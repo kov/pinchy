@@ -1,14 +1,44 @@
 #![allow(non_snake_case, non_upper_case_globals)]
-use std::borrow::Cow;
+use std::{
+    collections::HashMap,
+    io::{pipe, PipeWriter},
+    sync::Mutex,
+};
 
 use aya::{maps::perf::AsyncPerfEventArray, programs::TracePoint};
 use bytes::BytesMut;
 use log::{debug, warn};
-use pinchy_common::{syscalls::SYS_ppoll, SyscallEvent};
+use pinchy_common::SyscallEvent;
 use tokio::{
     signal,
     sync::mpsc::{channel, Sender},
 };
+use zbus::zvariant::Fd;
+
+mod events;
+
+struct PinchyDBus {
+    pipes: Mutex<HashMap<u32, Vec<PipeWriter>>>,
+}
+
+#[zbus::interface(name = "org.pinchy.Service")]
+impl PinchyDBus {
+    async fn trace_pid(&self, pid: u32) -> zbus::fdo::Result<Fd> {
+        let (read, write) = match pipe() {
+            Ok(pair) => pair,
+            Err(e) => return Err(zbus::fdo::Error::Failed(e.to_string())),
+        };
+
+        self.pipes
+            .lock()
+            .unwrap()
+            .entry(pid)
+            .or_default()
+            .push(write);
+
+        Ok(Fd::from(std::os::fd::OwnedFd::from(read)))
+    }
+}
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
@@ -64,28 +94,18 @@ async fn main() -> anyhow::Result<()> {
     spawn_event_readers(&mut ebpf, tx).await?;
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
-            match event.syscall_nr {
-                SYS_ppoll => {
-                    let data = unsafe { event.data.ppoll };
-
-                    let return_meaning = match event.return_value {
-                        0 => Cow::Borrowed("Timeout (0)"),
-                        -1 => Cow::Borrowed("Error (-1)"),
-                        _ => Cow::Owned(format!("{} fds ready", event.return_value)),
-                    };
-
-                    println!(
-                        "[{}] ppoll(fds: {:?}, nfds = {}) = {}",
-                        event.tid,
-                        &data.fds[..data.nfds as usize],
-                        data.nfds,
-                        return_meaning
-                    );
-                }
-                _ => println!("[{}] unknown syscall {}", event.tid, event.syscall_nr),
-            }
+            events::handle_event(event).await;
         }
     });
+
+    // Start D-Bus service on system bus
+    let dbus = PinchyDBus {
+        pipes: Mutex::new(HashMap::new()),
+    };
+    let conn = zbus::Connection::system().await?;
+    conn.object_server().at("/org/pinchy/Service", dbus).await?;
+    conn.request_name("org.pinchy.Service").await?;
+    println!("Pinchy D-Bus service started on system bus");
 
     let ctrl_c = signal::ctrl_c();
     println!("Waiting for Ctrl-C...");

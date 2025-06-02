@@ -171,12 +171,16 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
             let fds_ptr = args[0] as *const Pollfd;
 
             let mut fds = [0i32; 16];
+            let mut events = [0i16; 16];
+            let mut revents = [0i16; 16];
             for i in 0..fds.len() {
                 if i < nfds {
                     unsafe {
                         let entry_ptr = fds_ptr.add(i as usize);
                         if let Ok(pollfd) = bpf_probe_read_user::<Pollfd>(entry_ptr as *const _) {
                             fds[i] = pollfd.fd;
+                            events[i] = pollfd.events;
+                            revents[i] = pollfd.revents;
                         }
                     }
                 }
@@ -185,6 +189,8 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
             pinchy_common::SyscallEventData {
                 ppoll: pinchy_common::PpollData {
                     fds,
+                    events,
+                    revents,
                     nfds: nfds as u32,
                 },
             }

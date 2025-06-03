@@ -6,6 +6,7 @@ use std::{
     sync::Arc,
 };
 
+use anyhow::anyhow;
 use aya::{maps::perf::AsyncPerfEventArray, programs::TracePoint};
 use bytes::BytesMut;
 use log::{debug, warn};
@@ -23,10 +24,11 @@ use zbus::zvariant::Fd;
 mod events;
 mod util;
 
+type SharedEbpf = Arc<Mutex<aya::Ebpf>>;
 type PipeMap = Arc<Mutex<HashMap<u32, Vec<AsyncFd<PipeWriter>>>>>;
 
 struct PinchyDBus {
-    ebpf: aya::Ebpf,
+    ebpf: SharedEbpf,
     pipe_map: PipeMap,
 }
 
@@ -38,7 +40,7 @@ impl PinchyDBus {
             Err(e) => return Err(zbus::fdo::Error::Failed(e.to_string())),
         };
 
-        add_pid_trace(&mut self.ebpf, &mut self.pipe_map, pid, write)
+        add_pid_trace(&self.ebpf, &mut self.pipe_map, pid, write)
             .await
             .map_err(|e| {
                 zbus::fdo::Error::Failed(format!(
@@ -53,7 +55,7 @@ impl PinchyDBus {
 }
 
 async fn add_pid_trace(
-    ebpf: &mut aya::Ebpf,
+    ebpf: &SharedEbpf,
     pipe_map: &PipeMap,
     pid: u32,
     fd: PipeWriter,
@@ -65,12 +67,24 @@ async fn add_pid_trace(
         .or_default()
         .push(AsyncFd::new(fd).expect("Wrapping in AsyncFd"));
 
+    let mut ebpf = ebpf.lock().await;
     let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
         .map_mut("PID_FILTER")
         .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
         .try_into()?;
     pid_filter.insert(pid, 0, 0)?;
     Ok(())
+}
+
+// Removal from the pipe map is handled separately
+async fn remove_pid_trace(ebpf: &SharedEbpf, pid: u32) -> anyhow::Result<()> {
+    let mut ebpf = ebpf.lock().await;
+    let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
+        .map_mut("PID_FILTER")
+        .expect("PID_FILTER map not found")
+        .try_into()
+        .expect("Map conversion failed");
+    pid_filter.remove(&pid).map_err(|e| anyhow!(e))
 }
 
 #[tokio::main]
@@ -120,24 +134,26 @@ async fn main() -> anyhow::Result<()> {
     program.load()?;
     program.attach("raw_syscalls", "sys_exit")?;
 
+    // Wrap our ebpf object in a way that it can be shared with the various areas of the
+    // code that need it.
+    let ebpf = Arc::new(Mutex::new(ebpf));
+
     // The pipes we want to send data to
     let pipe_map = Arc::new(Mutex::new(HashMap::new()));
 
     let (tx, mut rx) = channel(128);
-    spawn_event_readers(&mut ebpf, tx).await?;
+    spawn_event_readers(&ebpf, tx).await?;
+    let tebpf = ebpf.clone();
     let tpipe_map = pipe_map.clone();
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
-            events::handle_event(event, tpipe_map.clone()).await;
+            events::handle_event(event, tebpf.clone(), tpipe_map.clone()).await;
         }
     });
 
     // If we did get a PID as argument, monitor and print that to our own stdout.
     if let Some(pid) = pid {
-        add_pid_trace(&mut ebpf, &pipe_map, pid, unsafe {
-            PipeWriter::from_raw_fd(1)
-        })
-        .await?;
+        add_pid_trace(&ebpf, &pipe_map, pid, unsafe { PipeWriter::from_raw_fd(1) }).await?;
     }
 
     // Start D-Bus service on system bus
@@ -156,11 +172,13 @@ async fn main() -> anyhow::Result<()> {
 }
 
 pub async fn spawn_event_readers(
-    ebpf: &mut aya::Ebpf,
+    ebpf: &SharedEbpf,
     tx: Sender<SyscallEvent>,
 ) -> anyhow::Result<()> {
     let mut events = AsyncPerfEventArray::try_from(
-        ebpf.take_map("EVENTS")
+        ebpf.lock()
+            .await
+            .take_map("EVENTS")
             .ok_or_else(|| anyhow::anyhow!("EVENTS map not found"))?,
     )?;
     let cpus = aya::util::online_cpus().map_err(|e| anyhow::anyhow!("online_cpus: {:?}", e))?;

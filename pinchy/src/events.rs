@@ -4,7 +4,7 @@ use pinchy_common::{syscalls::SYS_ppoll, SyscallEvent};
 
 use crate::util::poll_bits_to_strs;
 
-pub async fn handle_event(event: SyscallEvent, pipe_map: super::PipeMap) {
+pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map: super::PipeMap) {
     let output = match event.syscall_nr {
         SYS_ppoll => {
             let data = unsafe { event.data.ppoll };
@@ -68,9 +68,15 @@ pub async fn handle_event(event: SyscallEvent, pipe_map: super::PipeMap) {
                 let mut keep_iter = keep.iter();
                 writers.retain(|_| *keep_iter.next().unwrap());
 
-                // FIXME: need a way to let the tracer know that we no longer care about this PID.
                 if writers.is_empty() {
-                    eprintln!("No more writers for PID {}", event.pid);
+                    if let Err(e) = super::remove_pid_trace(&ebpf, event.pid).await {
+                        log::error!(
+                            "Failed to remove PID {} from eBPF filter map: {}",
+                            event.pid,
+                            e.to_string()
+                        );
+                    }
+                    log::trace!("No more writers for PID {}", event.pid);
                 }
             }
             None => {

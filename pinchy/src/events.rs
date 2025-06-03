@@ -35,8 +35,8 @@ pub async fn handle_event(event: SyscallEvent, pipe_map: super::PipeMap) {
                 .join(", ");
 
             format!(
-                "{} ppoll(fds: [{}], nfds = {}, timeout, sigmask) = {}\n",
-                event.tid, fds, data.nfds, return_meaning
+                "{} ppoll(fds: [{}], nfds: {}, timeout: {{ secs: {}, nanos: {} }}, sigmask) = {}\n",
+                event.tid, fds, data.nfds, data.timeout.seconds, data.timeout.nanos, return_meaning
             )
         }
         _ => format!("{} unknown syscall {}\n", event.tid, event.syscall_nr),

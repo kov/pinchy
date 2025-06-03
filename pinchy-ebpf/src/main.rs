@@ -9,7 +9,11 @@ use aya_ebpf::{
     EbpfContext as _,
 };
 use aya_log_ebpf::{error, info, trace};
-use pinchy_common::{kernel_types::Pollfd, syscalls::SYS_ppoll, SyscallEvent};
+use pinchy_common::{
+    kernel_types::{Pollfd, Timespec},
+    syscalls::SYS_ppoll,
+    SyscallEvent,
+};
 
 #[map]
 static mut PID_FILTER: HashMap<u32, u8> = HashMap::with_max_entries(1024, 0);
@@ -186,12 +190,16 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
                 }
             }
 
+            let timeout =
+                unsafe { bpf_probe_read_user::<Timespec>(args[2] as *const _) }.unwrap_or_default();
+
             pinchy_common::SyscallEventData {
                 ppoll: pinchy_common::PpollData {
                     fds,
                     events,
                     revents,
                     nfds: nfds as u32,
+                    timeout,
                 },
             }
         }

@@ -5,3 +5,10 @@ pub struct Pollfd {
     pub events: i16,
     pub revents: i16,
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Timespec {
+    pub seconds: i64,
+    pub nanos: i64,
+}

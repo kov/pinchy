@@ -1,5 +1,7 @@
 #![no_std]
 
+use crate::kernel_types::Timespec;
+
 pub mod kernel_types;
 pub mod syscalls;
 
@@ -24,4 +26,5 @@ pub struct PpollData {
     pub events: [i16; 16],
     pub revents: [i16; 16],
     pub nfds: u32,
+    pub timeout: Timespec,
 }

@@ -2,7 +2,8 @@
 use std::{
     collections::HashMap,
     io::{pipe, PipeWriter},
-    sync::Mutex,
+    os::fd::FromRawFd,
+    sync::Arc,
 };
 
 use aya::{maps::perf::AsyncPerfEventArray, programs::TracePoint};
@@ -10,34 +11,66 @@ use bytes::BytesMut;
 use log::{debug, warn};
 use pinchy_common::SyscallEvent;
 use tokio::{
+    io::unix::AsyncFd,
     signal,
-    sync::mpsc::{channel, Sender},
+    sync::{
+        mpsc::{channel, Sender},
+        Mutex,
+    },
 };
 use zbus::zvariant::Fd;
 
 mod events;
+mod util;
+
+type PipeMap = Arc<Mutex<HashMap<u32, Vec<AsyncFd<PipeWriter>>>>>;
 
 struct PinchyDBus {
-    pipes: Mutex<HashMap<u32, Vec<PipeWriter>>>,
+    ebpf: aya::Ebpf,
+    pipe_map: PipeMap,
 }
 
 #[zbus::interface(name = "org.pinchy.Service")]
 impl PinchyDBus {
-    async fn trace_pid(&self, pid: u32) -> zbus::fdo::Result<Fd> {
+    async fn trace_pid(&mut self, pid: u32) -> zbus::fdo::Result<Fd> {
         let (read, write) = match pipe() {
             Ok(pair) => pair,
             Err(e) => return Err(zbus::fdo::Error::Failed(e.to_string())),
         };
 
-        self.pipes
-            .lock()
-            .unwrap()
-            .entry(pid)
-            .or_default()
-            .push(write);
+        add_pid_trace(&mut self.ebpf, &mut self.pipe_map, pid, write)
+            .await
+            .map_err(|e| {
+                zbus::fdo::Error::Failed(format!(
+                    "Adding PID {} for tracing: {}",
+                    pid,
+                    e.to_string()
+                ))
+            })?;
 
         Ok(Fd::from(std::os::fd::OwnedFd::from(read)))
     }
+}
+
+async fn add_pid_trace(
+    ebpf: &mut aya::Ebpf,
+    pipe_map: &PipeMap,
+    pid: u32,
+    fd: PipeWriter,
+) -> anyhow::Result<()> {
+    pipe_map
+        .lock()
+        .await
+        .entry(pid)
+        .or_default()
+        .push(AsyncFd::new(fd).expect("Wrapping in AsyncFd"));
+
+    let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
+        .map_mut("PID_FILTER")
+        .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
+        .try_into()?;
+    pid_filter.insert(pid, 0, 0)?;
+    Ok(())
 }
 
 #[tokio::main]
@@ -45,11 +78,15 @@ async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
     // Expect first argument to be the PID to monitor
-    let pid: u32 = std::env::args()
-        .nth(1)
-        .ok_or_else(|| anyhow::anyhow!("Please provide a PID as the first argument"))?
-        .parse()
-        .map_err(|_| anyhow::anyhow!("PID must be a valid u32"))?;
+    let pid = if let Some(first) = std::env::args().nth(1) {
+        Some(
+            first
+                .parse::<u32>()
+                .map_err(|_| anyhow::anyhow!("PID must be a valid u32"))?,
+        )
+    } else {
+        None
+    };
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
     // new memcg based accounting, see https://lwn.net/Articles/837122/
@@ -75,13 +112,6 @@ async fn main() -> anyhow::Result<()> {
         warn!("failed to initialize eBPF logger: {e}");
     }
 
-    // Set the PIDs we want to trace...
-    let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
-        .map_mut("PID_FILTER")
-        .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
-        .try_into()?;
-    pid_filter.insert(pid, 0, 0)?;
-
     let program: &mut TracePoint = ebpf.program_mut("pinchy").unwrap().try_into()?;
     program.load()?;
     program.attach("raw_syscalls", "sys_enter")?;
@@ -90,18 +120,28 @@ async fn main() -> anyhow::Result<()> {
     program.load()?;
     program.attach("raw_syscalls", "sys_exit")?;
 
+    // The pipes we want to send data to
+    let pipe_map = Arc::new(Mutex::new(HashMap::new()));
+
     let (tx, mut rx) = channel(128);
     spawn_event_readers(&mut ebpf, tx).await?;
+    let tpipe_map = pipe_map.clone();
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
-            events::handle_event(event).await;
+            events::handle_event(event, tpipe_map.clone()).await;
         }
     });
 
+    // If we did get a PID as argument, monitor and print that to our own stdout.
+    if let Some(pid) = pid {
+        add_pid_trace(&mut ebpf, &pipe_map, pid, unsafe {
+            PipeWriter::from_raw_fd(1)
+        })
+        .await?;
+    }
+
     // Start D-Bus service on system bus
-    let dbus = PinchyDBus {
-        pipes: Mutex::new(HashMap::new()),
-    };
+    let dbus = PinchyDBus { ebpf, pipe_map };
     let conn = zbus::Connection::system().await?;
     conn.object_server().at("/org/pinchy/Service", dbus).await?;
     conn.request_name("org.pinchy.Service").await?;

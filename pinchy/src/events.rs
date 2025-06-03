@@ -12,19 +12,16 @@ pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map
     let mut output = match event.syscall_nr {
         SYS_epoll_pwait => {
             let data = unsafe { event.data.epoll_pwait };
-            let epoll_events = data
-                .events
-                .iter()
-                .take(event.return_value as usize)
-                .map(|event| {
-                    format!(
-                        "{{events={}, data={:#x}}}",
-                        poll_bits_to_strs(&(event.events as i16)).join("|"),
-                        event.data
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(", ");
+            let epoll_events =
+                data.events
+                    .iter()
+                    .join_take_map(event.return_value as usize, |event| {
+                        format!(
+                            "{{events={}, data={:#x}}}",
+                            poll_bits_to_strs(&(event.events as i16)).join("|"),
+                            event.data
+                        )
+                    });
 
             format!(
                 "{} epoll_pwait(epfd: {}, events: {}, max_events: {}, timeout: {}, sigmask) = {}",
@@ -45,13 +42,10 @@ pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map
                 _ => Cow::Owned(format!(
                     "{} ready -> [{}]",
                     data.nfds,
-                    data.fds
-                        .iter()
-                        .zip(data.revents.iter())
-                        .take(data.nfds as usize)
-                        .map(|(fd, event)| format!("{fd} = {}", poll_bits_to_strs(event).join("|")))
-                        .collect::<Vec<_>>()
-                        .join(", ")
+                    data.fds.iter().zip(data.revents.iter()).join_take_map(
+                        data.nfds as usize,
+                        |(fd, event)| format!("{fd} = {}", poll_bits_to_strs(event).join("|"))
+                    )
                 )),
             };
 
@@ -59,10 +53,9 @@ pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map
                 .fds
                 .iter()
                 .zip(data.events.iter())
-                .take(data.nfds as usize)
-                .map(|(fd, event)| format!("{{{fd}, {}}}", poll_bits_to_strs(event).join("|")))
-                .collect::<Vec<_>>()
-                .join(", ");
+                .join_take_map(data.nfds as usize, |(fd, event)| {
+                    format!("{{{fd}, {}}}", poll_bits_to_strs(event).join("|"))
+                });
 
             format!(
                 "{} ppoll(fds: [{}], nfds: {}, timeout: {}, sigmask) = {}",
@@ -129,3 +122,14 @@ fn format_timespec(timespec: Timespec) -> String {
         timespec.seconds, timespec.nanos
     )
 }
+
+trait JoinTakeMap: Iterator + Sized {
+    fn join_take_map<F>(self, n: usize, f: F) -> String
+    where
+        F: FnMut(Self::Item) -> String,
+    {
+        self.take(n).map(f).collect::<Vec<_>>().join(", ")
+    }
+}
+
+impl<I: Iterator> JoinTakeMap for I {}

@@ -190,8 +190,7 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
                 }
             }
 
-            let timeout =
-                unsafe { bpf_probe_read_user::<Timespec>(args[2] as *const _) }.unwrap_or_default();
+            let timeout = read_timespec(args[2] as *const _);
 
             pinchy_common::SyscallEventData {
                 ppoll: pinchy_common::PpollData {
@@ -219,6 +218,10 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
     unsafe { EVENTS.output(&ctx, &event, 0) };
 
     Ok(0)
+}
+
+fn read_timespec(ptr: *const Timespec) -> Timespec {
+    unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
 }
 
 #[cfg(not(test))]

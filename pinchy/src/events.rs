@@ -35,12 +35,19 @@ pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map
                 .join(", ");
 
             format!(
-                "{} ppoll(fds: [{}], nfds: {}, timeout: {{ secs: {}, nanos: {} }}, sigmask) = {}\n",
-                event.tid, fds, data.nfds, data.timeout.seconds, data.timeout.nanos, return_meaning
+                "{} ppoll(fds: [{}], nfds: {}, timeout: {}, sigmask) = {}",
+                event.tid,
+                fds,
+                data.nfds,
+                format_timespec(data.timeout),
+                return_meaning
             )
         }
-        _ => format!("{} unknown syscall {}\n", event.tid, event.syscall_nr),
+        _ => format!("{} unknown syscall {}", event.tid, event.syscall_nr),
     };
+
+    // Add a final new line.
+    output.push('\n');
 
     // Spawn as a separate task so we do not hold up reading and processing of new events while
     // writing this lot.
@@ -84,4 +91,11 @@ pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map
             }
         }
     });
+}
+
+fn format_timespec(timespec: Timespec) -> String {
+    format!(
+        "{{ secs: {}, nanos: {} }}",
+        timespec.seconds, timespec.nanos
+    )
 }

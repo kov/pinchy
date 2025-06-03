@@ -8,7 +8,7 @@ use aya_ebpf::{
     programs::TracePointContext,
     EbpfContext as _,
 };
-use aya_log_ebpf::{error, info, trace};
+use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
     syscalls::{SYS_epoll_pwait, SYS_ppoll},
@@ -65,10 +65,6 @@ fn try_pinchy(ctx: TracePointContext) -> Result<u32, u32> {
     }
 
     let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
-    info!(
-        &ctx,
-        "tracepoint sys_enter called for syscall: {}", syscall_nr
-    );
 
     let args = unsafe {
         ctx.read_at::<[usize; SYSCALL_ARGS_COUNT]>(SYSCALL_ARGS_OFFSET)
@@ -128,10 +124,6 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
     }
 
     let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
-    info!(
-        &ctx,
-        "tracepoint sys_enter called for syscall: {}", syscall_nr
-    );
 
     let Some(enter_data) = (unsafe { ENTER_MAP.get(&tid) }) else {
         error!(

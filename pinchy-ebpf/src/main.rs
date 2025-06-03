@@ -10,8 +10,8 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, info, trace};
 use pinchy_common::{
-    kernel_types::{Pollfd, Timespec},
-    syscalls::SYS_ppoll,
+    kernel_types::{EpollEvent, Pollfd, Timespec},
+    syscalls::{SYS_epoll_pwait, SYS_ppoll},
     SyscallEvent,
 };
 
@@ -168,9 +168,37 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
     };
 
     let data = match syscall_nr {
+        SYS_epoll_pwait => {
+            let epfd = args[0] as i32;
+            let events_ptr = args[1] as *const EpollEvent;
+            let max_events = args[2] as i32;
+            let timeout = args[3] as i32;
+
+            let mut events = [EpollEvent::default(); 8];
+            for i in 0..events.len() {
+                // The events pointer is an out parameter, the return value tells us how many were
+                // populated by the syscall.
+                if i < return_value as usize {
+                    unsafe {
+                        let events_ptr = events_ptr.add(i as usize);
+                        if let Ok(evt) = bpf_probe_read_user::<EpollEvent>(events_ptr as *const _) {
+                            events[i] = evt;
+                        }
+                    }
+                }
+            }
+
+            pinchy_common::SyscallEventData {
+                epoll_pwait: pinchy_common::EpollPWaitData {
+                    epfd,
+                    events,
+                    max_events,
+                    timeout,
+                },
+            }
+        }
         SYS_ppoll => {
             let nfds = args[1];
-            trace!(&ctx, "ppoll(fds, nfds={}, tmo_p, sigmask) = ...", nfds);
 
             let fds_ptr = args[0] as *const Pollfd;
 

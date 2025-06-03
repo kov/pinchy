@@ -1,11 +1,41 @@
 use std::{borrow::Cow, io::Write};
 
-use pinchy_common::{syscalls::SYS_ppoll, SyscallEvent};
+use pinchy_common::{
+    kernel_types::Timespec,
+    syscalls::{SYS_epoll_pwait, SYS_ppoll},
+    SyscallEvent,
+};
 
 use crate::util::poll_bits_to_strs;
 
 pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map: super::PipeMap) {
-    let output = match event.syscall_nr {
+    let mut output = match event.syscall_nr {
+        SYS_epoll_pwait => {
+            let data = unsafe { event.data.epoll_pwait };
+            let epoll_events = data
+                .events
+                .iter()
+                .take(event.return_value as usize)
+                .map(|event| {
+                    format!(
+                        "{{events={}, data={:#x}}}",
+                        poll_bits_to_strs(&(event.events as i16)).join("|"),
+                        event.data
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join(", ");
+
+            format!(
+                "{} epoll_pwait(epfd: {}, events: {}, max_events: {}, timeout: {}, sigmask) = {}",
+                event.tid,
+                data.epfd,
+                epoll_events,
+                data.max_events,
+                data.timeout,
+                event.return_value
+            )
+        }
         SYS_ppoll => {
             let data = unsafe { event.data.ppoll };
 

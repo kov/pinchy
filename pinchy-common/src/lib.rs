@@ -1,6 +1,6 @@
 #![no_std]
 
-use crate::kernel_types::Timespec;
+use crate::kernel_types::{EpollEvent, Timespec};
 
 pub mod kernel_types;
 pub mod syscalls;
@@ -16,6 +16,7 @@ pub struct SyscallEvent {
 
 #[repr(C)]
 pub union SyscallEventData {
+    pub epoll_pwait: EpollPWaitData,
     pub ppoll: PpollData,
 }
 
@@ -27,4 +28,13 @@ pub struct PpollData {
     pub revents: [i16; 16],
     pub nfds: u32,
     pub timeout: Timespec,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EpollPWaitData {
+    pub epfd: i32,
+    pub events: [EpollEvent; 8],
+    pub max_events: i32,
+    pub timeout: i32,
 }

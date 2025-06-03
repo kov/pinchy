@@ -2,7 +2,7 @@
 #![no_main]
 #![allow(non_snake_case, non_upper_case_globals, static_mut_refs)]
 use aya_ebpf::{
-    helpers::bpf_probe_read_user,
+    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
     macros::{map, tracepoint},
     maps::{HashMap, PerfEventArray},
     programs::TracePointContext,
@@ -11,8 +11,8 @@ use aya_ebpf::{
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
-    syscalls::{SYS_epoll_pwait, SYS_ppoll},
-    SyscallEvent,
+    syscalls::{SYS_epoll_pwait, SYS_ppoll, SYS_read},
+    SyscallEvent, DATA_READ_SIZE,
 };
 
 #[map]
@@ -187,6 +187,23 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
                     max_events,
                     timeout,
                 },
+            }
+        }
+        SYS_read => {
+            let fd = args[0] as i32;
+            let buf_addr = args[1];
+            let count = args[2];
+
+            let mut buf = [0u8; DATA_READ_SIZE];
+
+            // The return value is what tells us how many bytes were read.
+            let to_read = core::cmp::min(return_value as usize, buf.len());
+            unsafe {
+                let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_read]);
+            }
+
+            pinchy_common::SyscallEventData {
+                read: pinchy_common::ReadData { fd, buf, count },
             }
         }
         SYS_ppoll => {

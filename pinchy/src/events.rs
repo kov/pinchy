@@ -1,14 +1,16 @@
 use std::{borrow::Cow, io::Write};
 
+use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
-    syscalls::{SYS_epoll_pwait, SYS_ppoll},
+    syscalls::{SYS_epoll_pwait, SYS_ppoll, SYS_read},
     SyscallEvent,
 };
 
 use crate::util::poll_bits_to_strs;
 
 pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map: super::PipeMap) {
+    trace!("handle_event for syscall {}", event.syscall_nr);
     let mut output = match event.syscall_nr {
         SYS_epoll_pwait => {
             let data = unsafe { event.data.epoll_pwait };
@@ -66,6 +68,30 @@ pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map
                 return_meaning
             )
         }
+        SYS_read => {
+            let data = unsafe { event.data.read };
+            let bytes_read = event.return_value as usize;
+            let buf = &data.buf[..bytes_read.min(data.buf.len())];
+
+            let left_over = if event.return_value as usize > buf.len() {
+                format!(
+                    " ... ({} more bytes)",
+                    event.return_value as usize - buf.len()
+                )
+            } else {
+                String::new()
+            };
+
+            format!(
+                "{} read(fd: {}, buf: {}{}, count: {}) = {}",
+                event.tid,
+                data.fd,
+                format_bytes(&buf),
+                left_over,
+                data.count,
+                event.return_value
+            )
+        }
         _ => format!("{} unknown syscall {}", event.tid, event.syscall_nr),
     };
 
@@ -121,6 +147,18 @@ fn format_timespec(timespec: Timespec) -> String {
         "{{ secs: {}, nanos: {} }}",
         timespec.seconds, timespec.nanos
     )
+}
+
+fn format_bytes(bytes: &[u8]) -> String {
+    if let Ok(s) = str::from_utf8(bytes) {
+        format!("{:?}", s)
+    } else {
+        bytes
+            .iter()
+            .map(|b| format!("{:>2x}", b))
+            .collect::<Vec<_>>()
+            .join(" ")
+    }
 }
 
 trait JoinTakeMap: Iterator + Sized {

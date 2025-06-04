@@ -18,6 +18,7 @@ tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net"
 bytes = "1.10.1"
 zbus = { version = "5.7", features = ["tokio"] }
 zbus_macros = "5.7"
+clap = { workspace = true, features = ["derive"] }
 
 [build-dependencies]
 anyhow = { workspace = true }

@@ -7,10 +7,13 @@ use std::{
 };
 
 use anyhow::anyhow;
-use aya::{maps::perf::AsyncPerfEventArray, programs::TracePoint};
+use aya::{
+    maps::{perf::AsyncPerfEventArray, Array},
+    programs::TracePoint,
+};
 use bytes::BytesMut;
 use log::{debug, trace, warn};
-use pinchy_common::SyscallEvent;
+use pinchy_common::{syscalls::ALL_SUPPORTED_SYSCALLS, SyscallEvent};
 use tokio::{
     io::unix::AsyncFd,
     signal,
@@ -25,7 +28,7 @@ mod events;
 mod util;
 
 type SharedEbpf = Arc<Mutex<aya::Ebpf>>;
-type PipeMap = Arc<Mutex<HashMap<u32, Vec<AsyncFd<PipeWriter>>>>>;
+type PipeMap = Arc<Mutex<HashMap<u32, Vec<(AsyncFd<PipeWriter>, Vec<i64>)>>>>;
 
 pub fn open_pidfd(pid: libc::pid_t) -> io::Result<OwnedFd> {
     let raw_fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
@@ -122,6 +125,7 @@ impl PinchyDBus {
         #[zbus(header)] header: Header<'_>,
         #[zbus(connection)] conn: &zbus::Connection,
         pid: u32,
+        syscalls: Vec<i64>,
     ) -> zbus::fdo::Result<Fd> {
         let Some(pidfd) = validate_same_user_or_root(&header, conn, pid)
             .await
@@ -139,7 +143,7 @@ impl PinchyDBus {
             zbus::fdo::Error::Failed(format!("Failed to wrap pidfd in AsyncFd: {e}"))
         })?;
 
-        add_pid_trace(&self.ebpf, &mut self.pipe_map, pid, write)
+        add_pid_trace(&self.ebpf, &mut self.pipe_map, pid, write, syscalls)
             .await
             .map_err(|e| {
                 zbus::fdo::Error::Failed(format!("Adding PID {} for tracing: {e}", pid))
@@ -157,6 +161,8 @@ impl PinchyDBus {
                 eprintln!("Failed to remove PID from eBPF: {e}");
             }
             pipe_map.lock().await.remove(&pid);
+
+            resubscribe_syscalls(&ebpf, &pipe_map).await;
         });
 
         Ok(Fd::from(std::os::fd::OwnedFd::from(read)))
@@ -168,20 +174,26 @@ async fn add_pid_trace(
     pipe_map: &PipeMap,
     pid: u32,
     fd: PipeWriter,
+    syscalls: Vec<i64>,
 ) -> anyhow::Result<()> {
     pipe_map
         .lock()
         .await
         .entry(pid)
         .or_default()
-        .push(AsyncFd::new(fd).expect("Wrapping in AsyncFd"));
+        .push((AsyncFd::new(fd).expect("Wrapping in AsyncFd"), syscalls));
 
-    let mut ebpf = ebpf.lock().await;
-    let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
-        .map_mut("PID_FILTER")
-        .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
-        .try_into()?;
-    pid_filter.insert(pid, 0, 0)?;
+    {
+        let mut ebpf = ebpf.lock().await;
+        let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
+            .map_mut("PID_FILTER")
+            .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
+            .try_into()?;
+        pid_filter.insert(pid, 0, 0)?;
+    }
+
+    resubscribe_syscalls(ebpf, pipe_map).await;
+
     Ok(())
 }
 
@@ -210,6 +222,26 @@ async fn remove_pid_trace(ebpf: &SharedEbpf, pid: u32) -> anyhow::Result<()> {
         }
     } else {
         Ok(())
+    }
+}
+
+async fn resubscribe_syscalls(ebpf: &SharedEbpf, pipe_map: &PipeMap) {
+    let mut bitmap = [0u8; 64];
+
+    pipe_map.lock().await.iter().for_each(|(_, writers)| {
+        for (_, syscalls) in writers.iter() {
+            for &syscall_nr in syscalls.iter() {
+                bitmap[(syscall_nr / 8) as usize] |= 1 << (syscall_nr % 8);
+            }
+        }
+    });
+
+    let mut ebpf = ebpf.lock().await;
+    let mut map: aya::maps::Array<_, u8> =
+        Array::try_from(ebpf.map_mut("SYSCALL_FILTER").unwrap()).unwrap();
+
+    for (i, byte) in bitmap.iter().enumerate() {
+        map.set(i as u32, byte, 0).unwrap();
     }
 }
 
@@ -278,7 +310,7 @@ async fn main() -> anyhow::Result<()> {
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
             let output = events::handle_event(&event).await;
-            if let Err(e) = write_tx.send((output, event.pid)).await {
+            if let Err(e) = write_tx.send((output, event)).await {
                 eprintln!("FATAL: failed to send output to writer channel: {e}");
                 return;
             }
@@ -289,7 +321,14 @@ async fn main() -> anyhow::Result<()> {
 
     // If we did get a PID as argument, monitor and print that to our own stdout.
     if let Some(pid) = pid {
-        add_pid_trace(&ebpf, &pipe_map, pid, unsafe { PipeWriter::from_raw_fd(1) }).await?;
+        add_pid_trace(
+            &ebpf,
+            &pipe_map,
+            pid,
+            unsafe { PipeWriter::from_raw_fd(1) },
+            ALL_SUPPORTED_SYSCALLS.to_vec(),
+        )
+        .await?;
     }
 
     // Start D-Bus service on system bus
@@ -347,16 +386,21 @@ pub async fn spawn_event_readers(
 pub async fn spawn_event_writer(
     ebpf: SharedEbpf,
     pipe_map: PipeMap,
-    mut rx: Receiver<(String, u32)>,
+    mut rx: Receiver<(String, SyscallEvent)>,
 ) {
     tokio::spawn(async move {
-        while let Some((output, pid)) = rx.recv().await {
+        while let Some((output, event)) = rx.recv().await {
             let mut map = pipe_map.lock().await;
-            match map.get_mut(&pid) {
+            let mut writer_removed = false;
+            match map.get_mut(&event.pid) {
                 Some(writers) => {
                     let mut keep = Vec::with_capacity(writers.len());
 
-                    for w in writers.iter_mut() {
+                    for (w, syscalls_to_trace) in writers.iter_mut() {
+                        if !syscalls_to_trace.contains(&event.syscall_nr) {
+                            keep.push(true);
+                            continue;
+                        }
                         if let Err(_err) = w
                             .writable_mut()
                             .await
@@ -365,6 +409,7 @@ pub async fn spawn_event_writer(
                             .write_all(output.as_bytes())
                         {
                             keep.push(false);
+                            writer_removed = true;
                         } else {
                             keep.push(true);
                         }
@@ -374,15 +419,23 @@ pub async fn spawn_event_writer(
                     let mut keep_iter = keep.iter();
                     writers.retain(|_| *keep_iter.next().unwrap());
 
-                    if writers.is_empty() {
-                        if let Err(e) = remove_pid_trace(&ebpf, pid).await {
+                    // Release the map as early as we can
+                    let empty_writers = writers.is_empty();
+                    drop(map);
+
+                    if empty_writers {
+                        if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
                             log::error!(
                                 "Failed to remove PID {} from eBPF filter map: {}",
-                                pid,
+                                event.pid,
                                 e.to_string()
                             );
                         }
-                        log::trace!("No more writers for PID {}", pid);
+                        log::trace!("No more writers for PID {}", event.pid);
+                    }
+
+                    if empty_writers || writer_removed {
+                        resubscribe_syscalls(&ebpf, &pipe_map).await;
                     }
                 }
                 None => {

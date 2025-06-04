@@ -4,7 +4,7 @@
 use aya_ebpf::{
     helpers::{bpf_probe_read_buf, bpf_probe_read_user},
     macros::{map, tracepoint},
-    maps::{HashMap, PerfEventArray},
+    maps::{Array, HashMap, PerfEventArray},
     programs::TracePointContext,
     EbpfContext as _,
 };
@@ -18,6 +18,10 @@ use pinchy_common::{
 #[map]
 static mut PID_FILTER: HashMap<u32, u8> = HashMap::with_max_entries(1024, 0);
 
+// Treated as a bitmap for syscalls.
+#[map]
+static mut SYSCALL_FILTER: Array<u8> = Array::with_max_entries(64, 0);
+
 #[map]
 static mut EVENTS: PerfEventArray<SyscallEvent> = PerfEventArray::new(0);
 
@@ -29,6 +33,20 @@ pub struct SyscallEnterData {
     pub tgid: u32,
     pub syscall_nr: i64,
     pub args: [usize; SYSCALL_ARGS_COUNT],
+}
+
+fn is_syscall_enabled(nr: i64) -> bool {
+    if nr < 0 || nr >= 512 {
+        return false;
+    }
+    let nr = nr as u64; // To calm the verifier down
+    let idx = (nr / 8) as u32;
+    let bit = (nr % 8) as u8;
+    if let Some(&byte) = unsafe { SYSCALL_FILTER.get(idx) } {
+        (byte & (1 << bit)) != 0
+    } else {
+        false
+    }
 }
 
 #[tracepoint]
@@ -65,6 +83,10 @@ fn try_pinchy(ctx: TracePointContext) -> Result<u32, u32> {
     }
 
     let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
+
+    if !is_syscall_enabled(syscall_nr) {
+        return Ok(0);
+    }
 
     let args = unsafe {
         ctx.read_at::<[usize; SYSCALL_ARGS_COUNT]>(SYSCALL_ARGS_OFFSET)
@@ -124,6 +146,10 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
     }
 
     let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
+
+    if !is_syscall_enabled(syscall_nr) {
+        return Ok(0);
+    }
 
     let Some(enter_data) = (unsafe { ENTER_MAP.get(&tid) }) else {
         error!(

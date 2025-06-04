@@ -1,7 +1,7 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     collections::HashMap,
-    io::{self, pipe, PipeWriter},
+    io::{self, pipe, PipeWriter, Write as _},
     os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
     sync::Arc,
 };
@@ -15,7 +15,7 @@ use tokio::{
     io::unix::AsyncFd,
     signal,
     sync::{
-        mpsc::{channel, Sender},
+        mpsc::{channel, Receiver, Sender},
         Mutex,
     },
 };
@@ -267,15 +267,25 @@ async fn main() -> anyhow::Result<()> {
     // The pipes we want to send data to
     let pipe_map = Arc::new(Mutex::new(HashMap::new()));
 
+    // The following lines start the basic structure of tasks that handle events. Readers are spawned
+    // for each of the per-CPU buffers send events to the main handler channel, spawned on this function.
+    // There is also a writer task - handler output is put on its own queue and it can take its time
+    // sending it out to the various subscribers.
     let (tx, mut rx) = channel(128);
     spawn_event_readers(&ebpf, tx).await?;
-    let tebpf = ebpf.clone();
-    let tpipe_map = pipe_map.clone();
+
+    let (write_tx, write_rx) = channel(128);
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
-            events::handle_event(event, tebpf.clone(), tpipe_map.clone()).await;
+            let output = events::handle_event(&event).await;
+            if let Err(e) = write_tx.send((output, event.pid)).await {
+                eprintln!("FATAL: failed to send output to writer channel: {e}");
+                return;
+            }
         }
     });
+
+    spawn_event_writer(ebpf.clone(), pipe_map.clone(), write_rx).await;
 
     // If we did get a PID as argument, monitor and print that to our own stdout.
     if let Some(pid) = pid {
@@ -332,4 +342,53 @@ pub async fn spawn_event_readers(
         });
     }
     Ok(())
+}
+
+pub async fn spawn_event_writer(
+    ebpf: SharedEbpf,
+    pipe_map: PipeMap,
+    mut rx: Receiver<(String, u32)>,
+) {
+    tokio::spawn(async move {
+        while let Some((output, pid)) = rx.recv().await {
+            let mut map = pipe_map.lock().await;
+            match map.get_mut(&pid) {
+                Some(writers) => {
+                    let mut keep = Vec::with_capacity(writers.len());
+
+                    for w in writers.iter_mut() {
+                        if let Err(_err) = w
+                            .writable_mut()
+                            .await
+                            .unwrap()
+                            .get_inner_mut()
+                            .write_all(output.as_bytes())
+                        {
+                            keep.push(false);
+                        } else {
+                            keep.push(true);
+                        }
+                    }
+
+                    // Remove any writers that had errors.
+                    let mut keep_iter = keep.iter();
+                    writers.retain(|_| *keep_iter.next().unwrap());
+
+                    if writers.is_empty() {
+                        if let Err(e) = remove_pid_trace(&ebpf, pid).await {
+                            log::error!(
+                                "Failed to remove PID {} from eBPF filter map: {}",
+                                pid,
+                                e.to_string()
+                            );
+                        }
+                        log::trace!("No more writers for PID {}", pid);
+                    }
+                }
+                None => {
+                    eprintln!("Unexpected: do not have writers for PID, but still monitoring it...")
+                }
+            }
+        }
+    });
 }

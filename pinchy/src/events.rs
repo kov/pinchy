@@ -1,4 +1,4 @@
-use std::{borrow::Cow, io::Write};
+use std::borrow::Cow;
 
 use log::trace;
 use pinchy_common::{
@@ -9,7 +9,7 @@ use pinchy_common::{
 
 use crate::util::poll_bits_to_strs;
 
-pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map: super::PipeMap) {
+pub async fn handle_event(event: &SyscallEvent) -> String {
     trace!("handle_event for syscall {}", event.syscall_nr);
     let mut output = match event.syscall_nr {
         SYS_epoll_pwait => {
@@ -98,48 +98,7 @@ pub async fn handle_event(event: SyscallEvent, ebpf: super::SharedEbpf, pipe_map
     // Add a final new line.
     output.push('\n');
 
-    // Spawn as a separate task so we do not hold up reading and processing of new events while
-    // writing this lot.
-    tokio::spawn(async move {
-        let mut map = pipe_map.lock().await;
-        match map.get_mut(&event.pid) {
-            Some(writers) => {
-                let mut keep = Vec::with_capacity(writers.len());
-
-                for w in writers.iter_mut() {
-                    if let Err(_err) = w
-                        .writable_mut()
-                        .await
-                        .unwrap()
-                        .get_inner_mut()
-                        .write_all(output.as_bytes())
-                    {
-                        keep.push(false);
-                    } else {
-                        keep.push(true);
-                    }
-                }
-
-                // Remove any writers that had errors.
-                let mut keep_iter = keep.iter();
-                writers.retain(|_| *keep_iter.next().unwrap());
-
-                if writers.is_empty() {
-                    if let Err(e) = super::remove_pid_trace(&ebpf, event.pid).await {
-                        log::error!(
-                            "Failed to remove PID {} from eBPF filter map: {}",
-                            event.pid,
-                            e.to_string()
-                        );
-                    }
-                    log::trace!("No more writers for PID {}", event.pid);
-                }
-            }
-            None => {
-                eprintln!("Unexpected: do not have writers for PID, but still monitoring it...")
-            }
-        }
-    });
+    output
 }
 
 fn format_timespec(timespec: Timespec) -> String {

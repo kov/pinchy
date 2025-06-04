@@ -1,15 +1,15 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     collections::HashMap,
-    io::{pipe, PipeWriter},
-    os::fd::FromRawFd,
+    io::{self, pipe, PipeWriter},
+    os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
     sync::Arc,
 };
 
 use anyhow::anyhow;
 use aya::{maps::perf::AsyncPerfEventArray, programs::TracePoint};
 use bytes::BytesMut;
-use log::{debug, warn};
+use log::{debug, trace, warn};
 use pinchy_common::SyscallEvent;
 use tokio::{
     io::unix::AsyncFd,
@@ -19,13 +19,96 @@ use tokio::{
         Mutex,
     },
 };
-use zbus::zvariant::Fd;
+use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
 
 mod events;
 mod util;
 
 type SharedEbpf = Arc<Mutex<aya::Ebpf>>;
 type PipeMap = Arc<Mutex<HashMap<u32, Vec<AsyncFd<PipeWriter>>>>>;
+
+pub fn open_pidfd(pid: libc::pid_t) -> io::Result<OwnedFd> {
+    let raw_fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
+    if raw_fd < 0 {
+        Err(io::Error::last_os_error())
+    } else {
+        // SAFETY: We just obtained the fd, and it's valid
+        Ok(unsafe { OwnedFd::from_raw_fd(raw_fd as i32) })
+    }
+}
+
+pub fn uid_from_pidfd(fd: &OwnedFd) -> io::Result<u32> {
+    let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
+    let ret = unsafe { libc::fstat(fd.as_raw_fd(), stat.as_mut_ptr()) };
+    if ret != 0 {
+        return Err(io::Error::last_os_error());
+    }
+
+    let stat = unsafe { stat.assume_init() };
+
+    Ok(stat.st_uid)
+}
+
+pub fn uid_from_pid(pid: u32) -> io::Result<u32> {
+    use std::os::unix::fs::MetadataExt;
+    let proc_path = format!("/proc/{}", pid);
+    let meta = std::fs::metadata(proc_path)?;
+    Ok(meta.uid())
+}
+
+async fn validate_same_user_or_root(
+    header: &Header<'_>,
+    conn: &zbus::Connection,
+    pid: u32,
+) -> io::Result<Option<OwnedFd>> {
+    trace!("validate_same_user_or_root for PID {}", pid as libc::pid_t);
+
+    // Use a pidfd to ensure we know what process we are talking about.
+    let pidfd = open_pidfd(pid as libc::pid_t)?;
+
+    // User who owns the PID.
+    let pid_uid = uid_from_pid(pid)?;
+
+    // Check that the pidfd is still valid after reading the uid from /proc/<pid> to ensure the
+    // PID hasn't been changed from under us between opening the fd and checking the user id.
+    let fd = pidfd.as_raw_fd();
+    let pidfd_still_valid = tokio::task::spawn_blocking(move || {
+        if unsafe { libc::fcntl(fd, libc::F_GETFD) } == -1 {
+            Err(io::Error::last_os_error())
+        } else {
+            Ok(())
+        }
+    })
+    .await
+    .unwrap_or_else(|e| {
+        Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("Join error: {e}"),
+        ))
+    });
+    pidfd_still_valid?;
+
+    trace!("pidfd {} has uid {}", pidfd.as_raw_fd(), pid_uid);
+
+    // User making the tracing request.
+    let caller = header.sender().unwrap();
+    let bus_name: BusName = caller.as_str().try_into().unwrap();
+    let dbus_proxy = DBusProxy::new(conn)
+        .await
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    let caller_uid = dbus_proxy
+        .get_connection_unix_user(bus_name)
+        .await
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+    trace!("dbus request came from uid {caller_uid}");
+
+    if caller_uid == pid_uid || caller_uid == 0 {
+        Ok(Some(pidfd))
+    } else {
+        Ok(None)
+    }
+}
 
 struct PinchyDBus {
     ebpf: SharedEbpf,
@@ -34,21 +117,47 @@ struct PinchyDBus {
 
 #[zbus::interface(name = "org.pinchy.Service")]
 impl PinchyDBus {
-    async fn trace_pid(&mut self, pid: u32) -> zbus::fdo::Result<Fd> {
+    async fn trace_pid(
+        &mut self,
+        #[zbus(header)] header: Header<'_>,
+        #[zbus(connection)] conn: &zbus::Connection,
+        pid: u32,
+    ) -> zbus::fdo::Result<Fd> {
+        let Some(pidfd) = validate_same_user_or_root(&header, conn, pid)
+            .await
+            .map_err(|e| zbus::fdo::Error::AuthFailed(e.to_string()))?
+        else {
+            return Err(zbus::fdo::Error::AuthFailed("Not authorized".to_string()));
+        };
+
         let (read, write) = match pipe() {
             Ok(pair) => pair,
             Err(e) => return Err(zbus::fdo::Error::Failed(e.to_string())),
         };
 
+        let async_pidfd = AsyncFd::new(pidfd).map_err(|e| {
+            zbus::fdo::Error::Failed(format!("Failed to wrap pidfd in AsyncFd: {e}"))
+        })?;
+
         add_pid_trace(&self.ebpf, &mut self.pipe_map, pid, write)
             .await
             .map_err(|e| {
-                zbus::fdo::Error::Failed(format!(
-                    "Adding PID {} for tracing: {}",
-                    pid,
-                    e.to_string()
-                ))
+                zbus::fdo::Error::Failed(format!("Adding PID {} for tracing: {e}", pid))
             })?;
+
+        // Make sure we stop tracing and drop the state if the PID exits.
+        let ebpf = self.ebpf.clone();
+        let pipe_map = self.pipe_map.clone();
+        tokio::spawn(async move {
+            // Wait for the process to exit
+            let _ = async_pidfd.readable().await;
+
+            // Remove from eBPF and pipe map
+            if let Err(e) = remove_pid_trace(&ebpf, pid).await {
+                eprintln!("Failed to remove PID from eBPF: {e}");
+            }
+            pipe_map.lock().await.remove(&pid);
+        });
 
         Ok(Fd::from(std::os::fd::OwnedFd::from(read)))
     }
@@ -84,7 +193,24 @@ async fn remove_pid_trace(ebpf: &SharedEbpf, pid: u32) -> anyhow::Result<()> {
         .expect("PID_FILTER map not found")
         .try_into()
         .expect("Map conversion failed");
-    pid_filter.remove(&pid).map_err(|e| anyhow!(e))
+
+    // Aya considers trying to remove an item that is not in the map an error. This can happen
+    // if the pipe is closed by the client, which may cause all the writers for that PID to be
+    // removed, which triggers a call to remove_pid_trace() - see events::handle_event().
+    if let Ok(_) = pid_filter.get(&pid, 0) {
+        match pid_filter.remove(&pid) {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                use aya::maps::MapError;
+                match &e {
+                    MapError::KeyNotFound | MapError::ElementNotFound => Ok(()),
+                    _ => Err(anyhow!(e)),
+                }
+            }
+        }
+    } else {
+        Ok(())
+    }
 }
 
 #[tokio::main]

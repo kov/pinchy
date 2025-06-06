@@ -19,6 +19,7 @@ pub const ALL_SUPPORTED_SYSCALLS: &[i64] = &[
     SYS_ppoll,
     SYS_lseek,
     SYS_openat,
+    SYS_sched_yield,
 ];
 
 #[macro_export]

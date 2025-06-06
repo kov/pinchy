@@ -25,6 +25,7 @@ pub union SyscallEventData {
     pub lseek: LseekData,
     pub openat: OpenAtData,
     pub futex: FutexData,
+    pub sched_yield: SchedYieldData,
 }
 
 #[repr(C)]
@@ -87,3 +88,7 @@ pub struct FutexData {
     pub val3: u32,
     pub timeout: Timespec,
 }
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SchedYieldData;

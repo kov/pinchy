@@ -3,7 +3,10 @@ use std::borrow::Cow;
 use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_futex, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read},
+    syscalls::{
+        SYS_close, SYS_epoll_pwait, SYS_futex, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read,
+        SYS_sched_yield,
+    },
     SyscallEvent,
 };
 
@@ -105,6 +108,9 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 "{} lseek(fd: {}, offset: {}, whence: {}) = {}",
                 event.tid, data.fd, data.offset, data.whence, event.return_value
             )
+        }
+        SYS_sched_yield => {
+            format!("{} sched_yield() = {}", event.tid, event.return_value)
         }
         SYS_openat => {
             use std::ffi::CStr;

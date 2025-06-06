@@ -11,7 +11,9 @@ use aya_ebpf::{
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read},
+    syscalls::{
+        SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
+    },
     SyscallEvent, DATA_READ_SIZE,
 };
 
@@ -185,6 +187,9 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     lseek: pinchy_common::LseekData { fd, offset, whence },
                 }
             }
+            SYS_sched_yield => pinchy_common::SyscallEventData {
+                sched_yield: pinchy_common::SchedYieldData,
+            },
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

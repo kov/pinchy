@@ -17,7 +17,7 @@ use log::{debug, trace, warn};
 use pinchy_common::{
     syscalls::{
         SYS_close, SYS_epoll_pwait, SYS_futex, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read,
-        ALL_SUPPORTED_SYSCALLS,
+        SYS_sched_yield, ALL_SUPPORTED_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -368,7 +368,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     prog.load()?;
 
     // Use the same tail call handler for trivial syscalls.
-    const TRIVIAL_SYSCALLS: &[i64] = &[SYS_close, SYS_lseek];
+    const TRIVIAL_SYSCALLS: &[i64] = &[SYS_close, SYS_lseek, SYS_sched_yield];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
     }

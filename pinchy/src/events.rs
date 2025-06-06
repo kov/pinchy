@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read},
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_futex, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read},
     SyscallEvent,
 };
 
@@ -119,6 +119,13 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 format_flags(data.flags),
                 format_mode(data.mode),
                 event.return_value
+            )
+        }
+        SYS_futex => {
+            let data = unsafe { event.data.futex };
+            format!(
+                "{} futex(uaddr: 0x{:x}, op: {}, val: {}, uaddr2: 0x{:x}, val3: {}, timeout: {}) = {}",
+                event.tid, data.uaddr, data.op, data.val, data.uaddr2, data.val3, format_timespec(data.timeout), event.return_value
             )
         }
         _ => format!("{} unknown syscall {}", event.tid, event.syscall_nr),

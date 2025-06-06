@@ -24,6 +24,7 @@ pub union SyscallEventData {
     pub read: ReadData,
     pub lseek: LseekData,
     pub openat: OpenAtData,
+    pub futex: FutexData,
 }
 
 #[repr(C)]
@@ -74,4 +75,15 @@ pub struct OpenAtData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub flags: i32,
     pub mode: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FutexData {
+    pub uaddr: usize,
+    pub op: u32,
+    pub val: u32,
+    pub uaddr2: usize,
+    pub val3: u32,
+    pub timeout: Timespec,
 }

@@ -13,6 +13,7 @@ compile_error!("Unsupported architecture. Currently only aarch64 and x86_64 are 
 
 pub const ALL_SUPPORTED_SYSCALLS: &[i64] = &[
     SYS_close,
+    SYS_futex,
     SYS_read,
     SYS_epoll_pwait,
     SYS_ppoll,

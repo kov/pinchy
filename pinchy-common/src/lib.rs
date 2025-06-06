@@ -23,6 +23,7 @@ pub union SyscallEventData {
     pub ppoll: PpollData,
     pub read: ReadData,
     pub lseek: LseekData,
+    pub openat: OpenAtData,
 }
 
 #[repr(C)]
@@ -64,4 +65,13 @@ pub struct LseekData {
     pub fd: i32,
     pub offset: i64,
     pub whence: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OpenAtData {
+    pub dfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub flags: i32,
+    pub mode: u32,
 }

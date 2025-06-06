@@ -16,7 +16,8 @@ use bytes::BytesMut;
 use log::{debug, trace, warn};
 use pinchy_common::{
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_ppoll, SYS_read, ALL_SUPPORTED_SYSCALLS,
+        SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read,
+        ALL_SUPPORTED_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -376,6 +377,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_epoll_pwait", SYS_epoll_pwait),
         ("syscall_exit_ppoll", SYS_ppoll),
         ("syscall_exit_read", SYS_read),
+        ("syscall_exit_openat", SYS_openat),
     ] {
         let prog: &mut TracePoint = ebpf.program_mut(prog_name).unwrap().try_into()?;
         prog.load()?;

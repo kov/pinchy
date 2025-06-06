@@ -11,7 +11,7 @@ use aya_ebpf::{
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_ppoll, SYS_read},
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read},
     SyscallEvent, DATA_READ_SIZE,
 };
 
@@ -198,6 +198,46 @@ fn try_syscall_exit_trivial(ctx: TracePointContext) -> Result<(), u32> {
     };
 
     output_event(&ctx, syscall_nr, return_value, data)?;
+
+    Ok(())
+}
+
+#[tracepoint]
+pub fn syscall_exit_openat(ctx: TracePointContext) -> u32 {
+    match try_syscall_exit_openat(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+fn try_syscall_exit_openat(ctx: TracePointContext) -> Result<(), u32> {
+    let syscall_nr = SYS_openat;
+    let args = get_args(&ctx, syscall_nr)?;
+    let return_value = get_return_value(&ctx)?;
+
+    let dfd = args[0] as i32;
+    let pathname_ptr = args[1] as *const u8;
+    let flags = args[2] as i32;
+    let mode = args[3] as u32;
+
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut pathname);
+    }
+
+    output_event(
+        &ctx,
+        syscall_nr,
+        return_value,
+        pinchy_common::SyscallEventData {
+            openat: pinchy_common::OpenAtData {
+                dfd,
+                pathname,
+                flags,
+                mode,
+            },
+        },
+    )?;
 
     Ok(())
 }

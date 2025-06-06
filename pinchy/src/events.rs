@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_ppoll, SYS_read},
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read},
     SyscallEvent,
 };
 
@@ -106,6 +106,21 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.tid, data.fd, data.offset, data.whence, event.return_value
             )
         }
+        SYS_openat => {
+            use std::ffi::CStr;
+            let data = unsafe { event.data.openat };
+            let pathname = CStr::from_bytes_until_nul(&data.pathname)
+                .unwrap_or(CStr::from_bytes_with_nul(b"<invalid>\0").unwrap());
+            format!(
+                "{} openat(dfd: {}, pathname: {:?}, flags: {}, mode: {}) = {}",
+                event.tid,
+                format_dirfd(data.dfd),
+                pathname,
+                format_flags(data.flags),
+                format_mode(data.mode),
+                event.return_value
+            )
+        }
         _ => format!("{} unknown syscall {}", event.tid, event.syscall_nr),
     };
 
@@ -132,6 +147,80 @@ fn format_bytes(bytes: &[u8]) -> String {
             .collect::<Vec<_>>()
             .join(" ")
     }
+}
+
+fn format_dirfd(dfd: i32) -> String {
+    const AT_FDCWD: i32 = -100;
+    if dfd == AT_FDCWD {
+        "AT_FDCWD".to_string()
+    } else {
+        dfd.to_string()
+    }
+}
+
+fn format_mode(mode: u32) -> String {
+    // Only show if nonzero (O_CREAT was used)
+    if mode == 0 {
+        return "0".to_string();
+    }
+    // Show as octal and symbolic (e.g. rwxr-xr-x)
+    let mut s = format!("0o{:03o}", mode & 0o777);
+    s.push_str(" (");
+    let perms = [
+        (0o400, 'r'),
+        (0o200, 'w'),
+        (0o100, 'x'),
+        (0o040, 'r'),
+        (0o020, 'w'),
+        (0o010, 'x'),
+        (0o004, 'r'),
+        (0o002, 'w'),
+        (0o001, 'x'),
+    ];
+    for (bit, chr) in perms.iter() {
+        s.push(if (mode & bit) != 0 { *chr } else { '-' });
+    }
+    s.push(')');
+    s
+}
+
+fn format_flags(flags: i32) -> String {
+    // Access mode (lowest two bits)
+    let access = match flags & 0b11 {
+        0 => "O_RDONLY",
+        1 => "O_WRONLY",
+        2 => "O_RDWR",
+        _ => "<invalid>",
+    };
+    let mut parts = vec![access.to_string()];
+    // Common open(2) flags
+    let flag_defs = [
+        (libc::O_CREAT, "O_CREAT"),
+        (libc::O_EXCL, "O_EXCL"),
+        (libc::O_NOCTTY, "O_NOCTTY"),
+        (libc::O_TRUNC, "O_TRUNC"),
+        (libc::O_APPEND, "O_APPEND"),
+        (libc::O_NONBLOCK, "O_NONBLOCK"),
+        (libc::O_SYNC, "O_SYNC"),
+        (libc::O_DSYNC, "O_DSYNC"),
+        (libc::O_RSYNC, "O_RSYNC"),
+        (libc::O_DIRECTORY, "O_DIRECTORY"),
+        (libc::O_NOFOLLOW, "O_NOFOLLOW"),
+        (libc::O_CLOEXEC, "O_CLOEXEC"),
+        (libc::O_ASYNC, "O_ASYNC"),
+        (libc::O_LARGEFILE, "O_LARGEFILE"),
+        (libc::O_DIRECT, "O_DIRECT"),
+        (libc::O_TMPFILE, "O_TMPFILE"),
+        (libc::O_PATH, "O_PATH"),
+        (libc::O_NDELAY, "O_NDELAY"), // alias for O_NONBLOCK
+        (libc::O_NOATIME, "O_NOATIME"),
+    ];
+    for (bit, name) in flag_defs.iter() {
+        if (flags as u32) & (*bit as u32) != 0 {
+            parts.push(name.to_string());
+        }
+    }
+    format!("0x{:x} ({})", flags, parts.join("|"))
 }
 
 trait JoinTakeMap: Iterator + Sized {

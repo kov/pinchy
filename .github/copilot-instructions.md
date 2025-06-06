@@ -30,23 +30,71 @@ as well (suggest a change to this file in that case).
 
 # Adding support for a new syscall
 
-All current Linux syscalls are already listed in pinchy-common's aarch64.rs
-and x86_64.rs files and are made available architecture-agnostic by its
-syscalls/mod.rs, e.g. pinchy_common::syscalls::SYS_open.
+All current Linux syscalls are already listed in
+`pinchy-common/src/syscalls/aarch64.rs` and
+`pinchy-common/src/syscalls/x86_64.rs` and are made available
+architecture-agnostic by `pinchy-common/src/syscalls/mod.rs`, e.g.
+`pinchy_common::syscalls::SYS_open`.
 
-There is no need to change those files, you can use them as a reference
-to know what syscalls there are and to double check the SYS_<name> exists
-so you can import where necessary. To add support for parsing a new one these
- steps need to be taken:
+**Do not modify `aarch64.rs` or `x86_64.rs` directly. Only use them as
+references.**
 
-1. import it and list it in the ALL_SUPPORTED_SYSCALLS constant in 
-   pinchy-common/src/syscalls/mod.rs
-2. if it's a trivial syscall (no pointers), add it to the match statement
-   in try_syscall_exit_trivial
-   if it's a more complex syscall, add a new tracepoint named like this:
-   syscall_exit_<name>
-3. if it's a trivial syscall (no pointers), import it and add it to the
-   appropriate array in load_tailcalls() in pinchy/src/server.rs
-   if it's a more complex syscall, import it and add it to the
-   appropriate array in load_tailcalls() in pinchy/src/server.rs
-4. import it and add it to the event parsing code in pinchy/src/events.rs
+**Always import SYS_* constants from `pinchy_common::syscalls` in all
+code outside the arch files.**
+
+## Determining if a syscall is trivial or complex
+
+**Important:**
+A syscall is only "trivial" if *all* its arguments are plain integers and
+*none* are pointers, buffers, or addresses. If any argument is a pointer
+(even if it appears as `usize` in Rust), the syscall is complex and needs
+a dedicated handler.
+
+- Always check the syscall's man page or kernel signature for pointer arguments.
+- Common complex syscalls: `futex`, `read`, `write`, `openat`, etc.
+
+| Any pointer/buffer/struct argument? | Handler type   |
+|-------------------------------------|---------------|
+| Yes                                 | Complex       |
+| No                                  | Trivial       |
+
+**Never treat a syscall as trivial just because its Rust signature uses `usize`.**
+
+## Checklist for Adding a New Syscall
+
+1. **Verify existence:** Confirm `SYS_<name>` exists in both arch files
+   (see `pinchy-common/src/syscalls/aarch64.rs` and
+   `pinchy-common/src/syscalls/x86_64.rs`).
+2. **ALL_SUPPORTED_SYSCALLS:** Add the syscall to the
+   `ALL_SUPPORTED_SYSCALLS` array in
+   `pinchy-common/src/syscalls/mod.rs`.
+3. **Trivial or complex:**
+   - If trivial (no pointers, all arguments are plain integers):
+     - Add to the match in `pinchy-ebpf/src/main.rs` in
+       `try_syscall_exit_trivial`.
+     - Add to the `TRIVIAL_SYSCALLS` array in
+       `pinchy/src/server.rs` in `load_tailcalls()`.
+   - If complex (has pointer arguments or needs special handling):
+     - Add a new tracepoint named `syscall_exit_<name>` in
+       `pinchy-ebpf/src/main.rs`.
+     - Register it in the appropriate array in `load_tailcalls()` in
+       `pinchy/src/server.rs`.
+4. **Event parsing:** Add to the event parsing code in
+   `pinchy/src/events.rs`.
+5. **Test:** Ensure the new syscall is being traced and parsed
+   correctly.
+
+## Building
+When trying a build, always use `cargo check`, aya projects are not
+very friendly with `cargo build` or `cargo build --workspace`.
+
+## Troubleshooting
+- If you encounter a build error or ICE (internal compiler error), try
+  a clean build (`cargo clean`) before investigating further.
+- If a syscall is not being traced, double-check all steps above,
+  especially the tailcall and event parsing registration.
+
+## Note
+If you notice these instructions are missing a step or are unclear,
+please propose an update to this file. Try to keep it under 80 columns
+while doing so for better readability on wide terminals / editors.

@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_ppoll, SYS_read},
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_ppoll, SYS_read},
     SyscallEvent,
 };
 
@@ -97,6 +97,13 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 left_over,
                 data.count,
                 event.return_value
+            )
+        }
+        SYS_lseek => {
+            let data = unsafe { event.data.lseek };
+            format!(
+                "{} lseek(fd: {}, offset: {}, whence: {}) = {}",
+                event.tid, data.fd, data.offset, data.whence, event.return_value
             )
         }
         _ => format!("{} unknown syscall {}", event.tid, event.syscall_nr),

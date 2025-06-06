@@ -15,7 +15,9 @@ use aya::{
 use bytes::BytesMut;
 use log::{debug, trace, warn};
 use pinchy_common::{
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_ppoll, SYS_read, ALL_SUPPORTED_SYSCALLS},
+    syscalls::{
+        SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_ppoll, SYS_read, ALL_SUPPORTED_SYSCALLS,
+    },
     SyscallEvent,
 };
 use tokio::{
@@ -365,7 +367,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     prog.load()?;
 
     // Use the same tail call handler for trivial syscalls.
-    for syscall_nr in [SYS_close] {
+    const TRIVIAL_SYSCALLS: &[i64] = &[SYS_close, SYS_lseek];
+    for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
     }
 

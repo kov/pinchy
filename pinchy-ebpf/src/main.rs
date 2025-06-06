@@ -11,7 +11,7 @@ use aya_ebpf::{
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
-    syscalls::{SYS_close, SYS_epoll_pwait, SYS_ppoll, SYS_read},
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_ppoll, SYS_read},
     SyscallEvent, DATA_READ_SIZE,
 };
 
@@ -181,6 +181,14 @@ fn try_syscall_exit_trivial(ctx: TracePointContext) -> Result<(), u32> {
             let fd = args[0] as i32;
             pinchy_common::SyscallEventData {
                 close: pinchy_common::CloseData { fd },
+            }
+        }
+        SYS_lseek => {
+            let fd = args[0] as i32;
+            let offset = args[1] as i64;
+            let whence = args[2] as i32;
+            pinchy_common::SyscallEventData {
+                lseek: pinchy_common::LseekData { fd, offset, whence },
             }
         }
         _ => {

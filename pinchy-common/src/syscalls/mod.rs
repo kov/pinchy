@@ -11,7 +11,8 @@ pub use x86_64::*;
 #[cfg(not(any(aarch64, x86_64)))]
 compile_error!("Unsupported architecture. Currently only aarch64 and x86_64 are supported.");
 
-pub const ALL_SUPPORTED_SYSCALLS: &[i64] = &[SYS_close, SYS_read, SYS_epoll_pwait, SYS_ppoll];
+pub const ALL_SUPPORTED_SYSCALLS: &[i64] =
+    &[SYS_close, SYS_read, SYS_epoll_pwait, SYS_ppoll, SYS_lseek];
 
 #[macro_export]
 macro_rules! declare_syscalls {

@@ -8,12 +8,16 @@ use std::{
 
 use anyhow::anyhow;
 use aya::{
-    maps::{perf::AsyncPerfEventArray, Array},
+    maps::{perf::AsyncPerfEventArray, Array, ProgramArray},
     programs::TracePoint,
+    Ebpf,
 };
 use bytes::BytesMut;
 use log::{debug, trace, warn};
-use pinchy_common::{syscalls::ALL_SUPPORTED_SYSCALLS, SyscallEvent};
+use pinchy_common::{
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_ppoll, SYS_read, ALL_SUPPORTED_SYSCALLS},
+    SyscallEvent,
+};
 use tokio::{
     io::unix::AsyncFd,
     signal,
@@ -292,6 +296,8 @@ async fn main() -> anyhow::Result<()> {
     program.load()?;
     program.attach("raw_syscalls", "sys_exit")?;
 
+    load_tailcalls(&mut ebpf)?;
+
     // Wrap our ebpf object in a way that it can be shared with the various areas of the
     // code that need it.
     let ebpf = Arc::new(Mutex::new(ebpf));
@@ -342,6 +348,37 @@ async fn main() -> anyhow::Result<()> {
     println!("Waiting for Ctrl-C...");
     ctrl_c.await?;
     println!("Exiting...");
+
+    Ok(())
+}
+
+fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
+    let mut prog_array = ProgramArray::try_from(
+        ebpf.take_map("SYSCALL_TAILCALLS")
+            .ok_or_else(|| anyhow::anyhow!("SYSCALL_TAILCALLS map not found"))?,
+    )?;
+
+    let prog: &mut TracePoint = ebpf
+        .program_mut("syscall_exit_trivial")
+        .unwrap()
+        .try_into()?;
+    prog.load()?;
+
+    // Use the same tail call handler for trivial syscalls.
+    for syscall_nr in [SYS_close] {
+        prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
+    }
+
+    for (prog_name, syscall_nr) in [
+        ("syscall_exit_epoll_pwait", SYS_epoll_pwait),
+        ("syscall_exit_ppoll", SYS_ppoll),
+        ("syscall_exit_read", SYS_read),
+    ] {
+        let prog: &mut TracePoint = ebpf.program_mut(prog_name).unwrap().try_into()?;
+        prog.load()?;
+        prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
+        trace!("registered program for {}", syscall_nr);
+    }
 
     Ok(())
 }

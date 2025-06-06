@@ -18,9 +18,16 @@ pub struct SyscallEvent {
 
 #[repr(C)]
 pub union SyscallEventData {
+    pub close: CloseData,
     pub epoll_pwait: EpollPWaitData,
     pub ppoll: PpollData,
     pub read: ReadData,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CloseData {
+    pub fd: i32,
 }
 
 #[repr(C)]

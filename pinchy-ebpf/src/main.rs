@@ -4,14 +4,14 @@
 use aya_ebpf::{
     helpers::{bpf_probe_read_buf, bpf_probe_read_user},
     macros::{map, tracepoint},
-    maps::{Array, HashMap, PerfEventArray},
+    maps::{Array, HashMap, PerfEventArray, ProgramArray},
     programs::TracePointContext,
     EbpfContext as _,
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
-    syscalls::{SYS_epoll_pwait, SYS_ppoll, SYS_read},
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_ppoll, SYS_read},
     SyscallEvent, DATA_READ_SIZE,
 };
 
@@ -27,6 +27,9 @@ static mut EVENTS: PerfEventArray<SyscallEvent> = PerfEventArray::new(0);
 
 #[map]
 static mut ENTER_MAP: HashMap<u32, SyscallEnterData> = HashMap::with_max_entries(10240, 0);
+
+#[map(name = "SYSCALL_TAILCALLS")]
+static mut SYSCALL_TAILCALLS: ProgramArray = ProgramArray::pinned(512, 0);
 
 #[repr(C)]
 pub struct SyscallEnterData {
@@ -139,7 +142,6 @@ pub fn pinchy_exit(ctx: TracePointContext) -> u32 {
 const SYSCALL_RETURN_OFFSET: usize = 16;
 fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
     let tgid = ctx.tgid();
-    let tid = ctx.pid();
 
     if unsafe { PID_FILTER.get(&tgid).is_none() } {
         return Ok(0);
@@ -151,9 +153,197 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
         return Ok(0);
     }
 
+    unsafe {
+        let Err(_) = SYSCALL_TAILCALLS.tail_call(&ctx, syscall_nr as u32);
+        error!(&ctx, "failed tailcall for syscall {}", syscall_nr);
+        return Err(1);
+    }
+
+    #[allow(unreachable_code)]
+    Ok(0)
+}
+
+#[tracepoint]
+pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
+    match try_syscall_exit_trivial(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+fn try_syscall_exit_trivial(ctx: TracePointContext) -> Result<(), u32> {
+    let syscall_nr = get_syscall_nr(&ctx)?;
+    let args = get_args(&ctx, syscall_nr)?;
+    let return_value = get_return_value(&ctx)?;
+
+    let data = match syscall_nr {
+        SYS_close => {
+            let fd = args[0] as i32;
+            pinchy_common::SyscallEventData {
+                close: pinchy_common::CloseData { fd },
+            }
+        }
+        _ => {
+            trace!(&ctx, "unknown syscall {}", syscall_nr);
+            return Ok(());
+        }
+    };
+
+    output_event(&ctx, syscall_nr, return_value, data)?;
+
+    Ok(())
+}
+
+#[tracepoint]
+pub fn syscall_exit_epoll_pwait(ctx: TracePointContext) -> u32 {
+    match try_syscall_exit_epoll_pwait(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+fn try_syscall_exit_epoll_pwait(ctx: TracePointContext) -> Result<(), u32> {
+    let syscall_nr = SYS_epoll_pwait;
+    let args = get_args(&ctx, syscall_nr)?;
+    let return_value = get_return_value(&ctx)?;
+
+    let epfd = args[0] as i32;
+    let events_ptr = args[1] as *const EpollEvent;
+    let max_events = args[2] as i32;
+    let timeout = args[3] as i32;
+
+    let mut events = [EpollEvent::default(); 8];
+    for i in 0..events.len() {
+        if i < return_value as usize {
+            unsafe {
+                let events_ptr = events_ptr.add(i as usize);
+                if let Ok(evt) = bpf_probe_read_user::<EpollEvent>(events_ptr as *const _) {
+                    events[i] = evt;
+                }
+            }
+        }
+    }
+
+    output_event(
+        &ctx,
+        syscall_nr,
+        return_value,
+        pinchy_common::SyscallEventData {
+            epoll_pwait: pinchy_common::EpollPWaitData {
+                epfd,
+                events,
+                max_events,
+                timeout,
+            },
+        },
+    )?;
+
+    Ok(())
+}
+
+#[tracepoint]
+pub fn syscall_exit_ppoll(ctx: TracePointContext) -> u32 {
+    match try_syscall_exit_ppoll(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+fn try_syscall_exit_ppoll(ctx: TracePointContext) -> Result<(), u32> {
+    let syscall_nr = SYS_ppoll;
+    let args = get_args(&ctx, syscall_nr)?;
+    let return_value = get_return_value(&ctx)?;
+
+    let nfds = args[1];
+    let fds_ptr = args[0] as *const Pollfd;
+    let mut fds = [0i32; 16];
+    let mut events = [0i16; 16];
+    let mut revents = [0i16; 16];
+    for i in 0..fds.len() {
+        if i < nfds {
+            unsafe {
+                let entry_ptr = fds_ptr.add(i as usize);
+                if let Ok(pollfd) = bpf_probe_read_user::<Pollfd>(entry_ptr as *const _) {
+                    fds[i] = pollfd.fd;
+                    events[i] = pollfd.events;
+                    revents[i] = pollfd.revents;
+                }
+            }
+        }
+    }
+    let timeout = read_timespec(args[2] as *const _);
+
+    output_event(
+        &ctx,
+        syscall_nr,
+        return_value,
+        pinchy_common::SyscallEventData {
+            ppoll: pinchy_common::PpollData {
+                fds,
+                events,
+                revents,
+                nfds: nfds as u32,
+                timeout,
+            },
+        },
+    )?;
+
+    Ok(())
+}
+
+#[tracepoint]
+pub fn syscall_exit_read(ctx: TracePointContext) -> u32 {
+    match try_syscall_exit_read(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+fn try_syscall_exit_read(ctx: TracePointContext) -> Result<(), u32> {
+    let syscall_nr = SYS_read;
+    let args = get_args(&ctx, syscall_nr)?;
+    let return_value = get_return_value(&ctx)?;
+
+    let fd = args[0] as i32;
+    let buf_addr = args[1];
+    let count = args[2];
+
+    let mut buf = [0u8; DATA_READ_SIZE];
+    let to_read = core::cmp::min(return_value as usize, buf.len());
+    unsafe {
+        let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_read]);
+    }
+
+    output_event(
+        &ctx,
+        syscall_nr,
+        return_value,
+        pinchy_common::SyscallEventData {
+            read: pinchy_common::ReadData { fd, buf, count },
+        },
+    )?;
+
+    Ok(())
+}
+
+fn read_timespec(ptr: *const Timespec) -> Timespec {
+    unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
+}
+
+fn get_syscall_nr(ctx: &TracePointContext) -> Result<i64, u32> {
+    unsafe { ENTER_MAP.get(&ctx.pid()) }
+        .map(|data| data.syscall_nr)
+        .ok_or(1)
+}
+
+fn get_args(ctx: &TracePointContext, expected_syscall_nr: i64) -> Result<[usize; 6], u32> {
+    let tgid = ctx.tgid();
+    let tid = ctx.pid();
+    let syscall_nr = SYS_read;
+
     let Some(enter_data) = (unsafe { ENTER_MAP.get(&tid) }) else {
         error!(
-            &ctx,
+            ctx,
             "Could not find matching enter data for syscall {} exit (tid {}, tgid {})",
             syscall_nr,
             tid,
@@ -162,17 +352,11 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
         return Err(1);
     };
 
-    // Copy the part of the enter data we care about...
-    let args = enter_data.args;
-
-    // Then remove the item from the map.
-    let _ = unsafe { ENTER_MAP.remove(&tid) };
-
-    if enter_data.syscall_nr != syscall_nr {
+    if enter_data.syscall_nr != expected_syscall_nr {
         error!(
-            &ctx,
+            ctx,
             "Expected syscall {} found syscall {} on enter data (tid {}, tgid {})",
-            syscall_nr,
+            expected_syscall_nr,
             enter_data.syscall_nr,
             tid,
             tgid
@@ -180,96 +364,30 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
         return Err(1);
     }
 
-    let return_value = unsafe {
+    // Copy the part of the enter data we care about...
+    let args = enter_data.args;
+
+    // Then remove the item from the map.
+    let _ = unsafe { ENTER_MAP.remove(&tid) };
+
+    Ok(args)
+}
+
+fn get_return_value(ctx: &TracePointContext) -> Result<i64, u32> {
+    Ok(unsafe {
         ctx.read_at::<i64>(SYSCALL_RETURN_OFFSET)
-            .map_err(|e| e as u32)?
-    };
+            .map_err(|_| 1u32)?
+    })
+}
 
-    let data = match syscall_nr {
-        SYS_epoll_pwait => {
-            let epfd = args[0] as i32;
-            let events_ptr = args[1] as *const EpollEvent;
-            let max_events = args[2] as i32;
-            let timeout = args[3] as i32;
-
-            let mut events = [EpollEvent::default(); 8];
-            for i in 0..events.len() {
-                // The events pointer is an out parameter, the return value tells us how many were
-                // populated by the syscall.
-                if i < return_value as usize {
-                    unsafe {
-                        let events_ptr = events_ptr.add(i as usize);
-                        if let Ok(evt) = bpf_probe_read_user::<EpollEvent>(events_ptr as *const _) {
-                            events[i] = evt;
-                        }
-                    }
-                }
-            }
-
-            pinchy_common::SyscallEventData {
-                epoll_pwait: pinchy_common::EpollPWaitData {
-                    epfd,
-                    events,
-                    max_events,
-                    timeout,
-                },
-            }
-        }
-        SYS_read => {
-            let fd = args[0] as i32;
-            let buf_addr = args[1];
-            let count = args[2];
-
-            let mut buf = [0u8; DATA_READ_SIZE];
-
-            // The return value is what tells us how many bytes were read.
-            let to_read = core::cmp::min(return_value as usize, buf.len());
-            unsafe {
-                let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_read]);
-            }
-
-            pinchy_common::SyscallEventData {
-                read: pinchy_common::ReadData { fd, buf, count },
-            }
-        }
-        SYS_ppoll => {
-            let nfds = args[1];
-
-            let fds_ptr = args[0] as *const Pollfd;
-
-            let mut fds = [0i32; 16];
-            let mut events = [0i16; 16];
-            let mut revents = [0i16; 16];
-            for i in 0..fds.len() {
-                if i < nfds {
-                    unsafe {
-                        let entry_ptr = fds_ptr.add(i as usize);
-                        if let Ok(pollfd) = bpf_probe_read_user::<Pollfd>(entry_ptr as *const _) {
-                            fds[i] = pollfd.fd;
-                            events[i] = pollfd.events;
-                            revents[i] = pollfd.revents;
-                        }
-                    }
-                }
-            }
-
-            let timeout = read_timespec(args[2] as *const _);
-
-            pinchy_common::SyscallEventData {
-                ppoll: pinchy_common::PpollData {
-                    fds,
-                    events,
-                    revents,
-                    nfds: nfds as u32,
-                    timeout,
-                },
-            }
-        }
-        _ => {
-            trace!(&ctx, "unknown syscall {}", syscall_nr);
-            return Ok(0);
-        }
-    };
+fn output_event(
+    ctx: &TracePointContext,
+    syscall_nr: i64,
+    return_value: i64,
+    data: pinchy_common::SyscallEventData,
+) -> Result<(), u32> {
+    let tgid = ctx.tgid();
+    let tid = ctx.pid();
 
     let event = SyscallEvent {
         syscall_nr,
@@ -278,13 +396,10 @@ fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
         return_value,
         data,
     };
-    unsafe { EVENTS.output(&ctx, &event, 0) };
 
-    Ok(0)
-}
+    unsafe { EVENTS.output(ctx, &event, 0) };
 
-fn read_timespec(ptr: *const Timespec) -> Timespec {
-    unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
+    Ok(())
 }
 
 #[cfg(not(test))]

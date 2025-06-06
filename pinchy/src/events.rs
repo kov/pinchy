@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
-    syscalls::{SYS_epoll_pwait, SYS_ppoll, SYS_read},
+    syscalls::{SYS_close, SYS_epoll_pwait, SYS_ppoll, SYS_read},
     SyscallEvent,
 };
 
@@ -12,6 +12,13 @@ use crate::util::poll_bits_to_strs;
 pub async fn handle_event(event: &SyscallEvent) -> String {
     trace!("handle_event for syscall {}", event.syscall_nr);
     let mut output = match event.syscall_nr {
+        SYS_close => {
+            let data = unsafe { event.data.close };
+            format!(
+                "{} close(fd: {}) = {}",
+                event.tid, data.fd, event.return_value
+            )
+        }
         SYS_epoll_pwait => {
             let data = unsafe { event.data.epoll_pwait };
             let epoll_events =

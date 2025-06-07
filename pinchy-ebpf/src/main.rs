@@ -12,7 +12,8 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
+        SYS_close, SYS_epoll_pwait, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read,
+        SYS_sched_yield,
     },
     SyscallEvent, DATA_READ_SIZE,
 };
@@ -393,6 +394,32 @@ pub fn syscall_exit_read(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 read: pinchy_common::ReadData { fd, buf, count },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_ioctl(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_ioctl;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let request = args[1] as u32;
+        let arg = args[2];
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                ioctl: pinchy_common::IoctlData { fd, request, arg },
             },
         )
     }

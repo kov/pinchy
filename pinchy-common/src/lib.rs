@@ -26,6 +26,7 @@ pub union SyscallEventData {
     pub openat: OpenAtData,
     pub futex: FutexData,
     pub sched_yield: SchedYieldData,
+    pub ioctl: IoctlData,
 }
 
 #[repr(C)]
@@ -92,3 +93,11 @@ pub struct FutexData {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SchedYieldData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IoctlData {
+    pub fd: i32,
+    pub request: u32,
+    pub arg: usize,
+}

@@ -4,8 +4,8 @@ use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_futex, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read,
-        SYS_sched_yield,
+        SYS_close, SYS_epoll_pwait, SYS_futex, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll,
+        SYS_read, SYS_sched_yield,
     },
     SyscallEvent,
 };
@@ -134,6 +134,14 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.tid, data.uaddr, data.op, data.val, data.uaddr2, data.val3, format_timespec(data.timeout), event.return_value
             )
         }
+        SYS_ioctl => {
+            let data = unsafe { event.data.ioctl };
+            let request = format_ioctl_request(data.request);
+            format!(
+                "{} ioctl(fd: {}, request: {}::{}, arg: 0x{:x}) = {}",
+                event.tid, data.fd, request.0, request.1, data.arg, event.return_value
+            )
+        }
         _ => format!("{} unknown syscall {}", event.tid, event.syscall_nr),
     };
 
@@ -141,6 +149,10 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
     output.push('\n');
 
     output
+}
+
+fn format_ioctl_request(request: u32) -> (&'static str, &'static str) {
+    include!("ioctls-match.rsinc")
 }
 
 fn format_timespec(timespec: Timespec) -> String {

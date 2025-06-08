@@ -1,4 +1,6 @@
-# pinchy
+# Pinchy
+
+![Pinchy](pinchy.png)
 
 ## Prerequisites
 

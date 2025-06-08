@@ -26,7 +26,7 @@ use tokio::{
     signal,
     sync::{
         mpsc::{channel, Receiver, Sender},
-        Mutex,
+        Mutex, Notify,
     },
 };
 use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
@@ -309,12 +309,14 @@ async fn main() -> anyhow::Result<()> {
     // The pipes we want to send data to
     let pipe_map = Arc::new(Mutex::new(HashMap::new()));
 
+    let shutdown = Arc::new(Notify::new());
+
     // The following lines start the basic structure of tasks that handle events. Readers are spawned
     // for each of the per-CPU buffers send events to the main handler channel, spawned on this function.
     // There is also a writer task - handler output is put on its own queue and it can take its time
     // sending it out to the various subscribers.
     let (tx, mut rx) = channel(128);
-    spawn_event_readers(&ebpf, tx).await?;
+    spawn_event_readers(&ebpf, tx, shutdown.clone()).await?;
 
     let (write_tx, write_rx) = channel(128);
     tokio::spawn(async move {
@@ -341,16 +343,27 @@ async fn main() -> anyhow::Result<()> {
         .await?;
     }
 
-    // Start D-Bus service on system bus
+    // Start D-Bus service
     let dbus = PinchyDBus { ebpf, pipe_map };
-    let conn = zbus::Connection::system().await?;
+
+    // We allow requesting usage of the session bus, mostly for the tests.
+    let (conn, bus_type) = match std::env::var("PINCHYD_USE_SESSION_BUS") {
+        Ok(value) if value == "true" => (zbus::Connection::session().await?, "session"),
+        _ => (zbus::Connection::system().await?, "system"),
+    };
+
     conn.object_server().at("/org/pinchy/Service", dbus).await?;
     conn.request_name("org.pinchy.Service").await?;
-    println!("Pinchy D-Bus service started on system bus");
+    println!("Pinchy D-Bus service started on {bus_type} bus");
 
     let ctrl_c = signal::ctrl_c();
+
     println!("Waiting for Ctrl-C...");
     ctrl_c.await?;
+    eprintln!("Ctrl-C received...");
+
+    shutdown.notify_waiters();
+
     println!("Exiting...");
 
     Ok(())
@@ -394,6 +407,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 pub async fn spawn_event_readers(
     ebpf: &SharedEbpf,
     tx: Sender<SyscallEvent>,
+    shutdown: Arc<Notify>,
 ) -> anyhow::Result<()> {
     let mut events = AsyncPerfEventArray::try_from(
         ebpf.lock()
@@ -406,24 +420,37 @@ pub async fn spawn_event_readers(
         let mut bufs = vec![BytesMut::with_capacity(4096)];
         let mut buf_events = events.open(cpu_id, None)?;
         let tx = tx.clone();
+        let shutdown = shutdown.clone();
         tokio::spawn(async move {
             loop {
-                match buf_events.read_events(&mut bufs).await {
-                    Ok(evts) => {
-                        for i in 0..evts.read {
-                            let event = &bufs[i];
-                            let syscall_event: SyscallEvent =
-                                unsafe { std::ptr::read_unaligned(event.as_ptr() as *const _) };
-                            let _ = tx.send(syscall_event).await;
+                tokio::select! {
+                        _ = shutdown.notified() => {
+                            trace!("[cpu reader] Shutdown requested, stopping...");
+                            return;
                         }
-                    }
-                    Err(e) => {
-                        eprintln!("PerfEventArray read error: {e}");
-                        break;
+                        evts = buf_events.read_events(&mut bufs) => {
+                            trace!("post-read_events");
+                            match evts {
+                                Ok(evts) => {
+                                    trace!("Received {} events {} lost", evts.read, evts.lost);
+                                    for i in 0..evts.read {
+                                        let event = &bufs[i];
+                                        let syscall_event: SyscallEvent =
+                                            unsafe { std::ptr::read_unaligned(event.as_ptr() as *const _) };
+                                        let _ = tx.send(syscall_event).await;
+                                    }
+                                }
+                                Err(e) => {
+                                    eprintln!("PerfEventArray read error: {e}");
+                                    return;
+                                }
+                            }
                     }
                 }
+                trace!("READER LOOP...");
             }
         });
+        trace!("Done setting up readers");
     }
     Ok(())
 }

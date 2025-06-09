@@ -32,6 +32,7 @@ use tokio::{
 use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
 
 mod events;
+mod ioctls;
 mod util;
 
 type SharedEbpf = Arc<Mutex<aya::Ebpf>>;

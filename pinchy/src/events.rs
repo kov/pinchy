@@ -10,7 +10,7 @@ use pinchy_common::{
     SyscallEvent,
 };
 
-use crate::util::poll_bits_to_strs;
+use crate::{ioctls::format_ioctl_request, util::poll_bits_to_strs};
 
 pub async fn handle_event(event: &SyscallEvent) -> String {
     trace!("handle_event for syscall {}", event.syscall_nr);
@@ -149,10 +149,6 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
     output.push('\n');
 
     output
-}
-
-fn format_ioctl_request(request: u32) -> (&'static str, &'static str) {
-    include!("ioctls-match.rsinc")
 }
 
 fn format_timespec(timespec: Timespec) -> String {

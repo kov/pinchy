@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
+
 use std::{
     ffi::c_void,
     io::{BufRead as _, BufReader, PipeReader},

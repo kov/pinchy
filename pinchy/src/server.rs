@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
+
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     collections::HashMap,

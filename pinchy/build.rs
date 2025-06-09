@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
+
 use anyhow::{anyhow, Context as _};
 use aya_build::cargo_metadata;
 

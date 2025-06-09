@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
+
 #[cfg(aarch64)]
 mod aarch64;
 #[cfg(aarch64)]

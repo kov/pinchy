@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
+
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     let mut strs = vec![];
 

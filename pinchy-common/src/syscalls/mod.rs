@@ -14,18 +14,6 @@ pub use x86_64::*;
 #[cfg(not(any(aarch64, x86_64)))]
 compile_error!("Unsupported architecture. Currently only aarch64 and x86_64 are supported.");
 
-pub const ALL_SUPPORTED_SYSCALLS: &[i64] = &[
-    SYS_close,
-    SYS_futex,
-    SYS_read,
-    SYS_epoll_pwait,
-    SYS_ppoll,
-    SYS_lseek,
-    SYS_openat,
-    SYS_sched_yield,
-    SYS_ioctl,
-];
-
 #[macro_export]
 macro_rules! declare_syscalls {
     (
@@ -38,5 +26,12 @@ macro_rules! declare_syscalls {
                 _ => None,
             }
         }
+        pub fn syscall_name_from_nr(nr: i64) -> Option<&'static str> {
+            match nr {
+                $( $name => Some(&stringify!($name)[4..]), )*
+                _ => None,
+            }
+        }
+        pub const ALL_SYSCALLS: &[i64] = &[$($name),*];
     };
 }

@@ -19,8 +19,8 @@ use bytes::BytesMut;
 use log::{debug, trace, warn};
 use pinchy_common::{
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_futex, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll,
-        SYS_read, SYS_sched_yield, ALL_SUPPORTED_SYSCALLS,
+        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_futex, SYS_ioctl, SYS_lseek,
+        SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -341,7 +341,7 @@ async fn main() -> anyhow::Result<()> {
             &pipe_map,
             pid,
             unsafe { PipeWriter::from_raw_fd(1) },
-            ALL_SUPPORTED_SYSCALLS.to_vec(),
+            ALL_SYSCALLS.to_vec(),
         )
         .await?;
     }
@@ -378,6 +378,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("SYSCALL_TAILCALLS map not found"))?,
     )?;
 
+    // Track which syscalls have explicit handlers
+    let mut explicitly_supported = std::collections::HashSet::new();
+
     let prog: &mut TracePoint = ebpf
         .program_mut("syscall_exit_trivial")
         .unwrap()
@@ -388,6 +391,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     const TRIVIAL_SYSCALLS: &[i64] = &[SYS_close, SYS_lseek, SYS_sched_yield];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
     }
 
     for (prog_name, syscall_nr) in [
@@ -401,7 +405,29 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         let prog: &mut TracePoint = ebpf.program_mut(prog_name).unwrap().try_into()?;
         prog.load()?;
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
         trace!("registered program for {}", syscall_nr);
+    }
+
+    // Load the generic handler for all other syscalls
+    let generic_prog: &mut TracePoint = ebpf
+        .program_mut("syscall_exit_generic")
+        .unwrap()
+        .try_into()?;
+    generic_prog.load()?;
+
+    // Register generic handler for all other syscalls
+    for &syscall_nr in ALL_SYSCALLS {
+        if syscall_nr >= 0 && syscall_nr < 512 && !explicitly_supported.contains(&syscall_nr) {
+            prog_array.set(syscall_nr as u32, generic_prog.fd()?, 0)?;
+            if let Some(name) = syscall_name_from_nr(syscall_nr) {
+                trace!(
+                    "registered generic handler for syscall {} ({})",
+                    syscall_nr,
+                    name
+                );
+            }
+        }
     }
 
     Ok(())

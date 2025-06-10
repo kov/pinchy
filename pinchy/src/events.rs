@@ -7,8 +7,8 @@ use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_futex, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll,
-        SYS_read, SYS_sched_yield,
+        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_futex, SYS_ioctl, SYS_lseek,
+        SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
     },
     SyscallEvent,
 };
@@ -145,7 +145,26 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.tid, data.fd, request.0, request.1, data.arg, event.return_value
             )
         }
-        _ => format!("{} unknown syscall {}", event.tid, event.syscall_nr),
+        _ => {
+            // Check if this is a generic syscall with raw arguments
+            if let Some(name) = syscall_name_from_nr(event.syscall_nr) {
+                let data = unsafe { event.data.generic };
+                format!(
+                    "{} {}({}, {}, {}, {}, {}, {}) = {}",
+                    event.tid,
+                    name,
+                    data.args[0],
+                    data.args[1],
+                    data.args[2],
+                    data.args[3],
+                    data.args[4],
+                    data.args[5],
+                    event.return_value
+                )
+            } else {
+                format!("{} unknown syscall {}", event.tid, event.syscall_nr)
+            }
+        }
     };
 
     // Add a final new line.

@@ -7,7 +7,7 @@ use std::{
 };
 
 use clap::Parser;
-use pinchy_common::syscalls::{syscall_nr_from_name, ALL_SUPPORTED_SYSCALLS};
+use pinchy_common::syscalls::{syscall_nr_from_name, ALL_SYSCALLS};
 use zbus::{names::WellKnownName, proxy, Connection};
 
 #[proxy(interface = "org.pinchy.Service", default_path = "/org/pinchy/Service")]
@@ -19,7 +19,7 @@ fn parse_syscall_names(names: &[String]) -> Result<Vec<i64>, String> {
     let mut out = Vec::new();
     for name in names {
         match syscall_nr_from_name(name) {
-            Some(nr) if ALL_SUPPORTED_SYSCALLS.contains(&nr) => out.push(nr),
+            Some(nr) if ALL_SYSCALLS.contains(&nr) => out.push(nr),
             Some(_) => return Err(format!("Syscall '{name}' is not supported by this build")),
             None => return Err(format!("Unknown syscall name: {name}")),
         }
@@ -50,7 +50,7 @@ async fn main() -> zbus::Result<()> {
             }
         }
     } else {
-        ALL_SUPPORTED_SYSCALLS.to_vec()
+        ALL_SYSCALLS.to_vec()
     };
     let connection = Connection::system().await?;
     let destination = WellKnownName::try_from("org.pinchy.Service").unwrap();

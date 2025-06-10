@@ -431,6 +431,28 @@ pub fn syscall_exit_ioctl(ctx: TracePointContext) -> u32 {
     }
 }
 
+#[tracepoint]
+pub fn syscall_exit_generic(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = get_syscall_nr(&ctx)?;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                generic: pinchy_common::GenericSyscallData { args },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
 #[inline(always)]
 fn read_timespec(ptr: *const Timespec) -> Timespec {
     unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()

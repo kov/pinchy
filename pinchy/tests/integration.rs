@@ -53,13 +53,23 @@ fn basic_reads() {
         .stdout(predicate::str::contains(format!("close(fd: {fd}) = 0")));
 }
 
+fn running_on_ubuntu() -> bool {
+    std::fs::read_to_string("/etc/os-release")
+        .map(|contents| contents.contains("ID=ubuntu"))
+        .unwrap_or(false)
+}
+
 fn run_pinchyd(pid: Option<u32>) -> Child {
     let mut cmd = process::Command::new("/usr/bin/dbus-launch");
     let mut cmd = cmd
         .stdout(Stdio::piped())
-        .env("PINCHYD_USE_SESSION_BUS", "true")
         //.env("RUST_LOG", "trace")
-        .arg("--exit-with-session");
+        .env("PINCHYD_USE_SESSION_BUS", "true");
+
+    // Ubuntu's dbus-launch seems to exit too soon when using this flag?
+    if !running_on_ubuntu() {
+        cmd = cmd.arg("--exit-with-session");
+    }
 
     cmd.arg(cargo_bin("pinchyd"));
     if let Some(pid) = pid {

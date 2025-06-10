@@ -24,3 +24,48 @@ jobs:
       run: cargo install bpf-linker
     - name: Build
       run: cargo build --verbose
+    - name: Build tests
+      run: |
+        cargo test --no-run --test integration
+        cp $(ls target/debug/deps/integration-* | grep -v '\.d') target/debug/test-integration
+    - uses: actions/upload-artifact@v4
+      with:
+        name: pinchy-build
+        if-no-files-found: error
+        path: |
+          ./target/debug/pinchyd
+          ./target/debug/pinchy
+          ./target/debug/test-integration
+
+  test:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: pinchy-build
+          path: ./target/debug
+
+      - name: Restore executable bits
+        run: |
+          chmod +x target/debug/pinchy
+          chmod +x target/debug/pinchyd
+          chmod +x target/debug/test-integration
+
+      - name: Install vng and dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y virtme-ng zstd busybox-static qemu-system-x86 dbus-x11
+
+      - name: Run integration test inside vng VM
+        run: |
+          sudo vng --run v6.14 \
+            --user root \
+            --rw \
+            --verbose \
+            -- \
+            sh -c scripts/virtme-script

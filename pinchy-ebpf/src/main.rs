@@ -44,6 +44,7 @@ pub struct SyscallEnterData {
     pub args: [usize; SYSCALL_ARGS_COUNT],
 }
 
+#[inline(always)]
 fn is_syscall_enabled(nr: i64) -> bool {
     if nr < 0 || nr >= 512 {
         return false;
@@ -55,14 +56,6 @@ fn is_syscall_enabled(nr: i64) -> bool {
         (byte & (1 << bit)) != 0
     } else {
         false
-    }
-}
-
-#[tracepoint]
-pub fn pinchy(ctx: TracePointContext) -> u32 {
-    match try_pinchy(ctx) {
-        Ok(ret) => ret,
-        Err(ret) => ret,
     }
 }
 
@@ -83,49 +76,48 @@ pub fn pinchy(ctx: TracePointContext) -> u32 {
 const SYSCALL_OFFSET: usize = 8;
 const SYSCALL_ARGS_OFFSET: usize = 16;
 const SYSCALL_ARGS_COUNT: usize = 6;
-fn try_pinchy(ctx: TracePointContext) -> Result<u32, u32> {
-    let tgid = ctx.tgid();
-    let tid = ctx.pid();
-
-    if unsafe { PID_FILTER.get(&tgid).is_none() } {
-        return Ok(0);
-    }
-
-    let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
-
-    if !is_syscall_enabled(syscall_nr) {
-        return Ok(0);
-    }
-
-    let args = unsafe {
-        ctx.read_at::<[usize; SYSCALL_ARGS_COUNT]>(SYSCALL_ARGS_OFFSET)
-            .map_err(|e| e as u32)?
-    };
-
-    let data = SyscallEnterData {
-        tgid,
-        syscall_nr,
-        args,
-    };
-
-    if let Err(err) = unsafe { ENTER_MAP.insert(&tid, &data, 0) } {
-        error!(
-            &ctx,
-            "Failed to insert data for syscall {} (tid {}, tgid {}). Error code: {}",
-            syscall_nr,
-            tid,
-            tgid,
-            err
-        );
-        return Err(err as u32);
-    }
-
-    Ok(0)
-}
-
 #[tracepoint]
-pub fn pinchy_exit(ctx: TracePointContext) -> u32 {
-    match try_pinchy_exit(ctx) {
+pub fn pinchy(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<u32, u32> {
+        let tgid = ctx.tgid();
+        let tid = ctx.pid();
+
+        if unsafe { PID_FILTER.get(&tgid).is_none() } {
+            return Ok(0);
+        }
+
+        let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
+
+        if !is_syscall_enabled(syscall_nr) {
+            return Ok(0);
+        }
+
+        let args = unsafe {
+            ctx.read_at::<[usize; SYSCALL_ARGS_COUNT]>(SYSCALL_ARGS_OFFSET)
+                .map_err(|e| e as u32)?
+        };
+
+        let data = SyscallEnterData {
+            tgid,
+            syscall_nr,
+            args,
+        };
+
+        if let Err(err) = unsafe { ENTER_MAP.insert(&tid, &data, 0) } {
+            error!(
+                &ctx,
+                "Failed to insert data for syscall {} (tid {}, tgid {}). Error code: {}",
+                syscall_nr,
+                tid,
+                tgid,
+                err
+            );
+            return Err(err as u32);
+        }
+
+        Ok(0)
+    }
+    match inner(ctx) {
         Ok(ret) => ret,
         Err(ret) => ret,
     }
@@ -146,27 +138,34 @@ pub fn pinchy_exit(ctx: TracePointContext) -> u32 {
 //
 // print fmt: "NR %ld = %ld", REC->id, REC->ret
 const SYSCALL_RETURN_OFFSET: usize = 16;
-fn try_pinchy_exit(ctx: TracePointContext) -> Result<u32, u32> {
-    let tgid = ctx.tgid();
+#[tracepoint]
+pub fn pinchy_exit(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<u32, u32> {
+        let tgid = ctx.tgid();
 
-    if unsafe { PID_FILTER.get(&tgid).is_none() } {
-        return Ok(0);
+        if unsafe { PID_FILTER.get(&tgid).is_none() } {
+            return Ok(0);
+        }
+
+        let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
+
+        if !is_syscall_enabled(syscall_nr) {
+            return Ok(0);
+        }
+
+        unsafe {
+            let Err(_) = SYSCALL_TAILCALLS.tail_call(&ctx, syscall_nr as u32);
+            error!(&ctx, "failed tailcall for syscall {}", syscall_nr);
+            return Err(1);
+        }
+
+        #[allow(unreachable_code)]
+        Ok(0)
     }
-
-    let syscall_nr = unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|e| e as u32)? };
-
-    if !is_syscall_enabled(syscall_nr) {
-        return Ok(0);
+    match inner(ctx) {
+        Ok(ret) => ret,
+        Err(ret) => ret,
     }
-
-    unsafe {
-        let Err(_) = SYSCALL_TAILCALLS.tail_call(&ctx, syscall_nr as u32);
-        error!(&ctx, "failed tailcall for syscall {}", syscall_nr);
-        return Err(1);
-    }
-
-    #[allow(unreachable_code)]
-    Ok(0)
 }
 
 #[tracepoint]
@@ -432,16 +431,19 @@ pub fn syscall_exit_ioctl(ctx: TracePointContext) -> u32 {
     }
 }
 
+#[inline(always)]
 fn read_timespec(ptr: *const Timespec) -> Timespec {
     unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
 }
 
+#[inline(always)]
 fn get_syscall_nr(ctx: &TracePointContext) -> Result<i64, u32> {
     unsafe { ENTER_MAP.get(&ctx.pid()) }
         .map(|data| data.syscall_nr)
         .ok_or(1)
 }
 
+#[inline(always)]
 fn get_args(ctx: &TracePointContext, expected_syscall_nr: i64) -> Result<[usize; 6], u32> {
     let tgid = ctx.tgid();
     let tid = ctx.pid();
@@ -479,6 +481,7 @@ fn get_args(ctx: &TracePointContext, expected_syscall_nr: i64) -> Result<[usize;
     Ok(args)
 }
 
+#[inline(always)]
 fn get_return_value(ctx: &TracePointContext) -> Result<i64, u32> {
     Ok(unsafe {
         ctx.read_at::<i64>(SYSCALL_RETURN_OFFSET)
@@ -486,6 +489,7 @@ fn get_return_value(ctx: &TracePointContext) -> Result<i64, u32> {
     })
 }
 
+#[inline(always)]
 fn output_event(
     ctx: &TracePointContext,
     syscall_nr: i64,

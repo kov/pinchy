@@ -6,9 +6,11 @@ use std::{
     os::fd::AsRawFd,
 };
 
+use anyhow::Result;
 use clap::Parser;
+use log::trace;
 use pinchy_common::syscalls::{syscall_nr_from_name, ALL_SYSCALLS};
-use zbus::{names::WellKnownName, proxy, Connection};
+use zbus::{fdo, names::WellKnownName, proxy, Connection, Error as ZBusError};
 
 #[proxy(interface = "org.pinchy.Service", default_path = "/org/pinchy/Service")]
 trait Pinchy {
@@ -39,7 +41,9 @@ struct Args {
 }
 
 #[tokio::main]
-async fn main() -> zbus::Result<()> {
+async fn main() -> Result<()> {
+    env_logger::init();
+
     let args = Args::parse();
     let syscalls = if !args.syscalls.is_empty() {
         match parse_syscall_names(&args.syscalls) {
@@ -52,15 +56,35 @@ async fn main() -> zbus::Result<()> {
     } else {
         ALL_SYSCALLS.to_vec()
     };
-    let connection = Connection::system().await?;
+
+    // Handle D-Bus connection with proper error handling
+    let connection = match Connection::system().await {
+        Ok(conn) => conn,
+        Err(e) => handle_dbus_error(e),
+    };
+
     let destination = WellKnownName::try_from("org.pinchy.Service").unwrap();
-    let proxy = PinchyProxy::new(&connection, destination).await?;
+
+    // Handle proxy creation with proper error handling
+    let proxy = match PinchyProxy::new(&connection, destination).await {
+        Ok(proxy) => proxy,
+        Err(e) => handle_dbus_error(e),
+    };
+
     let pid = args.pid;
-    println!("Syscalls to trace: {:?}", syscalls);
 
-    let fd: std::os::fd::OwnedFd = proxy.trace_pid(pid, syscalls).await?.into();
+    trace!("Syscalls to trace: {:?}", syscalls);
 
-    println!("Received file descriptor: {}", fd.as_raw_fd());
+    // Handle method call with proper error handling
+    let fd: std::os::fd::OwnedFd = match proxy.trace_pid(pid, syscalls).await {
+        Ok(fd) => fd.into(),
+        Err(e) => handle_dbus_error(e),
+    };
+
+    trace!(
+        "Received file descriptor from dbus service: {}",
+        fd.as_raw_fd()
+    );
 
     let mut reader = std::fs::File::from(fd);
     let mut buf = [0u8; 4096];
@@ -79,4 +103,104 @@ async fn main() -> zbus::Result<()> {
     }
 
     Ok(())
+}
+
+fn handle_dbus_error(error: ZBusError) -> ! {
+    match error {
+        // Connection-related errors
+        ZBusError::InputOutput(io_err) => {
+            eprintln!("Failed to connect to D-Bus: {}", io_err);
+            eprintln!("Make sure the D-Bus system bus is running and accessible.");
+            std::process::exit(2);
+        }
+        ZBusError::Address(addr) => {
+            eprintln!("Invalid D-Bus address: {}", addr);
+            eprintln!("The D-Bus system bus address may be misconfigured.");
+            std::process::exit(2);
+        }
+        ZBusError::Handshake(msg) => {
+            eprintln!("D-Bus authentication failed: {}", msg);
+            eprintln!("You may not have permission to access the system D-Bus.");
+            std::process::exit(2);
+        }
+
+        // Service-related errors
+        ZBusError::MethodError(error_name, description, _) => match error_name.as_str() {
+            "org.freedesktop.DBus.Error.ServiceUnknown" => {
+                eprintln!("Pinchy service is not running.");
+                eprintln!("Please start the pinchyd daemon first.");
+                std::process::exit(3);
+            }
+            "org.freedesktop.DBus.Error.AccessDenied" | "org.freedesktop.DBus.Error.AuthFailed" => {
+                eprintln!("Permission denied: You don't have access to trace this process.");
+                eprintln!("Make sure you own the process or run with appropriate privileges.");
+                std::process::exit(4);
+            }
+            "org.freedesktop.DBus.Error.NoReply" | "org.freedesktop.DBus.Error.TimedOut" => {
+                eprintln!("Timeout: The pinchy service didn't respond in time.");
+                eprintln!("The service may be overloaded or the process may not exist.");
+                std::process::exit(5);
+            }
+            "org.freedesktop.DBus.Error.InvalidArgs" => {
+                if let Some(desc) = description {
+                    eprintln!("Invalid arguments: {}", desc);
+                } else {
+                    eprintln!("Invalid arguments provided to the pinchy service.");
+                }
+                std::process::exit(6);
+            }
+            _ => {
+                eprintln!("D-Bus method call failed: {}", error_name);
+                if let Some(desc) = description {
+                    eprintln!("Details: {}", desc);
+                }
+                std::process::exit(7);
+            }
+        },
+
+        // Proxy/Interface errors
+        ZBusError::InterfaceNotFound => {
+            eprintln!("Pinchy service interface not found.");
+            eprintln!("The running pinchyd may be incompatible with this client version.");
+            std::process::exit(8);
+        }
+
+        // FDO standard errors
+        ZBusError::FDO(fdo_error) => match *fdo_error {
+            fdo::Error::ServiceUnknown(_) => {
+                eprintln!("Pinchy service is not running.");
+                eprintln!("Please start the pinchyd daemon first.");
+                std::process::exit(3);
+            }
+            fdo::Error::AccessDenied(_) | fdo::Error::AuthFailed(_) => {
+                eprintln!("Permission denied: You don't have access to trace this process.");
+                eprintln!("Make sure you own the process or run with appropriate privileges.");
+                std::process::exit(4);
+            }
+            fdo::Error::NoReply(_) | fdo::Error::TimedOut(_) => {
+                eprintln!("Timeout: The pinchy service didn't respond in time.");
+                eprintln!("The service may be overloaded or the process may not exist.");
+                std::process::exit(5);
+            }
+            fdo::Error::InvalidArgs(ref msg) => {
+                eprintln!("Invalid arguments: {}", msg);
+                std::process::exit(6);
+            }
+            fdo::Error::UnknownMethod(ref msg) => {
+                eprintln!("Method not supported: {}", msg);
+                eprintln!("The running pinchyd may be incompatible with this client version.");
+                std::process::exit(8);
+            }
+            _ => {
+                eprintln!("D-Bus error: {}", fdo_error);
+                std::process::exit(7);
+            }
+        },
+
+        // Generic/Other errors
+        _ => {
+            eprintln!("Unexpected D-Bus error: {}", error);
+            std::process::exit(1);
+        }
+    }
 }

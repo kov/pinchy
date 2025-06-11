@@ -143,7 +143,7 @@ impl PinchyDBus {
             .await
             .map_err(|e| zbus::fdo::Error::AuthFailed(e.to_string()))?
         else {
-            return Err(zbus::fdo::Error::AuthFailed("Not authorized".to_string()));
+            return Err(zbus::fdo::Error::AccessDenied("Not authorized".to_string()));
         };
 
         let (read, write) = match pipe() {

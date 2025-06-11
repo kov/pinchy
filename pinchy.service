@@ -4,8 +4,5 @@ After=network.target
 
 [Service]
 Type=simple
-ExecStart=/usr/local/bin/pinchy
+ExecStart=/usr/local/bin/pinchyd
 Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target

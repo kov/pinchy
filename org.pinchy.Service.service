@@ -1,5 +1,5 @@
 [D-BUS Service]
 Name=org.pinchy.Service
-Exec=/usr/local/bin/pinchy
+Exec=/usr/local/bin/pinchyd
 User=root
 SystemdService=pinchy.service

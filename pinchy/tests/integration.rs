@@ -7,7 +7,7 @@ use std::{
     os::fd::OwnedFd,
     process::{self, Child, Output, Stdio},
     thread::JoinHandle,
-    time::Duration,
+    time::{Duration, Instant},
 };
 
 use assert_cmd::{assert::Assert, cargo::cargo_bin};
@@ -23,6 +23,64 @@ fn basic_output() {
     Assert::new(output)
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+fn auto_quit() {
+    // We won't start any tracing, after a minute we should see this message.
+    let now = Instant::now();
+
+    let pinchy = PinchyTest::new(
+        None,
+        Some(format!("Pinchy has been idle for a while, shutting down")),
+    );
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+
+    let elapsed = now.elapsed().as_secs();
+
+    // Check if we exited in around 10 seconds.
+    assert!(elapsed.abs_diff(10) < 5);
+}
+
+#[test]
+#[serial]
+fn auto_quit_after_client() {
+    // We won't start any tracing, after a minute we should see this message.
+    let pinchy = PinchyTest::new(None, Some(format!("Currently serving: 1")));
+
+    // Start pinchy client to monitor our own PID.
+    let mut child = process::Command::new(cargo_bin("pinchy"))
+        .arg(format!("{}", process::id()))
+        .spawn()
+        .unwrap();
+
+    // Give it time to establish connection and get some data.
+    std::thread::sleep(Duration::from_secs(1));
+
+    child.kill().unwrap();
+
+    // We start counting idle time after we killed the client.
+    let now = Instant::now();
+
+    // Now check the server gave us the expected output
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::contains("Currently serving: 0"))
+        .stdout(predicate::str::contains(
+            "Pinchy has been idle for a while, shutting down",
+        ))
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+
+    let elapsed = now.elapsed().as_secs();
+
+    // Check if we exited in under 20 seconds (worst case of hitting the idle check at exactly
+    // the same time we kill the client), with a bit of leeway
+    assert!(elapsed < 22);
 }
 
 #[test]

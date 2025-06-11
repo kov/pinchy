@@ -31,6 +31,7 @@ use tokio::{
         mpsc::{channel, Receiver, Sender},
         Mutex, Notify,
     },
+    time::{sleep, Duration},
 };
 use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
 
@@ -256,6 +257,88 @@ async fn resubscribe_syscalls(ebpf: &SharedEbpf, pipe_map: &PipeMap) {
     }
 }
 
+fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notify>) {
+    tokio::spawn(async move {
+        let idle_timeout = Duration::from_secs(10);
+
+        loop {
+            // Check if we're idle (no PIDs being traced)
+            let is_idle = {
+                let map = pipe_map.lock().await;
+                println!("Currently serving: {}", map.len());
+                map.is_empty()
+            };
+
+            if is_idle {
+                sleep(idle_timeout).await;
+
+                // Check again if we're still idle after the timeout, hold the lock
+                // while notifying waiters, so we are less likely to accept a new
+                // connection while quitting.
+                let map = pipe_map.lock().await;
+                if map.is_empty() {
+                    println!("Pinchy has been idle for a while, shutting down");
+                    shutdown.notify_waiters();
+                    return;
+                }
+            } else {
+                // We're busy, let's try reaping any dangling writers caused by our clients
+                // goind away.
+                let mut pids_to_remove = vec![];
+                {
+                    let mut map = pipe_map.lock().await;
+                    trace!("Writers map size before reaping: {}", map.len());
+                    for (&pid, writers) in map.iter_mut() {
+                        let mut keep = Vec::with_capacity(writers.len());
+                        for (w, _) in writers.iter_mut() {
+                            let should_keep =
+                                match w.try_io(tokio::io::Interest::WRITABLE, |mut inner| {
+                                    // Try a zero-byte write to detect if pipe is closed
+                                    inner.write(&[])
+                                }) {
+                                    Ok(_) => true, // Ready and operation succeeded
+                                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => true, // Not ready
+                                    Err(_) => false, // Pipe closed or some other error
+                                };
+                            keep.push(should_keep);
+                        }
+
+                        // Remove any writers that had errors / closed pipes. FIXME: share code with
+                        // event writer task.
+                        let mut keep_iter = keep.iter();
+                        writers.retain(|_| *keep_iter.next().unwrap());
+
+                        trace!("Writers left for PID {}: {}", pid, writers.len());
+                        if writers.is_empty() {
+                            pids_to_remove.push(pid);
+                        }
+                    }
+
+                    // Remove PID from the map here, it gets removed from the trace below.
+                    for &pid in &pids_to_remove {
+                        map.remove(&pid);
+                    }
+                }
+
+                for pid in pids_to_remove {
+                    if let Err(err) = remove_pid_trace(&ebpf, pid).await {
+                        eprintln!("Failed to remove PID {pid} from trace: {err}")
+                    };
+                }
+
+                resubscribe_syscalls(&ebpf, &pipe_map).await;
+                trace!(
+                    "Writers map size after reaping: {}",
+                    pipe_map.lock().await.len()
+                );
+
+                // Not idle, check again soon
+                sleep(Duration::from_secs(10)).await;
+            }
+        }
+    });
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -334,6 +417,11 @@ async fn main() -> anyhow::Result<()> {
 
     spawn_event_writer(ebpf.clone(), pipe_map.clone(), write_rx).await;
 
+    // Start auto-quit task (only if no PID argument was provided)
+    if pid.is_none() {
+        spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), shutdown.clone());
+    }
+
     // If we did get a PID as argument, monitor and print that to our own stdout.
     if let Some(pid) = pid {
         add_pid_trace(
@@ -362,8 +450,14 @@ async fn main() -> anyhow::Result<()> {
     let ctrl_c = signal::ctrl_c();
 
     println!("Waiting for Ctrl-C...");
-    ctrl_c.await?;
-    eprintln!("Ctrl-C received...");
+    tokio::select! {
+        result = ctrl_c => {
+            eprintln!("Ctrl-C received...");
+            result?;
+            shutdown.notify_waiters()
+        },
+        _ = shutdown.notified() => (),
+    };
 
     shutdown.notify_waiters();
 
@@ -520,8 +614,14 @@ pub async fn spawn_event_writer(
                     let mut keep_iter = keep.iter();
                     writers.retain(|_| *keep_iter.next().unwrap());
 
-                    // Release the map as early as we can
+                    // Release the map as early as we can, it will be locked again by
+                    // the helpers called below.
                     let empty_writers = writers.is_empty();
+
+                    if empty_writers {
+                        map.remove(&event.pid);
+                    }
+
                     drop(map);
 
                     if empty_writers {

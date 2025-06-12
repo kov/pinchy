@@ -1,4 +1,4 @@
-name: Rust
+name: Pinchy CI
 
 on:
   push:
@@ -35,6 +35,7 @@ jobs:
         path: |
           ./target/debug/pinchyd
           ./target/debug/pinchy
+          ./target/debug/test-helper
           ./target/debug/test-integration
 
   test:
@@ -54,12 +55,13 @@ jobs:
         run: |
           chmod +x target/debug/pinchy
           chmod +x target/debug/pinchyd
+          chmod +x target/debug/test-helper
           chmod +x target/debug/test-integration
 
       - name: Install vng and dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y virtme-ng zstd busybox-static qemu-system-x86 dbus-x11
+          sudo apt-get install -y virtme-ng zstd busybox-static qemu-system-x86 dbus-x11 procps
 
       - name: Run integration test inside vng VM
         run: |

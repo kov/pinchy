@@ -2,15 +2,20 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use std::{
-    io::{Read as _, Write as _},
-    os::fd::AsRawFd,
+    ffi::{c_char, CString, OsString},
+    io::{PipeReader, Read as _},
+    os::{
+        fd::{AsRawFd, OwnedFd},
+        unix::ffi::OsStrExt,
+    },
 };
 
 use anyhow::Result;
-use clap::Parser;
+use clap::{CommandFactory as _, Parser};
 use log::trace;
 use pinchy_common::syscalls::{syscall_nr_from_name, ALL_SYSCALLS};
-use zbus::{fdo, names::WellKnownName, proxy, Connection, Error as ZBusError};
+use tokio::io::{unix::AsyncFd, AsyncWriteExt as _};
+use zbus::{fdo, names::WellKnownName, proxy, Error as ZBusError};
 
 #[proxy(interface = "org.pinchy.Service", default_path = "/org/pinchy/Service")]
 trait Pinchy {
@@ -30,14 +35,19 @@ fn parse_syscall_names(names: &[String]) -> Result<Vec<i64>, String> {
 }
 
 #[derive(Parser, Debug)]
-#[command(author, version, about = "Pinchy client: trace syscalls for a PID", long_about = None)]
+#[command(author, version, about, trailing_var_arg = true)]
 struct Args {
     /// Syscall(s) to trace (can be repeated or comma-separated)
-    #[arg(short = 'e', long = "event", value_delimiter = ',', num_args = 1, action = clap::ArgAction::Append)]
+    #[arg(short = 'e', long = "event", value_delimiter = ',', action = clap::ArgAction::Append)]
     syscalls: Vec<String>,
 
-    /// PID to trace (must be the last argument)
-    pid: u32,
+    /// PID to trace
+    #[arg(short = 'p', long = "pid", action = clap::ArgAction::Set, conflicts_with = "command")]
+    pid: Option<u32>,
+
+    /// Command to run and its arguments
+    #[arg(conflicts_with = "pid")]
+    command: Option<Vec<OsString>>,
 }
 
 #[tokio::main]
@@ -58,10 +68,18 @@ async fn main() -> Result<()> {
     };
 
     // Handle D-Bus connection with proper error handling
-    let connection = match Connection::system().await {
+
+    let (conn, bus_type) = match std::env::var("PINCHYD_USE_SESSION_BUS") {
+        Ok(value) if value == "true" => (zbus::Connection::session().await, "session"),
+        _ => (zbus::Connection::system().await, "system"),
+    };
+
+    let connection = match conn {
         Ok(conn) => conn,
         Err(e) => handle_dbus_error(e),
     };
+
+    trace!("Connected to {bus_type} bus");
 
     let destination = WellKnownName::try_from("org.pinchy.Service").unwrap();
 
@@ -71,38 +89,96 @@ async fn main() -> Result<()> {
         Err(e) => handle_dbus_error(e),
     };
 
-    let pid = args.pid;
+    if let Some(command) = args.command {
+        let command: Vec<CString> = command
+            .into_iter()
+            .map(|s| CString::new(s.as_bytes()).unwrap())
+            .collect();
+        let mut argv: Vec<*const c_char> = command
+            .iter()
+            .map(|s| s.as_ptr() as *const c_char)
+            .collect();
+        argv.push(std::ptr::null());
 
-    trace!("Syscalls to trace: {:?}", syscalls);
+        let pid = unsafe { libc::fork() };
+        if pid < 0 {
+            eprintln!("Failed to fork a new process: {}", std::io::Error::last_os_error());
+            std::process::exit(1);
+        }
+        if pid == 0 {
+            unsafe {
+                // Wait for a signal before we exec
+                libc::raise(libc::SIGSTOP);
+                let result = libc::execvp(command[0].as_ptr(), argv.as_ptr());
+                std::process::exit(result);
+            }
+        }
 
-    // Handle method call with proper error handling
-    let fd: std::os::fd::OwnedFd = match proxy.trace_pid(pid, syscalls).await {
-        Ok(fd) => fd.into(),
-        Err(e) => handle_dbus_error(e),
+        let mut status = 0;
+        unsafe {
+            libc::waitpid(pid, &mut status, libc::WUNTRACED);
+            if !libc::WIFSTOPPED(status) {
+                eprintln!("Child process did not stop as expected (status: {status:#x})");
+                if libc::WIFEXITED(status) || libc::WIFSIGNALED(status) {
+                    std::process::exit(128 + libc::WTERMSIG(status));
+                }
+                std::process::exit(1);
+            }
+        }
+        let fd = match proxy.trace_pid(pid as u32, syscalls).await {
+            Ok(fd) => fd.into(),
+            Err(e) => handle_dbus_error(e),
+        };
+
+        // Signal we can exec the child
+        unsafe {
+            libc::kill(pid, libc::SIGCONT);
+        }
+
+        // Read everything there is to read, the server will close the write end
+        // of the pipe
+        relay_trace(fd).await?;
+
+        unsafe {
+            libc::waitpid(pid, &mut status, libc::WUNTRACED);
+            if libc::WIFEXITED(status) {
+                std::process::exit(libc::WEXITSTATUS(status));
+            } else if libc::WIFSIGNALED(status) {
+                std::process::exit(128 + libc::WTERMSIG(status));
+            }
+            std::process::exit(1);
+        }
+    } else if let Some(pid) = args.pid {
+        let fd = match proxy.trace_pid(pid, syscalls).await {
+            Ok(fd) => fd.into(),
+            Err(e) => handle_dbus_error(e),
+        };
+        relay_trace(fd).await?;
+    } else {
+        // Print clap's usage message and exit
+        Args::command().print_help().expect("Failed to print usage");
+        println!();
+        std::process::exit(2);
     };
 
+    Ok(())
+}
+
+async fn relay_trace(fd: OwnedFd) -> Result<()> {
     trace!(
         "Received file descriptor from dbus service: {}",
         fd.as_raw_fd()
     );
 
-    let mut reader = std::fs::File::from(fd);
+    let reader = AsyncFd::new(PipeReader::from(fd))?;
+    let mut stdout = tokio::io::stdout();
     let mut buf = [0u8; 4096];
-    let mut stdout = std::io::stdout().lock();
     loop {
-        match reader.read(&mut buf) {
-            Ok(0) => break,
-            Ok(n) => {
-                stdout.write_all(&buf[..n])?;
-            }
-            Err(e) => {
-                eprintln!("Read error: {e}");
-                break;
-            }
+        match reader.readable().await?.get_inner().read(&mut buf)? {
+            0 => break Ok(()),
+            n => stdout.write_all(&buf[..n]).await?,
         }
     }
-
-    Ok(())
 }
 
 fn handle_dbus_error(error: ZBusError) -> ! {

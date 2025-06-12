@@ -5,12 +5,13 @@ use std::{
     ffi::c_void,
     io::{BufRead as _, BufReader, PipeReader},
     os::fd::OwnedFd,
-    process::{self, Child, Output, Stdio},
+    process::{self, Child, Command, Output, Stdio},
     thread::JoinHandle,
     time::{Duration, Instant},
 };
 
 use assert_cmd::{assert::Assert, cargo::cargo_bin};
+use indoc::indoc;
 use pinchy_common::DATA_READ_SIZE;
 use predicates::prelude::*;
 use serial_test::serial;
@@ -53,8 +54,10 @@ fn auto_quit_after_client() {
     let pinchy = PinchyTest::new(None, Some(format!("Currently serving: 1")));
 
     // Start pinchy client to monitor our own PID.
-    let mut child = process::Command::new(cargo_bin("pinchy"))
-        .arg(format!("{}", process::id()))
+    let mut child = Command::new(cargo_bin("pinchy"))
+        //.env("RUST_LOG", "trace")
+        .arg(cargo_bin("test-helper"))
+        .arg("pinchy_reads")
         .spawn()
         .unwrap();
 
@@ -105,31 +108,60 @@ fn basic_reads() {
     let output = pinchy.wait();
 
     Assert::new(output)
-        .success()
+         .success()
         .stdout(predicate::str::contains(format!("openat(dfd: AT_FDCWD, pathname: \"/etc/os-release\", flags: 0x0 (O_RDONLY), mode: 0) = {fd}")))
         .stdout(predicate::str::contains(format!("read(fd: {fd}, buf: {:?}, count: 128) = 128", String::from_utf8(buf).unwrap())))
         .stdout(predicate::str::contains(format!("close(fd: {fd}) = 0")));
 }
 
-fn running_on_ubuntu() -> bool {
-    std::fs::read_to_string("/etc/os-release")
-        .map(|contents| contents.contains("ID=ubuntu"))
-        .unwrap_or(false)
+#[test]
+#[serial]
+fn pinchy_reads() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload
+    let handle = std::thread::spawn(|| {
+        Command::new(cargo_bin("pinchy"))
+            //.env("RUST_LOG", "trace")
+            .args(&["-e", "openat", "-e", "read", "-e", "lseek"])
+            .arg("--")
+            .arg(cargo_bin("test-helper"))
+            .arg("pinchy_reads")
+            .output()
+            .expect("Failed to run pinchy")
+    });
+
+    // Client's output
+    let expected_output = escaped_regex(indoc! {r#"
+           PID openat(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", flags: 0x0 (O_RDONLY), mode: 0) = 3
+           PID read(fd: 3, buf: "                    GNU GENERAL PUBLIC LICENSE\n                       Version 2, June 1991\n\n Copyright (C) 1989, 1991 Free Softw", count: 128) = 128
+           PID read(fd: 3, buf: "are Foundation, Inc.,\n 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n Everyone is permitted to copy and distribute " ... (896 more bytes), count: 1024) = 1024
+           PID lseek(fd: 3, offset: 0, whence: 2) = 18092
+           PID read(fd: 3, buf: "", count: 1024) = 0
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+fn escaped_regex(expected_output: &str) -> String {
+    regex::escape(expected_output).replace("PID", r"\d+")
 }
 
 fn run_pinchyd(pid: Option<u32>) -> Child {
-    let mut cmd = process::Command::new("/usr/bin/dbus-launch");
+    let mut cmd = process::Command::new(cargo_bin("pinchyd"));
     let mut cmd = cmd
-        .stdout(Stdio::piped())
         //.env("RUST_LOG", "trace")
-        .env("PINCHYD_USE_SESSION_BUS", "true");
+        .stdout(Stdio::piped());
 
-    // Ubuntu's dbus-launch seems to exit too soon when using this flag?
-    if !running_on_ubuntu() {
-        cmd = cmd.arg("--exit-with-session");
-    }
-
-    cmd.arg(cargo_bin("pinchyd"));
     if let Some(pid) = pid {
         cmd = cmd.arg(pid.to_string())
     }
@@ -205,6 +237,15 @@ struct PinchyTest {
 impl PinchyTest {
     fn new(pid: Option<u32>, first_needle: Option<String>) -> Self {
         ensure_root();
+        ensure_dbus_env();
+
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(wait_for_name_to_disappear(
+                "org.pinchy.Service",
+                Duration::from_secs(10),
+            ));
+        assert!(result.is_ok());
 
         let mut child = run_pinchyd(pid);
 
@@ -220,6 +261,12 @@ impl PinchyTest {
         } else {
             TestState::Running { reader }
         };
+
+        // Wait for name to show up in the bus before we go forward.
+        let result = tokio::runtime::Runtime::new()
+            .unwrap()
+            .block_on(wait_for_name("org.pinchy.Service", Duration::from_secs(1)));
+        assert!(result.is_ok());
 
         PinchyTest { child, data, state }
     }
@@ -251,4 +298,80 @@ impl PinchyTest {
 
         output
     }
+}
+
+use once_cell::sync::Lazy;
+
+static DBUS_ENV: Lazy<()> = Lazy::new(|| {
+    std::env::set_var("PINCHYD_USE_SESSION_BUS", "true");
+
+    let output = Command::new("dbus-launch")
+        .output()
+        .expect("failed to run dbus-launch");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+
+    for line in stdout.lines() {
+        if let Some((key, value)) = line.split_once('=') {
+            let value = value.trim_end_matches(';');
+            eprintln!("Setting {key} to {value}");
+            std::env::set_var(key, value);
+        }
+    }
+});
+
+fn ensure_dbus_env() {
+    Lazy::force(&DBUS_ENV);
+}
+
+use std::convert::TryFrom;
+
+use anyhow::bail;
+use futures::StreamExt;
+use zbus::{fdo::DBusProxy, names::BusName, Connection};
+
+async fn wait_for_name_to_disappear(bus_name: &str, timeout: Duration) -> anyhow::Result<()> {
+    let connection = Connection::session().await?;
+    let proxy = DBusProxy::new(&connection).await?;
+
+    let bus_name = BusName::try_from(bus_name)
+        .map_err(|e| zbus::Error::Address(format!("Invalid bus name: {e}")))?;
+
+    let start = Instant::now();
+    loop {
+        if !proxy.name_has_owner(bus_name.clone()).await? {
+            return Ok(());
+        }
+        let _ = Command::new("pkill").arg("pinchyd").status();
+        if start.elapsed() > timeout {
+            break;
+        }
+    }
+
+    bail!("Timeout waiting for name to be dropped")
+}
+
+async fn wait_for_name(bus_name: &str, timeout: Duration) -> anyhow::Result<()> {
+    let connection = Connection::session().await?;
+    let proxy = DBusProxy::new(&connection).await?;
+
+    let bus_name = BusName::try_from(bus_name)
+        .map_err(|e| zbus::Error::Address(format!("Invalid bus name: {e}")))?;
+
+    if proxy.name_has_owner(bus_name.clone()).await? {
+        return Ok(());
+    }
+
+    let mut stream = proxy.receive_name_owner_changed().await?;
+    let start = Instant::now();
+    while let Some(signal) = stream.next().await {
+        let args = signal.args()?;
+        if args.name == bus_name && !args.new_owner.is_none() {
+            return Ok(());
+        }
+        if start.elapsed() > timeout {
+            break;
+        }
+    }
+
+    bail!("Time out waiting for Pinchyd to appear")
 }

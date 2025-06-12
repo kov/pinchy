@@ -168,7 +168,11 @@ impl PinchyDBus {
             // Wait for the process to exit
             let _ = async_pidfd.readable().await;
 
+            // Give eBPF a small window for sending out the final events
+            sleep(Duration::from_millis(10)).await;
+
             // Remove from eBPF and pipe map
+            trace!("PID {pid} exited, removing from map");
             if let Err(e) = remove_pid_trace(&ebpf, pid).await {
                 eprintln!("Failed to remove PID from eBPF: {e}");
             }
@@ -552,7 +556,6 @@ pub async fn spawn_event_readers(
                             return;
                         }
                         evts = buf_events.read_events(&mut bufs) => {
-                            trace!("post-read_events");
                             match evts {
                                 Ok(evts) => {
                                     trace!("Received {} events {} lost", evts.read, evts.lost);
@@ -640,7 +643,17 @@ pub async fn spawn_event_writer(
                     }
                 }
                 None => {
-                    eprintln!("Unexpected: do not have writers for PID, but still monitoring it...")
+                    eprintln!(
+                        "Unexpected: do not have writers for PID, but still monitoring it..."
+                    );
+                    if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
+                        log::error!(
+                            "Failed to remove PID {} from eBPF filter map: {}",
+                            event.pid,
+                            e.to_string()
+                        );
+                    }
+                    log::trace!("No more writers for PID {}", event.pid);
                 }
             }
         }

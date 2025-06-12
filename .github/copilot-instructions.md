@@ -65,10 +65,7 @@ a dedicated handler.
 1. **Verify existence:** Confirm `SYS_<name>` exists in both arch files
    (see `pinchy-common/src/syscalls/aarch64.rs` and
    `pinchy-common/src/syscalls/x86_64.rs`).
-2. **ALL_SUPPORTED_SYSCALLS:** Add the syscall to the
-   `ALL_SUPPORTED_SYSCALLS` array in
-   `pinchy-common/src/syscalls/mod.rs`.
-3. **Trivial or complex:**
+2. **Trivial or complex:**
    - If trivial (no pointers, all arguments are plain integers):
      - Add to the match in `pinchy-ebpf/src/main.rs` in
        `try_syscall_exit_trivial`.
@@ -79,9 +76,9 @@ a dedicated handler.
        `pinchy-ebpf/src/main.rs`.
      - Register it in the appropriate array in `load_tailcalls()` in
        `pinchy/src/server.rs`.
-4. **Event parsing:** Add to the event parsing code in
+3. **Event parsing:** Add to the event parsing code in
    `pinchy/src/events.rs`.
-5. **Test:** Ensure the new syscall is being traced and parsed
+4. **Test:** Ensure the new syscall is being traced and parsed
    correctly.
 
 ## Building

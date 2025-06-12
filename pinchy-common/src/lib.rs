@@ -9,6 +9,7 @@ pub mod kernel_types;
 pub mod syscalls;
 
 pub const DATA_READ_SIZE: usize = 128;
+pub const SMALL_READ_SIZE: usize = 8;
 
 #[repr(C)]
 pub struct SyscallEvent {
@@ -30,6 +31,7 @@ pub union SyscallEventData {
     pub futex: FutexData,
     pub sched_yield: SchedYieldData,
     pub ioctl: IoctlData,
+    pub execve: ExecveData,
     pub generic: GenericSyscallData,
 }
 
@@ -104,6 +106,19 @@ pub struct IoctlData {
     pub fd: i32,
     pub request: u32,
     pub arg: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExecveData {
+    pub filename: [u8; SMALL_READ_SIZE * 4],
+    pub filename_truncated: bool,
+    pub argv: [[u8; SMALL_READ_SIZE]; 4],
+    pub argv_len: [u16; 4],
+    pub argc: u8,
+    pub envp: [[u8; SMALL_READ_SIZE]; 2],
+    pub envp_len: [u16; 2],
+    pub envc: u8,
 }
 
 #[repr(C)]

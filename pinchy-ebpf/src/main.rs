@@ -15,10 +15,10 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read,
-        SYS_sched_yield,
+        SYS_close, SYS_epoll_pwait, SYS_execve, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll,
+        SYS_read, SYS_sched_yield,
     },
-    SyscallEvent, DATA_READ_SIZE,
+    SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
 
 #[map]
@@ -34,6 +34,10 @@ static mut EVENTS: PerfEventArray<SyscallEvent> = PerfEventArray::new(0);
 #[map]
 static mut ENTER_MAP: HashMap<u32, SyscallEnterData> = HashMap::with_max_entries(10240, 0);
 
+#[map]
+static mut EXECVE_ENTER_MAP: HashMap<u32, ExecveEnterData> =
+    HashMap::<u32, ExecveEnterData>::with_max_entries(10240, 0);
+
 #[map(name = "SYSCALL_TAILCALLS")]
 static mut SYSCALL_TAILCALLS: ProgramArray = ProgramArray::pinned(512, 0);
 
@@ -42,6 +46,18 @@ pub struct SyscallEnterData {
     pub tgid: u32,
     pub syscall_nr: i64,
     pub args: [usize; SYSCALL_ARGS_COUNT],
+}
+
+#[repr(C)]
+pub struct ExecveEnterData {
+    pub filename: [u8; SMALL_READ_SIZE * 4],
+    pub filename_truncated: bool,
+    pub argv: [[u8; SMALL_READ_SIZE]; 4],
+    pub argv_len: [u16; 4],
+    pub argc: u8,
+    pub envp: [[u8; SMALL_READ_SIZE]; 2],
+    pub envp_len: [u16; 2],
+    pub envc: u8,
 }
 
 #[inline(always)]
@@ -446,6 +462,154 @@ pub fn syscall_exit_generic(ctx: TracePointContext) -> u32 {
                 generic: pinchy_common::GenericSyscallData { args },
             },
         )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let tid = ctx.pid();
+        let return_value = get_return_value(&ctx)?;
+        let enter_data = unsafe { EXECVE_ENTER_MAP.get(&tid) };
+        if let Some(enter_data) = enter_data {
+            let _ = unsafe { EXECVE_ENTER_MAP.remove(&tid) };
+            return output_event(
+                &ctx,
+                SYS_execve,
+                return_value,
+                pinchy_common::SyscallEventData {
+                    execve: pinchy_common::ExecveData {
+                        filename: enter_data.filename,
+                        filename_truncated: enter_data.filename_truncated,
+                        argv: enter_data.argv,
+                        argv_len: enter_data.argv_len,
+                        argc: enter_data.argc,
+                        envp: enter_data.envp,
+                        envp_len: enter_data.envp_len,
+                        envc: enter_data.envc,
+                    },
+                },
+            );
+        } else {
+            // fallback: emit empty event
+            return output_event(
+                &ctx,
+                SYS_execve,
+                return_value,
+                pinchy_common::SyscallEventData {
+                    execve: unsafe { core::mem::zeroed() },
+                },
+            );
+        }
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let tid = ctx.pid();
+        let args = unsafe {
+            ctx.read_at::<[usize; 6]>(SYSCALL_ARGS_OFFSET)
+                .map_err(|e| e as u32)?
+        };
+        let filename_ptr = args[0] as *const u8;
+        let argv_ptr = args[1] as *const *const u8;
+        let envp_ptr = args[2] as *const *const u8;
+
+        let mut filename = [0u8; SMALL_READ_SIZE * 4];
+        unsafe {
+            let _ = bpf_probe_read_buf(filename_ptr as *const _, &mut filename);
+        }
+        let mut filename_truncated = true;
+        for i in 0..filename.len() {
+            if filename[i] == 0 {
+                filename_truncated = false;
+                break;
+            }
+        }
+
+        let mut argv = [[0u8; SMALL_READ_SIZE]; 4];
+        let mut argv_len = [0u16; 4];
+        let mut argc = 0u8;
+        for i in 0..128 {
+            let ptr = unsafe { bpf_probe_read_user(argv_ptr.add(i) as *const *const u8) };
+            if let Ok(arg_ptr) = ptr {
+                if arg_ptr.is_null() {
+                    break;
+                }
+                if i < 4 {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(arg_ptr as *const _, &mut argv[i]);
+                    }
+                    for j in 0..argv[i].len() {
+                        if argv[i][j] == 0 {
+                            argv_len[i] = j as u16;
+                            break;
+                        }
+                    }
+                    if argv_len[i] == 0 && argv[i][0] != 0 {
+                        argv_len[i] = argv[i].len() as u16;
+                    }
+                }
+                argc += 1;
+            } else {
+                break;
+            }
+        }
+
+        let mut envp = [[0u8; SMALL_READ_SIZE]; 2];
+        let mut envp_len = [0u16; 2];
+        let mut envc = 0u8;
+        for i in 0..128 {
+            let ptr = unsafe { bpf_probe_read_user(envp_ptr.add(i) as *const *const u8) };
+            if let Ok(env_ptr) = ptr {
+                if env_ptr.is_null() {
+                    break;
+                }
+                if i < 2 {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(env_ptr as *const _, &mut envp[i]);
+                    }
+                    for j in 0..envp[i].len() {
+                        if envp[i][j] == 0 {
+                            envp_len[i] = j as u16;
+                            break;
+                        }
+                    }
+                    if envp_len[i] == 0 && envp[i][0] != 0 {
+                        envp_len[i] = envp[i].len() as u16;
+                    }
+                }
+                envc += 1;
+            } else {
+                break;
+            }
+        }
+
+        let data = ExecveEnterData {
+            filename,
+            filename_truncated,
+            argv,
+            argv_len,
+            argc,
+            envp,
+            envp_len,
+            envc,
+        };
+        unsafe {
+            EXECVE_ENTER_MAP
+                .insert(&tid, &data, 0)
+                .map_err(|e| e as u32)?;
+        }
+        Ok(())
     }
     match inner(ctx) {
         Ok(_) => 0,

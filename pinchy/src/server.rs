@@ -19,8 +19,8 @@ use bytes::BytesMut;
 use log::{debug, trace, warn};
 use pinchy_common::{
     syscalls::{
-        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_futex, SYS_ioctl, SYS_lseek,
-        SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, ALL_SYSCALLS,
+        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_futex, SYS_ioctl,
+        SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -390,6 +390,16 @@ async fn main() -> anyhow::Result<()> {
     program.load()?;
     program.attach("raw_syscalls", "sys_exit")?;
 
+    // Attach execve entry tracepoint for argument capture. This is necessary specifically
+    // for execve, as the process gets replaced when it is completed, erasing the data we
+    // need, so we need to capture it beforehand.
+    let program: &mut TracePoint = ebpf
+        .program_mut("syscall_enter_execve")
+        .unwrap()
+        .try_into()?;
+    program.load()?;
+    program.attach("raw_syscalls", "sys_enter")?;
+
     load_tailcalls(&mut ebpf)?;
 
     // Wrap our ebpf object in a way that it can be shared with the various areas of the
@@ -499,6 +509,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_openat", SYS_openat),
         ("syscall_exit_futex", SYS_futex),
         ("syscall_exit_ioctl", SYS_ioctl),
+        ("syscall_exit_execve", SYS_execve),
     ] {
         let prog: &mut TracePoint = ebpf.program_mut(prog_name).unwrap().try_into()?;
         prog.load()?;

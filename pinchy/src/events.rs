@@ -7,8 +7,8 @@ use log::trace;
 use pinchy_common::{
     kernel_types::Timespec,
     syscalls::{
-        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_futex, SYS_ioctl, SYS_lseek,
-        SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
+        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_futex, SYS_ioctl,
+        SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
     },
     SyscallEvent,
 };
@@ -143,6 +143,70 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
             format!(
                 "{} ioctl(fd: {}, request: {}::{}, arg: 0x{:x}) = {}",
                 event.tid, data.fd, request.0, request.1, data.arg, event.return_value
+            )
+        }
+        SYS_execve => {
+            use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+            let data = unsafe { event.data.execve };
+
+            // Format filename, showing ... if truncated
+            let filename = {
+                let nul_pos = data
+                    .filename
+                    .iter()
+                    .position(|&b| b == b'\0')
+                    .unwrap_or_else(|| data.filename.len());
+                let s = OsString::from_vec(data.filename[..nul_pos].to_vec());
+                if data.filename_truncated {
+                    // Truncated: no nul byte among the ones we read
+                    format!("{:?} ... (truncated)", s)
+                } else {
+                    format!("{:?}", s)
+                }
+            };
+
+            // Format argv, skipping empty slots and showing ... if truncated
+            let argc = data.argc as usize;
+            let argv = data
+                .argv
+                .iter()
+                .zip(data.argv_len.iter())
+                .take(argc)
+                .map(|(arg, &len)| {
+                    OsString::from_vec(arg[..(len as usize)].to_vec())
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect::<Vec<_>>();
+            let argv_trunc = if argc > data.argv.len() {
+                format!(", ... ({} more)", argc - data.argv.len())
+            } else {
+                String::new()
+            };
+            let argv_str = argv.join(", ") + &argv_trunc;
+
+            // Format envp, skipping empty slots and showing ... if truncated
+            let envc = data.envc as usize;
+            let envp = data
+                .envp
+                .iter()
+                .zip(data.envp_len.iter())
+                .take(envc)
+                .map(|(env, &len)| {
+                    OsString::from_vec(env[..(len as usize)].to_vec())
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect::<Vec<_>>();
+            let envp_trunc = if envc > data.envp.len() {
+                format!(", ... ({} more)", envc - data.envp.len())
+            } else {
+                String::new()
+            };
+            let envp_str = envp.join(", ") + &envp_trunc;
+            format!(
+                "{} execve(filename: {}, argv: [{}], envp: [{}]) = {}",
+                event.tid, filename, argv_str, envp_str, event.return_value
             )
         }
         _ => {

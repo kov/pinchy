@@ -238,7 +238,7 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
             if let Some(name) = syscall_name_from_nr(event.syscall_nr) {
                 let data = unsafe { event.data.generic };
                 format!(
-                    "{} {}({}, {}, {}, {}, {}, {}) = {}",
+                    "{} {}({}, {}, {}, {}, {}, {}) = {} <STUB>",
                     event.tid,
                     name,
                     data.args[0],

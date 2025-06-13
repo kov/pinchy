@@ -19,8 +19,9 @@ use bytes::BytesMut;
 use log::{debug, trace, warn};
 use pinchy_common::{
     syscalls::{
-        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_futex, SYS_ioctl,
-        SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_write, SYS_sched_yield, ALL_SYSCALLS,
+        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex,
+        SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
+        ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -508,6 +509,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_read", SYS_read),
         ("syscall_exit_write", SYS_write),
         ("syscall_exit_openat", SYS_openat),
+        ("syscall_exit_fstat", SYS_fstat),
         ("syscall_exit_futex", SYS_futex),
         ("syscall_exit_ioctl", SYS_ioctl),
         ("syscall_exit_execve", SYS_execve),

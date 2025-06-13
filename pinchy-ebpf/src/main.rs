@@ -13,10 +13,10 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
-    kernel_types::{EpollEvent, Pollfd, Timespec},
+    kernel_types::{EpollEvent, Pollfd, Stat, Timespec},
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_execve, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll,
-        SYS_read, SYS_sched_yield, SYS_write,
+        SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_ioctl, SYS_lseek, SYS_openat,
+        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -731,6 +731,40 @@ pub fn syscall_exit_write(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 write: pinchy_common::WriteData { fd, buf, count },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_fstat(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_fstat;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let stat_ptr = args[1] as *const u8;
+        let mut stat = Stat::default();
+        unsafe {
+            let _ = bpf_probe_read_buf(
+                stat_ptr,
+                core::slice::from_raw_parts_mut(
+                    &mut stat as *mut _ as *mut u8,
+                    core::mem::size_of::<Stat>(),
+                ),
+            );
+        }
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                fstat: pinchy_common::FstatData { fd, stat },
             },
         )
     }

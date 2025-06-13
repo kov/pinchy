@@ -5,10 +5,10 @@ use std::borrow::Cow;
 
 use log::trace;
 use pinchy_common::{
-    kernel_types::Timespec,
+    kernel_types::{Stat, Timespec},
     syscalls::{
-        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_futex, SYS_ioctl,
-        SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
+        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex,
+        SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent,
 };
@@ -233,6 +233,16 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.tid, filename, argv_str, envp_str, event.return_value
             )
         }
+        SYS_fstat => {
+            let data = unsafe { event.data.fstat };
+            format!(
+                "{} fstat(fd: {}, struct stat: {}) = {}",
+                event.tid,
+                data.fd,
+                format_stat(&data.stat),
+                event.return_value
+            )
+        }
         _ => {
             // Check if this is a generic syscall with raw arguments
             if let Some(name) = syscall_name_from_nr(event.syscall_nr) {
@@ -259,6 +269,23 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
     output.push('\n');
 
     output
+}
+
+fn format_stat(stat: &Stat) -> String {
+    format!("{{ mode: {}, ino: {}, dev: {}, nlink: {}, uid: {}, gid: {}, size: {}, blksize: {}, blocks: {}, atime: {}, mtime: {}, ctime: {} }}",  
+                format_mode(stat.st_mode),
+                stat.st_ino,
+                stat.st_dev,
+                stat.st_nlink,
+                stat.st_uid,
+                stat.st_gid,
+                stat.st_size,
+                stat.st_blksize,
+                stat.st_blocks,
+                stat.st_atime,
+                stat.st_mtime,
+                stat.st_ctime,
+    )
 }
 
 fn format_timespec(timespec: Timespec) -> String {

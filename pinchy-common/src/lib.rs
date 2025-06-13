@@ -33,6 +33,7 @@ pub union SyscallEventData {
     pub sched_yield: SchedYieldData,
     pub ioctl: IoctlData,
     pub execve: ExecveData,
+    pub fstat: FstatData,
     pub generic: GenericSyscallData,
 }
 
@@ -128,6 +129,13 @@ pub struct ExecveData {
     pub envp: [[u8; SMALL_READ_SIZE]; 2],
     pub envp_len: [u16; 2],
     pub envc: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FstatData {
+    pub fd: i32,
+    pub stat: crate::kernel_types::Stat,
 }
 
 #[repr(C)]

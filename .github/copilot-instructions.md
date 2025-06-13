@@ -76,9 +76,20 @@ a dedicated handler.
        `pinchy-ebpf/src/main.rs`.
      - Register it in the appropriate array in `load_tailcalls()` in
        `pinchy/src/server.rs`.
-3. **Event parsing:** Add to the event parsing code in
-   `pinchy/src/events.rs`.
-4. **Test:** Ensure the new syscall is being traced and parsed
+3. **Syscall arguments:**
+   - Identify any arguments with further parsing, especially those that
+   could be reused by multiple syscalls (e.g. mode, flags, poll events,
+   structs like timespec and stat).
+   - If it's a struct, use the existing ones in `pinchy_common/src/kernel_types.rs`
+   as examples and add it there, use for both eBPF and server sides.
+   - If a simpler type with defined interpretation for the values, add a format_*()
+   helper similar to the ones that already exist in `pinchy_common/src/events.rs`,
+   if it doesn't exist yet, so it can be used by the event parsing code.
+4. **Event parsing:** Add to the event parsing code in
+   `pinchy/src/events.rs`. For structs and other types with further parsing, try
+   to do any parsing that can be reasonably done in a short amount of time, use
+   existing helpers when they exist, improve them if necessary.
+5. **Test:** Ensure the new syscall is being traced and parsed
    correctly.
 
 ## Building

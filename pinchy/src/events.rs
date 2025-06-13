@@ -8,7 +8,7 @@ use pinchy_common::{
     kernel_types::Timespec,
     syscalls::{
         syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_futex, SYS_ioctl,
-        SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
+        SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent,
 };
@@ -97,6 +97,30 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
 
             format!(
                 "{} read(fd: {}, buf: {}{}, count: {}) = {}",
+                event.tid,
+                data.fd,
+                format_bytes(&buf),
+                left_over,
+                data.count,
+                event.return_value
+            )
+        }
+        SYS_write => {
+            let data = unsafe { event.data.write };
+            let bytes_written = event.return_value as usize;
+            let buf = &data.buf[..bytes_written.min(data.buf.len())];
+
+            let left_over = if event.return_value as usize > buf.len() {
+                format!(
+                    " ... ({} more bytes)",
+                    event.return_value as usize - buf.len()
+                )
+            } else {
+                String::new()
+            };
+
+            format!(
+                "{} write(fd: {}, buf: {}{}, count: {}) = {}",
                 event.tid,
                 data.fd,
                 format_bytes(&buf),

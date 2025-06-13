@@ -34,6 +34,7 @@ pub union SyscallEventData {
     pub ioctl: IoctlData,
     pub execve: ExecveData,
     pub fstat: FstatData,
+    pub getdents64: Getdents64Data,
     pub generic: GenericSyscallData,
 }
 
@@ -136,6 +137,15 @@ pub struct ExecveData {
 pub struct FstatData {
     pub fd: i32,
     pub stat: crate::kernel_types::Stat,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Getdents64Data {
+    pub fd: i32,
+    pub count: usize,
+    pub dirents: [crate::kernel_types::LinuxDirent64; 4],
+    pub num_dirents: u8,
 }
 
 #[repr(C)]

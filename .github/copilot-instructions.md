@@ -1,3 +1,17 @@
+# Code Style and Formatting
+
+- Always separate logical blocks, control flow statements (such as if,
+  else, match, loop, for, while), and conditional branches with a blank
+  line for clarity and readability.
+- Add a blank line before and after each block or branch, unless it is
+  immediately followed by a closing brace or another control flow
+  statement.
+- This applies to all Rust code, including eBPF handlers, event parsing,
+  and helpers.
+- Do not add unnecessary comments. Never add comments that describe the
+  prompt or instructions; only add comments that explain the behaviour or
+  intent of the code itself.
+
 # Project context
 
 This project is trying to develop a replacement for the strace command that

@@ -13,10 +13,10 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
-    kernel_types::{EpollEvent, Pollfd, Stat, Timespec},
+    kernel_types::{EpollEvent, LinuxDirent64, Pollfd, Stat, Timespec},
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_ioctl, SYS_lseek, SYS_openat,
-        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
+        SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_getdents64, SYS_ioctl, SYS_lseek,
+        SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -765,6 +765,59 @@ pub fn syscall_exit_fstat(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 fstat: pinchy_common::FstatData { fd, stat },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_getdents64(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_getdents64;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let dirp = args[1] as *const u8;
+        let count = args[2] as usize;
+
+        let mut dirents: [LinuxDirent64; 4] = [LinuxDirent64::default(); 4];
+        let mut num_dirents = 0u8;
+        let mut offset = 0usize;
+        let bytes = core::cmp::min(return_value as usize, count);
+        while offset < bytes && (num_dirents as usize) < dirents.len() {
+            let mut d: LinuxDirent64 = LinuxDirent64::default();
+            let base = unsafe { dirp.add(offset) };
+
+            if let Ok(val) = unsafe { bpf_probe_read_user::<LinuxDirent64>(base as *const _) } {
+                d = val;
+            }
+
+            let reclen = d.d_reclen as usize;
+            if reclen == 0 {
+                break;
+            }
+
+            dirents[num_dirents as usize] = d;
+            num_dirents += 1;
+            offset += reclen;
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                getdents64: pinchy_common::Getdents64Data {
+                    fd,
+                    count,
+                    dirents,
+                    num_dirents,
+                },
             },
         )
     }

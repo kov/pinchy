@@ -8,7 +8,8 @@ use pinchy_common::{
     kernel_types::{Stat, Timespec},
     syscalls::{
         syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex,
-        SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
+        SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
+        SYS_write,
     },
     SyscallEvent,
 };
@@ -32,7 +33,7 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                     .iter()
                     .join_take_map(event.return_value as usize, |event| {
                         format!(
-                            "{{events={}, data={:#x}}}",
+                            "{{ events={}, data={:#x} }}",
                             poll_bits_to_strs(&(event.events as i16)).join("|"),
                             event.data
                         )
@@ -69,7 +70,7 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 .iter()
                 .zip(data.events.iter())
                 .join_take_map(data.nfds as usize, |(fd, event)| {
-                    format!("{{{fd}, {}}}", poll_bits_to_strs(event).join("|"))
+                    format!("{{ {fd}, {} }}", poll_bits_to_strs(event).join("|"))
                 });
 
             format!(
@@ -240,6 +241,37 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.tid,
                 data.fd,
                 format_stat(&data.stat),
+                event.return_value
+            )
+        }
+        SYS_getdents64 => {
+            let data = unsafe { event.data.getdents64 };
+            let mut entries = Vec::new();
+            for dirent in data.dirents.iter().take(data.num_dirents as usize) {
+                let (name_end, truncated) = match dirent.d_name.iter().position(|&b| b == 0) {
+                    Some(pos) => (pos, false),
+                    None => (dirent.d_name.len(), true),
+                };
+
+                let mut d_name = format!(
+                    "\"{}\"",
+                    String::from_utf8_lossy(&dirent.d_name[..name_end])
+                );
+                if truncated {
+                    d_name.push_str(" ... (truncated)");
+                }
+
+                entries.push(format!(
+                    "{{ ino: {}, off: {}, reclen: {}, type: {}, name: {} }}",
+                    dirent.d_ino, dirent.d_off, dirent.d_reclen, dirent.d_type, d_name
+                ));
+            }
+            format!(
+                "{} getdents64(fd: {}, count: {}, entries: [{}]) = {}",
+                event.tid,
+                data.fd,
+                data.count,
+                entries.join(", "),
                 event.return_value
             )
         }

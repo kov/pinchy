@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
+use crate::SMALL_READ_SIZE;
+
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Pollfd {
@@ -40,4 +42,14 @@ pub struct Stat {
     pub st_atime: i64,
     pub st_mtime: i64,
     pub st_ctime: i64,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct LinuxDirent64 {
+    pub d_ino: u64,
+    pub d_off: i64,
+    pub d_reclen: u16,
+    pub d_type: u8,
+    pub d_name: [u8; SMALL_READ_SIZE],
 }

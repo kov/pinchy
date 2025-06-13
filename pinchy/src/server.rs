@@ -36,10 +36,6 @@ use tokio::{
 };
 use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
 
-mod events;
-mod ioctls;
-mod util;
-
 type SharedEbpf = Arc<Mutex<aya::Ebpf>>;
 type PipeMap = Arc<Mutex<HashMap<u32, Vec<(AsyncFd<PipeWriter>, Vec<i64>)>>>>;
 
@@ -348,17 +344,6 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notif
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
 
-    // Expect first argument to be the PID to monitor
-    let pid = if let Some(first) = std::env::args().nth(1) {
-        Some(
-            first
-                .parse::<u32>()
-                .map_err(|_| anyhow::anyhow!("PID must be a valid u32"))?,
-        )
-    } else {
-        None
-    };
-
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
     // new memcg based accounting, see https://lwn.net/Articles/837122/
     let rlim = libc::rlimit {
@@ -422,9 +407,9 @@ async fn main() -> anyhow::Result<()> {
     let (write_tx, write_rx) = channel(128);
     tokio::spawn(async move {
         while let Some(event) = rx.recv().await {
-            let output = events::handle_event(&event).await;
-            if let Err(e) = write_tx.send((output, event)).await {
-                eprintln!("FATAL: failed to send output to writer channel: {e}");
+            // Forward the event directly, do not pretty-print here
+            if let Err(e) = write_tx.send(event).await {
+                eprintln!("FATAL: failed to send event to writer channel: {e}");
                 return;
             }
         }
@@ -432,22 +417,7 @@ async fn main() -> anyhow::Result<()> {
 
     spawn_event_writer(ebpf.clone(), pipe_map.clone(), write_rx).await;
 
-    // Start auto-quit task (only if no PID argument was provided)
-    if pid.is_none() {
-        spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), shutdown.clone());
-    }
-
-    // If we did get a PID as argument, monitor and print that to our own stdout.
-    if let Some(pid) = pid {
-        add_pid_trace(
-            &ebpf,
-            &pipe_map,
-            pid,
-            unsafe { PipeWriter::from_raw_fd(1) },
-            ALL_SYSCALLS.to_vec(),
-        )
-        .await?;
-    }
+    spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), shutdown.clone());
 
     // Start D-Bus service
     let dbus = PinchyDBus { ebpf, pipe_map };
@@ -599,10 +569,11 @@ pub async fn spawn_event_readers(
 pub async fn spawn_event_writer(
     ebpf: SharedEbpf,
     pipe_map: PipeMap,
-    mut rx: Receiver<(String, SyscallEvent)>,
+    mut rx: Receiver<SyscallEvent>,
 ) {
+    use std::mem::size_of;
     tokio::spawn(async move {
-        while let Some((output, event)) = rx.recv().await {
+        while let Some(event) = rx.recv().await {
             let mut map = pipe_map.lock().await;
             let mut writer_removed = false;
             match map.get_mut(&event.pid) {
@@ -614,12 +585,18 @@ pub async fn spawn_event_writer(
                             keep.push(true);
                             continue;
                         }
+                        let event_bytes: &[u8] = unsafe {
+                            std::slice::from_raw_parts(
+                                &event as *const SyscallEvent as *const u8,
+                                size_of::<SyscallEvent>(),
+                            )
+                        };
                         if let Err(_err) = w
                             .writable_mut()
                             .await
                             .unwrap()
                             .get_inner_mut()
-                            .write_all(output.as_bytes())
+                            .write_all(event_bytes)
                         {
                             keep.push(false);
                             writer_removed = true;

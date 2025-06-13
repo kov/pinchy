@@ -1,13 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
+#![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     ffi::{c_char, CString, OsString},
     io::{PipeReader, Read as _},
-    os::{
-        fd::{AsRawFd, OwnedFd},
-        unix::ffi::OsStrExt,
-    },
+    os::{fd::OwnedFd, unix::ffi::OsStrExt},
 };
 
 use anyhow::Result;
@@ -16,6 +14,10 @@ use log::trace;
 use pinchy_common::syscalls::{syscall_nr_from_name, ALL_SYSCALLS};
 use tokio::io::{unix::AsyncFd, AsyncWriteExt as _};
 use zbus::{fdo, names::WellKnownName, proxy, Error as ZBusError};
+
+mod events;
+mod ioctls;
+mod util;
 
 #[proxy(interface = "org.pinchy.Service", default_path = "/org/pinchy/Service")]
 trait Pinchy {
@@ -102,7 +104,10 @@ async fn main() -> Result<()> {
 
         let pid = unsafe { libc::fork() };
         if pid < 0 {
-            eprintln!("Failed to fork a new process: {}", std::io::Error::last_os_error());
+            eprintln!(
+                "Failed to fork a new process: {}",
+                std::io::Error::last_os_error()
+            );
             std::process::exit(1);
         }
         if pid == 0 {
@@ -165,18 +170,20 @@ async fn main() -> Result<()> {
 }
 
 async fn relay_trace(fd: OwnedFd) -> Result<()> {
-    trace!(
-        "Received file descriptor from dbus service: {}",
-        fd.as_raw_fd()
-    );
-
     let reader = AsyncFd::new(PipeReader::from(fd))?;
     let mut stdout = tokio::io::stdout();
-    let mut buf = [0u8; 4096];
+    let mut buf = vec![0u8; std::mem::size_of::<pinchy_common::SyscallEvent>()];
     loop {
-        match reader.readable().await?.get_inner().read(&mut buf)? {
-            0 => break Ok(()),
-            n => stdout.write_all(&buf[..n]).await?,
+        let n = reader.readable().await?.get_inner().read_exact(&mut buf);
+        match n {
+            Ok(_) => {
+                let event: pinchy_common::SyscallEvent =
+                    unsafe { std::ptr::read(buf.as_ptr() as *const pinchy_common::SyscallEvent) };
+                let output = events::handle_event(&event).await;
+                stdout.write_all(output.as_bytes()).await?;
+            }
+            Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break Ok(()),
+            Err(e) => return Err(e.into()),
         }
     }
 }

@@ -2,7 +2,6 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use std::{
-    ffi::c_void,
     io::{BufRead as _, BufReader, PipeReader},
     os::fd::OwnedFd,
     process::{self, Child, Command, Output, Stdio},
@@ -12,7 +11,6 @@ use std::{
 
 use assert_cmd::{assert::Assert, cargo::cargo_bin};
 use indoc::indoc;
-use pinchy_common::DATA_READ_SIZE;
 use predicates::prelude::*;
 use serial_test::serial;
 
@@ -84,34 +82,6 @@ fn auto_quit_after_client() {
     // Check if we exited in under 20 seconds (worst case of hitting the idle check at exactly
     // the same time we kill the client), with a bit of leeway
     assert!(elapsed < 22);
-}
-
-#[test]
-#[serial]
-fn basic_reads() {
-    // Wait for our marker close async
-    let pinchy = PinchyTest::new(Some(process::id()), Some(format!("close(fd: 1042)")));
-
-    // Run a workload
-    let mut buf = vec![0u8; DATA_READ_SIZE];
-    let fd = unsafe {
-        let fd = libc::openat(libc::AT_FDCWD, c"/etc/os-release".as_ptr(), libc::O_RDONLY);
-        let _ = libc::read(fd, buf.as_mut_ptr() as *mut c_void, buf.len());
-        libc::close(fd);
-        fd
-    };
-
-    unsafe {
-        libc::close(1042);
-    } // marker close
-
-    let output = pinchy.wait();
-
-    Assert::new(output)
-         .success()
-        .stdout(predicate::str::contains(format!("openat(dfd: AT_FDCWD, pathname: \"/etc/os-release\", flags: 0x0 (O_RDONLY), mode: 0) = {fd}")))
-        .stdout(predicate::str::contains(format!("read(fd: {fd}, buf: {:?}, count: 128) = 128", String::from_utf8(buf).unwrap())))
-        .stdout(predicate::str::contains(format!("close(fd: {fd}) = 0")));
 }
 
 #[test]

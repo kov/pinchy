@@ -16,7 +16,7 @@ use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
     syscalls::{
         SYS_close, SYS_epoll_pwait, SYS_execve, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll,
-        SYS_read, SYS_sched_yield,
+        SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -707,3 +707,35 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 #[link_section = "license"]
 #[no_mangle]
 static LICENSE: [u8; 13] = *b"Dual MIT/GPL\0";
+
+#[tracepoint]
+pub fn syscall_exit_write(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_write;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let buf_addr = args[1];
+        let count = args[2];
+
+        let mut buf = [0u8; DATA_READ_SIZE];
+        let to_copy = core::cmp::min(count as usize, buf.len());
+        unsafe {
+            let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_copy]);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                write: pinchy_common::WriteData { fd, buf, count },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}

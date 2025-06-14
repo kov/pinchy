@@ -4,7 +4,6 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     ffi::{c_char, CString, OsString},
-    io::{PipeReader, Read as _},
     os::{fd::OwnedFd, unix::ffi::OsStrExt},
 };
 
@@ -12,7 +11,7 @@ use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
 use log::trace;
 use pinchy_common::syscalls::{syscall_nr_from_name, ALL_SYSCALLS};
-use tokio::io::{unix::AsyncFd, AsyncWriteExt as _};
+use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use zbus::{fdo, names::WellKnownName, proxy, Error as ZBusError};
 
 mod events;
@@ -170,12 +169,11 @@ async fn main() -> Result<()> {
 }
 
 async fn relay_trace(fd: OwnedFd) -> Result<()> {
-    let reader = AsyncFd::new(PipeReader::from(fd))?;
+    let mut reader = tokio::io::BufReader::new(tokio::fs::File::from(std::fs::File::from(fd)));
     let mut stdout = tokio::io::stdout();
     let mut buf = vec![0u8; std::mem::size_of::<pinchy_common::SyscallEvent>()];
     loop {
-        let n = reader.readable().await?.get_inner().read_exact(&mut buf);
-        match n {
+        match reader.read_exact(&mut buf).await {
             Ok(_) => {
                 let event: pinchy_common::SyscallEvent =
                     unsafe { std::ptr::read(buf.as_ptr() as *const pinchy_common::SyscallEvent) };

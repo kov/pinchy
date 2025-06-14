@@ -5,7 +5,7 @@
 use std::{
     collections::HashMap,
     fs::File,
-    io::{self, pipe, BufRead, BufReader, PipeWriter, Write as _},
+    io::{self, pipe, BufRead, BufReader, PipeWriter},
     os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
     sync::Arc,
 };
@@ -28,7 +28,7 @@ use pinchy_common::{
     SyscallEvent,
 };
 use tokio::{
-    io::unix::AsyncFd,
+    io::{unix::AsyncFd, AsyncWriteExt},
     signal,
     sync::{
         mpsc::{channel, Receiver, Sender},
@@ -39,7 +39,7 @@ use tokio::{
 use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
 
 type SharedEbpf = Arc<Mutex<aya::Ebpf>>;
-type PipeMap = Arc<Mutex<HashMap<u32, Vec<(AsyncFd<PipeWriter>, Vec<i64>)>>>>;
+type PipeMap = Arc<Mutex<HashMap<u32, Vec<(tokio::io::BufWriter<tokio::fs::File>, Vec<i64>)>>>>;
 
 pub fn open_pidfd(pid: libc::pid_t) -> io::Result<OwnedFd> {
     let raw_fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
@@ -175,7 +175,13 @@ impl PinchyDBus {
             if let Err(e) = remove_pid_trace(&ebpf, pid).await {
                 eprintln!("Failed to remove PID from eBPF: {e}");
             }
-            pipe_map.lock().await.remove(&pid);
+
+            // Flush writers before dropping them, so all data is received by the client.
+            if let Some(writers) = pipe_map.lock().await.remove(&pid) {
+                for (mut w, _) in writers {
+                    let _ = w.flush().await;
+                }
+            };
 
             resubscribe_syscalls(&ebpf, &pipe_map).await;
         });
@@ -191,12 +197,17 @@ async fn add_pid_trace(
     fd: PipeWriter,
     syscalls: Vec<i64>,
 ) -> anyhow::Result<()> {
+    // WISH: could we have impl From<OwnedFd> for BufWriter pls ;D
+    let writer = tokio::io::BufWriter::new(tokio::fs::File::from(std::fs::File::from(
+        OwnedFd::from(fd),
+    )));
+
     pipe_map
         .lock()
         .await
         .entry(pid)
         .or_default()
-        .push((AsyncFd::new(fd).expect("Wrapping in AsyncFd"), syscalls));
+        .push((writer, syscalls));
 
     {
         let mut ebpf = ebpf.lock().await;
@@ -294,15 +305,7 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notif
                     for (&pid, writers) in map.iter_mut() {
                         let mut keep = Vec::with_capacity(writers.len());
                         for (w, _) in writers.iter_mut() {
-                            let should_keep =
-                                match w.try_io(tokio::io::Interest::WRITABLE, |mut inner| {
-                                    // Try a zero-byte write to detect if pipe is closed
-                                    inner.write(&[])
-                                }) {
-                                    Ok(_) => true, // Ready and operation succeeded
-                                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => true, // Not ready
-                                    Err(_) => false, // Pipe closed or some other error
-                                };
+                            let should_keep = w.flush().await.is_ok();
                             keep.push(should_keep);
                         }
 
@@ -646,13 +649,7 @@ pub async fn spawn_event_writer(
                                 size_of::<SyscallEvent>(),
                             )
                         };
-                        if let Err(_err) = w
-                            .writable_mut()
-                            .await
-                            .unwrap()
-                            .get_inner_mut()
-                            .write_all(event_bytes)
-                        {
+                        if let Err(_err) = w.write_all(event_bytes).await {
                             keep.push(false);
                             writer_removed = true;
                         } else {

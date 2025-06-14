@@ -395,7 +395,9 @@ fn drop_privileges() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .filter(None, log::LevelFilter::Warn)
+        .init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
     // new memcg based accounting, see https://lwn.net/Articles/837122/
@@ -585,12 +587,14 @@ pub async fn spawn_event_readers(
             .take_map("EVENTS")
             .ok_or_else(|| anyhow::anyhow!("EVENTS map not found"))?,
     )?;
+    let total_lost = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let cpus = aya::util::online_cpus().map_err(|e| anyhow::anyhow!("online_cpus: {:?}", e))?;
     for cpu_id in cpus {
         let mut bufs = vec![BytesMut::with_capacity(4096)];
         let mut buf_events = events.open(cpu_id, None)?;
         let tx = tx.clone();
         let shutdown = shutdown.clone();
+        let total_lost = total_lost.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -601,6 +605,10 @@ pub async fn spawn_event_readers(
                         evts = buf_events.read_events(&mut bufs) => {
                             match evts {
                                 Ok(evts) => {
+                                    if evts.lost > 0 {
+                                        total_lost.fetch_add(evts.lost, std::sync::atomic::Ordering::Relaxed);
+                                        warn!("Lost events: {} ({} in total)", evts.lost, total_lost.load(std::sync::atomic::Ordering::Relaxed));
+                                    }
                                     trace!("Received {} events {} lost", evts.read, evts.lost);
                                     for i in 0..evts.read {
                                         let event = &bufs[i];

@@ -582,7 +582,7 @@ pub async fn spawn_event_readers(
     let total_lost = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let cpus = aya::util::online_cpus().map_err(|e| anyhow::anyhow!("online_cpus: {:?}", e))?;
     for cpu_id in cpus {
-        let mut bufs = vec![BytesMut::with_capacity(4096)];
+        let mut bufs = vec![BytesMut::with_capacity(size_of::<SyscallEvent>()); 128];
         let mut buf_events = events.open(cpu_id, None)?;
         let tx = tx.clone();
         let shutdown = shutdown.clone();
@@ -629,49 +629,57 @@ pub async fn spawn_event_writer(
     pipe_map: PipeMap,
     mut rx: Receiver<SyscallEvent>,
 ) {
-    use std::mem::size_of;
     tokio::spawn(async move {
-        while let Some(event) = rx.recv().await {
+        let mut events_buf = Vec::with_capacity(128);
+        loop {
+            let received = rx.recv_many(&mut events_buf, 128).await;
+            if received == 0 {
+                break;
+            }
+
             let mut map = pipe_map.lock().await;
+
+            let mut pids_to_remove = vec![];
             let mut writer_removed = false;
-            match map.get_mut(&event.pid) {
-                Some(writers) => {
-                    let mut keep = Vec::with_capacity(writers.len());
+            for i in 0..received {
+                let event = &mut events_buf[i];
+                match map.get_mut(&event.pid) {
+                    Some(writers) => {
+                        let mut keep = Vec::with_capacity(writers.len());
 
-                    for (w, syscalls_to_trace) in writers.iter_mut() {
-                        if !syscalls_to_trace.contains(&event.syscall_nr) {
-                            keep.push(true);
-                            continue;
+                        for (w, syscalls_to_trace) in writers.iter_mut() {
+                            if !syscalls_to_trace.contains(&event.syscall_nr) {
+                                keep.push(true);
+                                continue;
+                            }
+                            let event_bytes: &[u8] = unsafe {
+                                std::slice::from_raw_parts(
+                                    event as *const SyscallEvent as *const u8,
+                                    size_of::<SyscallEvent>(),
+                                )
+                            };
+                            if let Err(_err) = w.write_all(event_bytes).await {
+                                keep.push(false);
+                                writer_removed = true;
+                            } else {
+                                keep.push(true);
+                            }
                         }
-                        let event_bytes: &[u8] = unsafe {
-                            std::slice::from_raw_parts(
-                                &event as *const SyscallEvent as *const u8,
-                                size_of::<SyscallEvent>(),
-                            )
-                        };
-                        if let Err(_err) = w.write_all(event_bytes).await {
-                            keep.push(false);
-                            writer_removed = true;
-                        } else {
-                            keep.push(true);
+
+                        // Remove any writers that had errors.
+                        let mut keep_iter = keep.iter();
+                        writers.retain(|_| *keep_iter.next().unwrap());
+
+                        // Release the map as early as we can, it will be locked again by
+                        // the helpers called below.
+                        if writers.is_empty() {
+                            pids_to_remove.push(event.pid);
                         }
                     }
-
-                    // Remove any writers that had errors.
-                    let mut keep_iter = keep.iter();
-                    writers.retain(|_| *keep_iter.next().unwrap());
-
-                    // Release the map as early as we can, it will be locked again by
-                    // the helpers called below.
-                    let empty_writers = writers.is_empty();
-
-                    if empty_writers {
-                        map.remove(&event.pid);
-                    }
-
-                    drop(map);
-
-                    if empty_writers {
+                    None => {
+                        eprintln!(
+                            "Unexpected: do not have writers for PID, but still monitoring it..."
+                        );
                         if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
                             log::error!(
                                 "Failed to remove PID {} from eBPF filter map: {}",
@@ -681,24 +689,25 @@ pub async fn spawn_event_writer(
                         }
                         log::trace!("No more writers for PID {}", event.pid);
                     }
+                }
+            }
 
-                    if empty_writers || writer_removed {
-                        resubscribe_syscalls(&ebpf, &pipe_map).await;
-                    }
-                }
-                None => {
-                    eprintln!(
-                        "Unexpected: do not have writers for PID, but still monitoring it..."
-                    );
-                    if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
-                        log::error!(
-                            "Failed to remove PID {} from eBPF filter map: {}",
-                            event.pid,
-                            e.to_string()
-                        );
-                    }
-                    log::trace!("No more writers for PID {}", event.pid);
-                }
+            events_buf.clear();
+
+            for &pid in &pids_to_remove {
+                map.remove(&pid);
+            }
+
+            drop(map);
+
+            for &pid in &pids_to_remove {
+                if let Err(err) = remove_pid_trace(&ebpf, pid).await {
+                    eprintln!("Failed to remove PID {pid} from trace: {err}")
+                };
+            }
+
+            if writer_removed || !pids_to_remove.is_empty() {
+                resubscribe_syscalls(&ebpf, &pipe_map).await;
             }
         }
     });

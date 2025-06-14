@@ -4,7 +4,8 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     collections::HashMap,
-    io::{self, pipe, PipeWriter, Write as _},
+    fs::File,
+    io::{self, pipe, BufRead, BufReader, PipeWriter, Write as _},
     os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
     sync::Arc,
 };
@@ -17,6 +18,7 @@ use aya::{
 };
 use bytes::BytesMut;
 use log::{debug, trace, warn};
+use nix::unistd::{setgid, setuid, User};
 use pinchy_common::{
     syscalls::{
         syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex,
@@ -340,6 +342,57 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notif
     });
 }
 
+fn parse_uid_min() -> u32 {
+    let file = File::open("/etc/login.defs");
+    if let Ok(file) = file {
+        for line in BufReader::new(file).lines().flatten() {
+            let line = line.trim();
+            if line.starts_with("#") || line.is_empty() {
+                continue;
+            }
+            let mut parts = line.split_whitespace();
+            if let (Some(key), Some(val)) = (parts.next(), parts.next()) {
+                if key == "UID_MIN" {
+                    if let Ok(uid_min) = val.parse::<u32>() {
+                        return uid_min;
+                    }
+                }
+            }
+        }
+    }
+    1000 // fallback default
+}
+
+fn drop_privileges() -> anyhow::Result<()> {
+    let uid_min = parse_uid_min();
+    let mut uid = None;
+    let mut gid = None;
+
+    if let Ok(Some(user)) = User::from_name("pinchy") {
+        if user.uid.as_raw() < uid_min {
+            uid = Some(user.uid);
+            gid = Some(user.gid);
+        }
+    }
+
+    if uid.is_none() {
+        if let Ok(Some(user)) = User::from_name("nobody") {
+            uid = Some(user.uid);
+            gid = Some(user.gid);
+        }
+    }
+
+    let (uid, gid) = match (uid, gid) {
+        (Some(uid), Some(gid)) => (uid, gid),
+        _ => return Err(anyhow!("No suitable user found for privilege drop")),
+    };
+
+    setgid(gid)?;
+    setuid(uid)?;
+
+    Ok(())
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     env_logger::init();
@@ -431,6 +484,11 @@ async fn main() -> anyhow::Result<()> {
     conn.object_server().at("/org/pinchy/Service", dbus).await?;
     conn.request_name("org.pinchy.Service").await?;
     println!("Pinchy D-Bus service started on {bus_type} bus");
+
+    // Drop privileges. At this point we have created maps, loaded programs, opened
+    // event buffers and obtained our well-known D-Bus name, so we can diminish and
+    // go into the West.
+    drop_privileges()?;
 
     let ctrl_c = signal::ctrl_c();
 

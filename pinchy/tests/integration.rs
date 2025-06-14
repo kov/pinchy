@@ -2,6 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use std::{
+    fs,
     io::{BufRead as _, BufReader, PipeReader},
     os::fd::OwnedFd,
     process::{self, Child, Command, Output, Stdio},
@@ -18,6 +19,37 @@ use serial_test::serial;
 #[serial]
 fn basic_output() {
     let pinchy = PinchyTest::new(None, None);
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+fn drop_privileges() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let pid = pinchy.get_pid();
+    let status = fs::read_to_string(format!("/proc/{pid}/status"))
+        .expect("Failed to read process status from /proc");
+
+    let mut dropped_cap_inh = false;
+    let mut dropped_cap_prm = false;
+    let mut dropped_cap_eff = false;
+    for line in status.split('\n') {
+        if line.starts_with("CapInh:\t0000000000000000") {
+            dropped_cap_inh = true;
+        } else if line.starts_with("CapPrm:\t0000000000000000") {
+            dropped_cap_prm = true;
+        } else if line.starts_with("CapEff:\t0000000000000000") {
+            dropped_cap_eff = true;
+        }
+    }
+    assert!(dropped_cap_inh);
+    assert!(dropped_cap_prm);
+    assert!(dropped_cap_eff);
+
     let output = pinchy.wait();
     Assert::new(output)
         .success()
@@ -239,6 +271,10 @@ impl PinchyTest {
         assert!(result.is_ok());
 
         PinchyTest { child, data, state }
+    }
+
+    fn get_pid(&self) -> u32 {
+        self.child.id()
     }
 
     fn wait(mut self) -> Output {

@@ -456,21 +456,10 @@ async fn main() -> anyhow::Result<()> {
     // for each of the per-CPU buffers send events to the main handler channel, spawned on this function.
     // There is also a writer task - handler output is put on its own queue and it can take its time
     // sending it out to the various subscribers.
-    let (tx, mut rx) = channel(128);
+    let (tx, rx) = channel(128);
     spawn_event_readers(&ebpf, tx, shutdown.clone()).await?;
 
-    let (write_tx, write_rx) = channel(128);
-    tokio::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            // Forward the event directly, do not pretty-print here
-            if let Err(e) = write_tx.send(event).await {
-                eprintln!("FATAL: failed to send event to writer channel: {e}");
-                return;
-            }
-        }
-    });
-
-    spawn_event_writer(ebpf.clone(), pipe_map.clone(), write_rx).await;
+    spawn_event_writer(ebpf.clone(), pipe_map.clone(), rx).await;
 
     spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), shutdown.clone());
 

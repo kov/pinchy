@@ -170,7 +170,7 @@ async fn main() -> Result<()> {
 
 async fn relay_trace(fd: OwnedFd) -> Result<()> {
     let mut reader = tokio::io::BufReader::new(tokio::fs::File::from(std::fs::File::from(fd)));
-    let mut stdout = tokio::io::stdout();
+    let mut stdout = tokio::io::BufWriter::new(tokio::io::stdout());
     let mut buf = vec![0u8; std::mem::size_of::<pinchy_common::SyscallEvent>()];
     loop {
         match reader.read_exact(&mut buf).await {
@@ -180,10 +180,11 @@ async fn relay_trace(fd: OwnedFd) -> Result<()> {
                 let output = events::handle_event(&event).await;
                 stdout.write_all(output.as_bytes()).await?;
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break Ok(()),
+            Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.into()),
         }
     }
+    Ok(stdout.flush().await?)
 }
 
 fn handle_dbus_error(error: ZBusError) -> ! {

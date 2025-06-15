@@ -5,7 +5,7 @@
 use std::{
     collections::HashMap,
     fs::File,
-    io::{self, pipe, BufRead, BufReader, PipeWriter, Write as _},
+    io::{self, pipe, BufRead, BufReader, PipeWriter},
     os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
     sync::Arc,
 };
@@ -28,7 +28,7 @@ use pinchy_common::{
     SyscallEvent,
 };
 use tokio::{
-    io::unix::AsyncFd,
+    io::{unix::AsyncFd, AsyncWriteExt},
     signal,
     sync::{
         mpsc::{channel, Receiver, Sender},
@@ -39,7 +39,7 @@ use tokio::{
 use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
 
 type SharedEbpf = Arc<Mutex<aya::Ebpf>>;
-type PipeMap = Arc<Mutex<HashMap<u32, Vec<(AsyncFd<PipeWriter>, Vec<i64>)>>>>;
+type PipeMap = Arc<Mutex<HashMap<u32, Vec<(tokio::io::BufWriter<tokio::fs::File>, Vec<i64>)>>>>;
 
 pub fn open_pidfd(pid: libc::pid_t) -> io::Result<OwnedFd> {
     let raw_fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
@@ -175,7 +175,13 @@ impl PinchyDBus {
             if let Err(e) = remove_pid_trace(&ebpf, pid).await {
                 eprintln!("Failed to remove PID from eBPF: {e}");
             }
-            pipe_map.lock().await.remove(&pid);
+
+            // Flush writers before dropping them, so all data is received by the client.
+            if let Some(writers) = pipe_map.lock().await.remove(&pid) {
+                for (mut w, _) in writers {
+                    let _ = w.flush().await;
+                }
+            };
 
             resubscribe_syscalls(&ebpf, &pipe_map).await;
         });
@@ -191,12 +197,17 @@ async fn add_pid_trace(
     fd: PipeWriter,
     syscalls: Vec<i64>,
 ) -> anyhow::Result<()> {
+    // WISH: could we have impl From<OwnedFd> for BufWriter pls ;D
+    let writer = tokio::io::BufWriter::new(tokio::fs::File::from(std::fs::File::from(
+        OwnedFd::from(fd),
+    )));
+
     pipe_map
         .lock()
         .await
         .entry(pid)
         .or_default()
-        .push((AsyncFd::new(fd).expect("Wrapping in AsyncFd"), syscalls));
+        .push((writer, syscalls));
 
     {
         let mut ebpf = ebpf.lock().await;
@@ -294,15 +305,7 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notif
                     for (&pid, writers) in map.iter_mut() {
                         let mut keep = Vec::with_capacity(writers.len());
                         for (w, _) in writers.iter_mut() {
-                            let should_keep =
-                                match w.try_io(tokio::io::Interest::WRITABLE, |mut inner| {
-                                    // Try a zero-byte write to detect if pipe is closed
-                                    inner.write(&[])
-                                }) {
-                                    Ok(_) => true, // Ready and operation succeeded
-                                    Err(e) if e.kind() == std::io::ErrorKind::WouldBlock => true, // Not ready
-                                    Err(_) => false, // Pipe closed or some other error
-                                };
+                            let should_keep = w.flush().await.is_ok();
                             keep.push(should_keep);
                         }
 
@@ -395,7 +398,9 @@ fn drop_privileges() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::init();
+    env_logger::Builder::from_default_env()
+        .filter(None, log::LevelFilter::Warn)
+        .init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
     // new memcg based accounting, see https://lwn.net/Articles/837122/
@@ -454,21 +459,10 @@ async fn main() -> anyhow::Result<()> {
     // for each of the per-CPU buffers send events to the main handler channel, spawned on this function.
     // There is also a writer task - handler output is put on its own queue and it can take its time
     // sending it out to the various subscribers.
-    let (tx, mut rx) = channel(128);
+    let (tx, rx) = channel(128);
     spawn_event_readers(&ebpf, tx, shutdown.clone()).await?;
 
-    let (write_tx, write_rx) = channel(128);
-    tokio::spawn(async move {
-        while let Some(event) = rx.recv().await {
-            // Forward the event directly, do not pretty-print here
-            if let Err(e) = write_tx.send(event).await {
-                eprintln!("FATAL: failed to send event to writer channel: {e}");
-                return;
-            }
-        }
-    });
-
-    spawn_event_writer(ebpf.clone(), pipe_map.clone(), write_rx).await;
+    spawn_event_writer(ebpf.clone(), pipe_map.clone(), rx).await;
 
     spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), shutdown.clone());
 
@@ -585,12 +579,14 @@ pub async fn spawn_event_readers(
             .take_map("EVENTS")
             .ok_or_else(|| anyhow::anyhow!("EVENTS map not found"))?,
     )?;
+    let total_lost = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let cpus = aya::util::online_cpus().map_err(|e| anyhow::anyhow!("online_cpus: {:?}", e))?;
     for cpu_id in cpus {
-        let mut bufs = vec![BytesMut::with_capacity(4096)];
+        let mut bufs = vec![BytesMut::with_capacity(size_of::<SyscallEvent>()); 128];
         let mut buf_events = events.open(cpu_id, None)?;
         let tx = tx.clone();
         let shutdown = shutdown.clone();
+        let total_lost = total_lost.clone();
         tokio::spawn(async move {
             loop {
                 tokio::select! {
@@ -601,6 +597,10 @@ pub async fn spawn_event_readers(
                         evts = buf_events.read_events(&mut bufs) => {
                             match evts {
                                 Ok(evts) => {
+                                    if evts.lost > 0 {
+                                        total_lost.fetch_add(evts.lost, std::sync::atomic::Ordering::Relaxed);
+                                        warn!("Lost events: {} ({} in total)", evts.lost, total_lost.load(std::sync::atomic::Ordering::Relaxed));
+                                    }
                                     trace!("Received {} events {} lost", evts.read, evts.lost);
                                     for i in 0..evts.read {
                                         let event = &bufs[i];
@@ -629,55 +629,54 @@ pub async fn spawn_event_writer(
     pipe_map: PipeMap,
     mut rx: Receiver<SyscallEvent>,
 ) {
-    use std::mem::size_of;
     tokio::spawn(async move {
-        while let Some(event) = rx.recv().await {
+        let mut events_buf = Vec::with_capacity(128);
+        loop {
+            let received = rx.recv_many(&mut events_buf, 128).await;
+
             let mut map = pipe_map.lock().await;
+
+            let mut pids_to_remove = vec![];
             let mut writer_removed = false;
-            match map.get_mut(&event.pid) {
-                Some(writers) => {
-                    let mut keep = Vec::with_capacity(writers.len());
+            for i in 0..received {
+                let event = &mut events_buf[i];
+                match map.get_mut(&event.pid) {
+                    Some(writers) => {
+                        let mut keep = Vec::with_capacity(writers.len());
 
-                    for (w, syscalls_to_trace) in writers.iter_mut() {
-                        if !syscalls_to_trace.contains(&event.syscall_nr) {
-                            keep.push(true);
-                            continue;
+                        for (w, syscalls_to_trace) in writers.iter_mut() {
+                            if !syscalls_to_trace.contains(&event.syscall_nr) {
+                                keep.push(true);
+                                continue;
+                            }
+                            let event_bytes: &[u8] = unsafe {
+                                std::slice::from_raw_parts(
+                                    event as *const SyscallEvent as *const u8,
+                                    size_of::<SyscallEvent>(),
+                                )
+                            };
+                            if let Err(_err) = w.write_all(event_bytes).await {
+                                keep.push(false);
+                                writer_removed = true;
+                            } else {
+                                keep.push(true);
+                            }
                         }
-                        let event_bytes: &[u8] = unsafe {
-                            std::slice::from_raw_parts(
-                                &event as *const SyscallEvent as *const u8,
-                                size_of::<SyscallEvent>(),
-                            )
-                        };
-                        if let Err(_err) = w
-                            .writable_mut()
-                            .await
-                            .unwrap()
-                            .get_inner_mut()
-                            .write_all(event_bytes)
-                        {
-                            keep.push(false);
-                            writer_removed = true;
-                        } else {
-                            keep.push(true);
+
+                        // Remove any writers that had errors.
+                        let mut keep_iter = keep.iter();
+                        writers.retain(|_| *keep_iter.next().unwrap());
+
+                        // Release the map as early as we can, it will be locked again by
+                        // the helpers called below.
+                        if writers.is_empty() {
+                            pids_to_remove.push(event.pid);
                         }
                     }
-
-                    // Remove any writers that had errors.
-                    let mut keep_iter = keep.iter();
-                    writers.retain(|_| *keep_iter.next().unwrap());
-
-                    // Release the map as early as we can, it will be locked again by
-                    // the helpers called below.
-                    let empty_writers = writers.is_empty();
-
-                    if empty_writers {
-                        map.remove(&event.pid);
-                    }
-
-                    drop(map);
-
-                    if empty_writers {
+                    None => {
+                        eprintln!(
+                            "Unexpected: do not have writers for PID, but still monitoring it..."
+                        );
                         if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
                             log::error!(
                                 "Failed to remove PID {} from eBPF filter map: {}",
@@ -687,24 +686,25 @@ pub async fn spawn_event_writer(
                         }
                         log::trace!("No more writers for PID {}", event.pid);
                     }
+                }
+            }
 
-                    if empty_writers || writer_removed {
-                        resubscribe_syscalls(&ebpf, &pipe_map).await;
-                    }
-                }
-                None => {
-                    eprintln!(
-                        "Unexpected: do not have writers for PID, but still monitoring it..."
-                    );
-                    if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
-                        log::error!(
-                            "Failed to remove PID {} from eBPF filter map: {}",
-                            event.pid,
-                            e.to_string()
-                        );
-                    }
-                    log::trace!("No more writers for PID {}", event.pid);
-                }
+            events_buf.clear();
+
+            for &pid in &pids_to_remove {
+                map.remove(&pid);
+            }
+
+            drop(map);
+
+            for &pid in &pids_to_remove {
+                if let Err(err) = remove_pid_trace(&ebpf, pid).await {
+                    eprintln!("Failed to remove PID {pid} from trace: {err}")
+                };
+            }
+
+            if writer_removed || !pids_to_remove.is_empty() {
+                resubscribe_syscalls(&ebpf, &pipe_map).await;
             }
         }
     });

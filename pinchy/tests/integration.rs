@@ -310,7 +310,20 @@ impl PinchyTest {
 
 use once_cell::sync::Lazy;
 
+extern "C" fn kill_dbus_daemon() {
+    if let Ok(pid) = std::env::var("DBUS_SESSION_BUS_PID") {
+        let pid: i32 = pid.parse().unwrap();
+        unsafe {
+            libc::kill(pid, libc::SIGTERM);
+        }
+    }
+}
+
 static DBUS_ENV: Lazy<()> = Lazy::new(|| {
+    unsafe {
+        libc::atexit(kill_dbus_daemon);
+    }
+
     std::env::set_var("PINCHYD_USE_SESSION_BUS", "true");
 
     let output = Command::new("dbus-launch")

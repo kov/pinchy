@@ -475,6 +475,125 @@ pub fn syscall_exit_generic(ctx: TracePointContext) -> u32 {
 }
 
 #[tracepoint]
+pub fn syscall_exit_write(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_write;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let buf_addr = args[1];
+        let count = args[2];
+
+        let mut buf = [0u8; DATA_READ_SIZE];
+        let to_copy = core::cmp::min(count as usize, buf.len());
+        unsafe {
+            let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_copy]);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                write: pinchy_common::WriteData { fd, buf, count },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_fstat(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_fstat;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let stat_ptr = args[1] as *const u8;
+        let mut stat = Stat::default();
+        unsafe {
+            let _ = bpf_probe_read_buf(
+                stat_ptr,
+                core::slice::from_raw_parts_mut(
+                    &mut stat as *mut _ as *mut u8,
+                    core::mem::size_of::<Stat>(),
+                ),
+            );
+        }
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                fstat: pinchy_common::FstatData { fd, stat },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_getdents64(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_getdents64;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let dirp = args[1] as *const u8;
+        let count = args[2] as usize;
+
+        let mut dirents: [LinuxDirent64; 4] = [LinuxDirent64::default(); 4];
+        let mut num_dirents = 0u8;
+        let mut offset = 0usize;
+        let bytes = core::cmp::min(return_value as usize, count);
+        while offset < bytes && (num_dirents as usize) < dirents.len() {
+            let mut d: LinuxDirent64 = LinuxDirent64::default();
+            let base = unsafe { dirp.add(offset) };
+
+            if let Ok(val) = unsafe { bpf_probe_read_user::<LinuxDirent64>(base as *const _) } {
+                d = val;
+            }
+
+            let reclen = d.d_reclen as usize;
+            if reclen == 0 {
+                break;
+            }
+
+            dirents[num_dirents as usize] = d;
+            num_dirents += 1;
+            offset += reclen;
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                getdents64: pinchy_common::Getdents64Data {
+                    fd,
+                    count,
+                    dirents,
+                    num_dirents,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
 pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let tid = ctx.pid();
@@ -717,122 +836,3 @@ fn panic(_info: &core::panic::PanicInfo) -> ! {
 #[link_section = "license"]
 #[no_mangle]
 static LICENSE: [u8; 13] = *b"Dual MIT/GPL\0";
-
-#[tracepoint]
-pub fn syscall_exit_write(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_write;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
-
-        let fd = args[0] as i32;
-        let buf_addr = args[1];
-        let count = args[2];
-
-        let mut buf = [0u8; DATA_READ_SIZE];
-        let to_copy = core::cmp::min(count as usize, buf.len());
-        unsafe {
-            let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_copy]);
-        }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                write: pinchy_common::WriteData { fd, buf, count },
-            },
-        )
-    }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
-
-#[tracepoint]
-pub fn syscall_exit_fstat(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_fstat;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
-
-        let fd = args[0] as i32;
-        let stat_ptr = args[1] as *const u8;
-        let mut stat = Stat::default();
-        unsafe {
-            let _ = bpf_probe_read_buf(
-                stat_ptr,
-                core::slice::from_raw_parts_mut(
-                    &mut stat as *mut _ as *mut u8,
-                    core::mem::size_of::<Stat>(),
-                ),
-            );
-        }
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                fstat: pinchy_common::FstatData { fd, stat },
-            },
-        )
-    }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
-
-#[tracepoint]
-pub fn syscall_exit_getdents64(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_getdents64;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
-
-        let fd = args[0] as i32;
-        let dirp = args[1] as *const u8;
-        let count = args[2] as usize;
-
-        let mut dirents: [LinuxDirent64; 4] = [LinuxDirent64::default(); 4];
-        let mut num_dirents = 0u8;
-        let mut offset = 0usize;
-        let bytes = core::cmp::min(return_value as usize, count);
-        while offset < bytes && (num_dirents as usize) < dirents.len() {
-            let mut d: LinuxDirent64 = LinuxDirent64::default();
-            let base = unsafe { dirp.add(offset) };
-
-            if let Ok(val) = unsafe { bpf_probe_read_user::<LinuxDirent64>(base as *const _) } {
-                d = val;
-            }
-
-            let reclen = d.d_reclen as usize;
-            if reclen == 0 {
-                break;
-            }
-
-            dirents[num_dirents as usize] = d;
-            num_dirents += 1;
-            offset += reclen;
-        }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                getdents64: pinchy_common::Getdents64Data {
-                    fd,
-                    count,
-                    dirents,
-                    num_dirents,
-                },
-            },
-        )
-    }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}

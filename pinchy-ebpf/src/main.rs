@@ -4,10 +4,12 @@
 #![no_std]
 #![no_main]
 #![allow(non_snake_case, non_upper_case_globals, static_mut_refs)]
+use core::ops::DerefMut;
+
 use aya_ebpf::{
     helpers::{bpf_probe_read_buf, bpf_probe_read_user},
     macros::{map, tracepoint},
-    maps::{Array, HashMap, PerfEventArray, ProgramArray},
+    maps::{Array, HashMap, ProgramArray, RingBuf},
     programs::TracePointContext,
     EbpfContext as _,
 };
@@ -28,8 +30,8 @@ static mut PID_FILTER: HashMap<u32, u8> = HashMap::with_max_entries(1024, 0);
 #[map]
 static mut SYSCALL_FILTER: Array<u8> = Array::with_max_entries(64, 0);
 
-#[map]
-static mut EVENTS: PerfEventArray<SyscallEvent> = PerfEventArray::new(0);
+#[map] // 80MiB output buffer
+static mut EVENTS: RingBuf = RingBuf::with_byte_size(83886080, 0);
 
 #[map]
 static mut ENTER_MAP: HashMap<u32, SyscallEnterData> = HashMap::with_max_entries(10240, 0);
@@ -814,15 +816,37 @@ fn output_event(
     let tgid = ctx.tgid();
     let tid = ctx.pid();
 
-    let event = SyscallEvent {
-        syscall_nr,
-        pid: tgid,
-        tid,
-        return_value,
-        data,
-    };
+    unsafe {
+        let mut buf: Option<aya_ebpf::maps::ring_buf::RingBufEntry<SyscallEvent>> = None;
 
-    unsafe { EVENTS.output(ctx, &event, 0) };
+        // Retry a few times if the buffer is full, give time for userspace to catch up
+        for _ in 0..1_024 {
+            buf = EVENTS.reserve(0);
+            if buf.is_some() {
+                break;
+            }
+        }
+
+        match buf {
+            Some(mut entry) => {
+                let event = entry.deref_mut();
+                event.write(SyscallEvent {
+                    syscall_nr,
+                    pid: tgid,
+                    tid,
+                    return_value,
+                    data,
+                });
+                entry.submit(0);
+            }
+            None => {
+                error!(
+                    ctx,
+                    "Failed to reserve space for event - ring buffer was full."
+                );
+            }
+        }
+    }
 
     Ok(())
 }

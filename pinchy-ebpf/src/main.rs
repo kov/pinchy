@@ -108,6 +108,11 @@ pub fn pinchy(ctx: TracePointContext) -> u32 {
             return Ok(0);
         }
 
+        // execve has its own enter entry point
+        if syscall_nr == SYS_execve {
+            return Ok(0);
+        }
+
         let args = unsafe {
             ctx.read_at::<[usize; SYSCALL_ARGS_COUNT]>(SYSCALL_ARGS_OFFSET)
                 .map_err(|e| e as u32)?
@@ -515,7 +520,12 @@ pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
 #[tracepoint]
 pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        if unsafe { PID_FILTER.get(&ctx.tgid()).is_none() } {
+            return Ok(());
+        }
+
         let tid = ctx.pid();
+
         let args = unsafe {
             ctx.read_at::<[usize; 6]>(SYSCALL_ARGS_OFFSET)
                 .map_err(|e| e as u32)?

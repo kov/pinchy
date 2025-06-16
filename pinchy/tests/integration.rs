@@ -143,6 +143,8 @@ fn pinchy_reads() {
     "#});
 
     let output = handle.join().unwrap();
+    // stderr().write_all(&output.stderr).unwrap();
+    // stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
         .stdout(predicate::str::is_match(&expected_output).unwrap());
@@ -201,7 +203,7 @@ fn read_until(
                 break;
             }
             data.extend_from_slice(buf.as_bytes());
-            eprintln!("{}", buf);
+            // eprintln!("{}", buf);
             if buf.contains(&needle) {
                 // Minor wait as what we are actually waiting for may come right
                 // after the message being printed.

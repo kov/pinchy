@@ -442,7 +442,7 @@ async fn main() -> anyhow::Result<()> {
         .unwrap()
         .try_into()?;
     program.load()?;
-    program.attach("raw_syscalls", "sys_enter")?;
+    program.attach("syscalls", "sys_enter_execve")?;
 
     load_tailcalls(&mut ebpf)?;
 

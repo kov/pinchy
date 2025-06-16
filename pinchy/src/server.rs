@@ -4,6 +4,7 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     collections::HashMap,
+    convert::TryFrom,
     fs::File,
     io::{self, pipe, BufRead, BufReader, PipeWriter},
     os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
@@ -12,11 +13,10 @@ use std::{
 
 use anyhow::anyhow;
 use aya::{
-    maps::{perf::AsyncPerfEventArray, Array, ProgramArray},
+    maps::{ring_buf::RingBuf, Array, ProgramArray},
     programs::TracePoint,
     Ebpf,
 };
-use bytes::BytesMut;
 use log::{debug, trace, warn};
 use nix::unistd::{setgid, setuid, User};
 use pinchy_common::{
@@ -573,54 +573,44 @@ pub async fn spawn_event_readers(
     tx: Sender<SyscallEvent>,
     shutdown: Arc<Notify>,
 ) -> anyhow::Result<()> {
-    let mut events = AsyncPerfEventArray::try_from(
+    let ring = RingBuf::try_from(
         ebpf.lock()
             .await
             .take_map("EVENTS")
             .ok_or_else(|| anyhow::anyhow!("EVENTS map not found"))?,
     )?;
-    let total_lost = Arc::new(std::sync::atomic::AtomicUsize::new(0));
-    let cpus = aya::util::online_cpus().map_err(|e| anyhow::anyhow!("online_cpus: {:?}", e))?;
-    for cpu_id in cpus {
-        let mut bufs = vec![BytesMut::with_capacity(size_of::<SyscallEvent>()); 128];
-        let mut buf_events = events.open(cpu_id, None)?;
-        let tx = tx.clone();
-        let shutdown = shutdown.clone();
-        let total_lost = total_lost.clone();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                        _ = shutdown.notified() => {
-                            trace!("[cpu reader] Shutdown requested, stopping...");
-                            return;
-                        }
-                        evts = buf_events.read_events(&mut bufs) => {
-                            match evts {
-                                Ok(evts) => {
-                                    if evts.lost > 0 {
-                                        total_lost.fetch_add(evts.lost, std::sync::atomic::Ordering::Relaxed);
-                                        warn!("Lost events: {} ({} in total)", evts.lost, total_lost.load(std::sync::atomic::Ordering::Relaxed));
-                                    }
-                                    trace!("Received {} events {} lost", evts.read, evts.lost);
-                                    for i in 0..evts.read {
-                                        let event = &bufs[i];
-                                        let syscall_event: SyscallEvent =
-                                            unsafe { std::ptr::read_unaligned(event.as_ptr() as *const _) };
-                                        let _ = tx.send(syscall_event).await;
-                                    }
-                                }
-                                Err(e) => {
-                                    eprintln!("PerfEventArray read error: {e}");
-                                    return;
+    let mut async_ring = AsyncFd::new(ring)?;
+    let tx = tx.clone();
+    let shutdown = shutdown.clone();
+    tokio::spawn(async move {
+        loop {
+            tokio::select! {
+                _ = shutdown.notified() => {
+                    trace!("[ringbuf reader] Shutdown requested, stopping...");
+                    return;
+                }
+                result = async_ring.readable_mut() => {
+                    match result {
+                        Ok(mut guard) => {
+                            let ring = guard.get_inner_mut();
+                            while let Some(item) = ring.next() {
+                                let event = &*item;
+                                if event.len() == std::mem::size_of::<SyscallEvent>() {
+                                    let syscall_event: SyscallEvent = unsafe { std::ptr::read_unaligned(event.as_ptr() as *const _) };
+                                    let _ = tx.send(syscall_event).await;
                                 }
                             }
+                            guard.clear_ready();
+                        }
+                        Err(e) => {
+                            eprintln!("RingBuf read error: {e}");
+                            return;
+                        }
                     }
                 }
-                trace!("READER LOOP...");
             }
-        });
-        trace!("Done setting up readers");
-    }
+        }
+    });
     Ok(())
 }
 

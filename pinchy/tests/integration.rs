@@ -88,6 +88,7 @@ fn auto_quit_after_client() {
         //.env("RUST_LOG", "trace")
         .arg(cargo_bin("test-helper"))
         .arg("pinchy_reads")
+        .stdout(Stdio::null())
         .spawn()
         .unwrap();
 

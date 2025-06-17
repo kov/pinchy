@@ -73,8 +73,8 @@ fn auto_quit() {
 
     let elapsed = now.elapsed().as_secs();
 
-    // Check if we exited in around 10 seconds.
-    assert!(elapsed.abs_diff(10) < 5);
+    // Check if we exited in around 15 seconds.
+    assert!(elapsed.abs_diff(15) < 5);
 }
 
 #[test]

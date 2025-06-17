@@ -9,6 +9,7 @@ use std::{
     io::{self, pipe, BufRead, BufReader, PipeWriter},
     os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
     sync::Arc,
+    time::Instant,
 };
 
 use anyhow::anyhow;
@@ -32,7 +33,7 @@ use tokio::{
     signal,
     sync::{
         mpsc::{channel, Receiver, Sender},
-        Mutex, Notify,
+        Mutex, Notify, RwLock,
     },
     time::{sleep, Duration},
 };
@@ -271,28 +272,19 @@ async fn resubscribe_syscalls(ebpf: &SharedEbpf, pipe_map: &PipeMap) {
     }
 }
 
-fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notify>) {
+const IDLE_AFTER_SECONDS: u64 = 15;
+fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, idle_since: Arc<RwLock<Instant>>) {
     tokio::spawn(async move {
-        let idle_timeout = Duration::from_secs(10);
+        let idle_timeout = Duration::from_secs(5);
 
         loop {
-            // Check if we're idle (no PIDs being traced)
-            let is_idle = {
-                let map = pipe_map.lock().await;
-                println!("Currently serving: {}", map.len());
-                map.is_empty()
-            };
-
-            if is_idle {
-                sleep(idle_timeout).await;
-
-                // Check again if we're still idle after the timeout, hold the lock
-                // while notifying waiters, so we are less likely to accept a new
+            if idle_since.read().await.elapsed().as_secs() >= IDLE_AFTER_SECONDS {
+                // Hold the lock while notifying waiters, so we are less likely to accept a new
                 // connection while quitting.
                 let map = pipe_map.lock().await;
                 if map.is_empty() {
                     println!("Pinchy has been idle for a while, shutting down");
-                    shutdown.notify_waiters();
+                    unsafe { libc::kill(std::process::id() as i32, libc::SIGINT) };
                     return;
                 }
             } else {
@@ -302,6 +294,7 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notif
                 {
                     let mut map = pipe_map.lock().await;
                     trace!("Writers map size before reaping: {}", map.len());
+                    println!("Currently serving: {}", map.len());
                     for (&pid, writers) in map.iter_mut() {
                         let mut keep = Vec::with_capacity(writers.len());
                         for (w, _) in writers.iter_mut() {
@@ -339,7 +332,7 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, shutdown: Arc<Notif
                 );
 
                 // Not idle, check again soon
-                sleep(Duration::from_secs(10)).await;
+                sleep(idle_timeout).await;
             }
         }
     });
@@ -460,11 +453,12 @@ async fn main() -> anyhow::Result<()> {
     // There is also a writer task - handler output is put on its own queue and it can take its time
     // sending it out to the various subscribers.
     let (tx, rx) = channel(128);
-    spawn_event_readers(&ebpf, tx, shutdown.clone()).await?;
+    let idle_since = Arc::new(RwLock::new(Instant::now()));
+    spawn_event_readers(&ebpf, tx, shutdown.clone(), idle_since.clone()).await?;
 
     spawn_event_writer(ebpf.clone(), pipe_map.clone(), rx).await;
 
-    spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), shutdown.clone());
+    spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), idle_since);
 
     // Start D-Bus service
     let dbus = PinchyDBus { ebpf, pipe_map };
@@ -490,10 +484,10 @@ async fn main() -> anyhow::Result<()> {
     tokio::select! {
         result = ctrl_c => {
             eprintln!("Ctrl-C received...");
+            conn.close().await?;
             result?;
-            shutdown.notify_waiters()
         },
-        _ = shutdown.notified() => (),
+        _ = shutdown.notified() => conn.close().await?,
     };
 
     shutdown.notify_waiters();
@@ -572,6 +566,7 @@ pub async fn spawn_event_readers(
     ebpf: &SharedEbpf,
     tx: Sender<SyscallEvent>,
     shutdown: Arc<Notify>,
+    idle_since: Arc<RwLock<Instant>>,
 ) -> anyhow::Result<()> {
     let ring = RingBuf::try_from(
         ebpf.lock()
@@ -592,6 +587,9 @@ pub async fn spawn_event_readers(
                 result = async_ring.readable_mut() => {
                     match result {
                         Ok(mut guard) => {
+                            // Bump the idle timer.
+                            *idle_since.write().await = Instant::now();
+
                             let ring = guard.get_inner_mut();
                             while let Some(item) = ring.next() {
                                 let event = &*item;

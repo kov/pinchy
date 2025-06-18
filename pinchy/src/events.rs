@@ -141,15 +141,12 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
             format!("{} sched_yield() = {}", event.tid, event.return_value)
         }
         SYS_openat => {
-            use std::ffi::CStr;
             let data = unsafe { event.data.openat };
-            let pathname = CStr::from_bytes_until_nul(&data.pathname)
-                .unwrap_or(CStr::from_bytes_with_nul(b"<invalid>\0").unwrap());
             format!(
-                "{} openat(dfd: {}, pathname: {:?}, flags: {}, mode: {}) = {}",
+                "{} openat(dfd: {}, pathname: {}, flags: {}, mode: {}) = {}",
                 event.tid,
                 format_dirfd(data.dfd),
-                pathname,
+                format_path(&data.pathname, false),
                 format_flags(data.flags),
                 format_mode(data.mode),
                 event.return_value
@@ -175,20 +172,7 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
             let data = unsafe { event.data.execve };
 
             // Format filename, showing ... if truncated
-            let filename = {
-                let nul_pos = data
-                    .filename
-                    .iter()
-                    .position(|&b| b == b'\0')
-                    .unwrap_or_else(|| data.filename.len());
-                let s = OsString::from_vec(data.filename[..nul_pos].to_vec());
-                if data.filename_truncated {
-                    // Truncated: no nul byte among the ones we read
-                    format!("{:?} ... (truncated)", s)
-                } else {
-                    format!("{:?}", s)
-                }
-            };
+            let filename = format_path(&data.filename, data.filename_truncated);
 
             // Format argv, skipping empty slots and showing ... if truncated
             let argc = data.argc as usize;
@@ -248,18 +232,9 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
             let data = unsafe { event.data.getdents64 };
             let mut entries = Vec::new();
             for dirent in data.dirents.iter().take(data.num_dirents as usize) {
-                let (name_end, truncated) = match dirent.d_name.iter().position(|&b| b == 0) {
-                    Some(pos) => (pos, false),
-                    None => (dirent.d_name.len(), true),
-                };
-
-                let mut d_name = format!(
-                    "\"{}\"",
-                    String::from_utf8_lossy(&dirent.d_name[..name_end])
-                );
-                if truncated {
-                    d_name.push_str(" ... (truncated)");
-                }
+                // Use the format_path_display helper which handles truncation
+                let path_str = format_path(&dirent.d_name, false);
+                let d_name = format!("\"{}\"", path_str.trim_matches('"'));
 
                 entries.push(format!(
                     "{{ ino: {}, off: {}, reclen: {}, type: {}, name: {} }}",
@@ -356,6 +331,24 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
     output.push('\n');
 
     output
+}
+
+/// Formats a path for display, including truncation indication if needed
+fn format_path(path_bytes: &[u8], known_truncated: bool) -> String {
+    let null_pos = path_bytes.iter().position(|&b| b == 0);
+
+    let detected_truncated = null_pos.is_none();
+
+    let end_idx = null_pos.unwrap_or(path_bytes.len());
+    let path_slice = &path_bytes[..end_idx];
+
+    let path_str = String::from_utf8_lossy(path_slice);
+
+    if known_truncated || detected_truncated {
+        format!("{:?} ... (truncated)", path_str)
+    } else {
+        format!("{:?}", path_str)
+    }
 }
 
 fn format_stat(stat: &Stat) -> String {

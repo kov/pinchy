@@ -7,9 +7,9 @@ use log::trace;
 use pinchy_common::{
     kernel_types::{Stat, Timespec},
     syscalls::{
-        syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex,
-        SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_munmap, SYS_openat, SYS_ppoll,
-        SYS_read, SYS_sched_yield, SYS_write,
+        syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
+        SYS_futex, SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_munmap, SYS_openat,
+        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent,
 };
@@ -299,6 +299,13 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
             format!(
                 "{} munmap(addr: 0x{:x}, length: {}) = {}",
                 event.tid, data.addr, data.length, event.return_value
+            )
+        }
+        SYS_brk => {
+            let data = unsafe { event.data.brk };
+            format!(
+                "{} brk(addr: 0x{:x}) = 0x{:x}",
+                event.tid, data.addr, event.return_value
             )
         }
         _ => {

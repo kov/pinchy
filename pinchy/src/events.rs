@@ -8,8 +8,8 @@ use pinchy_common::{
     kernel_types::{Stat, Timespec},
     syscalls::{
         syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
-        SYS_futex, SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
-        SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
+        SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
+        SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent,
 };
@@ -312,6 +312,17 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.return_value
             )
         }
+        SYS_getrandom => {
+            let data = unsafe { event.data.getrandom };
+            format!(
+                "{} getrandom(buf: 0x{:x}, buflen: {}, flags: {}) = {}",
+                event.tid,
+                data.buf,
+                data.buflen,
+                format_getrandom_flags(data.flags),
+                event.return_value
+            )
+        }
         SYS_brk => {
             let data = unsafe { event.data.brk };
             format!(
@@ -509,6 +520,25 @@ fn format_mmap_prot(prot: i32) -> String {
         format!("0x{:x}", prot)
     } else {
         format!("0x{:x} ({})", prot, parts.join("|"))
+    }
+}
+
+fn format_getrandom_flags(flags: u32) -> String {
+    let defs = [
+        (0x0001, "GRND_RANDOM"),   // Use random source instead of urandom
+        (0x0002, "GRND_NONBLOCK"), // Don't block if no entropy available
+        (0x0004, "GRND_INSECURE"), // Use uninitialized bytes for early boot
+    ];
+    let mut parts = Vec::new();
+    for (bit, name) in defs.iter() {
+        if flags & bit != 0 {
+            parts.push(*name);
+        }
+    }
+    if parts.is_empty() {
+        format!("0x{:x}", flags)
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
     }
 }
 

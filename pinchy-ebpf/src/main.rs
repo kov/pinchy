@@ -17,8 +17,8 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, LinuxDirent64, Pollfd, Stat, Timespec},
     syscalls::{
-        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_getdents64, SYS_ioctl,
-        SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat, SYS_ppoll, SYS_read,
+        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_getdents64, SYS_getrandom,
+        SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat, SYS_ppoll, SYS_read,
         SYS_sched_yield, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
@@ -226,6 +226,14 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let prot = args[2] as i32;
                 pinchy_common::SyscallEventData {
                     mprotect: pinchy_common::MprotectData { addr, length, prot },
+                }
+            }
+            SYS_getrandom => {
+                let buf = args[0];
+                let buflen = args[1];
+                let flags = args[2] as u32;
+                pinchy_common::SyscallEventData {
+                    getrandom: pinchy_common::GetrandomData { buf, buflen, flags },
                 }
             }
             _ => {

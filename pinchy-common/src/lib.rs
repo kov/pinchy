@@ -35,6 +35,8 @@ pub union SyscallEventData {
     pub execve: ExecveData,
     pub fstat: FstatData,
     pub getdents64: Getdents64Data,
+    pub mmap: MmapData,
+    pub munmap: MunmapData,
     pub generic: GenericSyscallData,
 }
 
@@ -146,6 +148,24 @@ pub struct Getdents64Data {
     pub count: usize,
     pub dirents: [crate::kernel_types::LinuxDirent64; 4],
     pub num_dirents: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MmapData {
+    pub addr: usize,
+    pub length: usize,
+    pub prot: i32,
+    pub flags: i32,
+    pub fd: i32,
+    pub offset: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MunmapData {
+    pub addr: usize,
+    pub length: usize,
 }
 
 #[repr(C)]

@@ -8,8 +8,8 @@ use pinchy_common::{
     kernel_types::{Stat, Timespec},
     syscalls::{
         syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex,
-        SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
-        SYS_write,
+        SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_munmap, SYS_openat, SYS_ppoll,
+        SYS_read, SYS_sched_yield, SYS_write,
     },
     SyscallEvent,
 };
@@ -275,6 +275,32 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.return_value
             )
         }
+        SYS_mmap => {
+            let data = unsafe { event.data.mmap };
+            let ret_str = if event.return_value == -1 {
+                "-1 (error)".to_string()
+            } else {
+                format!("0x{:x}", event.return_value as usize)
+            };
+            format!(
+                "{} mmap(addr: 0x{:x}, length: {}, prot: {}, flags: {}, fd: {}, offset: 0x{:x}) = {}",
+                event.tid,
+                data.addr,
+                data.length,
+                format_mmap_prot(data.prot),
+                format_mmap_flags(data.flags),
+                data.fd,
+                data.offset,
+                ret_str
+            )
+        }
+        SYS_munmap => {
+            let data = unsafe { event.data.munmap };
+            format!(
+                "{} munmap(addr: 0x{:x}, length: {}) = {}",
+                event.tid, data.addr, data.length, event.return_value
+            )
+        }
         _ => {
             // Check if this is a generic syscall with raw arguments
             if let Some(name) = syscall_name_from_nr(event.syscall_nr) {
@@ -411,6 +437,61 @@ fn format_flags(flags: i32) -> String {
         }
     }
     format!("0x{:x} ({})", flags, parts.join("|"))
+}
+
+fn format_mmap_flags(flags: i32) -> String {
+    let defs = [
+        (libc::MAP_SHARED, "MAP_SHARED"),
+        (libc::MAP_PRIVATE, "MAP_PRIVATE"),
+        (libc::MAP_FIXED, "MAP_FIXED"),
+        (libc::MAP_ANONYMOUS, "MAP_ANONYMOUS"),
+        #[cfg(target_arch = "x86_64")]
+        (libc::MAP_32BIT, "MAP_32BIT"),
+        (libc::MAP_GROWSDOWN, "MAP_GROWSDOWN"),
+        (libc::MAP_DENYWRITE, "MAP_DENYWRITE"),
+        (libc::MAP_EXECUTABLE, "MAP_EXECUTABLE"),
+        (libc::MAP_LOCKED, "MAP_LOCKED"),
+        (libc::MAP_NORESERVE, "MAP_NORESERVE"),
+        (libc::MAP_POPULATE, "MAP_POPULATE"),
+        (libc::MAP_NONBLOCK, "MAP_NONBLOCK"),
+        (libc::MAP_STACK, "MAP_STACK"),
+        (libc::MAP_HUGETLB, "MAP_HUGETLB"),
+        (libc::MAP_SYNC, "MAP_SYNC"),
+        (libc::MAP_FIXED_NOREPLACE, "MAP_FIXED_NOREPLACE"),
+    ];
+    let mut parts = Vec::new();
+    for (bit, name) in defs.iter() {
+        if (flags as u32) & (*bit as u32) != 0 {
+            parts.push(*name);
+        }
+    }
+    if parts.is_empty() {
+        format!("0x{:x}", flags)
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+fn format_mmap_prot(prot: i32) -> String {
+    let defs = [
+        (libc::PROT_READ, "PROT_READ"),
+        (libc::PROT_WRITE, "PROT_WRITE"),
+        (libc::PROT_EXEC, "PROT_EXEC"),
+        (libc::PROT_NONE, "PROT_NONE"),
+        (libc::PROT_GROWSDOWN, "PROT_GROWSDOWN"),
+        (libc::PROT_GROWSUP, "PROT_GROWSUP"),
+    ];
+    let mut parts = Vec::new();
+    for (bit, name) in defs.iter() {
+        if (prot as u32) & (*bit as u32) != 0 {
+            parts.push(*name);
+        }
+    }
+    if parts.is_empty() {
+        format!("0x{:x}", prot)
+    } else {
+        format!("0x{:x} ({})", prot, parts.join("|"))
+    }
 }
 
 trait JoinTakeMap: Iterator + Sized {

@@ -23,8 +23,8 @@ use nix::unistd::{setgid, setuid, User};
 use pinchy_common::{
     syscalls::{
         syscall_name_from_nr, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex,
-        SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield,
-        SYS_write, ALL_SYSCALLS,
+        SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_munmap, SYS_openat, SYS_ppoll,
+        SYS_read, SYS_sched_yield, SYS_write, ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -530,6 +530,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_futex", SYS_futex),
         ("syscall_exit_ioctl", SYS_ioctl),
         ("syscall_exit_execve", SYS_execve),
+        ("syscall_exit_mmap", SYS_mmap),
+        ("syscall_exit_munmap", SYS_munmap),
     ] {
         let prog: &mut TracePoint = ebpf.program_mut(prog_name).unwrap().try_into()?;
         prog.load()?;

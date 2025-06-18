@@ -39,6 +39,7 @@ pub union SyscallEventData {
     pub munmap: MunmapData,
     pub brk: BrkData,
     pub mprotect: MprotectData,
+    pub getrandom: GetrandomData,
     pub generic: GenericSyscallData,
 }
 
@@ -169,6 +170,14 @@ pub struct MprotectData {
     pub addr: usize,
     pub length: usize,
     pub prot: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetrandomData {
+    pub buf: usize,
+    pub buflen: usize,
+    pub flags: u32,
 }
 
 #[repr(C)]

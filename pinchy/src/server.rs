@@ -24,7 +24,8 @@ use pinchy_common::{
     syscalls::{
         syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
         SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
-        SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write, ALL_SYSCALLS,
+        SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
+        ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -539,6 +540,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_execve", SYS_execve),
         ("syscall_exit_mmap", SYS_mmap),
         ("syscall_exit_munmap", SYS_munmap),
+        ("syscall_exit_statfs", SYS_statfs),
     ] {
         let prog: &mut TracePoint = ebpf.program_mut(prog_name).unwrap().try_into()?;
         prog.load()?;

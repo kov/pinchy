@@ -53,3 +53,21 @@ pub struct LinuxDirent64 {
     pub d_type: u8,
     pub d_name: [u8; SMALL_READ_SIZE],
 }
+
+/// Filesystem statistics structure, matching the kernel's struct statfs
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Statfs {
+    pub f_type: i64,       /* Type of filesystem */
+    pub f_bsize: i64,      /* Optimal transfer block size */
+    pub f_blocks: u64,     /* Total data blocks in filesystem */
+    pub f_bfree: u64,      /* Free blocks in filesystem */
+    pub f_bavail: u64,     /* Free blocks available to unprivileged user */
+    pub f_files: u64,      /* Total inodes in filesystem */
+    pub f_ffree: u64,      /* Free inodes in filesystem */
+    pub f_fsid: [i32; 2],  /* Filesystem ID */
+    pub f_namelen: i64,    /* Maximum length of filenames */
+    pub f_frsize: i64,     /* Fragment size */
+    pub f_flags: i64,      /* Mount flags of filesystem */
+    pub f_spare: [i64; 4], /* Padding bytes reserved for future use */
+}

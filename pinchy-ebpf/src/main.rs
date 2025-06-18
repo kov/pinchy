@@ -19,7 +19,7 @@ use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_getdents64, SYS_getrandom,
         SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat, SYS_ppoll, SYS_read,
-        SYS_sched_yield, SYS_write,
+        SYS_sched_yield, SYS_statfs, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -820,6 +820,46 @@ pub fn syscall_exit_munmap(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 munmap: pinchy_common::MunmapData { addr, length },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_statfs(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_statfs;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pathname_ptr = args[0] as *const u8;
+        let buf_ptr = args[1] as *const pinchy_common::kernel_types::Statfs;
+
+        // Only parse the buffer if the syscall succeeded
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let mut statfs = pinchy_common::kernel_types::Statfs::default();
+
+        unsafe {
+            let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut pathname);
+
+            // Only read the statfs buffer if the syscall was successful (return_value == 0)
+            if return_value == 0 {
+                if let Ok(data) = bpf_probe_read_user(buf_ptr as *const _) {
+                    statfs = data;
+                }
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                statfs: pinchy_common::StatfsData { pathname, statfs },
             },
         )
     }

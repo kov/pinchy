@@ -38,6 +38,7 @@ pub union SyscallEventData {
     pub mmap: MmapData,
     pub munmap: MunmapData,
     pub brk: BrkData,
+    pub mprotect: MprotectData,
     pub generic: GenericSyscallData,
 }
 
@@ -160,6 +161,14 @@ pub struct MmapData {
     pub flags: i32,
     pub fd: i32,
     pub offset: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MprotectData {
+    pub addr: usize,
+    pub length: usize,
+    pub prot: i32,
 }
 
 #[repr(C)]

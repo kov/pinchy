@@ -23,8 +23,8 @@ use nix::unistd::{setgid, setuid, User};
 use pinchy_common::{
     syscalls::{
         syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
-        SYS_futex, SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_munmap, SYS_openat,
-        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write, ALL_SYSCALLS,
+        SYS_futex, SYS_getdents64, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
+        SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write, ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -513,7 +513,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     prog.load()?;
 
     // Use the same tail call handler for trivial syscalls.
-    const TRIVIAL_SYSCALLS: &[i64] = &[SYS_close, SYS_lseek, SYS_sched_yield, SYS_brk];
+    const TRIVIAL_SYSCALLS: &[i64] =
+        &[SYS_close, SYS_lseek, SYS_sched_yield, SYS_brk, SYS_mprotect];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);

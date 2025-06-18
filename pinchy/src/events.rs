@@ -9,7 +9,7 @@ use pinchy_common::{
     syscalls::{
         syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
         SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
-        SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_write,
+        SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
     },
     SyscallEvent,
 };
@@ -305,6 +305,20 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.tid, data.addr, event.return_value
             )
         }
+        SYS_statfs => {
+            let data = unsafe { event.data.statfs };
+            format!(
+                "{} statfs(pathname: {}, buf: {}) = {}",
+                event.tid,
+                format_path(&data.pathname, false),
+                if event.return_value == 0 {
+                    format_statfs(&data.statfs)
+                } else {
+                    "<unavailable>".to_string()
+                },
+                event.return_value
+            )
+        }
         _ => {
             // Check if this is a generic syscall with raw arguments
             if let Some(name) = syscall_name_from_nr(event.syscall_nr) {
@@ -533,6 +547,160 @@ fn format_getrandom_flags(flags: u32) -> String {
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
     }
+}
+
+/// Format filesystem type based on f_type value
+fn format_fs_type(fs_type: i64) -> String {
+    let type_name = match fs_type {
+        0x0000002f => "QNX4_SUPER_MAGIC",
+        0x00011954 => "UFS_MAGIC",
+        0x0001aabb => "CRAMFS_MAGIC",
+        0x0001dfc6 => "ROMFS_MAGIC",
+        0x00414a53 => "EFS_SUPER_MAGIC",
+        0x00c36400 => "CEPH_SUPER_MAGIC",
+        0x01021994 => "TMPFS_MAGIC",
+        0x01021997 => "V9FS_MAGIC",
+        0x012ff7b4 => "XENIX_SUPER_MAGIC",
+        0x012ff7b5 => "SYSV4_SUPER_MAGIC",
+        0x012ff7b6 => "SYSV2_SUPER_MAGIC",
+        0x012ff7b7 => "COH_SUPER_MAGIC",
+        0x012fd16d => "XIAFS_SUPER_MAGIC",
+        0x0187 => "AUTOFS_SUPER_MAGIC",
+        0x01b6 => "VXFS_SUPER_MAGIC",
+        0x02011994 => "BALLOON_KVM_MAGIC",
+        0x02295a52 => "OCFS2_SUPER_MAGIC",
+        0x023abcde => "CGROUP2_SUPER_MAGIC",
+        0x0534d5f3 => "PPC_CMM_MAGIC",
+        0x09041934 => "ANON_INODE_FS_MAGIC",
+        0x0bad1dea => "FUTEXFS_SUPER_MAGIC",
+        0x0bd00bd0 => "LUSTRE_SUPER_MAGIC",
+        0x11307854 => "MTD_INODE_FS_MAGIC",
+        0x13661366 => "BALLOON_MAGIC",
+        0x137d => "EXT_SUPER_MAGIC",
+        0x137f => "MINIX_SUPER_MAGIC",
+        0x138f => "MINIX_SUPER_MAGIC2",
+        0x1cd1 => "DEVPTS_SUPER_MAGIC",
+        0x1c36400 => "CEPH_SUPER_MAGIC",
+        0x1face => "FUSE_CTL_SUPER_MAGIC",
+        0x1badface => "BFS_MAGIC",
+        0x2468 => "MINIX2_SUPER_MAGIC",
+        0x2478 => "MINIX2_SUPER_MAGIC2",
+        0x27e0eb => "CGROUP_SUPER_MAGIC",
+        0x28cd3d45 => "CRAMFS_MAGIC",
+        0x3153464a => "JFS_SUPER_MAGIC",
+        0x42465331 => "BEFS_SUPER_MAGIC",
+        0x42494e4d => "BINFMTFS_MAGIC",
+        0x4244 => "HFS_SUPER_MAGIC",
+        0x4d44 => "MSDOS_SUPER_MAGIC",
+        0x4d5a => "MINIX3_SUPER_MAGIC",
+        0x517b => "SMB_SUPER_MAGIC",
+        0x52654973 => "REISERFS_SUPER_MAGIC",
+        0x534f434b => "SOCKFS_MAGIC",
+        0x534f => "AX25_SUPER_MAGIC",
+        0x5346544e => "NTFS_SB_MAGIC",
+        0x5346414f => "AFS_SUPER_MAGIC",
+        0x5a3c69f0 => "AAFS_MAGIC",
+        0x58295829 => "XENFS_SUPER_MAGIC",
+        0x58464552 => "XREFS_MAGIC",
+        0x58465342 => "XFS_SUPER_MAGIC",
+        0x5df5 => "OVERLAYFS_SUPER_MAGIC",
+        0x61636673 => "ACFS_SUPER_MAGIC",
+        0x6163 => "ASYNCFS_MAGIC",
+        0x62646576 => "BDEVFS_MAGIC",
+        0x62656570 => "CONFIGFS_MAGIC", // Added based on mount output
+        0x62656572 => "SYSFS_MAGIC",
+        0x63677270 => "CGROUP2_SUPER_MAGIC",
+        0x64626720 => "DEBUGFS_MAGIC",
+        0x65735546 => "FUSE_SUPER_MAGIC",
+        0x676e6973 => "CONFIGFS_MAGIC",
+        0x68191122 => "QNX6_SUPER_MAGIC",
+        0x6969 => "NFS_SUPER_MAGIC",
+        0x6165676c => "PSTORE_MAGIC",     // Added based on mount output
+        0x73636673 => "SECURITYFS_MAGIC", // Added based on mount output
+        0x73717368 => "SQUASHFS_MAGIC",
+        0x73727279 => "BTRFS_TEST_MAGIC",
+        0x73757245 => "CODA_SUPER_MAGIC",
+        0x74726163 => "TRACEFS_MAGIC", // Added based on mount output
+        0x7461636f => "OCFS2_SUPER_MAGIC",
+        0x74736e6d => "NSFS_SUPER_MAGIC",
+        0x794c7630 => "OVERLAYFS_SUPER_MAGIC",
+        0x858458f6 => "RAMFS_MAGIC",
+        0x9660 => "ISOFS_SUPER_MAGIC",
+        0x9fa0 => "PROC_SUPER_MAGIC",
+        0x9fa1 => "OPENPROM_SUPER_MAGIC",
+        0x9fa2 => "USBDEVICE_SUPER_MAGIC",
+        0x9123683e => "BTRFS_SUPER_MAGIC",
+        0xadf5 => "ADFS_SUPER_MAGIC",
+        0xadff => "AFFS_SUPER_MAGIC",
+        0xabba1974 => "XENFS_SUPER_MAGIC",
+        0xb550ca10 => "BTRFS_TEST_MAGIC",
+        0xbacbacbc => "CGROUP_SUPER_MAGIC",
+        0xcafe4a11 => "BPF_FS_MAGIC",
+        0xcab007f5 => "DMA_BUF_MAGIC",
+        0xc7578268 => "CGROUP2_SUPER_MAGIC",
+        0xde5e81e4 => "EFIVARFS_MAGIC",
+        0xef51 => "EXT2_OLD_SUPER_MAGIC",
+        0xef53 => "EXT4_SUPER_MAGIC", // Also EXT2_SUPER_MAGIC, EXT3_SUPER_MAGIC
+        0xf15f => "ECRYPTFS_SUPER_MAGIC",
+        0xf2f52010 => "F2FS_SUPER_MAGIC",
+        0xf97cff8c => "SELINUXFS_MAGIC", // Added based on mount output
+        0xf995e849 => "HPFS_SUPER_MAGIC",
+        0xfe534d42 => "SMB2_MAGIC_NUMBER",
+        0xff534d42 => "CIFS_MAGIC_NUMBER",
+        0x958458f6 => "HUGETLBFS_MAGIC", // Added based on mount output
+        _ => return format!("UNKNOWN (0x{:x})", fs_type),
+    };
+    format!("{} (0x{:x})", type_name, fs_type)
+}
+
+/// Format mount flags from f_flags
+fn format_mount_flags(flags: i64) -> String {
+    let flag_defs = [
+        (0x0001, "ST_RDONLY"),      // 1
+        (0x0002, "ST_NOSUID"),      // 2
+        (0x0004, "ST_NODEV"),       // 4
+        (0x0008, "ST_NOEXEC"),      // 8
+        (0x0010, "ST_SYNCHRONOUS"), // 16
+        (0x0020, "ST_MANDLOCK"),    // 32
+        (0x0040, "ST_WRITE"),       // 64
+        (0x0080, "ST_APPEND"),      // 128
+        (0x0100, "ST_IMMUTABLE"),   // 256
+        (0x0200, "ST_NOATIME"),     // 512
+        (0x0400, "ST_NODIRATIME"),  // 1024
+        (0x0800, "ST_RELATIME"),    // 2048
+        (0x1000, "ST_NOSYMFOLLOW"), // 4096
+    ];
+
+    let mut parts = Vec::new();
+    for (bit, name) in flag_defs.iter() {
+        if (flags as u64 & *bit as u64) != 0 {
+            parts.push(*name);
+        }
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags)
+    } else {
+        format!("0x{:x} ({})", flags, parts.join(" | "))
+    }
+}
+
+/// Format statfs struct for display
+fn format_statfs(statfs: &pinchy_common::kernel_types::Statfs) -> String {
+    format!(
+        "{{ type: {}, block_size: {}, blocks: {}, blocks_free: {}, blocks_available: {}, files: {}, files_free: {}, fsid: [{}, {}], name_max: {}, fragment_size: {}, mount_flags: {} }}",
+        format_fs_type(statfs.f_type),
+        statfs.f_bsize,
+        statfs.f_blocks,
+        statfs.f_bfree,
+        statfs.f_bavail,
+        statfs.f_files,
+        statfs.f_ffree,
+        statfs.f_fsid[0], statfs.f_fsid[1],
+        statfs.f_namelen,
+        statfs.f_frsize,
+        format_mount_flags(statfs.f_flags)
+    )
 }
 
 trait JoinTakeMap: Iterator + Sized {

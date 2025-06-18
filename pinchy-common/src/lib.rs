@@ -40,6 +40,7 @@ pub union SyscallEventData {
     pub brk: BrkData,
     pub mprotect: MprotectData,
     pub getrandom: GetrandomData,
+    pub statfs: StatfsData,
     pub generic: GenericSyscallData,
 }
 
@@ -178,6 +179,13 @@ pub struct GetrandomData {
     pub buf: usize,
     pub buflen: usize,
     pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StatfsData {
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub statfs: kernel_types::Statfs,
 }
 
 #[repr(C)]

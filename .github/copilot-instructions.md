@@ -42,6 +42,14 @@ and can know from a cursory look whether the version you remember is quite
 different from current, so it makes sense to double check docs for that crate
 as well (suggest a change to this file in that case).
 
+# Getting details about a syscall
+
+All syscalls should have manpages that provide a lot of detailed information,
+associated types, explanations for return values, and so on. You can use
+the following URL, replacing <syscall> with the name:
+
+  https://man7.org/linux/man-pages/man2/<syscall>.2.html
+
 # Adding support for a new syscall
 
 All current Linux syscalls are already listed in

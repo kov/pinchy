@@ -37,6 +37,7 @@ pub union SyscallEventData {
     pub getdents64: Getdents64Data,
     pub mmap: MmapData,
     pub munmap: MunmapData,
+    pub brk: BrkData,
     pub generic: GenericSyscallData,
 }
 
@@ -166,6 +167,12 @@ pub struct MmapData {
 pub struct MunmapData {
     pub addr: usize,
     pub length: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct BrkData {
+    pub addr: usize,
 }
 
 #[repr(C)]

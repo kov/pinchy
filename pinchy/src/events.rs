@@ -9,7 +9,8 @@ use pinchy_common::{
     syscalls::{
         syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
         SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
-        SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
+        SYS_munmap, SYS_openat, SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_statfs,
+        SYS_write,
     },
     SyscallEvent,
 };
@@ -319,6 +320,52 @@ pub async fn handle_event(event: &SyscallEvent) -> String {
                 event.return_value
             )
         }
+        SYS_prctl => {
+            let data = unsafe { event.data.generic };
+            let op_code = data.args[0] as i32;
+            let op_name = format_prctl_op(op_code);
+
+            // Special case for PR_CAP_AMBIENT which has sub-operations
+            if op_code == libc::PR_CAP_AMBIENT && data.args.len() > 1 {
+                let sub_op = data.args[1] as i32;
+                let sub_op_name = format_prctl_op(sub_op); // Format the sub-operation
+
+                // Different sub-operations take different numbers of args
+                let args_formatted = if sub_op == libc::PR_CAP_AMBIENT_CLEAR_ALL {
+                    String::new() // No args beyond sub-op
+                } else {
+                    // Sub-operations like RAISE/LOWER/IS_SET take a capability arg
+                    format!(", 0x{:x}", data.args[2]) // Show the cap argument
+                };
+
+                format!(
+                    "{} prctl(PR_CAP_AMBIENT, {}{}) = {}",
+                    event.tid, sub_op_name, args_formatted, event.return_value
+                )
+            } else {
+                // Normal prctl operations
+                let arg_count = prctl_op_arg_count(op_code);
+
+                let args_formatted = match arg_count {
+                    1 => String::new(),
+                    2 => format!(", 0x{:x}", data.args[1]),
+                    3 => format!(", 0x{:x}, 0x{:x}", data.args[1], data.args[2]),
+                    4 => format!(
+                        ", 0x{:x}, 0x{:x}, 0x{:x}",
+                        data.args[1], data.args[2], data.args[3]
+                    ),
+                    _ => format!(
+                        ", 0x{:x}, 0x{:x}, 0x{:x}, 0x{:x}",
+                        data.args[1], data.args[2], data.args[3], data.args[4]
+                    ),
+                };
+
+                format!(
+                    "{} prctl({}{}) = {}",
+                    event.tid, op_name, args_formatted, event.return_value
+                )
+            }
+        }
         _ => {
             // Check if this is a generic syscall with raw arguments
             if let Some(name) = syscall_name_from_nr(event.syscall_nr) {
@@ -546,6 +593,206 @@ fn format_getrandom_flags(flags: u32) -> String {
         format!("0x{:x}", flags)
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+// Constants for prctl operations not available in libc
+const PR_SVE_SET_VL: i32 = 50;
+const PR_SVE_GET_VL: i32 = 51;
+const PR_GET_SPECULATION_CTRL: i32 = 52;
+const PR_SET_SPECULATION_CTRL: i32 = 53;
+const PR_SET_TAGGED_ADDR_CTRL: i32 = 55;
+const PR_GET_TAGGED_ADDR_CTRL: i32 = 56;
+const PR_SET_IO_FLUSHER: i32 = 57;
+const PR_GET_IO_FLUSHER: i32 = 58;
+const PR_SET_SYSCALL_USER_DISPATCH: i32 = 59;
+const PR_PAC_SET_ENABLED_KEYS: i32 = 60;
+const PR_PAC_GET_ENABLED_KEYS: i32 = 61;
+const PR_SCHED_CORE: i32 = 62;
+const PR_SME_SET_VL: i32 = 63;
+const PR_SME_GET_VL: i32 = 64;
+const PR_SET_MDWE: i32 = 65;
+const PR_GET_MDWE: i32 = 66;
+const PR_SET_VMA: i32 = 67;
+const PR_GET_AUXV: i32 = 68;
+const PR_RISCV_SET_ICACHE_FLUSH_CTX: i32 = 69;
+
+/// Format prctl operation into human-readable string
+fn format_prctl_op(op: i32) -> String {
+    match op {
+        // PR_* constants from libc
+        libc::PR_SET_PDEATHSIG => "PR_SET_PDEATHSIG",
+        libc::PR_GET_PDEATHSIG => "PR_GET_PDEATHSIG",
+        libc::PR_GET_DUMPABLE => "PR_GET_DUMPABLE",
+        libc::PR_SET_DUMPABLE => "PR_SET_DUMPABLE",
+        libc::PR_GET_UNALIGN => "PR_GET_UNALIGN",
+        libc::PR_SET_UNALIGN => "PR_SET_UNALIGN",
+        libc::PR_GET_KEEPCAPS => "PR_GET_KEEPCAPS",
+        libc::PR_SET_KEEPCAPS => "PR_SET_KEEPCAPS",
+        libc::PR_GET_FPEMU => "PR_GET_FPEMU",
+        libc::PR_SET_FPEMU => "PR_SET_FPEMU",
+        libc::PR_GET_FPEXC => "PR_GET_FPEXC",
+        libc::PR_SET_FPEXC => "PR_SET_FPEXC",
+        libc::PR_GET_TIMING => "PR_GET_TIMING",
+        libc::PR_SET_TIMING => "PR_SET_TIMING",
+        libc::PR_SET_NAME => "PR_SET_NAME",
+        libc::PR_GET_NAME => "PR_GET_NAME",
+        libc::PR_GET_ENDIAN => "PR_GET_ENDIAN",
+        libc::PR_SET_ENDIAN => "PR_SET_ENDIAN",
+        libc::PR_GET_SECCOMP => "PR_GET_SECCOMP",
+        libc::PR_SET_SECCOMP => "PR_SET_SECCOMP",
+        libc::PR_CAPBSET_READ => "PR_CAPBSET_READ",
+        libc::PR_CAPBSET_DROP => "PR_CAPBSET_DROP",
+        libc::PR_GET_TSC => "PR_GET_TSC",
+        libc::PR_SET_TSC => "PR_SET_TSC",
+        libc::PR_GET_SECUREBITS => "PR_GET_SECUREBITS",
+        libc::PR_SET_SECUREBITS => "PR_SET_SECUREBITS",
+        libc::PR_SET_TIMERSLACK => "PR_SET_TIMERSLACK",
+        libc::PR_GET_TIMERSLACK => "PR_GET_TIMERSLACK",
+        libc::PR_TASK_PERF_EVENTS_DISABLE => "PR_TASK_PERF_EVENTS_DISABLE",
+        libc::PR_TASK_PERF_EVENTS_ENABLE => "PR_TASK_PERF_EVENTS_ENABLE",
+        libc::PR_MCE_KILL => "PR_MCE_KILL",
+        libc::PR_MCE_KILL_GET => "PR_MCE_KILL_GET",
+        libc::PR_SET_MM => "PR_SET_MM",
+        libc::PR_GET_TID_ADDRESS => "PR_GET_TID_ADDRESS",
+        libc::PR_SET_CHILD_SUBREAPER => "PR_SET_CHILD_SUBREAPER",
+        libc::PR_GET_CHILD_SUBREAPER => "PR_GET_CHILD_SUBREAPER",
+        libc::PR_SET_NO_NEW_PRIVS => "PR_SET_NO_NEW_PRIVS",
+        libc::PR_GET_NO_NEW_PRIVS => "PR_GET_NO_NEW_PRIVS",
+        libc::PR_GET_THP_DISABLE => "PR_GET_THP_DISABLE",
+        libc::PR_SET_THP_DISABLE => "PR_SET_THP_DISABLE",
+        libc::PR_MPX_ENABLE_MANAGEMENT => "PR_MPX_ENABLE_MANAGEMENT",
+        libc::PR_MPX_DISABLE_MANAGEMENT => "PR_MPX_DISABLE_MANAGEMENT",
+        libc::PR_SET_FP_MODE => "PR_SET_FP_MODE",
+        libc::PR_GET_FP_MODE => "PR_GET_FP_MODE",
+        libc::PR_CAP_AMBIENT => "PR_CAP_AMBIENT",
+        #[cfg(target_arch = "aarch64")]
+        libc::PR_PAC_RESET_KEYS => "PR_PAC_RESET_KEYS",
+        // Constants not yet available in our libc version
+        PR_SVE_SET_VL => "PR_SVE_SET_VL",
+        PR_SVE_GET_VL => "PR_SVE_GET_VL",
+        PR_GET_SPECULATION_CTRL => "PR_GET_SPECULATION_CTRL",
+        PR_SET_SPECULATION_CTRL => "PR_SET_SPECULATION_CTRL",
+        #[cfg(target_arch = "aarch64")]
+        PR_SET_TAGGED_ADDR_CTRL => "PR_SET_TAGGED_ADDR_CTRL",
+        #[cfg(target_arch = "aarch64")]
+        PR_GET_TAGGED_ADDR_CTRL => "PR_GET_TAGGED_ADDR_CTRL",
+        PR_SET_IO_FLUSHER => "PR_SET_IO_FLUSHER",
+        PR_GET_IO_FLUSHER => "PR_GET_IO_FLUSHER",
+        PR_SET_SYSCALL_USER_DISPATCH => "PR_SET_SYSCALL_USER_DISPATCH",
+        #[cfg(target_arch = "aarch64")]
+        PR_PAC_SET_ENABLED_KEYS => "PR_PAC_SET_ENABLED_KEYS",
+        #[cfg(target_arch = "aarch64")]
+        PR_PAC_GET_ENABLED_KEYS => "PR_PAC_GET_ENABLED_KEYS",
+        PR_SCHED_CORE => "PR_SCHED_CORE",
+        PR_SME_SET_VL => "PR_SME_SET_VL",
+        PR_SME_GET_VL => "PR_SME_GET_VL",
+        PR_SET_MDWE => "PR_SET_MDWE",
+        PR_GET_MDWE => "PR_GET_MDWE",
+        PR_SET_VMA => "PR_SET_VMA",
+        PR_GET_AUXV => "PR_GET_AUXV",
+        PR_RISCV_SET_ICACHE_FLUSH_CTX => "PR_RISCV_SET_ICACHE_FLUSH_CTX",
+        _ => return format!("UNKNOWN (0x{:x})", op),
+    }
+    .to_string()
+}
+
+/// Get the number of arguments used by a prctl operation based on documentation
+/// Different prctl operations take different numbers of arguments.
+/// Note that some operations have unused arguments that are set to 0L.
+fn prctl_op_arg_count(op: i32) -> usize {
+    match op {
+        // GET operations that take NO additional arguments (just the opcode)
+        #[cfg(target_arch = "aarch64")]
+        PR_PAC_GET_ENABLED_KEYS => 1,
+
+        libc::PR_GET_DUMPABLE
+        | libc::PR_GET_UNALIGN
+        | libc::PR_GET_KEEPCAPS
+        | libc::PR_GET_FPEMU
+        | libc::PR_GET_FPEXC
+        | libc::PR_GET_TIMING
+        | libc::PR_GET_ENDIAN
+        | libc::PR_GET_SECCOMP
+        | libc::PR_GET_TSC
+        | libc::PR_GET_SECUREBITS
+        | libc::PR_GET_TIMERSLACK
+        | libc::PR_MCE_KILL_GET
+        | libc::PR_GET_CHILD_SUBREAPER
+        | libc::PR_GET_NO_NEW_PRIVS
+        | libc::PR_GET_THP_DISABLE
+        | libc::PR_GET_FP_MODE
+        | PR_SVE_GET_VL
+        | PR_SME_GET_VL
+        | PR_GET_MDWE => 1,
+
+        // Operations that need a pointer to receive data (op + pointer)
+        libc::PR_GET_NAME
+        | libc::PR_GET_TID_ADDRESS
+        | PR_GET_AUXV
+        | libc::PR_GET_PDEATHSIG
+        | PR_GET_TAGGED_ADDR_CTRL
+        | PR_GET_IO_FLUSHER
+        | PR_GET_SPECULATION_CTRL => 2,
+
+        // Operations with an input parameter (op + param)
+        libc::PR_CAPBSET_READ | libc::PR_CAPBSET_DROP => 2,
+
+        // Task performance control operations
+        libc::PR_TASK_PERF_EVENTS_DISABLE | libc::PR_TASK_PERF_EVENTS_ENABLE => 1,
+
+        // PR_SET_MM has variable arguments depending on the suboperation
+        libc::PR_SET_MM => 3, // op + sub_op + addr, though some use more
+
+        // PR_SET_VMA requires 5 args
+        PR_SET_VMA => 5,
+
+        // Most SET operations take 2 arguments (op and value)
+        #[cfg(target_arch = "aarch64")]
+        PR_PAC_SET_ENABLED_KEYS | libc::PR_PAC_RESET_KEYS => 2,
+
+        libc::PR_SET_PDEATHSIG
+        | libc::PR_SET_DUMPABLE
+        | libc::PR_SET_UNALIGN
+        | libc::PR_SET_KEEPCAPS
+        | libc::PR_SET_FPEMU
+        | libc::PR_SET_FPEXC
+        | libc::PR_SET_TIMING
+        | libc::PR_SET_NAME
+        | libc::PR_SET_ENDIAN
+        | libc::PR_SET_TSC
+        | libc::PR_SET_SECUREBITS
+        | libc::PR_SET_TIMERSLACK
+        | libc::PR_SET_CHILD_SUBREAPER
+        | libc::PR_SET_NO_NEW_PRIVS
+        | libc::PR_SET_THP_DISABLE
+        | libc::PR_SET_FP_MODE
+        | PR_SVE_SET_VL
+        | PR_SET_SPECULATION_CTRL
+        | PR_SET_TAGGED_ADDR_CTRL
+        | PR_SET_IO_FLUSHER
+        | PR_SCHED_CORE
+        | PR_SME_SET_VL
+        | PR_SET_MDWE
+        | PR_RISCV_SET_ICACHE_FLUSH_CTX
+        | libc::PR_MPX_ENABLE_MANAGEMENT
+        | libc::PR_MPX_DISABLE_MANAGEMENT => 2,
+
+        // PR_SET_SECCOMP takes different args depending on mode
+        // Basic mode: 2 args, Filter mode: 3 args
+        libc::PR_SET_SECCOMP => 3, // Conservatively show 3 args
+
+        // PR_SET_SYSCALL_USER_DISPATCH takes 5 args
+        PR_SET_SYSCALL_USER_DISPATCH => 5,
+
+        // PR_CAP_AMBIENT requires sub-operation argument
+        libc::PR_CAP_AMBIENT => 3, // op + sub_op + cap (if needed)
+
+        // PR_MCE_KILL has 3 arguments total
+        libc::PR_MCE_KILL => 3, // op + type + flags
+
+        // Default to showing all 5 possible arguments when unsure
+        _ => 5,
     }
 }
 

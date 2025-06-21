@@ -14,6 +14,9 @@ pub use x86_64::*;
 #[cfg(not(any(aarch64, x86_64)))]
 compile_error!("Unsupported architecture. Currently only aarch64 and x86_64 are supported.");
 
+#[allow(non_upper_case_globals)]
+pub const SYS_generic_parse_test: i64 = i64::MAX; // for testing only
+
 #[macro_export]
 macro_rules! declare_syscalls {
     (
@@ -28,6 +31,7 @@ macro_rules! declare_syscalls {
         }
         pub fn syscall_name_from_nr(nr: i64) -> Option<&'static str> {
             match nr {
+                crate::syscalls::SYS_generic_parse_test => Some("generic_parse_test"),
                 $( $name => Some(&stringify!($name)[4..]), )*
                 _ => None,
             }

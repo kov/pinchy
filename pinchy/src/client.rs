@@ -5,6 +5,7 @@
 use std::{
     ffi::{c_char, CString, OsString},
     os::{fd::OwnedFd, unix::ffi::OsStrExt},
+    pin::Pin,
 };
 
 use anyhow::Result;
@@ -14,7 +15,10 @@ use pinchy_common::syscalls::{syscall_nr_from_name, ALL_SYSCALLS};
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use zbus::{fdo, names::WellKnownName, proxy, Error as ZBusError};
 
+use crate::formatting::{Formatter, FormattingStyle};
+
 mod events;
+mod formatting;
 mod ioctls;
 mod util;
 
@@ -42,6 +46,10 @@ struct Args {
     #[arg(short = 'e', long = "event", value_delimiter = ',', action = clap::ArgAction::Append)]
     syscalls: Vec<String>,
 
+    // Formatting style, `one-line` or `multi-line`
+    #[arg(long = "format", value_enum, default_value_t = FormattingStyle::default())]
+    style: FormattingStyle,
+
     /// PID to trace
     #[arg(short = 'p', long = "pid", action = clap::ArgAction::Set, conflicts_with = "command")]
     pid: Option<u32>,
@@ -67,6 +75,8 @@ async fn main() -> Result<()> {
     } else {
         ALL_SYSCALLS.to_vec()
     };
+
+    let style = args.style;
 
     // Handle D-Bus connection with proper error handling
 
@@ -141,7 +151,7 @@ async fn main() -> Result<()> {
 
         // Read everything there is to read, the server will close the write end
         // of the pipe
-        relay_trace(fd).await?;
+        relay_trace(fd, style).await?;
 
         unsafe {
             libc::waitpid(pid, &mut status, libc::WUNTRACED);
@@ -157,7 +167,7 @@ async fn main() -> Result<()> {
             Ok(fd) => fd.into(),
             Err(e) => handle_dbus_error(e),
         };
-        relay_trace(fd).await?;
+        relay_trace(fd, style).await?;
     } else {
         // Print clap's usage message and exit
         Args::command().print_help().expect("Failed to print usage");
@@ -168,17 +178,27 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-async fn relay_trace(fd: OwnedFd) -> Result<()> {
+async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<()> {
     let mut reader = tokio::io::BufReader::new(tokio::fs::File::from(std::fs::File::from(fd)));
     let mut stdout = tokio::io::BufWriter::new(tokio::io::stdout());
     let mut buf = vec![0u8; std::mem::size_of::<pinchy_common::SyscallEvent>()];
+
+    let mut output: Vec<u8> = vec![];
     loop {
         match reader.read_exact(&mut buf).await {
             Ok(_) => {
                 let event: pinchy_common::SyscallEvent =
                     unsafe { std::ptr::read(buf.as_ptr() as *const pinchy_common::SyscallEvent) };
-                let output = events::handle_event(&event).await;
-                stdout.write_all(output.as_bytes()).await?;
+
+                output.clear();
+
+                // Safety: we own the output vector and won't progress before handle_event() returns.
+                let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+                let formatter = Formatter::new(pin_output, formatting_style.clone());
+
+                let string_output = events::handle_event(&event, formatter).await?;
+                // stdout.write_all(&output).await?;
+                stdout.write_all(string_output.as_bytes()).await?;
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.into()),

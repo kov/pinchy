@@ -118,6 +118,15 @@ a dedicated handler.
 When trying a build, always use `cargo check`, aya projects are not
 very friendly with `cargo build` or `cargo build --workspace`.
 
+## Adding tests
+When adding tests for parsing syscalls, use the `pinchy/src/events/test.rs`
+module. Integration tests that run the binaries as root in a controlled environment
+are in `pinchy/tests/integration.rs`.
+
+## Helper functions
+Helper functions for parsing specific arguments should go under
+`pinchy/src/util.rs`.
+
 ## Troubleshooting
 - If you encounter a build error or ICE (internal compiler error), try
   a clean build (`cargo clean`) before investigating further.

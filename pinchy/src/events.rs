@@ -3,13 +3,12 @@
 
 use std::borrow::Cow;
 
-use log::trace;
+use log::{error, trace};
 use pinchy_common::{
     syscalls::{
-        syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
-        SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
-        SYS_munmap, SYS_openat, SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_statfs,
-        SYS_write,
+        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex, SYS_getdents64,
+        SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat,
+        SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
     },
     SyscallEvent,
 };
@@ -22,49 +21,28 @@ use crate::{
     util::{
         format_bytes, format_dirfd, format_flags, format_getrandom_flags, format_mmap_flags,
         format_mmap_prot, format_mode, format_path, format_prctl_op, format_stat, format_statfs,
-        format_timespec, old_format_stat, old_format_statfs, old_format_timespec,
-        poll_bits_to_strs, prctl_op_arg_count,
+        format_timespec, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
 
-pub async fn handle_event(
-    event: &SyscallEvent,
-    formatter: Formatter<'_>,
-) -> anyhow::Result<String> {
+pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> anyhow::Result<()> {
     trace!("handle_event for syscall {}", event.syscall_nr);
 
     let Ok(mut sf) = formatter.push_syscall(event.tid, event.syscall_nr).await else {
-        return Ok(format!(
-            "{} unknown syscall {}",
-            event.tid, event.syscall_nr
-        ));
+        error!("{} unknown syscall {}", event.tid, event.syscall_nr);
+        return Ok(());
     };
 
-    let mut string_output = match event.syscall_nr {
+    match event.syscall_nr {
         SYS_close => {
             let data = unsafe { event.data.close };
 
             argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
-
-            format!(
-                "{} close(fd: {}) = {}",
-                event.tid, data.fd, event.return_value
-            )
         }
         SYS_epoll_pwait => {
             let data = unsafe { event.data.epoll_pwait };
-            let epoll_events =
-                data.events
-                    .iter()
-                    .join_take_map(event.return_value as usize, |event| {
-                        format!(
-                            "epoll_event {{ events: {}, data: {:#x} }}",
-                            poll_bits_to_strs(&(event.events as i16)).join("|"),
-                            event.data
-                        )
-                    });
 
             argf!(sf, "epfd: {}", data.epfd);
             arg!(sf, "events:");
@@ -90,16 +68,6 @@ pub async fn handle_event(
             arg!(sf, "sigmask");
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} epoll_pwait(epfd: {}, events: [ {} ], max_events: {}, timeout: {}, sigmask) = {}",
-                event.tid,
-                data.epfd,
-                epoll_events,
-                data.max_events,
-                data.timeout,
-                event.return_value
-            )
         }
         SYS_ppoll => {
             let data = unsafe { event.data.ppoll };
@@ -116,14 +84,6 @@ pub async fn handle_event(
                     )
                 )),
             };
-
-            let fds = data
-                .fds
-                .iter()
-                .zip(data.events.iter())
-                .join_take_map(data.nfds as usize, |(fd, event)| {
-                    format!("{{ {fd}, {} }}", poll_bits_to_strs(event).join("|"))
-                });
 
             arg!(sf, "fds:");
 
@@ -146,15 +106,6 @@ pub async fn handle_event(
             arg!(sf, "sigmask");
 
             finish!(sf, return_meaning);
-
-            format!(
-                "{} ppoll(fds: [ {} ], nfds: {}, timeout: {}, sigmask) = {}",
-                event.tid,
-                fds,
-                data.nfds,
-                old_format_timespec(data.timeout),
-                return_meaning
-            )
         }
         SYS_read => {
             let data = unsafe { event.data.read };
@@ -175,16 +126,6 @@ pub async fn handle_event(
             argf!(sf, "count: {}", data.count);
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} read(fd: {}, buf: {}{}, count: {}) = {}",
-                event.tid,
-                data.fd,
-                format_bytes(&buf),
-                left_over,
-                data.count,
-                event.return_value
-            )
         }
         SYS_write => {
             let data = unsafe { event.data.write };
@@ -205,16 +146,6 @@ pub async fn handle_event(
             argf!(sf, "count: {}", data.count);
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} write(fd: {}, buf: {}{}, count: {}) = {}",
-                event.tid,
-                data.fd,
-                format_bytes(&buf),
-                left_over,
-                data.count,
-                event.return_value
-            )
         }
         SYS_lseek => {
             let data = unsafe { event.data.lseek };
@@ -224,16 +155,9 @@ pub async fn handle_event(
             argf!(sf, "whence: {}", data.whence);
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} lseek(fd: {}, offset: {}, whence: {}) = {}",
-                event.tid, data.fd, data.offset, data.whence, event.return_value
-            )
         }
         SYS_sched_yield => {
             finish!(sf, event.return_value);
-
-            format!("{} sched_yield() = {}", event.tid, event.return_value)
         }
         SYS_openat => {
             let data = unsafe { event.data.openat };
@@ -244,16 +168,6 @@ pub async fn handle_event(
             argf!(sf, "mode: {}", format_mode(data.mode));
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} openat(dfd: {}, pathname: {}, flags: {}, mode: {}) = {}",
-                event.tid,
-                format_dirfd(data.dfd),
-                format_path(&data.pathname, false),
-                format_flags(data.flags),
-                format_mode(data.mode),
-                event.return_value
-            )
         }
         SYS_futex => {
             let data = unsafe { event.data.futex };
@@ -268,11 +182,6 @@ pub async fn handle_event(
             format_timespec(&mut sf, data.timeout).await?;
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} futex(uaddr: 0x{:x}, op: {}, val: {}, uaddr2: 0x{:x}, val3: {}, timeout: {}) = {}",
-                event.tid, data.uaddr, data.op, data.val, data.uaddr2, data.val3, old_format_timespec(data.timeout), event.return_value
-            )
         }
         SYS_ioctl => {
             let data = unsafe { event.data.ioctl };
@@ -283,11 +192,6 @@ pub async fn handle_event(
             argf!(sf, "arg: 0x{}", data.arg);
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} ioctl(fd: {}, request: {}::{}, arg: 0x{:x}) = {}",
-                event.tid, data.fd, request.0, request.1, data.arg, event.return_value
-            )
         }
         SYS_execve => {
             use std::{ffi::OsString, os::unix::ffi::OsStringExt};
@@ -341,11 +245,6 @@ pub async fn handle_event(
             argf!(sf, "envp: [{}]", envp_str);
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} execve(filename: {}, argv: [{}], envp: [{}]) = {}",
-                event.tid, filename, argv_str, envp_str, event.return_value
-            )
         }
         SYS_fstat => {
             let data = unsafe { event.data.fstat };
@@ -357,14 +256,6 @@ pub async fn handle_event(
             });
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} fstat(fd: {}, struct stat: {}) = {}",
-                event.tid,
-                data.fd,
-                old_format_stat(&data.stat),
-                event.return_value
-            )
         }
         SYS_getdents64 => {
             let data = unsafe { event.data.getdents64 };
@@ -398,14 +289,6 @@ pub async fn handle_event(
                     dirent.d_ino, dirent.d_off, dirent.d_reclen, dirent.d_type, d_name
                 ));
             }
-            format!(
-                "{} getdents64(fd: {}, count: {}, entries: [ {} ]) = {}",
-                event.tid,
-                data.fd,
-                data.count,
-                entries.join(", "),
-                event.return_value
-            )
         }
         SYS_mmap => {
             let data = unsafe { event.data.mmap };
@@ -423,18 +306,6 @@ pub async fn handle_event(
             argf!(sf, "offset: 0x{:x}", data.offset);
 
             finish!(sf, ret_str);
-
-            format!(
-                "{} mmap(addr: 0x{:x}, length: {}, prot: {}, flags: {}, fd: {}, offset: 0x{:x}) = {}",
-                event.tid,
-                data.addr,
-                data.length,
-                format_mmap_prot(data.prot),
-                format_mmap_flags(data.flags),
-                data.fd,
-                data.offset,
-                ret_str
-            )
         }
         SYS_munmap => {
             let data = unsafe { event.data.munmap };
@@ -443,11 +314,6 @@ pub async fn handle_event(
             argf!(sf, "length: {}", data.length);
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} munmap(addr: 0x{:x}, length: {}) = {}",
-                event.tid, data.addr, data.length, event.return_value
-            )
         }
         SYS_mprotect => {
             let data = unsafe { event.data.mprotect };
@@ -457,15 +323,6 @@ pub async fn handle_event(
             argf!(sf, "prot: {}", format_mmap_prot(data.prot));
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} mprotect(addr: 0x{:x}, length: {}, prot: {}) = {}",
-                event.tid,
-                data.addr,
-                data.length,
-                format_mmap_prot(data.prot),
-                event.return_value
-            )
         }
         SYS_getrandom => {
             let data = unsafe { event.data.getrandom };
@@ -475,15 +332,6 @@ pub async fn handle_event(
             argf!(sf, "flags: {}", format_getrandom_flags(data.flags));
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} getrandom(buf: 0x{:x}, buflen: {}, flags: {}) = {}",
-                event.tid,
-                data.buf,
-                data.buflen,
-                format_getrandom_flags(data.flags),
-                event.return_value
-            )
         }
         SYS_brk => {
             let data = unsafe { event.data.brk };
@@ -491,11 +339,6 @@ pub async fn handle_event(
             argf!(sf, "addr: 0x{:x}", data.addr);
 
             finish!(sf, format!("0x{:x}", event.return_value));
-
-            format!(
-                "{} brk(addr: 0x{:x}) = 0x{:x}",
-                event.tid, data.addr, event.return_value
-            )
         }
         SYS_statfs => {
             let data = unsafe { event.data.statfs };
@@ -511,18 +354,6 @@ pub async fn handle_event(
             }
 
             finish!(sf, event.return_value);
-
-            format!(
-                "{} statfs(pathname: {}, buf: {}) = {}",
-                event.tid,
-                format_path(&data.pathname, false),
-                if event.return_value == 0 {
-                    old_format_statfs(&data.statfs)
-                } else {
-                    "<unavailable>".to_string()
-                },
-                event.return_value
-            )
         }
         SYS_prctl => {
             let data = unsafe { event.data.generic };
@@ -537,60 +368,20 @@ pub async fn handle_event(
                 argf!(sf, "0x{:x}", data.args[i]);
             }
 
-            let args_formatted = match arg_count {
-                1 => String::new(),
-                2 => format!(", 0x{:x}", data.args[1]),
-                3 => format!(", 0x{:x}, 0x{:x}", data.args[1], data.args[2]),
-                4 => format!(
-                    ", 0x{:x}, 0x{:x}, 0x{:x}",
-                    data.args[1], data.args[2], data.args[3]
-                ),
-                _ => format!(
-                    ", 0x{:x}, 0x{:x}, 0x{:x}, 0x{:x}",
-                    data.args[1], data.args[2], data.args[3], data.args[4]
-                ),
-            };
-
             finish!(sf, event.return_value);
-
-            format!(
-                "{} prctl({}{}) = {}",
-                event.tid, op_name, args_formatted, event.return_value
-            )
         }
         _ => {
-            // Check if this is a generic syscall with raw arguments
-            if let Some(name) = syscall_name_from_nr(event.syscall_nr) {
-                let data = unsafe { event.data.generic };
+            let data = unsafe { event.data.generic };
 
-                for i in 0..data.args.len() {
-                    argf!(sf, "{}", data.args[i]);
-                }
-
-                finish!(sf, event.return_value, b" <STUB>");
-
-                format!(
-                    "{} {}({}, {}, {}, {}, {}, {}) = {} <STUB>",
-                    event.tid,
-                    name,
-                    data.args[0],
-                    data.args[1],
-                    data.args[2],
-                    data.args[3],
-                    data.args[4],
-                    data.args[5],
-                    event.return_value
-                )
-            } else {
-                format!("{} unknown syscall {}", event.tid, event.syscall_nr)
+            for i in 0..data.args.len() {
+                argf!(sf, "{}", data.args[i]);
             }
+
+            finish!(sf, event.return_value, b" <STUB>");
         }
     };
 
-    // Add a final new line.
-    string_output.push('\n');
-
-    Ok(string_output)
+    Ok(())
 }
 
 trait JoinTakeMap: Iterator + Sized {

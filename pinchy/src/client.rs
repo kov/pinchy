@@ -196,9 +196,8 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
                 let pin_output = unsafe { Pin::new_unchecked(&mut output) };
                 let formatter = Formatter::new(pin_output, formatting_style.clone());
 
-                let string_output = events::handle_event(&event, formatter).await?;
-                // stdout.write_all(&output).await?;
-                stdout.write_all(string_output.as_bytes()).await?;
+                events::handle_event(&event, formatter).await?;
+                stdout.write_all(&output).await?;
             }
             Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.into()),

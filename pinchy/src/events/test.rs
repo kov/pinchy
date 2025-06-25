@@ -26,10 +26,12 @@ async fn parse_close() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("1 close(fd: 2) = 0\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1 close(fd: 2) = 0\n")
+    );
 }
 
 #[tokio::test]
@@ -57,17 +59,19 @@ async fn parse_epoll_pwait() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("1 epoll_pwait(epfd: 4, events: [ epoll_event {{ events: POLLIN|POLLERR|POLLHUP, data: 0xbeef }} ], max_events: 10, timeout: -1, sigmask) = 1\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1 epoll_pwait(epfd: 4, events: [ epoll_event {{ events: POLLIN|POLLERR|POLLHUP, data: 0xbeef }} ], max_events: 10, timeout: -1, sigmask) = 1\n")
+    );
 
     // Multi-line
     let mut output: Vec<u8> = vec![];
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::MultiLine);
 
-    let _ = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
         String::from_utf8_lossy(&output),
@@ -118,10 +122,12 @@ async fn parse_ppoll() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("22 ppoll(fds: [ {{ 3, POLLIN }} ], nfds: 1, timeout: {{ secs: 0, nanos: 0 }}, sigmask) = Timeout [0]\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("22 ppoll(fds: [ {{ 3, POLLIN }} ], nfds: 1, timeout: {{ secs: 0, nanos: 0 }}, sigmask) = Timeout [0]\n")
+    );
 }
 
 #[tokio::test]
@@ -153,10 +159,12 @@ async fn parse_read() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n")
+    );
 }
 
 #[tokio::test]
@@ -188,10 +196,12 @@ async fn parse_write() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n")
+    );
 }
 
 #[tokio::test]
@@ -214,13 +224,12 @@ async fn parse_lseek() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("22 lseek(fd: 3, offset: 0, whence: 2) = 18092\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -239,10 +248,12 @@ async fn parse_sched_yield() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("22 sched_yield() = 0\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("22 sched_yield() = 0\n")
+    );
 }
 
 #[tokio::test]
@@ -270,10 +281,12 @@ async fn parse_openat() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3\n")
+    );
 }
 
 #[tokio::test]
@@ -302,10 +315,12 @@ async fn parse_futex() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
-    assert_eq!(string_output, format!("22 futex(uaddr: 0xbeef, op: 10, val: 11, uaddr2: 0xbeef2, val3: 12, timeout: {{ secs: 13, nanos: 14 }}) = 0\n"));
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("22 futex(uaddr: 0xbeef, op: 10, val: 11, uaddr2: 0xbeef2, val3: 12, timeout: {{ secs: 13, nanos: 14 }}) = 0\n")
+    );
 }
 
 #[tokio::test]
@@ -328,13 +343,12 @@ async fn parse_ioctl() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("22 ioctl(fd: 4, request: SNDRV_COMPRESS_START::sound, arg: 0x0) = 0\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -391,13 +405,12 @@ async fn parse_execve() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-            string_output,
-            format!("22 execve(filename: \"/bin/find\", argv: [/etc\0, -name\0, org.pinc], envp: [HOME=/ro, WAYLAND=, ... (28 more)]) = 0\n")
-        );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+        String::from_utf8_lossy(&output),
+        format!("22 execve(filename: \"/bin/find\", argv: [/etc\0, -name\0, org.pinc], envp: [HOME=/ro, WAYLAND=, ... (28 more)]) = 0\n")
+    );
 }
 
 #[tokio::test]
@@ -432,15 +445,14 @@ async fn parse_fstat() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-            string_output,
-            format!(
-                "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = 0\n"
-            )
-        );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+        String::from_utf8_lossy(&output),
+        format!(
+            "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = 0\n"
+        )
+    );
 
     // Test with an error return value
     event.return_value = -1;
@@ -449,15 +461,14 @@ async fn parse_fstat() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-            string_output,
-            format!(
-                "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = -1\n"
-            )
-        );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+        String::from_utf8_lossy(&output),
+        format!(
+            "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = -1\n"
+        )
+    );
 }
 
 #[tokio::test]
@@ -497,15 +508,14 @@ async fn parse_statfs() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-            string_output,
-            format!(
-                "44 statfs(pathname: \"/mnt/data\", buf: {{ type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x0 }}) = 0\n"
-            )
-        );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+        String::from_utf8_lossy(&output),
+        format!(
+            "44 statfs(pathname: \"/mnt/data\", buf: {{ type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x0 }}) = 0\n"
+        )
+    );
 
     // Test with an error return value
     event.return_value = -1;
@@ -514,13 +524,12 @@ async fn parse_statfs() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("44 statfs(pathname: \"/mnt/data\", buf: <unavailable>) = -1\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -581,15 +590,14 @@ async fn parse_getdents64() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-            string_output,
-            format!(
-                "55 getdents64(fd: 7, count: 1024, entries: [ dirent {{ ino: 123456, off: 1, reclen: 24, type: 4, name: \".\" }}, dirent {{ ino: 123457, off: 2, reclen: 25, type: 4, name: \"..\" }}, dirent {{ ino: 123458, off: 3, reclen: 32, type: 8, name: \"file.txt\" ... (truncated) }} ]) = 3\n"
-            )
-        );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+        String::from_utf8_lossy(&output),
+        format!(
+            "55 getdents64(fd: 7, count: 1024, entries: [ dirent {{ ino: 123456, off: 1, reclen: 24, type: 4, name: \".\" }}, dirent {{ ino: 123457, off: 2, reclen: 25, type: 4, name: \"..\" }}, dirent {{ ino: 123458, off: 3, reclen: 32, type: 8, name: \"file.txt\" ... (truncated) }} ]) = 3\n"
+        )
+    );
 
     // Test with zero entries
     event.return_value = 0;
@@ -603,13 +611,12 @@ async fn parse_getdents64() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("55 getdents64(fd: 7, count: 1024, entries: [  ]) = 0\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -637,15 +644,14 @@ async fn parse_mmap() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-            string_output,
-            format!(
-                "66 mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = 0x7f1234567000\n"
-            )
-        );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+        String::from_utf8_lossy(&output),
+        format!(
+            "66 mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = 0x7f1234567000\n"
+        )
+    );
 
     // Test with error return
     let event_error = SyscallEvent {
@@ -669,15 +675,14 @@ async fn parse_mmap() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event_error, formatter).await.unwrap();
+    handle_event(&event_error, formatter).await.unwrap();
 
     assert_eq!(
-            string_output,
-            format!(
-                "66 mmap(addr: 0x7f0000000000, length: 8192, prot: 0x4 (PROT_EXEC), flags: 0x1 (MAP_SHARED), fd: 5, offset: 0x1000) = -1 (error)\n"
-            )
-        );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
+        String::from_utf8_lossy(&output),
+        format!(
+            "66 mmap(addr: 0x7f0000000000, length: 8192, prot: 0x4 (PROT_EXEC), flags: 0x1 (MAP_SHARED), fd: 5, offset: 0x1000) = -1 (error)\n"
+        )
+    );
 }
 
 #[tokio::test]
@@ -705,13 +710,12 @@ async fn test_munmap_syscall() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("123 munmap(addr: 0xffff8a9c2000, length: 57344) = 0\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test with error return
     event.return_value = -1;
@@ -720,13 +724,12 @@ async fn test_munmap_syscall() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("123 munmap(addr: 0xffff8a9c2000, length: 57344) = -1\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -751,15 +754,14 @@ async fn parse_mprotect() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!(
             "77 mprotect(addr: 0x7f5678901000, length: 8192, prot: 0x5 (PROT_READ|PROT_EXEC)) = 0\n"
         )
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test with error return value
     let event_error = SyscallEvent {
@@ -780,13 +782,12 @@ async fn parse_mprotect() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event_error, formatter).await.unwrap();
+    handle_event(&event_error, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("77 mprotect(addr: 0x1000, length: 4096, prot: 0x2 (PROT_WRITE)) = -22\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -812,13 +813,12 @@ async fn parse_getrandom() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x0) = 32\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test with GRND_RANDOM flag
     event.data.getrandom.flags = libc::GRND_RANDOM;
@@ -827,13 +827,12 @@ async fn parse_getrandom() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x2 (GRND_RANDOM)) = 32\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test with GRND_RANDOM flag
     event.data.getrandom.flags = libc::GRND_NONBLOCK;
@@ -842,15 +841,14 @@ async fn parse_getrandom() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!(
             "555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x1 (GRND_NONBLOCK)) = 32\n"
         )
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test with combined flags
     unsafe { event.data.getrandom.flags |= libc::GRND_RANDOM };
@@ -859,13 +857,12 @@ async fn parse_getrandom() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = 32\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test error case (would happen if entropy pool not initialized yet)
     event.return_value = -11;
@@ -874,15 +871,14 @@ async fn parse_getrandom() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!(
             "555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = -11\n"
         )
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -906,13 +902,12 @@ async fn parse_brk() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("888 brk(addr: 0x7f1234560000) = 0x7f1234570000\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test with NULL address - used to get the current program break
     let event = SyscallEvent {
@@ -931,13 +926,12 @@ async fn parse_brk() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("888 brk(addr: 0x0) = 0x7f1234500000\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -968,13 +962,12 @@ async fn parse_prctl() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("999 prctl(PR_SET_NAME, 0x7fffffff0000) = 0\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test prctl with error return value - PR_CAPBSET_DROP
     let event = SyscallEvent {
@@ -1000,13 +993,12 @@ async fn parse_prctl() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("999 prctl(PR_CAPBSET_DROP, 0xa) = -1\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 
     // Test PR_CAP_AMBIENT with PR_CAP_AMBIENT_CLEAR_ALL sub-operation
     let event = SyscallEvent {
@@ -1032,13 +1024,12 @@ async fn parse_prctl() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("999 prctl(PR_CAP_AMBIENT, 0x4, 0x0) = 0\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }
 
 #[tokio::test]
@@ -1064,11 +1055,10 @@ async fn parse_generic_syscall() {
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
 
-    let string_output = handle_event(&event, formatter).await.unwrap();
+    handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(
-        string_output,
+        String::from_utf8_lossy(&output),
         format!("1234 generic_parse_test(0, 1, 2, 3, 4, 5) = 42 <STUB>\n")
     );
-    assert_eq!(string_output, String::from_utf8_lossy(&output));
 }

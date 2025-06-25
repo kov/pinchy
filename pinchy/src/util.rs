@@ -73,23 +73,6 @@ pub fn format_path(path_bytes: &[u8], known_truncated: bool) -> String {
     }
 }
 
-pub fn old_format_stat(stat: &Stat) -> String {
-    format!("{{ mode: {}, ino: {}, dev: {}, nlink: {}, uid: {}, gid: {}, size: {}, blksize: {}, blocks: {}, atime: {}, mtime: {}, ctime: {} }}",  
-                format_mode(stat.st_mode),
-                stat.st_ino,
-                stat.st_dev,
-                stat.st_nlink,
-                stat.st_uid,
-                stat.st_gid,
-                stat.st_size,
-                stat.st_blksize,
-                stat.st_blocks,
-                stat.st_atime,
-                stat.st_mtime,
-                stat.st_ctime,
-    )
-}
-
 pub async fn format_stat(sf: &mut SyscallFormatter<'_>, stat: &Stat) -> anyhow::Result<()> {
     argf!(sf, "mode: {}", format_mode(stat.st_mode));
     argf!(sf, "ino: {}", stat.st_ino);
@@ -104,12 +87,6 @@ pub async fn format_stat(sf: &mut SyscallFormatter<'_>, stat: &Stat) -> anyhow::
     argf!(sf, "mtime: {}", stat.st_mtime);
     argf!(sf, "ctime: {}", stat.st_ctime);
     Ok(())
-}
-pub fn old_format_timespec(timespec: Timespec) -> String {
-    format!(
-        "{{ secs: {}, nanos: {} }}",
-        timespec.seconds, timespec.nanos
-    )
 }
 
 pub async fn format_timespec(
@@ -620,23 +597,6 @@ pub fn format_mount_flags(flags: i64) -> String {
 }
 
 /// Format statfs struct for display
-pub fn old_format_statfs(statfs: &pinchy_common::kernel_types::Statfs) -> String {
-    format!(
-        "{{ type: {}, block_size: {}, blocks: {}, blocks_free: {}, blocks_available: {}, files: {}, files_free: {}, fsid: [{}, {}], name_max: {}, fragment_size: {}, mount_flags: {} }}",
-        format_fs_type(statfs.f_type),
-        statfs.f_bsize,
-        statfs.f_blocks,
-        statfs.f_bfree,
-        statfs.f_bavail,
-        statfs.f_files,
-        statfs.f_ffree,
-        statfs.f_fsid[0], statfs.f_fsid[1],
-        statfs.f_namelen,
-        statfs.f_frsize,
-        format_mount_flags(statfs.f_flags)
-    )
-}
-
 pub async fn format_statfs(
     sf: &mut SyscallFormatter<'_>,
     statfs: &pinchy_common::kernel_types::Statfs,

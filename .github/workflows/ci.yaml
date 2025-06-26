@@ -24,7 +24,9 @@ jobs:
       run: cargo install bpf-linker
     - name: Build
       run: cargo build --verbose
-    - name: Build tests
+    - name: Run unit tests
+      run: cargo test
+    - name: Build integration tests
       run: |
         cargo test --no-run --test integration
         cp $(ls target/debug/deps/integration-* | grep -v '\.d') target/debug/test-integration

@@ -1,3 +1,3 @@
 #!/bin/sh -xe
 mount -t bpf bpf /sys/fs/bpf
-RUST_BACKTRACE=1 ./target/debug/test-integration --nocapture
+RUST_BACKTRACE=1 ./target/debug/test-integration --nocapture --ignored

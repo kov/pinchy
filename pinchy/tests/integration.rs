@@ -17,6 +17,7 @@ use serial_test::serial;
 
 #[test]
 #[serial]
+#[ignore = "runs in special environment"]
 fn basic_output() {
     let pinchy = PinchyTest::new(None, None);
     let output = pinchy.wait();
@@ -27,6 +28,7 @@ fn basic_output() {
 
 #[test]
 #[serial]
+#[ignore = "runs in special environment"]
 fn drop_privileges() {
     let pinchy = PinchyTest::new(None, None);
 
@@ -58,6 +60,7 @@ fn drop_privileges() {
 
 #[test]
 #[serial]
+#[ignore = "runs in special environment"]
 fn auto_quit() {
     // We won't start any tracing, after a minute we should see this message.
     let now = Instant::now();
@@ -79,6 +82,7 @@ fn auto_quit() {
 
 #[test]
 #[serial]
+#[ignore = "runs in special environment"]
 fn auto_quit_after_client() {
     // We won't start any tracing, after a minute we should see this message.
     let pinchy = PinchyTest::new(None, Some(format!("Currently serving: 1")));
@@ -119,6 +123,7 @@ fn auto_quit_after_client() {
 
 #[test]
 #[serial]
+#[ignore = "runs in special environment"]
 fn pinchy_reads() {
     let pinchy = PinchyTest::new(None, None);
 

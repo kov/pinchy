@@ -565,21 +565,22 @@ pub fn format_fs_type(fs_type: i64) -> String {
 }
 
 /// Format mount flags from f_flags
-pub fn format_mount_flags(flags: i64) -> String {
+pub fn format_mount_flags(flags: u64) -> String {
+    const ST_NOSYMFOLLOW: u64 = 8192;
     let flag_defs = [
-        (0x0001, "ST_RDONLY"),      // 1
-        (0x0002, "ST_NOSUID"),      // 2
-        (0x0004, "ST_NODEV"),       // 4
-        (0x0008, "ST_NOEXEC"),      // 8
-        (0x0010, "ST_SYNCHRONOUS"), // 16
-        (0x0020, "ST_MANDLOCK"),    // 32
-        (0x0040, "ST_WRITE"),       // 64
-        (0x0080, "ST_APPEND"),      // 128
-        (0x0100, "ST_IMMUTABLE"),   // 256
-        (0x0200, "ST_NOATIME"),     // 512
-        (0x0400, "ST_NODIRATIME"),  // 1024
-        (0x0800, "ST_RELATIME"),    // 2048
-        (0x1000, "ST_NOSYMFOLLOW"), // 4096
+        (libc::ST_RDONLY, "ST_RDONLY"),
+        (libc::ST_NOSUID, "ST_NOSUID"),
+        (libc::ST_NODEV, "ST_NODEV"),
+        (libc::ST_NOEXEC, "ST_NOEXEC"),
+        (libc::ST_SYNCHRONOUS, "ST_SYNCHRONOUS"),
+        (libc::ST_MANDLOCK, "ST_MANDLOCK"),
+        (libc::ST_WRITE, "ST_WRITE"),
+        (libc::ST_APPEND, "ST_APPEND"),
+        (libc::ST_IMMUTABLE, "ST_IMMUTABLE"),
+        (libc::ST_NOATIME, "ST_NOATIME"),
+        (libc::ST_NODIRATIME, "ST_NODIRATIME"),
+        (libc::ST_RELATIME, "ST_RELATIME"),
+        (ST_NOSYMFOLLOW, "ST_NOSYMFOLLOW"),
     ];
 
     let mut parts = Vec::new();
@@ -592,7 +593,7 @@ pub fn format_mount_flags(flags: i64) -> String {
     if parts.is_empty() {
         format!("0x{:x}", flags)
     } else {
-        format!("0x{:x} ({})", flags, parts.join(" | "))
+        format!("0x{:x} ({})", flags, parts.join("|"))
     }
 }
 
@@ -611,6 +612,10 @@ pub async fn format_statfs(
     argf!(sf, "fsid: [{}, {}]", statfs.f_fsid[0], statfs.f_fsid[1]);
     argf!(sf, "name_max: {}", statfs.f_namelen);
     argf!(sf, "fragment_size: {}", statfs.f_frsize);
-    argf!(sf, "mount_flags: {}", format_mount_flags(statfs.f_flags));
+    argf!(
+        sf,
+        "mount_flags: {}",
+        format_mount_flags(statfs.f_flags as u64)
+    );
     Ok(())
 }

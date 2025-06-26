@@ -503,6 +503,7 @@ async fn parse_statfs() {
     statfs_data.statfs.f_files = 65536;
     statfs_data.statfs.f_ffree = 65000;
     statfs_data.statfs.f_namelen = 255;
+    statfs_data.statfs.f_flags = (libc::ST_NOEXEC | libc::ST_RDONLY) as i64;
 
     let mut output: Vec<u8> = vec![];
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
@@ -513,7 +514,7 @@ async fn parse_statfs() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "44 statfs(pathname: \"/mnt/data\", buf: {{ type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x0 }}) = 0\n"
+            "44 statfs(pathname: \"/mnt/data\", buf: {{ type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x9 (ST_RDONLY|ST_NOEXEC) }}) = 0\n"
         )
     );
 

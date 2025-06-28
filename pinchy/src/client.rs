@@ -210,17 +210,17 @@ fn handle_dbus_error(error: ZBusError) -> ! {
     match error {
         // Connection-related errors
         ZBusError::InputOutput(io_err) => {
-            eprintln!("Failed to connect to D-Bus: {}", io_err);
+            eprintln!("Failed to connect to D-Bus: {io_err}");
             eprintln!("Make sure the D-Bus system bus is running and accessible.");
             std::process::exit(2);
         }
         ZBusError::Address(addr) => {
-            eprintln!("Invalid D-Bus address: {}", addr);
+            eprintln!("Invalid D-Bus address: {addr}");
             eprintln!("The D-Bus system bus address may be misconfigured.");
             std::process::exit(2);
         }
         ZBusError::Handshake(msg) => {
-            eprintln!("D-Bus authentication failed: {}", msg);
+            eprintln!("D-Bus authentication failed: {msg}");
             eprintln!("You may not have permission to access the system D-Bus.");
             std::process::exit(2);
         }
@@ -244,16 +244,16 @@ fn handle_dbus_error(error: ZBusError) -> ! {
             }
             "org.freedesktop.DBus.Error.InvalidArgs" => {
                 if let Some(desc) = description {
-                    eprintln!("Invalid arguments: {}", desc);
+                    eprintln!("Invalid arguments: {desc}");
                 } else {
                     eprintln!("Invalid arguments provided to the pinchy service.");
                 }
                 std::process::exit(6);
             }
             _ => {
-                eprintln!("D-Bus method call failed: {}", error_name);
+                eprintln!("D-Bus method call failed: {error_name}");
                 if let Some(desc) = description {
-                    eprintln!("Details: {}", desc);
+                    eprintln!("Details: {desc}");
                 }
                 std::process::exit(7);
             }
@@ -284,23 +284,23 @@ fn handle_dbus_error(error: ZBusError) -> ! {
                 std::process::exit(5);
             }
             fdo::Error::InvalidArgs(ref msg) => {
-                eprintln!("Invalid arguments: {}", msg);
+                eprintln!("Invalid arguments: {msg}");
                 std::process::exit(6);
             }
             fdo::Error::UnknownMethod(ref msg) => {
-                eprintln!("Method not supported: {}", msg);
+                eprintln!("Method not supported: {msg}");
                 eprintln!("The running pinchyd may be incompatible with this client version.");
                 std::process::exit(8);
             }
             _ => {
-                eprintln!("D-Bus error: {}", fdo_error);
+                eprintln!("D-Bus error: {fdo_error}");
                 std::process::exit(7);
             }
         },
 
         // Generic/Other errors
         _ => {
-            eprintln!("Unexpected D-Bus error: {}", error);
+            eprintln!("Unexpected D-Bus error: {error}");
             std::process::exit(1);
         }
     }

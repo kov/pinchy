@@ -31,7 +31,7 @@ macro_rules! declare_syscalls {
         }
         pub fn syscall_name_from_nr(nr: i64) -> Option<&'static str> {
             match nr {
-                crate::syscalls::SYS_generic_parse_test => Some("generic_parse_test"),
+                $crate::syscalls::SYS_generic_parse_test => Some("generic_parse_test"),
                 $( $name => Some(&stringify!($name)[4..]), )*
                 _ => None,
             }

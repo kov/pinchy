@@ -67,7 +67,7 @@ pub fn uid_from_pidfd(fd: &OwnedFd) -> io::Result<u32> {
 
 pub fn uid_from_pid(pid: u32) -> io::Result<u32> {
     use std::os::unix::fs::MetadataExt;
-    let proc_path = format!("/proc/{}", pid);
+    let proc_path = format!("/proc/{pid}");
     let meta = std::fs::metadata(proc_path)?;
     Ok(meta.uid())
 }
@@ -97,8 +97,7 @@ async fn validate_same_user_or_root(
     })
     .await
     .unwrap_or_else(|e| {
-        Err(io::Error::new(
-            io::ErrorKind::Other,
+        Err(io::Error::other(
             format!("Join error: {e}"),
         ))
     });
@@ -111,11 +110,11 @@ async fn validate_same_user_or_root(
     let bus_name: BusName = caller.as_str().try_into().unwrap();
     let dbus_proxy = DBusProxy::new(conn)
         .await
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(|e| io::Error::other(e))?;
     let caller_uid = dbus_proxy
         .get_connection_unix_user(bus_name)
         .await
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        .map_err(|e| io::Error::other(e))?;
 
     trace!("dbus request came from uid {caller_uid}");
 
@@ -159,7 +158,7 @@ impl PinchyDBus {
         add_pid_trace(&self.ebpf, &mut self.pipe_map, pid, write, syscalls)
             .await
             .map_err(|e| {
-                zbus::fdo::Error::Failed(format!("Adding PID {} for tracing: {e}", pid))
+                zbus::fdo::Error::Failed(format!("Adding PID {pid} for tracing: {e}"))
             })?;
 
         // Make sure we stop tracing and drop the state if the PID exits.
@@ -237,7 +236,7 @@ async fn remove_pid_trace(ebpf: &SharedEbpf, pid: u32) -> anyhow::Result<()> {
     // Aya considers trying to remove an item that is not in the map an error. This can happen
     // if the pipe is closed by the client, which may cause all the writers for that PID to be
     // removed, which triggers a call to remove_pid_trace() - see events::handle_event().
-    if let Ok(_) = pid_filter.get(&pid, 0) {
+    if pid_filter.get(&pid, 0).is_ok() {
         match pid_filter.remove(&pid) {
             Ok(_) => Ok(()),
             Err(e) => {
@@ -546,7 +545,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         prog.load()?;
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
-        trace!("registered program for {}", syscall_nr);
+        trace!("registered program for {syscall_nr}");
     }
 
     // Load the generic handler for all other syscalls
@@ -558,13 +557,11 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 
     // Register generic handler for all other syscalls
     for &syscall_nr in ALL_SYSCALLS {
-        if syscall_nr >= 0 && syscall_nr < 512 && !explicitly_supported.contains(&syscall_nr) {
+        if (0..512).contains(&syscall_nr) && !explicitly_supported.contains(&syscall_nr) {
             prog_array.set(syscall_nr as u32, generic_prog.fd()?, 0)?;
             if let Some(name) = syscall_name_from_nr(syscall_nr) {
                 trace!(
-                    "registered generic handler for syscall {} ({})",
-                    syscall_nr,
-                    name
+                    "registered generic handler for syscall {syscall_nr} ({name})"
                 );
             }
         }
@@ -683,7 +680,7 @@ pub async fn spawn_event_writer(
                             log::error!(
                                 "Failed to remove PID {} from eBPF filter map: {}",
                                 event.pid,
-                                e.to_string()
+                                e
                             );
                         }
                         log::trace!("No more writers for PID {}", event.pid);

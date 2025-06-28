@@ -67,9 +67,9 @@ pub fn format_path(path_bytes: &[u8], known_truncated: bool) -> String {
     let path_str = String::from_utf8_lossy(path_slice);
 
     if known_truncated || detected_truncated {
-        format!("{:?} ... (truncated)", path_str)
+        format!("{path_str:?} ... (truncated)")
     } else {
-        format!("{:?}", path_str)
+        format!("{path_str:?}")
     }
 }
 
@@ -102,11 +102,11 @@ pub async fn format_timespec(
 
 pub fn format_bytes(bytes: &[u8]) -> String {
     if let Ok(s) = str::from_utf8(bytes) {
-        format!("{:?}", s)
+        format!("{s:?}")
     } else {
         bytes
             .iter()
-            .map(|b| format!("{:>2x}", b))
+            .map(|b| format!("{b:>2x}"))
             .collect::<Vec<_>>()
             .join(" ")
     }
@@ -213,7 +213,7 @@ pub fn format_mmap_flags(flags: i32) -> String {
         }
     }
     if parts.is_empty() {
-        format!("0x{:x}", flags)
+        format!("0x{flags:x}")
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
     }
@@ -235,7 +235,7 @@ pub fn format_mmap_prot(prot: i32) -> String {
         }
     }
     if parts.is_empty() {
-        format!("0x{:x}", prot)
+        format!("0x{prot:x}")
     } else {
         format!("0x{:x} ({})", prot, parts.join("|"))
     }
@@ -254,7 +254,7 @@ pub fn format_getrandom_flags(flags: u32) -> String {
         }
     }
     if parts.is_empty() {
-        format!("0x{:x}", flags)
+        format!("0x{flags:x}")
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
     }
@@ -356,7 +356,7 @@ pub fn format_prctl_op(op: i32) -> String {
         PR_SET_VMA => "PR_SET_VMA",
         PR_GET_AUXV => "PR_GET_AUXV",
         PR_RISCV_SET_ICACHE_FLUSH_CTX => "PR_RISCV_SET_ICACHE_FLUSH_CTX",
-        _ => return format!("UNKNOWN (0x{:x})", op),
+        _ => return format!("UNKNOWN (0x{op:x})"),
     }
     .to_string()
 }
@@ -559,9 +559,9 @@ pub fn format_fs_type(fs_type: i64) -> String {
         0xfe534d42 => "SMB2_MAGIC_NUMBER",
         0xff534d42 => "CIFS_MAGIC_NUMBER",
         0x958458f6 => "HUGETLBFS_MAGIC", // Added based on mount output
-        _ => return format!("UNKNOWN (0x{:x})", fs_type),
+        _ => return format!("UNKNOWN (0x{fs_type:x})"),
     };
-    format!("{} (0x{:x})", type_name, fs_type)
+    format!("{type_name} (0x{fs_type:x})")
 }
 
 /// Format mount flags from f_flags
@@ -585,13 +585,13 @@ pub fn format_mount_flags(flags: u64) -> String {
 
     let mut parts = Vec::new();
     for (bit, name) in flag_defs.iter() {
-        if (flags as u64 & *bit as u64) != 0 {
+        if (flags & *bit) != 0 {
             parts.push(*name);
         }
     }
 
     if parts.is_empty() {
-        format!("0x{:x}", flags)
+        format!("0x{flags:x}")
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
     }

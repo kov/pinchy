@@ -122,7 +122,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             };
 
             argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "buf: {}{}", format_bytes(&buf), left_over);
+            argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
             argf!(sf, "count: {}", data.count);
 
             finish!(sf, event.return_value);
@@ -142,7 +142,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             };
 
             argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "buf: {}{}", format_bytes(&buf), left_over);
+            argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
             argf!(sf, "count: {}", data.count);
 
             finish!(sf, event.return_value);

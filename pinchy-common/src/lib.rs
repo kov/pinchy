@@ -38,6 +38,7 @@ pub union SyscallEventData {
     pub mmap: MmapData,
     pub munmap: MunmapData,
     pub brk: BrkData,
+    pub faccessat: FaccessatData,
     pub mprotect: MprotectData,
     pub getrandom: GetrandomData,
     pub statfs: StatfsData,
@@ -205,4 +206,13 @@ pub struct BrkData {
 #[derive(Clone, Copy)]
 pub struct GenericSyscallData {
     pub args: [usize; 6],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FaccessatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub mode: i32,
+    pub flags: i32,
 }

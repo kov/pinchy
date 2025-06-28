@@ -22,10 +22,10 @@ use log::{debug, trace, warn};
 use nix::unistd::{setgid, setuid, User};
 use pinchy_common::{
     syscalls::{
-        syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat,
-        SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
-        SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
-        ALL_SYSCALLS,
+        syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat,
+        SYS_fstat, SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap,
+        SYS_mprotect, SYS_munmap, SYS_openat, SYS_ppoll, SYS_read, SYS_sched_yield, SYS_statfs,
+        SYS_write, ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -533,8 +533,12 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_mmap", SYS_mmap),
         ("syscall_exit_munmap", SYS_munmap),
         ("syscall_exit_statfs", SYS_statfs),
+        ("syscall_exit_faccessat", SYS_faccessat),
     ] {
-        let prog: &mut TracePoint = ebpf.program_mut(prog_name).unwrap().try_into()?;
+        let prog: &mut TracePoint = ebpf
+            .program_mut(prog_name)
+            .unwrap_or_else(|| panic!("Failed to load eBPF program {prog_name}"))
+            .try_into()?;
         prog.load()?;
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);

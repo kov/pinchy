@@ -113,8 +113,7 @@ pub fn format_bytes(bytes: &[u8]) -> String {
 }
 
 pub fn format_dirfd(dfd: i32) -> String {
-    const AT_FDCWD: i32 = -100;
-    if dfd == AT_FDCWD {
+    if dfd == libc::AT_FDCWD {
         "AT_FDCWD".to_string()
     } else {
         dfd.to_string()
@@ -618,4 +617,97 @@ pub async fn format_statfs(
         format_mount_flags(statfs.f_flags as u64)
     );
     Ok(())
+}
+
+pub fn format_access_mode(mode: i32) -> String {
+    match mode {
+        libc::F_OK => "F_OK".to_string(),
+        _ => {
+            let mut parts = Vec::new();
+
+            if mode & libc::R_OK != 0 {
+                parts.push("R_OK");
+            }
+            if mode & libc::W_OK != 0 {
+                parts.push("W_OK");
+            }
+            if mode & libc::X_OK != 0 {
+                parts.push("X_OK");
+            }
+
+            if parts.is_empty() {
+                format!("0x{mode:x}")
+            } else {
+                parts.join("|")
+            }
+        }
+    }
+}
+
+pub fn format_faccessat_flags(flags: i32) -> String {
+    if flags == 0 {
+        return "0".to_string();
+    }
+
+    let mut parts = Vec::new();
+
+    // Special value used for current working directory
+    if flags & libc::AT_FDCWD == libc::AT_FDCWD {
+        parts.push("AT_FDCWD");
+    }
+
+    // Common flags
+    if flags & libc::AT_EACCESS != 0 {
+        parts.push("AT_EACCESS");
+    }
+    if flags & libc::AT_SYMLINK_NOFOLLOW != 0 {
+        parts.push("AT_SYMLINK_NOFOLLOW");
+    }
+    if flags & libc::AT_REMOVEDIR != 0 {
+        parts.push("AT_REMOVEDIR");
+    }
+    if flags & libc::AT_SYMLINK_FOLLOW != 0 {
+        parts.push("AT_SYMLINK_FOLLOW");
+    }
+    if flags & libc::AT_EMPTY_PATH != 0 {
+        parts.push("AT_EMPTY_PATH");
+    }
+
+    // Less common flags
+    const AT_NO_AUTOMOUNT: i32 = 0x800;
+    if flags & AT_NO_AUTOMOUNT != 0 {
+        parts.push("AT_NO_AUTOMOUNT");
+    }
+
+    // STATX related flags
+    const AT_STATX_SYNC_TYPE: i32 = 0x6000;
+    const AT_STATX_SYNC_AS_STAT: i32 = 0x0000;
+    const AT_STATX_FORCE_SYNC: i32 = 0x2000;
+    const AT_STATX_DONT_SYNC: i32 = 0x4000;
+
+    // Extract STATX sync type
+    let sync_type = flags & AT_STATX_SYNC_TYPE;
+    match sync_type {
+        AT_STATX_FORCE_SYNC => parts.push("AT_STATX_FORCE_SYNC"),
+        AT_STATX_DONT_SYNC => parts.push("AT_STATX_DONT_SYNC"),
+        AT_STATX_SYNC_AS_STAT => {
+            // Only include this if other STATX flags are present
+            if flags & AT_STATX_SYNC_TYPE != 0 {
+                parts.push("AT_STATX_SYNC_AS_STAT");
+            }
+        }
+        _ => {}
+    }
+
+    // Recursive flag
+    const AT_RECURSIVE: i32 = 0x8000;
+    if flags & AT_RECURSIVE != 0 {
+        parts.push("AT_RECURSIVE");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("{} (0x{flags:x})", parts.join("|"))
+    }
 }

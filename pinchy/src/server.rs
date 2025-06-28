@@ -96,11 +96,7 @@ async fn validate_same_user_or_root(
         }
     })
     .await
-    .unwrap_or_else(|e| {
-        Err(io::Error::other(
-            format!("Join error: {e}"),
-        ))
-    });
+    .unwrap_or_else(|e| Err(io::Error::other(format!("Join error: {e}"))));
     pidfd_still_valid?;
 
     trace!("pidfd {} has uid {}", pidfd.as_raw_fd(), pid_uid);
@@ -108,13 +104,11 @@ async fn validate_same_user_or_root(
     // User making the tracing request.
     let caller = header.sender().unwrap();
     let bus_name: BusName = caller.as_str().try_into().unwrap();
-    let dbus_proxy = DBusProxy::new(conn)
-        .await
-        .map_err(|e| io::Error::other(e))?;
+    let dbus_proxy = DBusProxy::new(conn).await.map_err(io::Error::other)?;
     let caller_uid = dbus_proxy
         .get_connection_unix_user(bus_name)
         .await
-        .map_err(|e| io::Error::other(e))?;
+        .map_err(io::Error::other)?;
 
     trace!("dbus request came from uid {caller_uid}");
 
@@ -155,11 +149,9 @@ impl PinchyDBus {
             zbus::fdo::Error::Failed(format!("Failed to wrap pidfd in AsyncFd: {e}"))
         })?;
 
-        add_pid_trace(&self.ebpf, &mut self.pipe_map, pid, write, syscalls)
+        add_pid_trace(&self.ebpf, &self.pipe_map, pid, write, syscalls)
             .await
-            .map_err(|e| {
-                zbus::fdo::Error::Failed(format!("Adding PID {pid} for tracing: {e}"))
-            })?;
+            .map_err(|e| zbus::fdo::Error::Failed(format!("Adding PID {pid} for tracing: {e}")))?;
 
         // Make sure we stop tracing and drop the state if the PID exits.
         let ebpf = self.ebpf.clone();
@@ -341,7 +333,8 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, idle_since: Arc<RwL
 fn parse_uid_min() -> u32 {
     let file = File::open("/etc/login.defs");
     if let Ok(file) = file {
-        for line in BufReader::new(file).lines().flatten() {
+        for line in BufReader::new(file).lines() {
+            let line = line.expect("Failed to read from /etc/login.defs");
             let line = line.trim();
             if line.starts_with("#") || line.is_empty() {
                 continue;
@@ -560,9 +553,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         if (0..512).contains(&syscall_nr) && !explicitly_supported.contains(&syscall_nr) {
             prog_array.set(syscall_nr as u32, generic_prog.fd()?, 0)?;
             if let Some(name) = syscall_name_from_nr(syscall_nr) {
-                trace!(
-                    "registered generic handler for syscall {syscall_nr} ({name})"
-                );
+                trace!("registered generic handler for syscall {syscall_nr} ({name})");
             }
         }
     }
@@ -637,8 +628,7 @@ pub async fn spawn_event_writer(
 
             let mut pids_to_remove = vec![];
             let mut writer_removed = false;
-            for i in 0..received {
-                let event = &mut events_buf[i];
+            for event in events_buf.iter_mut().take(received) {
                 match map.get_mut(&event.pid) {
                     Some(writers) => {
                         let mut keep = Vec::with_capacity(writers.len());

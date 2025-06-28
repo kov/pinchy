@@ -139,7 +139,7 @@ impl PinchyDBus {
         #[zbus(connection)] conn: &zbus::Connection,
         pid: u32,
         syscalls: Vec<i64>,
-    ) -> zbus::fdo::Result<Fd> {
+    ) -> zbus::fdo::Result<Fd<'_>> {
         let Some(pidfd) = validate_same_user_or_root(&header, conn, pid)
             .await
             .map_err(|e| zbus::fdo::Error::AuthFailed(e.to_string()))?

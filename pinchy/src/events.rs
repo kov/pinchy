@@ -6,9 +6,9 @@ use std::borrow::Cow;
 use log::{error, trace};
 use pinchy_common::{
     syscalls::{
-        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_futex, SYS_getdents64,
-        SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat,
-        SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
+        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_futex,
+        SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
+        SYS_openat, SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
     },
     SyscallEvent,
 };
@@ -19,9 +19,10 @@ use crate::{
     ioctls::format_ioctl_request,
     raw,
     util::{
-        format_bytes, format_dirfd, format_flags, format_getrandom_flags, format_mmap_flags,
-        format_mmap_prot, format_mode, format_path, format_prctl_op, format_stat, format_statfs,
-        format_timespec, poll_bits_to_strs, prctl_op_arg_count,
+        format_access_mode, format_bytes, format_dirfd, format_faccessat_flags, format_flags,
+        format_getrandom_flags, format_mmap_flags, format_mmap_prot, format_mode, format_path,
+        format_prctl_op, format_stat, format_statfs, format_timespec, poll_bits_to_strs,
+        prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -367,6 +368,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             for i in 1..arg_count {
                 argf!(sf, "0x{:x}", data.args[i]);
             }
+
+            finish!(sf, event.return_value);
+        }
+        SYS_faccessat => {
+            let data = unsafe { event.data.faccessat };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "mode: {}", format_access_mode(data.mode));
+
+            // FIXME: I believe this argument is not used for faccessat, only
+            // for faccessat2?
+            argf!(sf, "flags: {}", format_faccessat_flags(data.flags));
 
             finish!(sf, event.return_value);
         }

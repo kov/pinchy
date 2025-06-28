@@ -3,8 +3,8 @@ use std::pin::Pin;
 use indoc::indoc;
 use pinchy_common::{
     kernel_types::{EpollEvent, Timespec},
-    CloseData, EpollPWaitData, ExecveData, FutexData, IoctlData, LseekData, OpenAtData, PpollData,
-    ReadData, SchedYieldData, WriteData, DATA_READ_SIZE, SMALL_READ_SIZE,
+    CloseData, EpollPWaitData, ExecveData, FaccessatData, FutexData, IoctlData, LseekData,
+    OpenAtData, PpollData, ReadData, SchedYieldData, WriteData, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
 
 use super::*;
@@ -1061,5 +1061,71 @@ async fn parse_generic_syscall() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!("1234 generic_parse_test(0, 1, 2, 3, 4, 5) = 42 <STUB>\n")
+    );
+}
+
+#[tokio::test]
+async fn test_faccessat_syscall() {
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    let path = b"/etc/hosts.conf";
+    pathname[0..path.len()].copy_from_slice(path);
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_faccessat,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            faccessat: FaccessatData {
+                dirfd: libc::AT_FDCWD,
+                pathname,
+                mode: libc::R_OK | libc::W_OK,
+                flags: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0\n")
+    );
+}
+
+#[tokio::test]
+async fn test_faccessat_with_flags_syscall() {
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    let path = b"/etc/hosts";
+    pathname[0..path.len()].copy_from_slice(path);
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_faccessat,
+        pid: 1000,
+        tid: 1001,
+        return_value: -1,
+        data: pinchy_common::SyscallEventData {
+            faccessat: FaccessatData {
+                dirfd: 3,
+                pathname,
+                mode: libc::F_OK,
+                flags: libc::AT_SYMLINK_NOFOLLOW,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1\n")
     );
 }

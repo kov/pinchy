@@ -17,9 +17,9 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, LinuxDirent64, Pollfd, Stat, Timespec},
     syscalls::{
-        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_fstat, SYS_getdents64, SYS_getrandom,
-        SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat, SYS_ppoll, SYS_read,
-        SYS_sched_yield, SYS_statfs, SYS_write,
+        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_getdents64,
+        SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat,
+        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -860,6 +860,43 @@ pub fn syscall_exit_statfs(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 statfs: pinchy_common::StatfsData { pathname, statfs },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_faccessat(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_faccessat;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let dirfd = args[0] as i32;
+        let pathname_ptr = args[1] as *const u8;
+        let mode = args[2] as i32;
+        let flags = args[3] as i32;
+
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        unsafe {
+            let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut pathname);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                faccessat: pinchy_common::FaccessatData {
+                    dirfd,
+                    pathname,
+                    mode,
+                    flags,
+                },
             },
         )
     }

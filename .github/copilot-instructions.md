@@ -105,7 +105,7 @@ a dedicated handler.
    - If it's a struct, use the existing ones in `pinchy_common/src/kernel_types.rs`
    as examples and add it there, use for both eBPF and server sides.
    - If a simpler type with defined interpretation for the values, add a format_*()
-   helper similar to the ones that already exist in `pinchy_common/src/events.rs`,
+   helper similar to the ones that already exist in `pinchy_common/src/util.rs`,
    if it doesn't exist yet, so it can be used by the event parsing code.
 4. **Event parsing:** Add to the event parsing code in
    `pinchy/src/events.rs`. For structs and other types with further parsing, try

@@ -19,7 +19,8 @@ use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_getdents64,
         SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat,
-        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
+        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
+        SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -234,6 +235,19 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let flags = args[2] as u32;
                 pinchy_common::SyscallEventData {
                     getrandom: pinchy_common::GetrandomData { buf, buflen, flags },
+                }
+            }
+            SYS_set_robust_list => {
+                let head = args[0];
+                let len = args[1];
+                pinchy_common::SyscallEventData {
+                    set_robust_list: pinchy_common::SetRobustListData { head, len },
+                }
+            }
+            SYS_set_tid_address => {
+                let tidptr = args[0];
+                pinchy_common::SyscallEventData {
+                    set_tid_address: pinchy_common::SetTidAddressData { tidptr },
                 }
             }
             _ => {

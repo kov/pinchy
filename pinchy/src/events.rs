@@ -8,7 +8,8 @@ use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_futex,
         SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
-        SYS_openat, SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_statfs, SYS_write,
+        SYS_openat, SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_set_robust_list,
+        SYS_set_tid_address, SYS_statfs, SYS_write,
     },
     SyscallEvent,
 };
@@ -381,6 +382,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             // FIXME: I believe this argument is not used for faccessat, only
             // for faccessat2?
             argf!(sf, "flags: {}", format_faccessat_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        SYS_set_robust_list => {
+            let data = unsafe { event.data.set_robust_list };
+
+            argf!(sf, "head: 0x{:x}", data.head);
+            argf!(sf, "len: {}", data.len);
+
+            finish!(sf, event.return_value);
+        }
+        SYS_set_tid_address => {
+            let data = unsafe { event.data.set_tid_address };
+
+            argf!(sf, "tidptr: 0x{:x}", data.tidptr);
 
             finish!(sf, event.return_value);
         }

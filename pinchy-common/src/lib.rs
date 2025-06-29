@@ -42,6 +42,8 @@ pub union SyscallEventData {
     pub mprotect: MprotectData,
     pub getrandom: GetrandomData,
     pub statfs: StatfsData,
+    pub set_robust_list: SetRobustListData,
+    pub set_tid_address: SetTidAddressData,
     pub generic: GenericSyscallData,
 }
 
@@ -200,6 +202,19 @@ pub struct MunmapData {
 #[derive(Clone, Copy)]
 pub struct BrkData {
     pub addr: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetRobustListData {
+    pub head: usize,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetTidAddressData {
+    pub tidptr: usize,
 }
 
 #[repr(C)]

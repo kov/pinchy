@@ -66,19 +66,27 @@ code outside the arch files.**
 
 ## Determining if a syscall is trivial or complex
 
-**Important:**
-A syscall is only "trivial" if *all* its arguments are plain integers and
-*none* are pointers, buffers, or addresses. If any argument is a pointer
-(even if it appears as `usize` in Rust), the syscall is complex and needs
-a dedicated handler.
+A syscall is considered "trivial" or "complex" based on how we need to handle its arguments:
 
-- Always check the syscall's man page or kernel signature for pointer arguments.
-- Common complex syscalls: `futex`, `read`, `write`, `openat`, etc.
+| Syscall type | Definition | Examples |
+|-------------|------------|---------|
+| **Trivial** | Either has no pointer arguments, OR has pointers where we only need to display the address value without dereferencing | `close`, `lseek`, `set_tid_address` |
+| **Complex** | Has pointer arguments where we need to read and process the data they point to | `read`, `statfs`, `getdents64` |
 
-| Any pointer/buffer/struct argument? | Handler type   |
-|-------------------------------------|---------------|
-| Yes                                 | Complex       |
-| No                                  | Trivial       |
+For syscalls with pointer arguments:
+- If we only need to show the pointer's address value (not its contents), it
+can be treated as "trivial"
+  - Examples: `set_robust_list` (head pointer), `set_tid_address` (tid pointer)
+- If we need to access the data being pointed to, it's "complex" and needs a
+dedicated handler
+  - Examples:
+    - `read` (needs to show buffer contents)
+    - `statfs` (needs to access struct statfs data)
+    - `fstat` (needs to access struct stat data)
+    - `getdents64` (needs to access directory entry structs)
+
+Always check the syscall's man page to understand what data its pointer
+arguments reference and whether that data needs special handling.
 
 **Never treat a syscall as trivial just because its Rust signature uses `usize`.**
 

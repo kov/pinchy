@@ -71,3 +71,11 @@ pub struct Statfs {
     pub f_flags: i64,      /* Mount flags of filesystem */
     pub f_spare: [i64; 4], /* Padding bytes reserved for future use */
 }
+
+/// Resource limit structure, matching the kernel's struct rlimit
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Rlimit {
+    pub rlim_cur: u64, /* Soft limit */
+    pub rlim_max: u64, /* Hard limit */
+}

@@ -1233,3 +1233,109 @@ async fn parse_set_tid_address() {
         format!("5678 set_tid_address(tidptr: 0x0) = 5678\n")
     );
 }
+
+#[tokio::test]
+async fn parse_prlimit64() {
+    use pinchy_common::{
+        kernel_types::Rlimit, syscalls::SYS_prlimit64, PrlimitData, SyscallEvent, SyscallEventData,
+    };
+
+    // Test with new_limit and old_limit both provided
+    let event = SyscallEvent {
+        syscall_nr: SYS_prlimit64,
+        pid: 9876,
+        tid: 9876,
+        return_value: 0, // Success
+        data: SyscallEventData {
+            prlimit: PrlimitData {
+                pid: 1234,
+                resource: 7, // RLIMIT_NOFILE
+                has_old: true,
+                has_new: true,
+                old_limit: Rlimit {
+                    rlim_cur: 1024,
+                    rlim_max: 4096,
+                },
+                new_limit: Rlimit {
+                    rlim_cur: 2048,
+                    rlim_max: 4096,
+                },
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("9876 prlimit64(pid: 1234, resource: RLIMIT_NOFILE, new_limit: {{ rlim_cur: 2048, rlim_max: 4096 }}, old_limit: {{ rlim_cur: 1024, rlim_max: 4096 }}) = 0\n")
+    );
+
+    // Test with only old_limit (query case)
+    let event = SyscallEvent {
+        syscall_nr: SYS_prlimit64,
+        pid: 9876,
+        tid: 9876,
+        return_value: 0, // Success
+        data: SyscallEventData {
+            prlimit: PrlimitData {
+                pid: 0,      // Current process
+                resource: 3, // RLIMIT_STACK
+                has_old: true,
+                has_new: false,
+                old_limit: Rlimit {
+                    rlim_cur: 8 * 1024 * 1024, // 8MB
+                    rlim_max: u64::MAX,        // RLIM_INFINITY
+                },
+                new_limit: Rlimit::default(),
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("9876 prlimit64(pid: 0, resource: RLIMIT_STACK, new_limit: NULL, old_limit: {{ rlim_cur: 8388608, rlim_max: RLIM_INFINITY }}) = 0\n")
+    );
+
+    // Test with only new_limit (set case) and error
+    let event = SyscallEvent {
+        syscall_nr: SYS_prlimit64,
+        pid: 9876,
+        tid: 9876,
+        return_value: -1, // Error
+        data: SyscallEventData {
+            prlimit: PrlimitData {
+                pid: 5678,
+                resource: 9, // RLIMIT_AS
+                has_old: false,
+                has_new: true,
+                old_limit: Rlimit::default(),
+                new_limit: Rlimit {
+                    rlim_cur: 4 * 1024 * 1024 * 1024, // 4GB
+                    rlim_max: 8 * 1024 * 1024 * 1024, // 8GB
+                },
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: {{ rlim_cur: 4294967296, rlim_max: 8589934592 }}, old_limit: NULL) = -1\n")
+    );
+}

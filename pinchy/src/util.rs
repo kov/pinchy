@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
+use std::borrow::Cow;
+
 use pinchy_common::kernel_types::{Stat, Timespec};
 
 use crate::{argf, formatting::SyscallFormatter, with_struct};
@@ -710,4 +712,46 @@ pub fn format_faccessat_flags(flags: i32) -> String {
     } else {
         format!("{} (0x{flags:x})", parts.join("|"))
     }
+}
+
+// Formats a resource value for prlimit64 syscall
+pub fn format_resource_type(resource: i32) -> Cow<'static, str> {
+    match resource as u32 {
+        libc::RLIMIT_CPU => Cow::Borrowed("RLIMIT_CPU"),
+        libc::RLIMIT_FSIZE => Cow::Borrowed("RLIMIT_FSIZE"),
+        libc::RLIMIT_DATA => Cow::Borrowed("RLIMIT_DATA"),
+        libc::RLIMIT_STACK => Cow::Borrowed("RLIMIT_STACK"),
+        libc::RLIMIT_CORE => Cow::Borrowed("RLIMIT_CORE"),
+        libc::RLIMIT_RSS => Cow::Borrowed("RLIMIT_RSS"),
+        libc::RLIMIT_NPROC => Cow::Borrowed("RLIMIT_NPROC"),
+        libc::RLIMIT_NOFILE => Cow::Borrowed("RLIMIT_NOFILE"),
+        libc::RLIMIT_MEMLOCK => Cow::Borrowed("RLIMIT_MEMLOCK"),
+        libc::RLIMIT_AS => Cow::Borrowed("RLIMIT_AS"),
+        libc::RLIMIT_LOCKS => Cow::Borrowed("RLIMIT_LOCKS"),
+        libc::RLIMIT_SIGPENDING => Cow::Borrowed("RLIMIT_SIGPENDING"),
+        libc::RLIMIT_MSGQUEUE => Cow::Borrowed("RLIMIT_MSGQUEUE"),
+        libc::RLIMIT_NICE => Cow::Borrowed("RLIMIT_NICE"),
+        libc::RLIMIT_RTPRIO => Cow::Borrowed("RLIMIT_RTPRIO"),
+        libc::RLIMIT_RTTIME => Cow::Borrowed("RLIMIT_RTTIME"),
+        _ => Cow::Owned(format!("UNKNOWN({resource})")),
+    }
+}
+
+// Formats an rlimit value, handling the special RLIM_INFINITY case
+pub fn format_rlimit_value(value: u64) -> Cow<'static, str> {
+    if value == u64::MAX {
+        Cow::Borrowed("RLIM_INFINITY")
+    } else {
+        Cow::Owned(value.to_string())
+    }
+}
+
+/// Format rlimit struct for display
+pub async fn format_rlimit(
+    sf: &mut SyscallFormatter<'_>,
+    rlimit: &pinchy_common::kernel_types::Rlimit,
+) -> anyhow::Result<()> {
+    argf!(sf, "rlim_cur: {}", format_rlimit_value(rlimit.rlim_cur));
+    argf!(sf, "rlim_max: {}", format_rlimit_value(rlimit.rlim_max));
+    Ok(())
 }

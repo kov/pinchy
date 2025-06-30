@@ -8,8 +8,8 @@ use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_futex,
         SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
-        SYS_openat, SYS_ppoll, SYS_prctl, SYS_read, SYS_sched_yield, SYS_set_robust_list,
-        SYS_set_tid_address, SYS_statfs, SYS_write,
+        SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_sched_yield,
+        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_write,
     },
     SyscallEvent,
 };
@@ -397,6 +397,40 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let data = unsafe { event.data.set_tid_address };
 
             argf!(sf, "tidptr: 0x{:x}", data.tidptr);
+
+            finish!(sf, event.return_value);
+        }
+        SYS_prlimit64 => {
+            let data = unsafe { event.data.prlimit };
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(
+                sf,
+                "resource: {}",
+                crate::util::format_resource_type(data.resource)
+            );
+
+            // Handle new_limit
+            if data.has_new {
+                arg!(sf, "new_limit:");
+                with_struct!(sf, {
+                    crate::util::format_rlimit(&mut sf, &data.new_limit).await?;
+                });
+            } else {
+                arg!(sf, "new_limit: NULL");
+            }
+
+            // Handle old_limit
+            arg!(sf, "old_limit:");
+            if data.has_old && event.return_value == 0 {
+                with_struct!(sf, {
+                    crate::util::format_rlimit(&mut sf, &data.old_limit).await?;
+                });
+            } else if data.has_old {
+                raw!(sf, " (content unavailable)");
+            } else {
+                raw!(sf, " NULL");
+            }
 
             finish!(sf, event.return_value);
         }

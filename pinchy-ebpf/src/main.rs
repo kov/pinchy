@@ -15,12 +15,12 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::{
-    kernel_types::{EpollEvent, LinuxDirent64, Pollfd, Stat, Timespec},
+    kernel_types::{EpollEvent, LinuxDirent64, Pollfd, Rlimit, Stat, Timespec},
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_getdents64,
         SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_openat,
-        SYS_ppoll, SYS_read, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
-        SYS_write,
+        SYS_ppoll, SYS_prlimit64, SYS_read, SYS_sched_yield, SYS_set_robust_list,
+        SYS_set_tid_address, SYS_statfs, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -874,6 +874,62 @@ pub fn syscall_exit_statfs(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 statfs: pinchy_common::StatfsData { pathname, statfs },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_prlimit64(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_prlimit64;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pid = args[0] as i32;
+        let resource = args[1] as i32;
+        let new_limit_ptr = args[2] as *const Rlimit;
+        let old_limit_ptr = args[3] as *const Rlimit;
+
+        // Default values for limits
+        let mut new_limit = Rlimit::default();
+        let mut old_limit = Rlimit::default();
+
+        // Track whether new and old limits are present
+        let has_new = !new_limit_ptr.is_null();
+        let has_old = !old_limit_ptr.is_null();
+
+        // Only try to read the new limit if provided
+        if has_new {
+            if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(new_limit_ptr as *const _) } {
+                new_limit = limit;
+            }
+        }
+
+        // Only try to read the old limit if provided and call was successful
+        if has_old && return_value == 0 {
+            if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(old_limit_ptr as *const _) } {
+                old_limit = limit;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                prlimit: pinchy_common::PrlimitData {
+                    pid,
+                    resource,
+                    has_old,
+                    has_new,
+                    old_limit,
+                    new_limit,
+                },
             },
         )
     }

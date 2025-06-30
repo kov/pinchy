@@ -44,6 +44,7 @@ pub union SyscallEventData {
     pub statfs: StatfsData,
     pub set_robust_list: SetRobustListData,
     pub set_tid_address: SetTidAddressData,
+    pub prlimit: PrlimitData,
     pub generic: GenericSyscallData,
 }
 
@@ -230,4 +231,15 @@ pub struct FaccessatData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub mode: i32,
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PrlimitData {
+    pub pid: i32,
+    pub resource: i32,
+    pub has_old: bool,
+    pub has_new: bool,
+    pub old_limit: kernel_types::Rlimit,
+    pub new_limit: kernel_types::Rlimit,
 }

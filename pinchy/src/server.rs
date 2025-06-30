@@ -12,7 +12,7 @@ use std::{
     time::Instant,
 };
 
-use anyhow::anyhow;
+use anyhow::{anyhow, Context};
 use aya::{
     maps::{ring_buf::RingBuf, Array, ProgramArray},
     programs::TracePoint,
@@ -503,7 +503,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         .program_mut("syscall_exit_trivial")
         .unwrap()
         .try_into()?;
-    prog.load()?;
+    prog.load()
+        .with_context(|| format!("trying to load syscall_exit_trivial:"))?;
 
     // Use the same tail call handler for trivial syscalls.
     const TRIVIAL_SYSCALLS: &[i64] = &[
@@ -539,9 +540,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)
-            .unwrap_or_else(|| panic!("Failed to load eBPF program {prog_name}"))
+            .with_context(|| format!("getting eBPF program {prog_name}"))?
             .try_into()?;
-        prog.load()?;
+        prog.load()
+            .with_context(|| format!("trying to load {prog_name} into eBPF"))?;
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
         trace!("registered program for {syscall_nr}");
@@ -550,9 +552,11 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     // Load the generic handler for all other syscalls
     let generic_prog: &mut TracePoint = ebpf
         .program_mut("syscall_exit_generic")
-        .unwrap()
+        .with_context(|| format!("getting syscall_exit_generic"))?
         .try_into()?;
-    generic_prog.load()?;
+    generic_prog
+        .load()
+        .with_context(|| format!("trying to load syscall_exit_generic into eBPF"))?;
 
     // Register generic handler for all other syscalls
     for &syscall_nr in ALL_SYSCALLS {

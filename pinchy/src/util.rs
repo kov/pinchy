@@ -5,7 +5,7 @@ use std::borrow::Cow;
 
 use pinchy_common::kernel_types::{Stat, Timespec};
 
-use crate::{argf, formatting::SyscallFormatter, with_struct};
+use crate::{arg, argf, formatting::SyscallFormatter, with_struct};
 
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     let mut strs = vec![];
@@ -753,5 +753,105 @@ pub async fn format_rlimit(
 ) -> anyhow::Result<()> {
     argf!(sf, "rlim_cur: {}", format_rlimit_value(rlimit.rlim_cur));
     argf!(sf, "rlim_max: {}", format_rlimit_value(rlimit.rlim_max));
+    Ok(())
+}
+
+// Formats rseq flags
+pub fn format_rseq_flags(flags: i32) -> String {
+    if flags == 0 {
+        return "0".to_string();
+    }
+
+    // Define the RSEQ_FLAG constants as they are in linux/rseq.h
+    let rseq_flag_unregister = 0x1;
+
+    let mut flags_str = Vec::new();
+
+    if flags & rseq_flag_unregister != 0 {
+        flags_str.push("RSEQ_FLAG_UNREGISTER".to_string());
+    }
+
+    let remainder = flags & !(rseq_flag_unregister);
+    if remainder != 0 {
+        flags_str.push(format!("0x{:x}", remainder));
+    }
+
+    flags_str.join("|")
+}
+
+// Format the rseq cs flags
+pub fn format_rseq_cs_flags(flags: u32) -> String {
+    if flags == 0 {
+        return "0".to_string();
+    }
+
+    // Define the RSEQ_CS_FLAG constants as they are in linux/rseq.h
+    let rseq_cs_flag_no_restart_on_preempt = 0x1;
+    let rseq_cs_flag_no_restart_on_signal = 0x2;
+    let rseq_cs_flag_no_restart_on_migrate = 0x4;
+
+    let mut flags_str = Vec::new();
+
+    if flags & rseq_cs_flag_no_restart_on_preempt != 0 {
+        flags_str.push("RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT".to_string());
+    }
+    if flags & rseq_cs_flag_no_restart_on_signal != 0 {
+        flags_str.push("RSEQ_CS_FLAG_NO_RESTART_ON_SIGNAL".to_string());
+    }
+    if flags & rseq_cs_flag_no_restart_on_migrate != 0 {
+        flags_str.push("RSEQ_CS_FLAG_NO_RESTART_ON_MIGRATE".to_string());
+    }
+
+    let remainder = flags
+        & !(rseq_cs_flag_no_restart_on_preempt
+            | rseq_cs_flag_no_restart_on_signal
+            | rseq_cs_flag_no_restart_on_migrate);
+    if remainder != 0 {
+        flags_str.push(format!("0x{:x}", remainder));
+    }
+
+    flags_str.join("|")
+}
+
+/// Format rseq struct for display
+pub async fn format_rseq(
+    sf: &mut SyscallFormatter<'_>,
+    rseq: &pinchy_common::kernel_types::Rseq,
+    rseq_cs: Option<&pinchy_common::kernel_types::RseqCs>,
+) -> anyhow::Result<()> {
+    argf!(sf, "cpu_id_start: {}", rseq.cpu_id_start);
+    argf!(
+        sf,
+        "cpu_id: {}",
+        if rseq.cpu_id == u32::MAX {
+            "-1".to_string()
+        } else {
+            rseq.cpu_id.to_string()
+        }
+    );
+    if let Some(rseq_cs) = rseq_cs {
+        arg!(sf, "rseq_cs:");
+        with_struct!(sf, {
+            format_rseq_cs(sf, rseq_cs).await?;
+        });
+    } else {
+        arg!(sf, "rseq_cs: 0x0");
+    }
+    argf!(sf, "flags: {}", format_rseq_cs_flags(rseq.flags));
+    argf!(sf, "node_id: {}", rseq.node_id);
+    argf!(sf, "mm_cid: {}", rseq.mm_cid);
+    Ok(())
+}
+
+/// Format rseq_cs struct for display
+pub async fn format_rseq_cs(
+    sf: &mut SyscallFormatter<'_>,
+    rseq_cs: &pinchy_common::kernel_types::RseqCs,
+) -> anyhow::Result<()> {
+    argf!(sf, "version: {}", rseq_cs.version);
+    argf!(sf, "flags: {}", format_rseq_cs_flags(rseq_cs.flags));
+    argf!(sf, "start_ip: 0x{:x}", rseq_cs.start_ip);
+    argf!(sf, "post_commit_offset: 0x{:x}", rseq_cs.post_commit_offset);
+    argf!(sf, "abort_ip: 0x{:x}", rseq_cs.abort_ip);
     Ok(())
 }

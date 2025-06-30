@@ -79,3 +79,26 @@ pub struct Rlimit {
     pub rlim_cur: u64, /* Soft limit */
     pub rlim_max: u64, /* Hard limit */
 }
+
+/// Restartable sequence critical section structure
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct RseqCs {
+    pub version: u32,
+    pub flags: u32,
+    pub start_ip: u64,
+    pub post_commit_offset: u64,
+    pub abort_ip: u64,
+}
+
+/// Restartable sequence structure
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Rseq {
+    pub cpu_id_start: u32,
+    pub cpu_id: u32,
+    pub rseq_cs: u64, // This is a pointer to RseqCs in user space
+    pub flags: u32,
+    pub node_id: u32,
+    pub mm_cid: u32,
+}

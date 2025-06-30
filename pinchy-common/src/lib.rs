@@ -45,6 +45,7 @@ pub union SyscallEventData {
     pub set_robust_list: SetRobustListData,
     pub set_tid_address: SetTidAddressData,
     pub prlimit: PrlimitData,
+    pub rseq: RseqData,
     pub generic: GenericSyscallData,
 }
 
@@ -242,4 +243,17 @@ pub struct PrlimitData {
     pub has_new: bool,
     pub old_limit: kernel_types::Rlimit,
     pub new_limit: kernel_types::Rlimit,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RseqData {
+    pub rseq_ptr: u64,
+    pub rseq_len: u32,
+    pub flags: i32,
+    pub signature: u32,
+    pub rseq: kernel_types::Rseq,
+    pub has_rseq: bool, // Whether rseq pointer was valid and could be read
+    pub rseq_cs: kernel_types::RseqCs,
+    pub has_rseq_cs: bool, // Whether rseq_cs pointer was valid and could be read
 }

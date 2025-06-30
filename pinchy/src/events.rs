@@ -8,7 +8,7 @@ use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_futex,
         SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
-        SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_sched_yield,
+        SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_rseq, SYS_sched_yield,
         SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_write,
     },
     SyscallEvent,
@@ -22,8 +22,8 @@ use crate::{
     util::{
         format_access_mode, format_bytes, format_dirfd, format_faccessat_flags, format_flags,
         format_getrandom_flags, format_mmap_flags, format_mmap_prot, format_mode, format_path,
-        format_prctl_op, format_stat, format_statfs, format_timespec, poll_bits_to_strs,
-        prctl_op_arg_count,
+        format_prctl_op, format_rseq, format_rseq_flags, format_stat, format_statfs,
+        format_timespec, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -430,6 +430,36 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " (content unavailable)");
             } else {
                 raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        SYS_rseq => {
+            let data = unsafe { event.data.rseq };
+
+            argf!(
+                sf,
+                "rseq: {}",
+                if data.has_rseq {
+                    format!("0x{:x}", data.rseq_ptr)
+                } else {
+                    "NULL".to_string()
+                }
+            );
+            argf!(sf, "rseq_len: {}", data.rseq_len);
+            argf!(sf, "flags: {}", format_rseq_flags(data.flags));
+            argf!(sf, "signature: 0x{:x}", data.signature);
+
+            if data.has_rseq {
+                arg!(sf, "rseq content:");
+                with_struct!(sf, {
+                    let req_cs = if data.has_rseq_cs {
+                        Some(&data.rseq_cs)
+                    } else {
+                        None
+                    };
+                    format_rseq(&mut sf, &data.rseq, req_cs).await?;
+                });
             }
 
             finish!(sf, event.return_value);

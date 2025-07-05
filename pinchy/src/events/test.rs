@@ -1544,3 +1544,100 @@ async fn parse_uname_truncated() {
         "1234 uname(struct utsname: { sysname: \"Linux\", nodename: \"jabuticaba\", release: \"6.15.4-200.fc42.aarch64\", version: \"#1 SMP PREEMPT_DYNAMIC Fri Jun 27 15:55:20 UTC 2025 aarch64 GNU/L ... (truncated)\", machine: \"aarch64\", domainname: \"(none)\" }) = 0\n"
     );
 }
+
+#[tokio::test]
+async fn parse_newfstatat() {
+    use pinchy_common::{kernel_types::Stat, NewfstatatData};
+
+    let mut event = SyscallEvent {
+        syscall_nr: SYS_newfstatat,
+        pid: 42,
+        tid: 42,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            newfstatat: NewfstatatData {
+                dirfd: libc::AT_FDCWD,
+                pathname: [0u8; DATA_READ_SIZE],
+                stat: Stat::default(),
+                flags: libc::AT_SYMLINK_NOFOLLOW,
+            },
+        },
+    };
+
+    // Set up a pathname
+    let pathname = b"test_file.txt\0";
+    let data = unsafe { &mut event.data.newfstatat };
+    data.pathname[..pathname.len()].copy_from_slice(pathname);
+
+    // Set some representative values for the stat struct
+    let stat_data = unsafe { &mut event.data.newfstatat.stat };
+    stat_data.st_mode = libc::S_IFREG | 0o755; // Regular file with rwxr-xr-x permissions
+    stat_data.st_size = 54321;
+    stat_data.st_uid = 500;
+    stat_data.st_gid = 500;
+    stat_data.st_blocks = 108;
+    stat_data.st_blksize = 4096;
+    stat_data.st_ino = 1234567;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0\n"
+        )
+    );
+
+    // Test with an error return value
+    event.return_value = -1;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1\n"
+        )
+    );
+
+    // Test with different flags - no flags (0)
+    event.return_value = 0;
+    event.data.newfstatat.flags = 0;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0\n"
+        )
+    );
+
+    // Test with different dirfd - a regular file descriptor
+    event.data.newfstatat.dirfd = 5;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0\n"
+        )
+    );
+}

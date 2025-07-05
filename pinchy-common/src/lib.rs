@@ -34,6 +34,7 @@ pub union SyscallEventData {
     pub ioctl: IoctlData,
     pub execve: ExecveData,
     pub fstat: FstatData,
+    pub newfstatat: NewfstatatData,
     pub getdents64: Getdents64Data,
     pub mmap: MmapData,
     pub munmap: MunmapData,
@@ -149,6 +150,15 @@ pub struct ExecveData {
 pub struct FstatData {
     pub fd: i32,
     pub stat: crate::kernel_types::Stat,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct NewfstatatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub stat: crate::kernel_types::Stat,
+    pub flags: i32,
 }
 
 #[repr(C)]

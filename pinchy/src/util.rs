@@ -646,7 +646,8 @@ pub fn format_access_mode(mode: i32) -> String {
     }
 }
 
-pub fn format_faccessat_flags(flags: i32) -> String {
+/// Format AT_* flags used by *at syscalls (faccessat, newfstatat, etc.)
+pub fn format_at_flags(flags: i32) -> String {
     if flags == 0 {
         return "0".to_string();
     }

@@ -24,9 +24,9 @@ use pinchy_common::{
     syscalls::{
         syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat,
         SYS_fstat, SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap,
-        SYS_mprotect, SYS_munmap, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_rseq,
-        SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname,
-        SYS_write, ALL_SYSCALLS,
+        SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read,
+        SYS_rseq, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
+        SYS_uname, SYS_write, ALL_SYSCALLS,
     },
     SyscallEvent,
 };
@@ -530,6 +530,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_write", SYS_write),
         ("syscall_exit_openat", SYS_openat),
         ("syscall_exit_fstat", SYS_fstat),
+        ("syscall_exit_newfstatat", SYS_newfstatat),
         ("syscall_exit_getdents64", SYS_getdents64),
         ("syscall_exit_futex", SYS_futex),
         ("syscall_exit_ioctl", SYS_ioctl),

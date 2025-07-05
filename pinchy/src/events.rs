@@ -8,8 +8,9 @@ use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_futex,
         SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
-        SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_rseq, SYS_sched_yield,
-        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write,
+        SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_rseq,
+        SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname,
+        SYS_write,
     },
     SyscallEvent,
 };
@@ -20,7 +21,7 @@ use crate::{
     ioctls::format_ioctl_request,
     raw,
     util::{
-        format_access_mode, format_bytes, format_dirfd, format_faccessat_flags, format_flags,
+        format_access_mode, format_at_flags, format_bytes, format_dirfd, format_flags,
         format_getrandom_flags, format_mmap_flags, format_mmap_prot, format_mode, format_path,
         format_prctl_op, format_rseq, format_rseq_flags, format_stat, format_statfs,
         format_timespec, format_utsname, poll_bits_to_strs, prctl_op_arg_count,
@@ -259,6 +260,23 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        SYS_newfstatat => {
+            let data = unsafe { event.data.newfstatat };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            arg!(sf, "struct stat:");
+            if event.return_value == 0 {
+                with_struct!(sf, {
+                    format_stat(&mut sf, &data.stat).await?;
+                });
+            } else {
+                raw!(sf, " <unavailable>");
+            }
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         SYS_getdents64 => {
             let data = unsafe { event.data.getdents64 };
             let mut entries = Vec::new();
@@ -381,7 +399,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             // FIXME: I believe this argument is not used for faccessat, only
             // for faccessat2?
-            argf!(sf, "flags: {}", format_faccessat_flags(data.flags));
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
 
             finish!(sf, event.return_value);
         }

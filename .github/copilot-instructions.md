@@ -106,6 +106,8 @@ arguments reference and whether that data needs special handling.
        `pinchy-ebpf/src/main.rs`.
      - Register it in the appropriate array in `load_tailcalls()` in
        `pinchy/src/server.rs`.
+     - When parsing structs on the eBPF side, use `bpf_probe_read_user()`;
+       only use `bpf_probe_read_buf()` when reading byte arrays.
 3. **Syscall arguments:**
    - Identify any arguments with further parsing, especially those that
    could be reused by multiple syscalls (e.g. mode, flags, poll events,

@@ -34,6 +34,7 @@ pub union SyscallEventData {
     pub ioctl: IoctlData,
     pub execve: ExecveData,
     pub fstat: FstatData,
+    pub newfstatat: NewfstatatData,
     pub getdents64: Getdents64Data,
     pub mmap: MmapData,
     pub munmap: MunmapData,
@@ -46,6 +47,7 @@ pub union SyscallEventData {
     pub set_tid_address: SetTidAddressData,
     pub prlimit: PrlimitData,
     pub rseq: RseqData,
+    pub uname: UnameData,
     pub generic: GenericSyscallData,
 }
 
@@ -148,6 +150,15 @@ pub struct ExecveData {
 pub struct FstatData {
     pub fd: i32,
     pub stat: crate::kernel_types::Stat,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct NewfstatatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub stat: crate::kernel_types::Stat,
+    pub flags: i32,
 }
 
 #[repr(C)]
@@ -256,4 +267,10 @@ pub struct RseqData {
     pub has_rseq: bool, // Whether rseq pointer was valid and could be read
     pub rseq_cs: kernel_types::RseqCs,
     pub has_rseq_cs: bool, // Whether rseq_cs pointer was valid and could be read
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UnameData {
+    pub utsname: kernel_types::Utsname,
 }

@@ -646,7 +646,8 @@ pub fn format_access_mode(mode: i32) -> String {
     }
 }
 
-pub fn format_faccessat_flags(flags: i32) -> String {
+/// Format AT_* flags used by *at syscalls (faccessat, newfstatat, etc.)
+pub fn format_at_flags(flags: i32) -> String {
     if flags == 0 {
         return "0".to_string();
     }
@@ -853,5 +854,71 @@ pub async fn format_rseq_cs(
     argf!(sf, "start_ip: 0x{:x}", rseq_cs.start_ip);
     argf!(sf, "post_commit_offset: 0x{:x}", rseq_cs.post_commit_offset);
     argf!(sf, "abort_ip: 0x{:x}", rseq_cs.abort_ip);
+    Ok(())
+}
+
+/// Extract a null-terminated string from a byte array with truncation detection
+///
+/// This helper handles the common pattern of reading C-style strings from eBPF
+/// where the data might be truncated due to stack limits or buffer size constraints.
+///
+/// # Arguments
+/// * `bytes` - The byte array to extract the string from
+///
+/// # Returns
+/// A String with "... (truncated)" appended if truncation is detected
+pub fn extract_cstring_with_truncation(bytes: &[u8]) -> String {
+    let null_pos = bytes.iter().position(|&b| b == 0);
+
+    match null_pos {
+        Some(pos) => {
+            // Found null terminator, extract the string up to that point
+            let trimmed = &bytes[..pos];
+            String::from_utf8_lossy(trimmed).into_owned()
+        }
+        None => {
+            // No null terminator found - this indicates truncation
+            let mut result = String::from_utf8_lossy(bytes).into_owned();
+            result.push_str(" ... (truncated)");
+            result
+        }
+    }
+}
+
+/// Format utsname struct for display
+pub async fn format_utsname(
+    sf: &mut SyscallFormatter<'_>,
+    utsname: &pinchy_common::kernel_types::Utsname,
+) -> anyhow::Result<()> {
+    argf!(
+        sf,
+        "sysname: {:?}",
+        extract_cstring_with_truncation(&utsname.sysname)
+    );
+    argf!(
+        sf,
+        "nodename: {:?}",
+        extract_cstring_with_truncation(&utsname.nodename)
+    );
+    argf!(
+        sf,
+        "release: {:?}",
+        extract_cstring_with_truncation(&utsname.release)
+    );
+    argf!(
+        sf,
+        "version: {:?}",
+        extract_cstring_with_truncation(&utsname.version)
+    );
+    argf!(
+        sf,
+        "machine: {:?}",
+        extract_cstring_with_truncation(&utsname.machine)
+    );
+    argf!(
+        sf,
+        "domainname: {:?}",
+        extract_cstring_with_truncation(&utsname.domainname)
+    );
     Ok(())
 }

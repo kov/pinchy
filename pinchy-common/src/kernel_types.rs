@@ -102,3 +102,34 @@ pub struct Rseq {
     pub node_id: u32,
     pub mm_cid: u32,
 }
+
+/// Note: some fields are truncated to fit within eBPF stack limits
+pub const SYSNAME_READ_SIZE: usize = 16;
+pub const NODENAME_READ_SIZE: usize = 32;
+pub const RELEASE_READ_SIZE: usize = 32;
+pub const VERSION_READ_SIZE: usize = 65;
+pub const MACHINE_READ_SIZE: usize = 16;
+pub const DOMAIN_READ_SIZE: usize = 16;
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct Utsname {
+    pub sysname: [u8; SYSNAME_READ_SIZE], // Operating system name (e.g., "Linux")
+    pub nodename: [u8; NODENAME_READ_SIZE], // Name within network
+    pub release: [u8; RELEASE_READ_SIZE], // Operating system release
+    pub version: [u8; VERSION_READ_SIZE], // Operating system version
+    pub machine: [u8; MACHINE_READ_SIZE], // Hardware type identifier
+    pub domainname: [u8; DOMAIN_READ_SIZE], // NIS or YP domain name
+}
+
+impl Default for Utsname {
+    fn default() -> Self {
+        Self {
+            sysname: [0; SYSNAME_READ_SIZE],
+            nodename: [0; NODENAME_READ_SIZE],
+            release: [0; RELEASE_READ_SIZE],
+            version: [0; VERSION_READ_SIZE],
+            machine: [0; MACHINE_READ_SIZE],
+            domainname: [0; DOMAIN_READ_SIZE],
+        }
+    }
+}

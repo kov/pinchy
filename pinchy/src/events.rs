@@ -9,7 +9,7 @@ use pinchy_common::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_futex,
         SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
         SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_rseq, SYS_sched_yield,
-        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_write,
+        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write,
     },
     SyscallEvent,
 };
@@ -23,7 +23,7 @@ use crate::{
         format_access_mode, format_bytes, format_dirfd, format_faccessat_flags, format_flags,
         format_getrandom_flags, format_mmap_flags, format_mmap_prot, format_mode, format_path,
         format_prctl_op, format_rseq, format_rseq_flags, format_stat, format_statfs,
-        format_timespec, poll_bits_to_strs, prctl_op_arg_count,
+        format_timespec, format_utsname, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -461,6 +461,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     format_rseq(&mut sf, &data.rseq, req_cs).await?;
                 });
             }
+
+            finish!(sf, event.return_value);
+        }
+        SYS_uname => {
+            let data = unsafe { event.data.uname };
+
+            arg!(sf, "struct utsname:");
+            with_struct!(sf, {
+                format_utsname(&mut sf, &data.utsname).await?;
+            });
 
             finish!(sf, event.return_value);
         }

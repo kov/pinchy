@@ -46,6 +46,7 @@ pub union SyscallEventData {
     pub set_tid_address: SetTidAddressData,
     pub prlimit: PrlimitData,
     pub rseq: RseqData,
+    pub uname: UnameData,
     pub generic: GenericSyscallData,
 }
 
@@ -256,4 +257,10 @@ pub struct RseqData {
     pub has_rseq: bool, // Whether rseq pointer was valid and could be read
     pub rseq_cs: kernel_types::RseqCs,
     pub has_rseq_cs: bool, // Whether rseq_cs pointer was valid and could be read
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UnameData {
+    pub utsname: kernel_types::Utsname,
 }

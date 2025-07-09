@@ -128,16 +128,7 @@ fn pinchy_reads() {
     let pinchy = PinchyTest::new(None, None);
 
     // Run a workload
-    let handle = std::thread::spawn(|| {
-        Command::new(cargo_bin("pinchy"))
-            //.env("RUST_LOG", "trace")
-            .args(&["-e", "openat", "-e", "read", "-e", "lseek"])
-            .arg("--")
-            .arg(cargo_bin("test-helper"))
-            .arg("pinchy_reads")
-            .output()
-            .expect("Failed to run pinchy")
-    });
+    let handle = run_workload(&["openat", "read", "lseek"], "pinchy_reads");
 
     // Client's output
     let expected_output = escaped_regex(indoc! {r#"
@@ -162,8 +153,59 @@ fn pinchy_reads() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn rt_sig() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload
+    let handle = run_workload(&["rt_sigprocmask"], "rt_sig");
+
+    // Client's output - we expect multiple rt_sigprocmask calls from our test
+    let expected_output = escaped_regex(indoc! {r#"
+        PID rt_sigprocmask(how: SIG_BLOCK, set: ADDR, oldset: ADDR, sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_SETMASK, set: 0x0, oldset: ADDR, sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_UNBLOCK, set: ADDR, oldset: 0x0, sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_SETMASK, set: ADDR, oldset: 0x0, sigsetsize: 8) = 0
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
+    let events: Vec<String> = events.iter().map(|&s| s.to_owned()).collect();
+    let test_name = test_name.to_owned();
+    std::thread::spawn(move || {
+        let mut cmd = Command::new(cargo_bin("pinchy"));
+
+        // Add event filters
+        for event in events {
+            cmd.args(&["-e", &event]);
+        }
+
+        // Add the test helper command
+        cmd.arg("--")
+            .arg(cargo_bin("test-helper"))
+            .arg(&test_name)
+            .output()
+            .expect("Failed to run pinchy")
+    })
+}
+
 fn escaped_regex(expected_output: &str) -> String {
-    regex::escape(expected_output).replace("PID", r"\d+")
+    regex::escape(expected_output)
+        .replace("PID", r"\d+")
+        .replace("ADDR", "0x[0-9a-f]+")
 }
 
 fn run_pinchyd(pid: Option<u32>) -> Child {

@@ -1,11 +1,11 @@
 use std::{
     env::{current_dir, set_current_dir},
     ffi::c_void,
-    fs, io,
+    fs,
     path::PathBuf,
 };
 
-use anyhow::{anyhow, bail};
+use anyhow::bail;
 use pinchy_common::DATA_READ_SIZE;
 
 /// Returns the workspace root by walking up from the crate root.
@@ -47,7 +47,8 @@ fn main() -> anyhow::Result<()> {
     // Call the workload for the test provided as argument
     if let Some(name) = args.next() {
         match name.as_str() {
-            "pinchy_reads" => pinchy_reads().map_err(|e| anyhow!(e)),
+            "pinchy_reads" => pinchy_reads(),
+            "rt_sig" => rt_sig(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -55,7 +56,7 @@ fn main() -> anyhow::Result<()> {
     }
 }
 
-fn pinchy_reads() -> io::Result<()> {
+fn pinchy_reads() -> anyhow::Result<()> {
     unsafe {
         let fd = libc::openat(
             libc::AT_FDCWD,
@@ -78,6 +79,39 @@ fn pinchy_reads() -> io::Result<()> {
         // This read should produce EOF.
         let count = libc::read(fd, buf.as_mut_ptr() as *mut c_void, buf.capacity());
         assert_eq!(count, 0);
+    }
+    Ok(())
+}
+
+fn rt_sig() -> anyhow::Result<()> {
+    unsafe {
+        let mut old_set: libc::sigset_t = std::mem::zeroed();
+        let mut new_set: libc::sigset_t = std::mem::zeroed();
+
+        // Initialize the new signal set and add SIGUSR1 to it
+        libc::sigemptyset(&mut new_set);
+        libc::sigaddset(&mut new_set, libc::SIGUSR1);
+
+        // Block SIGUSR1 using SIG_BLOCK
+        let result = libc::sigprocmask(libc::SIG_BLOCK, &new_set, &mut old_set);
+        assert_eq!(result, 0, "Failed to block SIGUSR1");
+
+        // Get current signal mask using SIG_SETMASK with NULL set
+        let mut current_set: libc::sigset_t = std::mem::zeroed();
+        let result = libc::sigprocmask(libc::SIG_SETMASK, std::ptr::null(), &mut current_set);
+        assert_eq!(result, 0, "Failed to get current signal mask");
+
+        // Verify SIGUSR1 is in the current mask
+        let is_blocked = libc::sigismember(&current_set, libc::SIGUSR1);
+        assert_eq!(is_blocked, 1, "SIGUSR1 should be blocked");
+
+        // Unblock SIGUSR1 using SIG_UNBLOCK
+        let result = libc::sigprocmask(libc::SIG_UNBLOCK, &new_set, std::ptr::null_mut());
+        assert_eq!(result, 0, "Failed to unblock SIGUSR1");
+
+        // Restore the original signal mask
+        let result = libc::sigprocmask(libc::SIG_SETMASK, &old_set, std::ptr::null_mut());
+        assert_eq!(result, 0, "Failed to restore original signal mask");
     }
     Ok(())
 }

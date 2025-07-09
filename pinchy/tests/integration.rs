@@ -182,6 +182,62 @@ fn rt_sig() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn rt_sigaction_realtime() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises rt_sigaction with real-time signals
+    let handle = run_workload(&["rt_sigaction"], "rt_sigaction_realtime");
+
+    // Client's output - we expect rt_sigaction calls with SIGRT1
+    let expected_output = escaped_regex(indoc! {r#"
+        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0
+        PID rt_sigaction(signum: SIGRT1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0
+        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn rt_sigaction_standard() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises rt_sigaction with standard signals
+    let handle = run_workload(&["rt_sigaction"], "rt_sigaction_standard");
+
+    // Client's output - we expect rt_sigaction calls with SIGUSR1
+    let expected_output = escaped_regex(indoc! {r#"
+        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0
+        PID rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0
+        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
     let events: Vec<String> = events.iter().map(|&s| s.to_owned()).collect();
     let test_name = test_name.to_owned();

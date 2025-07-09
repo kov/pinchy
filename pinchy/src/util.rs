@@ -931,3 +931,46 @@ pub fn format_sigprocmask_how(how: i32) -> &'static str {
         _ => "UNKNOWN",
     }
 }
+
+pub fn format_signal_number(signum: i32) -> Cow<'static, str> {
+    match signum {
+        libc::SIGHUP => Cow::Borrowed("SIGHUP"),
+        libc::SIGINT => Cow::Borrowed("SIGINT"),
+        libc::SIGQUIT => Cow::Borrowed("SIGQUIT"),
+        libc::SIGILL => Cow::Borrowed("SIGILL"),
+        libc::SIGTRAP => Cow::Borrowed("SIGTRAP"),
+        libc::SIGABRT => Cow::Borrowed("SIGABRT"),
+        libc::SIGBUS => Cow::Borrowed("SIGBUS"),
+        libc::SIGFPE => Cow::Borrowed("SIGFPE"),
+        libc::SIGKILL => Cow::Borrowed("SIGKILL"),
+        libc::SIGUSR1 => Cow::Borrowed("SIGUSR1"),
+        libc::SIGSEGV => Cow::Borrowed("SIGSEGV"),
+        libc::SIGUSR2 => Cow::Borrowed("SIGUSR2"),
+        libc::SIGPIPE => Cow::Borrowed("SIGPIPE"),
+        libc::SIGALRM => Cow::Borrowed("SIGALRM"),
+        libc::SIGTERM => Cow::Borrowed("SIGTERM"),
+        libc::SIGSTKFLT => Cow::Borrowed("SIGSTKFLT"),
+        libc::SIGCHLD => Cow::Borrowed("SIGCHLD"),
+        libc::SIGCONT => Cow::Borrowed("SIGCONT"),
+        libc::SIGSTOP => Cow::Borrowed("SIGSTOP"),
+        libc::SIGTSTP => Cow::Borrowed("SIGTSTP"),
+        libc::SIGTTIN => Cow::Borrowed("SIGTTIN"),
+        libc::SIGTTOU => Cow::Borrowed("SIGTTOU"),
+        libc::SIGURG => Cow::Borrowed("SIGURG"),
+        libc::SIGXCPU => Cow::Borrowed("SIGXCPU"),
+        libc::SIGXFSZ => Cow::Borrowed("SIGXFSZ"),
+        libc::SIGVTALRM => Cow::Borrowed("SIGVTALRM"),
+        libc::SIGPROF => Cow::Borrowed("SIGPROF"),
+        libc::SIGWINCH => Cow::Borrowed("SIGWINCH"),
+        libc::SIGIO => Cow::Borrowed("SIGIO"),
+        libc::SIGPWR => Cow::Borrowed("SIGPWR"),
+        libc::SIGSYS => Cow::Borrowed("SIGSYS"),
+        _ => {
+            if signum >= 34 && signum <= 64 {
+                Cow::Owned(format!("SIGRT{}", signum - 34))
+            } else {
+                Cow::Owned(format!("UNKNOWN({})", signum))
+            }
+        }
+    }
+}

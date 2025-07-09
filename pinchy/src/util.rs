@@ -922,3 +922,12 @@ pub async fn format_utsname(
     );
     Ok(())
 }
+
+pub fn format_sigprocmask_how(how: i32) -> &'static str {
+    match how {
+        libc::SIG_BLOCK => "SIG_BLOCK",
+        libc::SIG_UNBLOCK => "SIG_UNBLOCK",
+        libc::SIG_SETMASK => "SIG_SETMASK",
+        _ => "UNKNOWN",
+    }
+}

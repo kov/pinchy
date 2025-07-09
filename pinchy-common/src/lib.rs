@@ -45,6 +45,7 @@ pub union SyscallEventData {
     pub statfs: StatfsData,
     pub set_robust_list: SetRobustListData,
     pub set_tid_address: SetTidAddressData,
+    pub rt_sigprocmask: RtSigprocmaskData,
     pub prlimit: PrlimitData,
     pub rseq: RseqData,
     pub uname: UnameData,
@@ -228,6 +229,15 @@ pub struct SetRobustListData {
 #[derive(Clone, Copy)]
 pub struct SetTidAddressData {
     pub tidptr: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RtSigprocmaskData {
+    pub how: i32,
+    pub set: usize,
+    pub oldset: usize,
+    pub sigsetsize: usize,
 }
 
 #[repr(C)]

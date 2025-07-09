@@ -4,8 +4,8 @@ use indoc::indoc;
 use pinchy_common::{
     kernel_types::{EpollEvent, Rseq, RseqCs, Timespec, Utsname},
     CloseData, EpollPWaitData, ExecveData, FaccessatData, FutexData, IoctlData, LseekData,
-    OpenAtData, PpollData, ReadData, SchedYieldData, SetRobustListData, SetTidAddressData,
-    UnameData, WriteData, DATA_READ_SIZE, SMALL_READ_SIZE,
+    OpenAtData, PpollData, ReadData, RtSigprocmaskData, SchedYieldData, SetRobustListData,
+    SetTidAddressData, UnameData, WriteData, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
 
 use super::*;
@@ -1639,5 +1639,95 @@ async fn parse_newfstatat() {
         format!(
             "42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0\n"
         )
+    );
+}
+
+#[tokio::test]
+async fn parse_rt_sigprocmask() {
+    // Test with SIG_BLOCK and both set and oldset pointers
+    let event = SyscallEvent {
+        syscall_nr: SYS_rt_sigprocmask,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            rt_sigprocmask: RtSigprocmaskData {
+                how: libc::SIG_BLOCK,
+                set: 0x7fff12345678,
+                oldset: 0x7fff87654321,
+                sigsetsize: 8,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1234 rt_sigprocmask(how: SIG_BLOCK, set: 0x7fff12345678, oldset: 0x7fff87654321, sigsetsize: 8) = 0\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_rt_sigprocmask_null_set() {
+    // Test with SIG_SETMASK and NULL set pointer
+    let event = SyscallEvent {
+        syscall_nr: SYS_rt_sigprocmask,
+        pid: 5678,
+        tid: 5678,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            rt_sigprocmask: RtSigprocmaskData {
+                how: libc::SIG_SETMASK,
+                set: 0,
+                oldset: 0x7fff11223344,
+                sigsetsize: 8,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("5678 rt_sigprocmask(how: SIG_SETMASK, set: 0x0, oldset: 0x7fff11223344, sigsetsize: 8) = 0\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_rt_sigprocmask_unblock() {
+    // Test with SIG_UNBLOCK and NULL oldset pointer
+    let event = SyscallEvent {
+        syscall_nr: SYS_rt_sigprocmask,
+        pid: 9999,
+        tid: 9999,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            rt_sigprocmask: RtSigprocmaskData {
+                how: libc::SIG_UNBLOCK,
+                set: 0x7fffaabbccdd,
+                oldset: 0,
+                sigsetsize: 8,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("9999 rt_sigprocmask(how: SIG_UNBLOCK, set: 0x7fffaabbccdd, oldset: 0x0, sigsetsize: 8) = 0\n")
     );
 }

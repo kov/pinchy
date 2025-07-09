@@ -17,11 +17,11 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, LinuxDirent64, Pollfd, Rlimit, Rseq, Stat, Timespec, Utsname},
     syscalls::{
-        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_getdents64,
-        SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat,
-        SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_rseq, SYS_rt_sigaction,
-        SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address,
-        SYS_statfs, SYS_uname, SYS_write,
+        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fcntl, SYS_fstat,
+        SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
+        SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_rseq, SYS_rt_sigaction,
+        SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
+        SYS_uname, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -508,6 +508,32 @@ pub fn syscall_exit_ioctl(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 ioctl: pinchy_common::IoctlData { fd, request, arg },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_fcntl(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_fcntl;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let cmd = args[1] as i32;
+        let arg = args[2];
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                fcntl: pinchy_common::FcntlData { fd, cmd, arg },
             },
         )
     }

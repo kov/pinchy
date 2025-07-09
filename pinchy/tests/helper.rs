@@ -51,6 +51,7 @@ fn main() -> anyhow::Result<()> {
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
+            "fcntl_test" => fcntl_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -145,7 +146,10 @@ fn rt_sigaction_realtime() -> anyhow::Result<()> {
 
         // Restore the original signal handler
         let result = libc::sigaction(sigrt1, &old_action, std::ptr::null_mut());
-        assert_eq!(result, 0, "Failed to restore original signal handler for SIGRT1");
+        assert_eq!(
+            result, 0,
+            "Failed to restore original signal handler for SIGRT1"
+        );
     }
     Ok(())
 }
@@ -170,14 +174,71 @@ fn rt_sigaction_standard() -> anyhow::Result<()> {
         // Get the current signal handler (this will trigger another rt_sigaction call)
         let mut current_action: libc::sigaction = std::mem::zeroed();
         let result = libc::sigaction(sigusr1, std::ptr::null(), &mut current_action);
-        assert_eq!(result, 0, "Failed to get current signal handler for SIGUSR1");
+        assert_eq!(
+            result, 0,
+            "Failed to get current signal handler for SIGUSR1"
+        );
 
         // Verify the handler was set correctly
         assert_eq!(current_action.sa_sigaction, libc::SIG_IGN);
 
         // Restore the original signal handler
         let result = libc::sigaction(sigusr1, &old_action, std::ptr::null_mut());
-        assert_eq!(result, 0, "Failed to restore original signal handler for SIGUSR1");
+        assert_eq!(
+            result, 0,
+            "Failed to restore original signal handler for SIGUSR1"
+        );
     }
+    Ok(())
+}
+
+fn fcntl_test() -> anyhow::Result<()> {
+    unsafe {
+        // Open a file to test fcntl on
+        let fd = libc::openat(
+            libc::AT_FDCWD,
+            c"pinchy/tests/GPLv2".as_ptr(),
+            libc::O_RDONLY,
+        );
+        if fd < 0 {
+            bail!("Failed to open test file");
+        }
+
+        // Test F_GETFL - get file status flags
+        let flags = libc::fcntl(fd, libc::F_GETFL);
+        if flags < 0 {
+            bail!("Failed to get file flags");
+        }
+
+        // Test F_GETFD - get file descriptor flags
+        let fd_flags = libc::fcntl(fd, libc::F_GETFD);
+        if fd_flags < 0 {
+            bail!("Failed to get fd flags");
+        }
+
+        // Test F_SETFD - set close-on-exec flag
+        let result = libc::fcntl(fd, libc::F_SETFD, libc::FD_CLOEXEC);
+        if result < 0 {
+            bail!("Failed to set fd flags");
+        }
+
+        // Test F_DUPFD - duplicate file descriptor
+        let new_fd = libc::fcntl(fd, libc::F_DUPFD, 10);
+        if new_fd < 0 {
+            bail!("Failed to duplicate fd");
+        }
+
+        // Test F_DUPFD_CLOEXEC - duplicate with close-on-exec
+        let new_fd2 = libc::fcntl(fd, libc::F_DUPFD_CLOEXEC, 20);
+        if new_fd2 < 0 {
+            bail!("Failed to duplicate fd with cloexec");
+        }
+
+        // Clean up
+        libc::close(new_fd2);
+        libc::close(new_fd);
+        libc::close(fd);
+    }
+
     Ok(())
 }

@@ -238,6 +238,36 @@ fn rt_sigaction_standard() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn fcntl_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises fcntl syscalls
+    let handle = run_workload(&["fcntl"], "fcntl_test");
+
+    // Client's output - we expect several fcntl calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID fcntl(fd: 3, cmd: F_GETFL, arg: 0x0) = NUMBER
+        PID fcntl(fd: 3, cmd: F_GETFD, arg: 0x0) = 0
+        PID fcntl(fd: 3, cmd: F_SETFD, arg: 0x1) = 0
+        PID fcntl(fd: 3, cmd: F_DUPFD, arg: 0xa) = 10
+        PID fcntl(fd: 3, cmd: F_DUPFD_CLOEXEC, arg: 0x14) = 20
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
     let events: Vec<String> = events.iter().map(|&s| s.to_owned()).collect();
     let test_name = test_name.to_owned();
@@ -262,6 +292,7 @@ fn escaped_regex(expected_output: &str) -> String {
     regex::escape(expected_output)
         .replace("PID", r"\d+")
         .replace("ADDR", "0x[0-9a-f]+")
+        .replace("NUMBER", "[0-9]+")
 }
 
 fn run_pinchyd(pid: Option<u32>) -> Child {

@@ -974,3 +974,71 @@ pub fn format_signal_number(signum: i32) -> Cow<'static, str> {
         }
     }
 }
+
+/// Format fcntl operation command into human-readable string
+pub fn format_fcntl_cmd(cmd: i32) -> String {
+    match cmd {
+        // File descriptor duplication
+        libc::F_DUPFD => "F_DUPFD".to_string(),
+        libc::F_DUPFD_CLOEXEC => "F_DUPFD_CLOEXEC".to_string(),
+
+        // File descriptor flags
+        libc::F_GETFD => "F_GETFD".to_string(),
+        libc::F_SETFD => "F_SETFD".to_string(),
+
+        // File status flags
+        libc::F_GETFL => "F_GETFL".to_string(),
+        libc::F_SETFL => "F_SETFL".to_string(),
+
+        // Advisory record locking
+        libc::F_SETLK => "F_SETLK".to_string(),
+        libc::F_SETLKW => "F_SETLKW".to_string(),
+        libc::F_GETLK => "F_GETLK".to_string(),
+
+        // Signal management
+        libc::F_GETOWN => "F_GETOWN".to_string(),
+        libc::F_SETOWN => "F_SETOWN".to_string(),
+
+        // Linux-specific operations
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        libc::F_SETLEASE => "F_SETLEASE".to_string(),
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        libc::F_GETLEASE => "F_GETLEASE".to_string(),
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        libc::F_NOTIFY => "F_NOTIFY".to_string(),
+
+        _ => {
+            // Handle additional Linux-specific commands not available in libc
+            match cmd {
+                // Signal management (Linux)
+                8 => "F_GETSIG".to_string(),
+                7 => "F_SETSIG".to_string(),
+
+                // Extended signal management (Linux 2.6.32+)
+                9 => "F_SETOWN_EX".to_string(),
+                10 => "F_GETOWN_EX".to_string(),
+
+                // Open file description locks (Linux 3.15+)
+                14 => "F_OFD_GETLK".to_string(),
+                15 => "F_OFD_SETLK".to_string(),
+                16 => "F_OFD_SETLKW".to_string(),
+
+                // Pipe capacity (Linux 2.6.35+)
+                1031 => "F_SETPIPE_SZ".to_string(),
+                1032 => "F_GETPIPE_SZ".to_string(),
+
+                // File sealing (Linux 3.17+)
+                1033 => "F_ADD_SEALS".to_string(),
+                1034 => "F_GET_SEALS".to_string(),
+
+                // Read/write hints (Linux 4.13+)
+                1036 => "F_GET_RW_HINT".to_string(),
+                1037 => "F_SET_RW_HINT".to_string(),
+                1038 => "F_GET_FILE_RW_HINT".to_string(),
+                1039 => "F_SET_FILE_RW_HINT".to_string(),
+
+                _ => format!("0x{:x}", cmd),
+            }
+        }
+    }
+}

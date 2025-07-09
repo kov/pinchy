@@ -51,6 +51,7 @@ pub union SyscallEventData {
     pub rseq: RseqData,
     pub uname: UnameData,
     pub generic: GenericSyscallData,
+    pub fcntl: FcntlData,
 }
 
 #[repr(C)]
@@ -131,6 +132,14 @@ pub struct SchedYieldData;
 pub struct IoctlData {
     pub fd: i32,
     pub request: u32,
+    pub arg: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FcntlData {
+    pub fd: i32,
+    pub cmd: i32,
     pub arg: usize,
 }
 

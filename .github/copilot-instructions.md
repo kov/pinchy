@@ -117,6 +117,9 @@ arguments reference and whether that data needs special handling.
    - If a simpler type with defined interpretation for the values, add a format_*()
    helper similar to the ones that already exist in `pinchy_common/src/util.rs`,
    if it doesn't exist yet, so it can be used by the event parsing code.
+   - When adding or modifying formatting helpers, use `libc::` constants whenever
+   possible for mapping numeric values to strings; when they are not available,
+   declare constants outside of the function and use those.
 4. **Event parsing:** Add to the event parsing code in
    `pinchy/src/events.rs`. For structs and other types with further parsing, try
    to do any parsing that can be reasonably done in a short amount of time, use

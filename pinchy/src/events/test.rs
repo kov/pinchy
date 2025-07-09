@@ -3,8 +3,8 @@ use std::pin::Pin;
 use indoc::indoc;
 use pinchy_common::{
     kernel_types::{EpollEvent, Rseq, RseqCs, Timespec, Utsname},
-    CloseData, EpollPWaitData, ExecveData, FaccessatData, FutexData, IoctlData, LseekData,
-    OpenAtData, PpollData, ReadData, RtSigactionData, RtSigprocmaskData, SchedYieldData,
+    CloseData, EpollPWaitData, ExecveData, FaccessatData, FcntlData, FutexData, IoctlData,
+    LseekData, OpenAtData, PpollData, ReadData, RtSigactionData, RtSigprocmaskData, SchedYieldData,
     SetRobustListData, SetTidAddressData, UnameData, WriteData, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
 
@@ -349,6 +349,93 @@ async fn parse_ioctl() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!("22 ioctl(fd: 4, request: SNDRV_COMPRESS_START::sound, arg: 0x0) = 0\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_fcntl() {
+    // Test F_GETFL command
+    let event = SyscallEvent {
+        syscall_nr: SYS_fcntl,
+        pid: 22,
+        tid: 22,
+        return_value: 2, // O_RDWR
+        data: pinchy_common::SyscallEventData {
+            fcntl: FcntlData {
+                fd: 3,
+                cmd: libc::F_GETFL,
+                arg: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("22 fcntl(fd: 3, cmd: F_GETFL, arg: 0x0) = 2\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_fcntl_setfl() {
+    // Test F_SETFL command with O_NONBLOCK
+    let event = SyscallEvent {
+        syscall_nr: SYS_fcntl,
+        pid: 42,
+        tid: 42,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fcntl: FcntlData {
+                fd: 5,
+                cmd: libc::F_SETFL,
+                arg: libc::O_NONBLOCK as usize,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("42 fcntl(fd: 5, cmd: F_SETFL, arg: 0x800) = 0\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_fcntl_dupfd() {
+    // Test F_DUPFD command
+    let event = SyscallEvent {
+        syscall_nr: SYS_fcntl,
+        pid: 100,
+        tid: 100,
+        return_value: 7, // New file descriptor
+        data: pinchy_common::SyscallEventData {
+            fcntl: FcntlData {
+                fd: 3,
+                cmd: libc::F_DUPFD,
+                arg: 4, // Minimum fd number
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("100 fcntl(fd: 3, cmd: F_DUPFD, arg: 0x4) = 7\n")
     );
 }
 

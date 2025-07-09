@@ -49,6 +49,8 @@ fn main() -> anyhow::Result<()> {
         match name.as_str() {
             "pinchy_reads" => pinchy_reads(),
             "rt_sig" => rt_sig(),
+            "rt_sigaction_realtime" => rt_sigaction_realtime(),
+            "rt_sigaction_standard" => rt_sigaction_standard(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -112,6 +114,70 @@ fn rt_sig() -> anyhow::Result<()> {
         // Restore the original signal mask
         let result = libc::sigprocmask(libc::SIG_SETMASK, &old_set, std::ptr::null_mut());
         assert_eq!(result, 0, "Failed to restore original signal mask");
+    }
+    Ok(())
+}
+
+fn rt_sigaction_realtime() -> anyhow::Result<()> {
+    unsafe {
+        // Test rt_sigaction with a real-time signal (SIGRT1 = SIGRTMIN + 1)
+        let sigrt1 = libc::SIGRTMIN() + 1;
+
+        let mut old_action: libc::sigaction = std::mem::zeroed();
+        let mut new_action: libc::sigaction = std::mem::zeroed();
+
+        // Set up a simple signal handler (we'll use SIG_IGN for simplicity)
+        new_action.sa_sigaction = libc::SIG_IGN;
+        new_action.sa_flags = 0;
+        libc::sigemptyset(&mut new_action.sa_mask);
+
+        // Install the signal handler for SIGRT1
+        let result = libc::sigaction(sigrt1, &new_action, &mut old_action);
+        assert_eq!(result, 0, "Failed to install signal handler for SIGRT1");
+
+        // Get the current signal handler (this will trigger another rt_sigaction call)
+        let mut current_action: libc::sigaction = std::mem::zeroed();
+        let result = libc::sigaction(sigrt1, std::ptr::null(), &mut current_action);
+        assert_eq!(result, 0, "Failed to get current signal handler for SIGRT1");
+
+        // Verify the handler was set correctly
+        assert_eq!(current_action.sa_sigaction, libc::SIG_IGN);
+
+        // Restore the original signal handler
+        let result = libc::sigaction(sigrt1, &old_action, std::ptr::null_mut());
+        assert_eq!(result, 0, "Failed to restore original signal handler for SIGRT1");
+    }
+    Ok(())
+}
+
+fn rt_sigaction_standard() -> anyhow::Result<()> {
+    unsafe {
+        // Test rt_sigaction with a standard signal (SIGUSR1)
+        let sigusr1 = libc::SIGUSR1;
+
+        let mut old_action: libc::sigaction = std::mem::zeroed();
+        let mut new_action: libc::sigaction = std::mem::zeroed();
+
+        // Set up a simple signal handler (we'll use SIG_IGN for simplicity)
+        new_action.sa_sigaction = libc::SIG_IGN;
+        new_action.sa_flags = 0;
+        libc::sigemptyset(&mut new_action.sa_mask);
+
+        // Install the signal handler for SIGUSR1
+        let result = libc::sigaction(sigusr1, &new_action, &mut old_action);
+        assert_eq!(result, 0, "Failed to install signal handler for SIGUSR1");
+
+        // Get the current signal handler (this will trigger another rt_sigaction call)
+        let mut current_action: libc::sigaction = std::mem::zeroed();
+        let result = libc::sigaction(sigusr1, std::ptr::null(), &mut current_action);
+        assert_eq!(result, 0, "Failed to get current signal handler for SIGUSR1");
+
+        // Verify the handler was set correctly
+        assert_eq!(current_action.sa_sigaction, libc::SIG_IGN);
+
+        // Restore the original signal handler
+        let result = libc::sigaction(sigusr1, &old_action, std::ptr::null_mut());
+        assert_eq!(result, 0, "Failed to restore original signal handler for SIGUSR1");
     }
     Ok(())
 }

@@ -19,9 +19,9 @@ use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_getdents64,
         SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat,
-        SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_rseq, SYS_rt_sigprocmask,
-        SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname,
-        SYS_write,
+        SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_rseq, SYS_rt_sigaction,
+        SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address,
+        SYS_statfs, SYS_uname, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -261,6 +261,20 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         how,
                         set,
                         oldset,
+                        sigsetsize,
+                    },
+                }
+            }
+            SYS_rt_sigaction => {
+                let signum = args[0] as i32;
+                let act = args[1];
+                let oldact = args[2];
+                let sigsetsize = args[3];
+                pinchy_common::SyscallEventData {
+                    rt_sigaction: pinchy_common::RtSigactionData {
+                        signum,
+                        act,
+                        oldact,
                         sigsetsize,
                     },
                 }

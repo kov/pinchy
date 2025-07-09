@@ -9,8 +9,8 @@ use pinchy_common::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fstat, SYS_futex,
         SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
         SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_rseq,
-        SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
-        SYS_uname, SYS_write,
+        SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
+        SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write,
     },
     SyscallEvent,
 };
@@ -23,8 +23,8 @@ use crate::{
     util::{
         format_access_mode, format_at_flags, format_bytes, format_dirfd, format_flags,
         format_getrandom_flags, format_mmap_flags, format_mmap_prot, format_mode, format_path,
-        format_prctl_op, format_rseq, format_rseq_flags, format_sigprocmask_how, format_stat,
-        format_statfs, format_timespec, format_utsname, poll_bits_to_strs, prctl_op_arg_count,
+        format_prctl_op, format_rseq, format_rseq_flags, format_sigprocmask_how, format_signal_number,
+        format_stat, format_statfs, format_timespec, format_utsname, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -428,6 +428,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "set: 0x{:x}", data.set);
             argf!(sf, "oldset: 0x{:x}", data.oldset);
 
+            argf!(sf, "sigsetsize: {}", data.sigsetsize);
+
+            finish!(sf, event.return_value);
+        }
+        SYS_rt_sigaction => {
+            let data = unsafe { event.data.rt_sigaction };
+
+            argf!(sf, "signum: {}", format_signal_number(data.signum));
+            argf!(sf, "act: 0x{:x}", data.act);
+            argf!(sf, "oldact: 0x{:x}", data.oldact);
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
             finish!(sf, event.return_value);

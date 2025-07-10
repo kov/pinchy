@@ -67,7 +67,7 @@ fn auto_quit() {
 
     let pinchy = PinchyTest::new(
         None,
-        Some(format!("Pinchy has been idle for a while, shutting down")),
+        Some("Pinchy has been idle for a while, shutting down".to_string()),
     );
     let output = pinchy.wait();
     Assert::new(output)
@@ -85,7 +85,7 @@ fn auto_quit() {
 #[ignore = "runs in special environment"]
 fn auto_quit_after_client() {
     // We won't start any tracing, after a minute we should see this message.
-    let pinchy = PinchyTest::new(None, Some(format!("Currently serving: 1")));
+    let pinchy = PinchyTest::new(None, Some("Currently serving: 1".to_string()));
 
     // Start pinchy client to monitor our own PID.
     let mut child = Command::new(cargo_bin("pinchy"))
@@ -119,6 +119,8 @@ fn auto_quit_after_client() {
     // Check if we exited in under 20 seconds (worst case of hitting the idle check at exactly
     // the same time we kill the client), with a bit of leeway
     assert!(elapsed < 22);
+
+    let _ = child.wait();
 }
 
 #[test]
@@ -276,7 +278,7 @@ fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
 
         // Add event filters
         for event in events {
-            cmd.args(&["-e", &event]);
+            cmd.args(["-e", &event]);
         }
 
         // Add the test helper command
@@ -390,7 +392,7 @@ impl PinchyTest {
 
         // Wait synchronously for startup
         let reader = wrap_stdout(&mut child);
-        let (reader, data) = read_until(reader, format!("Waiting for Ctrl-C..."))
+        let (reader, data) = read_until(reader, "Waiting for Ctrl-C...".to_string())
             .join()
             .unwrap();
 
@@ -427,7 +429,7 @@ impl PinchyTest {
         };
 
         // Signal the child to exit and obtain the Output object
-        let handle = read_until(reader, format!("Exiting..."));
+        let handle = read_until(reader, "Exiting...".to_string());
 
         let mut output = wait_for_output(self.child);
 
@@ -435,7 +437,7 @@ impl PinchyTest {
         self.data.extend_from_slice(&more_data);
 
         // Read the left-overs from the buffer just so it doesn't block trying to print something
-        let _ = read_until(reader, format!("something unexpected!"));
+        let _ = read_until(reader, "something unexpected!".to_string());
 
         output.stdout = self.data;
 

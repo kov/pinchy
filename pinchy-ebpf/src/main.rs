@@ -67,7 +67,7 @@ pub struct ExecveEnterData {
 
 #[inline(always)]
 fn is_syscall_enabled(nr: i64) -> bool {
-    if nr < 0 || nr >= 512 {
+    if !(0..512).contains(&nr) {
         return false;
     }
     let nr = nr as u64; // To calm the verifier down
@@ -381,12 +381,12 @@ pub fn syscall_exit_epoll_pwait(ctx: TracePointContext) -> u32 {
         let timeout = args[3] as i32;
 
         let mut events = [EpollEvent::default(); 8];
-        for i in 0..events.len() {
+        for (i, item) in events.iter_mut().enumerate() {
             if i < return_value as usize {
                 unsafe {
-                    let events_ptr = events_ptr.add(i as usize);
+                    let events_ptr = events_ptr.add(i);
                     if let Ok(evt) = bpf_probe_read_user::<EpollEvent>(events_ptr as *const _) {
-                        events[i] = evt;
+                        *item = evt;
                     }
                 }
             }
@@ -427,7 +427,7 @@ pub fn syscall_exit_ppoll(ctx: TracePointContext) -> u32 {
         for i in 0..fds.len() {
             if i < nfds {
                 unsafe {
-                    let entry_ptr = fds_ptr.add(i as usize);
+                    let entry_ptr = fds_ptr.add(i);
                     if let Ok(pollfd) = bpf_probe_read_user::<Pollfd>(entry_ptr as *const _) {
                         fds[i] = pollfd.fd;
                         events[i] = pollfd.events;
@@ -743,7 +743,7 @@ pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
         let enter_data = unsafe { EXECVE_ENTER_MAP.get(&tid) };
         if let Some(enter_data) = enter_data {
             let _ = unsafe { EXECVE_ENTER_MAP.remove(&tid) };
-            return output_event(
+            output_event(
                 &ctx,
                 SYS_execve,
                 return_value,
@@ -759,17 +759,17 @@ pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
                         envc: enter_data.envc,
                     },
                 },
-            );
+            )
         } else {
             // fallback: emit empty event
-            return output_event(
+            output_event(
                 &ctx,
                 SYS_execve,
                 return_value,
                 pinchy_common::SyscallEventData {
                     execve: unsafe { core::mem::zeroed() },
                 },
-            );
+            )
         }
     }
     match inner(ctx) {
@@ -800,8 +800,8 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
             let _ = bpf_probe_read_buf(filename_ptr as *const _, &mut filename);
         }
         let mut filename_truncated = true;
-        for i in 0..filename.len() {
-            if filename[i] == 0 {
+        for byte in filename {
+            if byte == 0 {
                 filename_truncated = false;
                 break;
             }
@@ -811,7 +811,7 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
         let mut argv_len = [0u16; 4];
         let mut argc = 0u8;
         for i in 0..128 {
-            let ptr = unsafe { bpf_probe_read_user(argv_ptr.add(i) as *const *const u8) };
+            let ptr = unsafe { bpf_probe_read_user(argv_ptr.add(i)) };
             if let Ok(arg_ptr) = ptr {
                 if arg_ptr.is_null() {
                     break;
@@ -840,7 +840,7 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
         let mut envp_len = [0u16; 2];
         let mut envc = 0u8;
         for i in 0..128 {
-            let ptr = unsafe { bpf_probe_read_user(envp_ptr.add(i) as *const *const u8) };
+            let ptr = unsafe { bpf_probe_read_user(envp_ptr.add(i)) };
             if let Ok(env_ptr) = ptr {
                 if env_ptr.is_null() {
                     break;
@@ -1171,7 +1171,7 @@ pub fn syscall_exit_uname(ctx: TracePointContext) -> u32 {
         // Read nodename (offset FIELD_SIZE)
         unsafe {
             let _ = bpf_probe_read_buf(
-                buf_ptr.offset(FIELD_SIZE as isize),
+                buf_ptr.add(FIELD_SIZE),
                 core::slice::from_raw_parts_mut(
                     utsname.nodename.as_mut_ptr(),
                     pinchy_common::kernel_types::NODENAME_READ_SIZE,
@@ -1182,7 +1182,7 @@ pub fn syscall_exit_uname(ctx: TracePointContext) -> u32 {
         // Read release (offset 2 * FIELD_SIZE)
         unsafe {
             let _ = bpf_probe_read_buf(
-                buf_ptr.offset((2 * FIELD_SIZE) as isize),
+                buf_ptr.add(2 * FIELD_SIZE),
                 core::slice::from_raw_parts_mut(
                     utsname.release.as_mut_ptr(),
                     pinchy_common::kernel_types::RELEASE_READ_SIZE,
@@ -1193,7 +1193,7 @@ pub fn syscall_exit_uname(ctx: TracePointContext) -> u32 {
         // Read version (offset 3 * FIELD_SIZE)
         unsafe {
             let _ = bpf_probe_read_buf(
-                buf_ptr.offset((3 * FIELD_SIZE) as isize),
+                buf_ptr.add(3 * FIELD_SIZE),
                 core::slice::from_raw_parts_mut(
                     utsname.version.as_mut_ptr(),
                     pinchy_common::kernel_types::VERSION_READ_SIZE,
@@ -1204,7 +1204,7 @@ pub fn syscall_exit_uname(ctx: TracePointContext) -> u32 {
         // Read machine (offset 4 * FIELD_SIZE)
         unsafe {
             let _ = bpf_probe_read_buf(
-                buf_ptr.offset((4 * FIELD_SIZE) as isize),
+                buf_ptr.add(4 * FIELD_SIZE),
                 core::slice::from_raw_parts_mut(
                     utsname.machine.as_mut_ptr(),
                     pinchy_common::kernel_types::MACHINE_READ_SIZE,
@@ -1215,7 +1215,7 @@ pub fn syscall_exit_uname(ctx: TracePointContext) -> u32 {
         // Read domainname (offset 5 * FIELD_SIZE)
         unsafe {
             let _ = bpf_probe_read_buf(
-                buf_ptr.offset((5 * FIELD_SIZE) as isize),
+                buf_ptr.add(5 * FIELD_SIZE),
                 core::slice::from_raw_parts_mut(
                     utsname.domainname.as_mut_ptr(),
                     pinchy_common::kernel_types::DOMAIN_READ_SIZE,

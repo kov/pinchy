@@ -505,7 +505,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         .unwrap()
         .try_into()?;
     prog.load()
-        .with_context(|| format!("trying to load syscall_exit_trivial:"))?;
+        .with_context(|| "trying to load syscall_exit_trivial:".to_string())?;
 
     // Use the same tail call handler for trivial syscalls.
     const TRIVIAL_SYSCALLS: &[i64] = &[
@@ -560,11 +560,11 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     // Load the generic handler for all other syscalls
     let generic_prog: &mut TracePoint = ebpf
         .program_mut("syscall_exit_generic")
-        .with_context(|| format!("getting syscall_exit_generic"))?
+        .with_context(|| "getting syscall_exit_generic".to_string())?
         .try_into()?;
     generic_prog
         .load()
-        .with_context(|| format!("trying to load syscall_exit_generic into eBPF"))?;
+        .with_context(|| "trying to load syscall_exit_generic into eBPF".to_string())?;
 
     // Register generic handler for all other syscalls
     for &syscall_nr in ALL_SYSCALLS {

@@ -774,7 +774,7 @@ pub fn format_rseq_flags(flags: i32) -> String {
 
     let remainder = flags & !(rseq_flag_unregister);
     if remainder != 0 {
-        flags_str.push(format!("0x{:x}", remainder));
+        flags_str.push(format!("0x{remainder:x}"));
     }
 
     flags_str.join("|")
@@ -808,7 +808,7 @@ pub fn format_rseq_cs_flags(flags: u32) -> String {
             | rseq_cs_flag_no_restart_on_signal
             | rseq_cs_flag_no_restart_on_migrate);
     if remainder != 0 {
-        flags_str.push(format!("0x{:x}", remainder));
+        flags_str.push(format!("0x{remainder:x}"));
     }
 
     flags_str.join("|")
@@ -966,10 +966,10 @@ pub fn format_signal_number(signum: i32) -> Cow<'static, str> {
         libc::SIGPWR => Cow::Borrowed("SIGPWR"),
         libc::SIGSYS => Cow::Borrowed("SIGSYS"),
         _ => {
-            if signum >= 34 && signum <= 64 {
+            if (34..=64).contains(&signum) {
                 Cow::Owned(format!("SIGRT{}", signum - 34))
             } else {
-                Cow::Owned(format!("UNKNOWN({})", signum))
+                Cow::Owned(format!("UNKNOWN({signum})"))
             }
         }
     }
@@ -1037,7 +1037,7 @@ pub fn format_fcntl_cmd(cmd: i32) -> String {
                 1038 => "F_GET_FILE_RW_HINT".to_string(),
                 1039 => "F_SET_FILE_RW_HINT".to_string(),
 
-                _ => format!("0x{:x}", cmd),
+                _ => format!("0x{cmd:x}"),
             }
         }
     }

@@ -153,8 +153,8 @@ async fn parse_read() {
     read_data
         .buf
         .iter_mut()
-        .zip((0..).flat_map(|n: u8| std::iter::repeat(n).take(10)))
-        .for_each(|(b, i)| *b = (i + 65) as u8);
+        .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
+        .for_each(|(b, i)| *b = i + 65);
 
     let mut output: Vec<u8> = vec![];
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
@@ -190,8 +190,8 @@ async fn parse_write() {
     write_data
         .buf
         .iter_mut()
-        .zip((0..).flat_map(|n: u8| std::iter::repeat(n).take(10)))
-        .for_each(|(b, i)| *b = (i + 65) as u8);
+        .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
+        .for_each(|(b, i)| *b = i + 65);
 
     let mut output: Vec<u8> = vec![];
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
@@ -276,7 +276,7 @@ async fn parse_openat() {
 
     let openat_data = unsafe { &mut event.data.openat };
     let path = c"/etc/passwd".to_bytes_with_nul();
-    openat_data.pathname[..path.len()].copy_from_slice(&path);
+    openat_data.pathname[..path.len()].copy_from_slice(path);
 
     let mut output: Vec<u8> = vec![];
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
@@ -580,7 +580,7 @@ async fn parse_statfs() {
 
     // Setup pathname
     let path = c"/mnt/data".to_bytes_with_nul();
-    statfs_data.pathname[..path.len()].copy_from_slice(&path);
+    statfs_data.pathname[..path.len()].copy_from_slice(path);
 
     // Set some representative values for the statfs struct
     statfs_data.statfs.f_type = 0x01021994; // TMPFS_MAGIC
@@ -652,7 +652,7 @@ async fn parse_getdents64() {
 
         // Add the "." directory name
         let dot = c".".to_bytes_with_nul();
-        getdents_data.dirents[0].d_name[..dot.len()].copy_from_slice(&dot);
+        getdents_data.dirents[0].d_name[..dot.len()].copy_from_slice(dot);
 
         // Set up second entry
         getdents_data.dirents[1].d_ino = 123457;
@@ -662,7 +662,7 @@ async fn parse_getdents64() {
 
         // Add the ".." directory name
         let dot_dot = c"..".to_bytes_with_nul();
-        getdents_data.dirents[1].d_name[..dot_dot.len()].copy_from_slice(&dot_dot);
+        getdents_data.dirents[1].d_name[..dot_dot.len()].copy_from_slice(dot_dot);
 
         // Set up third entry
         getdents_data.dirents[2].d_ino = 123458;
@@ -672,7 +672,7 @@ async fn parse_getdents64() {
 
         // Add a filename
         let filename = c"file.txt".to_bytes();
-        getdents_data.dirents[2].d_name[..filename.len()].copy_from_slice(&filename);
+        getdents_data.dirents[2].d_name[..filename.len()].copy_from_slice(filename);
     }
 
     let mut output: Vec<u8> = vec![];

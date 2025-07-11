@@ -3,46 +3,35 @@
 
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
-    collections::HashMap,
     convert::TryFrom,
     fs::File,
-    io::{self, pipe, BufRead, BufReader, PipeWriter},
+    io::{self, pipe, BufRead, BufReader},
     os::fd::{AsRawFd as _, FromRawFd, OwnedFd},
     sync::Arc,
     time::Instant,
 };
 
 use anyhow::{anyhow, Context};
-use aya::{
-    maps::{ring_buf::RingBuf, Array, ProgramArray},
-    programs::TracePoint,
-    Ebpf,
-};
+use aya::{maps::ProgramArray, programs::TracePoint, Ebpf};
 use log::{debug, trace, warn};
 use nix::unistd::{setgid, setuid, User};
-use pinchy_common::{
-    syscalls::{
-        syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat,
-        SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek,
-        SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64,
-        SYS_read, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield,
-        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write, ALL_SYSCALLS,
-    },
-    SyscallEvent,
+use pinchy_common::syscalls::{
+    syscall_name_from_nr, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat,
+    SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap,
+    SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read,
+    SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
+    SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write, ALL_SYSCALLS,
 };
 use tokio::{
-    io::{unix::AsyncFd, AsyncWriteExt},
     signal,
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        Mutex, Notify, RwLock,
-    },
+    sync::RwLock,
     time::{sleep, Duration},
 };
 use zbus::{fdo::DBusProxy, message::Header, names::BusName, zvariant::Fd};
 
-type SharedEbpf = Arc<Mutex<aya::Ebpf>>;
-type PipeMap = Arc<Mutex<HashMap<u32, Vec<(tokio::io::BufWriter<tokio::fs::File>, Vec<i64>)>>>>;
+use crate::tracing::{EventDispatch, SharedEventDispatch};
+
+mod tracing;
 
 pub fn open_pidfd(pid: libc::pid_t) -> io::Result<OwnedFd> {
     let raw_fd = unsafe { libc::syscall(libc::SYS_pidfd_open, pid, 0) };
@@ -121,8 +110,7 @@ async fn validate_same_user_or_root(
 }
 
 struct PinchyDBus {
-    ebpf: SharedEbpf,
-    pipe_map: PipeMap,
+    dispatch: SharedEventDispatch,
 }
 
 #[zbus::interface(name = "org.pinchy.Service")]
@@ -146,144 +134,39 @@ impl PinchyDBus {
             Err(e) => return Err(zbus::fdo::Error::Failed(e.to_string())),
         };
 
-        let async_pidfd = AsyncFd::new(pidfd).map_err(|e| {
-            zbus::fdo::Error::Failed(format!("Failed to wrap pidfd in AsyncFd: {e}"))
-        })?;
+        let writer = tokio::io::BufWriter::new(tokio::fs::File::from(std::fs::File::from(
+            OwnedFd::from(write),
+        )));
 
-        add_pid_trace(&self.ebpf, &self.pipe_map, pid, write, syscalls)
+        let _client_id = self
+            .dispatch
+            .write()
             .await
-            .map_err(|e| zbus::fdo::Error::Failed(format!("Adding PID {pid} for tracing: {e}")))?;
-
-        // Make sure we stop tracing and drop the state if the PID exits.
-        let ebpf = self.ebpf.clone();
-        let pipe_map = self.pipe_map.clone();
-        tokio::spawn(async move {
-            // Wait for the process to exit
-            let _ = async_pidfd.readable().await;
-
-            // Give eBPF a small window for sending out the final events
-            sleep(Duration::from_millis(10)).await;
-
-            // Remove from eBPF and pipe map
-            trace!("PID {pid} exited, removing from map");
-            if let Err(e) = remove_pid_trace(&ebpf, pid).await {
-                eprintln!("Failed to remove PID from eBPF: {e}");
-            }
-
-            // Flush writers before dropping them, so all data is received by the client.
-            if let Some(writers) = pipe_map.lock().await.remove(&pid) {
-                for (mut w, _) in writers {
-                    let _ = w.flush().await;
-                }
-            };
-
-            resubscribe_syscalls(&ebpf, &pipe_map).await;
-        });
+            .register_client(pid, writer, syscalls, Some(pidfd))
+            .await
+            .map_err(|e| zbus::fdo::Error::Failed(e.to_string()))?;
 
         Ok(Fd::from(std::os::fd::OwnedFd::from(read)))
     }
 }
 
-async fn add_pid_trace(
-    ebpf: &SharedEbpf,
-    pipe_map: &PipeMap,
-    pid: u32,
-    fd: PipeWriter,
-    syscalls: Vec<i64>,
-) -> anyhow::Result<()> {
-    // WISH: could we have impl From<OwnedFd> for BufWriter pls ;D
-    let writer = tokio::io::BufWriter::new(tokio::fs::File::from(std::fs::File::from(
-        OwnedFd::from(fd),
-    )));
-
-    pipe_map
-        .lock()
-        .await
-        .entry(pid)
-        .or_default()
-        .push((writer, syscalls));
-
-    {
-        let mut ebpf = ebpf.lock().await;
-        let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
-            .map_mut("PID_FILTER")
-            .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
-            .try_into()?;
-        pid_filter.insert(pid, 0, 0)?;
-    }
-
-    resubscribe_syscalls(ebpf, pipe_map).await;
-
-    Ok(())
-}
-
-// Removal from the pipe map is handled separately
-async fn remove_pid_trace(ebpf: &SharedEbpf, pid: u32) -> anyhow::Result<()> {
-    let mut ebpf = ebpf.lock().await;
-    let mut pid_filter: aya::maps::HashMap<_, u32, u8> = ebpf
-        .map_mut("PID_FILTER")
-        .expect("PID_FILTER map not found")
-        .try_into()
-        .expect("Map conversion failed");
-
-    // Aya considers trying to remove an item that is not in the map an error. This can happen
-    // if the pipe is closed by the client, which may cause all the writers for that PID to be
-    // removed, which triggers a call to remove_pid_trace() - see events::handle_event().
-    if pid_filter.get(&pid, 0).is_ok() {
-        match pid_filter.remove(&pid) {
-            Ok(_) => Ok(()),
-            Err(e) => {
-                use aya::maps::MapError;
-                match &e {
-                    MapError::KeyNotFound | MapError::ElementNotFound => Ok(()),
-                    _ => Err(anyhow!(e)),
-                }
-            }
-        }
-    } else {
-        Ok(())
-    }
-}
-
-async fn resubscribe_syscalls(ebpf: &SharedEbpf, pipe_map: &PipeMap) {
-    let mut bitmap = [0u8; 64];
-
-    pipe_map.lock().await.iter().for_each(|(_, writers)| {
-        for (_, syscalls) in writers.iter() {
-            for &syscall_nr in syscalls.iter() {
-                bitmap[(syscall_nr / 8) as usize] |= 1 << (syscall_nr % 8);
-            }
-        }
-    });
-
-    let mut ebpf = ebpf.lock().await;
-    let mut map: aya::maps::Array<_, u8> =
-        Array::try_from(ebpf.map_mut("SYSCALL_FILTER").unwrap()).unwrap();
-
-    for (i, byte) in bitmap.iter().enumerate() {
-        map.set(i as u32, byte, 0).unwrap();
-    }
-}
-
 const IDLE_AFTER_SECONDS: u64 = 15;
-fn spawn_auto_quit_task(pipe_map: PipeMap, idle_since: Arc<RwLock<Instant>>) {
+fn spawn_auto_quit_task(dispatch: SharedEventDispatch, idle_since: Arc<RwLock<Instant>>) {
     tokio::spawn(async move {
         let idle_timeout = Duration::from_secs(5);
 
         loop {
             if idle_since.read().await.elapsed().as_secs() >= IDLE_AFTER_SECONDS {
-                // Hold the lock while notifying waiters, so we are less likely to accept a new
-                // connection while quitting.
-                let map = pipe_map.lock().await;
-                if map.is_empty() {
+                let pid_count = dispatch.read().await.active_pid_count();
+                if pid_count == 0 {
                     println!("Pinchy has been idle for a while, shutting down");
                     unsafe { libc::kill(std::process::id() as i32, libc::SIGINT) };
                     return;
                 }
             }
 
-            // Not idle, check again soon
-            println!("Currently serving: {}", pipe_map.lock().await.len());
+            let pid_count = dispatch.read().await.active_pid_count();
+            println!("Currently serving: {pid_count}");
             sleep(idle_timeout).await;
         }
     });
@@ -391,29 +274,17 @@ async fn main() -> anyhow::Result<()> {
 
     load_tailcalls(&mut ebpf)?;
 
-    // Wrap our ebpf object in a way that it can be shared with the various areas of the
-    // code that need it.
-    let ebpf = Arc::new(Mutex::new(ebpf));
-
-    // The pipes we want to send data to
-    let pipe_map = Arc::new(Mutex::new(HashMap::new()));
-
-    let shutdown = Arc::new(Notify::new());
-
-    // The following lines start the basic structure of tasks that handle events. Readers are spawned
-    // for each of the per-CPU buffers send events to the main handler channel, spawned on this function.
-    // There is also a writer task - handler output is put on its own queue and it can take its time
-    // sending it out to the various subscribers.
-    let (tx, rx) = channel(128);
+    // Keeps track of how long since we handled an event; used to decide when to
+    // automatically quit.
     let idle_since = Arc::new(RwLock::new(Instant::now()));
-    spawn_event_readers(&ebpf, tx, shutdown.clone(), idle_since.clone()).await?;
 
-    spawn_event_writer(ebpf.clone(), pipe_map.clone(), rx).await;
+    // The core event dispatch
+    let dispatch = EventDispatch::spawn(ebpf, idle_since.clone()).await?;
 
-    spawn_auto_quit_task(pipe_map.clone(), idle_since);
+    spawn_auto_quit_task(dispatch.clone(), idle_since);
 
     // Start D-Bus service
-    let dbus = PinchyDBus { ebpf, pipe_map };
+    let dbus = PinchyDBus { dispatch };
 
     // We allow requesting usage of the session bus, mostly for the tests.
     let (conn, bus_type) = match std::env::var("PINCHYD_USE_SESSION_BUS") {
@@ -439,10 +310,7 @@ async fn main() -> anyhow::Result<()> {
             conn.close().await?;
             result?;
         },
-        _ = shutdown.notified() => conn.close().await?,
     };
-
-    shutdown.notify_waiters();
 
     println!("Exiting...");
 
@@ -535,189 +403,4 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     Ok(())
-}
-
-pub async fn spawn_event_readers(
-    ebpf: &SharedEbpf,
-    tx: Sender<SyscallEvent>,
-    shutdown: Arc<Notify>,
-    idle_since: Arc<RwLock<Instant>>,
-) -> anyhow::Result<()> {
-    let ring = RingBuf::try_from(
-        ebpf.lock()
-            .await
-            .take_map("EVENTS")
-            .ok_or_else(|| anyhow::anyhow!("EVENTS map not found"))?,
-    )?;
-    let mut async_ring = AsyncFd::new(ring)?;
-    let tx = tx.clone();
-    let shutdown = shutdown.clone();
-    tokio::spawn(async move {
-        loop {
-            tokio::select! {
-                _ = shutdown.notified() => {
-                    trace!("[ringbuf reader] Shutdown requested, stopping...");
-                    return;
-                }
-                result = async_ring.readable_mut() => {
-                    match result {
-                        Ok(mut guard) => {
-                            // Bump the idle timer.
-                            *idle_since.write().await = Instant::now();
-
-                            let ring = guard.get_inner_mut();
-                            while let Some(item) = ring.next() {
-                                let event = &*item;
-                                if event.len() == std::mem::size_of::<SyscallEvent>() {
-                                    let syscall_event: SyscallEvent = unsafe { std::ptr::read_unaligned(event.as_ptr() as *const _) };
-                                    let _ = tx.send(syscall_event).await;
-                                }
-                            }
-                            guard.clear_ready();
-                        }
-                        Err(e) => {
-                            eprintln!("RingBuf read error: {e}");
-                            return;
-                        }
-                    }
-                }
-            }
-        }
-    });
-    Ok(())
-}
-
-pub async fn spawn_event_writer(
-    ebpf: SharedEbpf,
-    pipe_map: PipeMap,
-    mut rx: Receiver<SyscallEvent>,
-) {
-    tokio::spawn(async move {
-        let mut events_buf = Vec::with_capacity(128);
-        loop {
-            let mut pids_to_remove = vec![];
-            let mut writer_removed = false;
-
-            tokio::select! {
-                received = rx.recv_many(&mut events_buf, 128) => {
-                    if received == 0 {
-                        break;
-                    }
-
-                    let mut map = pipe_map.lock().await;
-                    for event in events_buf.iter_mut().take(received) {
-                        match map.get_mut(&event.pid) {
-                            Some(writers) => {
-                                let mut keep = Vec::with_capacity(writers.len());
-
-                                for (w, syscalls_to_trace) in writers.iter_mut() {
-                                    if !syscalls_to_trace.contains(&event.syscall_nr) {
-                                        keep.push(true);
-                                        continue;
-                                    }
-                                    let event_bytes: &[u8] = unsafe {
-                                        std::slice::from_raw_parts(
-                                            event as *const SyscallEvent as *const u8,
-                                            size_of::<SyscallEvent>(),
-                                        )
-                                    };
-                                    if let Err(_err) = w.write_all(event_bytes).await {
-                                        keep.push(false);
-                                        writer_removed = true;
-                                    } else {
-                                        keep.push(true);
-                                    }
-                                }
-
-                                // Remove any writers that had errors.
-                                let mut keep_iter = keep.iter();
-                                writers.retain(|_| *keep_iter.next().unwrap());
-
-                                // Release the map as early as we can, it will be locked again by
-                                // the helpers called below.
-                                if writers.is_empty() {
-                                    pids_to_remove.push(event.pid);
-                                }
-                            }
-                            None => {
-                                eprintln!(
-                                "Unexpected: do not have writers for PID, but still monitoring it..."
-                            );
-                                if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
-                                    log::error!(
-                                        "Failed to remove PID {} from eBPF filter map: {}",
-                                        event.pid,
-                                        e
-                                    );
-                                }
-                                log::trace!("No more writers for PID {}", event.pid);
-                            }
-                        }
-                    }
-
-                },
-                _ = sleep(Duration::from_millis(100)) => {
-                    // On a fairly short timeout, make sure our clients are still active and our buffers
-                    // flushed. This will make sure we have fast output even when there are not that many
-                    // writes.
-                    for (&pid, writers) in pipe_map.lock().await.iter_mut() {
-                        let mut keep = Vec::with_capacity(writers.len());
-                        for (w, _syscalls) in writers.iter_mut() {
-                            // Flush the writer.
-                            let _ = w.flush().await;
-
-                            // FIXME: there must be a better, more high level way of identifying the other end
-                            // of the pipe got closed? I tried a 0-sized write followed by a flush, I suppose the
-                            // BufWriter absorbs it.
-
-                            // Get the underlying file descriptor
-                            let fd = w.get_ref().as_raw_fd();
-
-                            // Check if the pipe is still writable using poll
-                            let poll_fd = libc::pollfd {
-                                fd,
-                                events: libc::POLLOUT,
-                                revents: 0,
-                            };
-
-                            let poll_result = unsafe { libc::poll(&poll_fd as *const _ as *mut _, 1, 0) };
-
-                            if poll_result < 0 || (poll_fd.revents & libc::POLLHUP) != 0 || (poll_fd.revents & libc::POLLERR) != 0 {
-                                keep.push(false);
-                            } else {
-                                keep.push(true);
-                            }
-                        }
-
-                        // Remove any writers that had errors.
-                        let mut keep_iter = keep.iter();
-                        writers.retain(|_| *keep_iter.next().unwrap());
-
-                        if writers.is_empty() {
-                            pids_to_remove.push(pid);
-                        }
-                    };
-                }
-            }
-
-            events_buf.clear();
-
-            {
-                let mut map = pipe_map.lock().await;
-                for &pid in &pids_to_remove {
-                    map.remove(&pid);
-                }
-            }
-
-            for &pid in &pids_to_remove {
-                if let Err(err) = remove_pid_trace(&ebpf, pid).await {
-                    eprintln!("Failed to remove PID {pid} from trace: {err}")
-                };
-            }
-
-            if writer_removed || !pids_to_remove.is_empty() {
-                resubscribe_syscalls(&ebpf, &pipe_map).await;
-            }
-        }
-    });
 }

@@ -266,7 +266,7 @@ async fn resubscribe_syscalls(ebpf: &SharedEbpf, pipe_map: &PipeMap) {
 }
 
 const IDLE_AFTER_SECONDS: u64 = 15;
-fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, idle_since: Arc<RwLock<Instant>>) {
+fn spawn_auto_quit_task(pipe_map: PipeMap, idle_since: Arc<RwLock<Instant>>) {
     tokio::spawn(async move {
         let idle_timeout = Duration::from_secs(5);
 
@@ -280,53 +280,11 @@ fn spawn_auto_quit_task(ebpf: SharedEbpf, pipe_map: PipeMap, idle_since: Arc<RwL
                     unsafe { libc::kill(std::process::id() as i32, libc::SIGINT) };
                     return;
                 }
-            } else {
-                // We're busy, let's try reaping any dangling writers caused by our clients
-                // goind away.
-                let mut pids_to_remove = vec![];
-                {
-                    let mut map = pipe_map.lock().await;
-                    trace!("Writers map size before reaping: {}", map.len());
-                    println!("Currently serving: {}", map.len());
-                    for (&pid, writers) in map.iter_mut() {
-                        let mut keep = Vec::with_capacity(writers.len());
-                        for (w, _) in writers.iter_mut() {
-                            let should_keep = w.flush().await.is_ok();
-                            keep.push(should_keep);
-                        }
-
-                        // Remove any writers that had errors / closed pipes. FIXME: share code with
-                        // event writer task.
-                        let mut keep_iter = keep.iter();
-                        writers.retain(|_| *keep_iter.next().unwrap());
-
-                        trace!("Writers left for PID {}: {}", pid, writers.len());
-                        if writers.is_empty() {
-                            pids_to_remove.push(pid);
-                        }
-                    }
-
-                    // Remove PID from the map here, it gets removed from the trace below.
-                    for &pid in &pids_to_remove {
-                        map.remove(&pid);
-                    }
-                }
-
-                for pid in pids_to_remove {
-                    if let Err(err) = remove_pid_trace(&ebpf, pid).await {
-                        eprintln!("Failed to remove PID {pid} from trace: {err}")
-                    };
-                }
-
-                resubscribe_syscalls(&ebpf, &pipe_map).await;
-                trace!(
-                    "Writers map size after reaping: {}",
-                    pipe_map.lock().await.len()
-                );
-
-                // Not idle, check again soon
-                sleep(idle_timeout).await;
             }
+
+            // Not idle, check again soon
+            println!("Currently serving: {}", pipe_map.lock().await.len());
+            sleep(idle_timeout).await;
         }
     });
 }
@@ -452,7 +410,7 @@ async fn main() -> anyhow::Result<()> {
 
     spawn_event_writer(ebpf.clone(), pipe_map.clone(), rx).await;
 
-    spawn_auto_quit_task(ebpf.clone(), pipe_map.clone(), idle_since);
+    spawn_auto_quit_task(pipe_map.clone(), idle_since);
 
     // Start D-Bus service
     let dbus = PinchyDBus { ebpf, pipe_map };
@@ -637,34 +595,95 @@ pub async fn spawn_event_writer(
     tokio::spawn(async move {
         let mut events_buf = Vec::with_capacity(128);
         loop {
-            let received = rx.recv_many(&mut events_buf, 128).await;
-            if received == 0 {
-                break;
-            }
-
-            let mut map = pipe_map.lock().await;
-
             let mut pids_to_remove = vec![];
             let mut writer_removed = false;
-            for event in events_buf.iter_mut().take(received) {
-                match map.get_mut(&event.pid) {
-                    Some(writers) => {
-                        let mut keep = Vec::with_capacity(writers.len());
 
-                        for (w, syscalls_to_trace) in writers.iter_mut() {
-                            if !syscalls_to_trace.contains(&event.syscall_nr) {
-                                keep.push(true);
-                                continue;
+            tokio::select! {
+                received = rx.recv_many(&mut events_buf, 128) => {
+                    if received == 0 {
+                        break;
+                    }
+
+                    let mut map = pipe_map.lock().await;
+                    for event in events_buf.iter_mut().take(received) {
+                        match map.get_mut(&event.pid) {
+                            Some(writers) => {
+                                let mut keep = Vec::with_capacity(writers.len());
+
+                                for (w, syscalls_to_trace) in writers.iter_mut() {
+                                    if !syscalls_to_trace.contains(&event.syscall_nr) {
+                                        keep.push(true);
+                                        continue;
+                                    }
+                                    let event_bytes: &[u8] = unsafe {
+                                        std::slice::from_raw_parts(
+                                            event as *const SyscallEvent as *const u8,
+                                            size_of::<SyscallEvent>(),
+                                        )
+                                    };
+                                    if let Err(_err) = w.write_all(event_bytes).await {
+                                        keep.push(false);
+                                        writer_removed = true;
+                                    } else {
+                                        keep.push(true);
+                                    }
+                                }
+
+                                // Remove any writers that had errors.
+                                let mut keep_iter = keep.iter();
+                                writers.retain(|_| *keep_iter.next().unwrap());
+
+                                // Release the map as early as we can, it will be locked again by
+                                // the helpers called below.
+                                if writers.is_empty() {
+                                    pids_to_remove.push(event.pid);
+                                }
                             }
-                            let event_bytes: &[u8] = unsafe {
-                                std::slice::from_raw_parts(
-                                    event as *const SyscallEvent as *const u8,
-                                    size_of::<SyscallEvent>(),
-                                )
+                            None => {
+                                eprintln!(
+                                "Unexpected: do not have writers for PID, but still monitoring it..."
+                            );
+                                if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
+                                    log::error!(
+                                        "Failed to remove PID {} from eBPF filter map: {}",
+                                        event.pid,
+                                        e
+                                    );
+                                }
+                                log::trace!("No more writers for PID {}", event.pid);
+                            }
+                        }
+                    }
+
+                },
+                _ = sleep(Duration::from_millis(100)) => {
+                    // On a fairly short timeout, make sure our clients are still active and our buffers
+                    // flushed. This will make sure we have fast output even when there are not that many
+                    // writes.
+                    for (&pid, writers) in pipe_map.lock().await.iter_mut() {
+                        let mut keep = Vec::with_capacity(writers.len());
+                        for (w, _syscalls) in writers.iter_mut() {
+                            // Flush the writer.
+                            let _ = w.flush().await;
+
+                            // FIXME: there must be a better, more high level way of identifying the other end
+                            // of the pipe got closed? I tried a 0-sized write followed by a flush, I suppose the
+                            // BufWriter absorbs it.
+
+                            // Get the underlying file descriptor
+                            let fd = w.get_ref().as_raw_fd();
+
+                            // Check if the pipe is still writable using poll
+                            let poll_fd = libc::pollfd {
+                                fd,
+                                events: libc::POLLOUT,
+                                revents: 0,
                             };
-                            if let Err(_err) = w.write_all(event_bytes).await {
+
+                            let poll_result = unsafe { libc::poll(&poll_fd as *const _ as *mut _, 1, 0) };
+
+                            if poll_result < 0 || (poll_fd.revents & libc::POLLHUP) != 0 || (poll_fd.revents & libc::POLLERR) != 0 {
                                 keep.push(false);
-                                writer_removed = true;
                             } else {
                                 keep.push(true);
                             }
@@ -674,35 +693,21 @@ pub async fn spawn_event_writer(
                         let mut keep_iter = keep.iter();
                         writers.retain(|_| *keep_iter.next().unwrap());
 
-                        // Release the map as early as we can, it will be locked again by
-                        // the helpers called below.
                         if writers.is_empty() {
-                            pids_to_remove.push(event.pid);
+                            pids_to_remove.push(pid);
                         }
-                    }
-                    None => {
-                        eprintln!(
-                            "Unexpected: do not have writers for PID, but still monitoring it..."
-                        );
-                        if let Err(e) = remove_pid_trace(&ebpf, event.pid).await {
-                            log::error!(
-                                "Failed to remove PID {} from eBPF filter map: {}",
-                                event.pid,
-                                e
-                            );
-                        }
-                        log::trace!("No more writers for PID {}", event.pid);
-                    }
+                    };
                 }
             }
 
             events_buf.clear();
 
-            for &pid in &pids_to_remove {
-                map.remove(&pid);
+            {
+                let mut map = pipe_map.lock().await;
+                for &pid in &pids_to_remove {
+                    map.remove(&pid);
+                }
             }
-
-            drop(map);
 
             for &pid in &pids_to_remove {
                 if let Err(err) = remove_pid_trace(&ebpf, pid).await {

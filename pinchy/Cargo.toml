@@ -5,6 +5,7 @@ edition = "2021"
 license = "MIT OR Apache-2.0"
 
 [dependencies]
+pinchy-client = { path = "../pinchy-client" }
 pinchy-common = { path = "../pinchy-common", features = ["user"] }
 
 anyhow = { workspace = true, default-features = true }
@@ -13,7 +14,17 @@ aya-log = { workspace = true }
 env_logger = { workspace = true }
 libc = { workspace = true }
 log = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "net", "signal", "sync", "io-std", "io-util", "time"] }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "net",
+    "signal",
+    "sync",
+    "io-std",
+    "io-util",
+    "time",
+] }
 bytes = "1.10.1"
 zbus = { version = "5.7", features = ["tokio"] }
 zbus_macros = "5.7"

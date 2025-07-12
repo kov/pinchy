@@ -1,0 +1,21 @@
+[package]
+name = "lupa"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+pinchy-common = { path = "../pinchy-common", features = ["user"] }
+pinchy-client = { path = "../pinchy-client" }
+env_logger = { workspace = true }
+anyhow = { workspace = true, default-features = true }
+libc = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true, features = ["rt"] }
+tokio-stream = { workspace = true, features = ["fs"] }
+zbus = { version = "5.7", features = ["tokio"] }
+zbus_macros = "5.7"
+clap = { workspace = true, default-features = true, features = ["derive"] }
+ratatui = "0.29"
+crossterm = "0.29"
+human_bytes = { version = "0.4", features = ["fast"] }

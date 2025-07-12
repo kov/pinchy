@@ -1,0 +1,22 @@
+[package]
+name = "pinchy-client"
+version = "0.1.0"
+edition = "2024"
+license.workspace = true
+
+[dependencies]
+libc = { workspace = true }
+log = { workspace = true }
+tokio = { workspace = true, features = [
+    "macros",
+    "rt",
+    "rt-multi-thread",
+    "net",
+    "signal",
+    "sync",
+    "io-std",
+    "io-util",
+    "time",
+] }
+zbus = { version = "5.7", features = ["tokio"] }
+zbus_macros = "5.7"

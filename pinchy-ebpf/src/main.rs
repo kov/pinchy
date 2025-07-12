@@ -7,6 +7,7 @@
 use core::ops::DerefMut;
 
 use aya_ebpf::{
+    bindings::BPF_RB_FORCE_WAKEUP,
     helpers::{bpf_probe_read_buf, bpf_probe_read_user},
     macros::{map, tracepoint},
     maps::{Array, HashMap, ProgramArray, RingBuf},
@@ -1328,7 +1329,7 @@ fn output_event(
                     return_value,
                     data,
                 });
-                entry.submit(0);
+                entry.submit(BPF_RB_FORCE_WAKEUP.into());
             }
             None => {
                 error!(

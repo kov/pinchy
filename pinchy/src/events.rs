@@ -192,7 +192,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let request = format_ioctl_request(data.request);
 
             argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "request: {}::{}", request.0, request.1);
+            argf!(
+                sf,
+                "request: (0x{:x}) {}::{}",
+                data.request,
+                request.0,
+                request.1
+            );
             argf!(sf, "arg: 0x{}", data.arg);
 
             finish!(sf, event.return_value);

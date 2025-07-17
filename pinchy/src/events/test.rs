@@ -348,7 +348,7 @@ async fn parse_ioctl() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("22 ioctl(fd: 4, request: SNDRV_COMPRESS_START::sound, arg: 0x0) = 0\n")
+        format!("22 ioctl(fd: 4, request: (0x4332) SNDRV_COMPRESS_START::sound, arg: 0x0) = 0\n")
     );
 }
 

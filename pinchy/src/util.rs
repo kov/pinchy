@@ -5,7 +5,7 @@ use std::borrow::Cow;
 
 use pinchy_common::kernel_types::{Stat, Timespec};
 
-use crate::{arg, argf, formatting::SyscallFormatter, with_struct};
+use crate::{arg, argf, formatting::SyscallFormatter, with_array, with_struct};
 
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     let mut strs = vec![];
@@ -1041,4 +1041,121 @@ pub fn format_fcntl_cmd(cmd: i32) -> String {
             }
         }
     }
+}
+
+pub fn format_recvmsg_flags(flags: i32) -> String {
+    let flag_defs = [
+        (libc::MSG_PEEK, "MSG_PEEK"),
+        (libc::MSG_WAITALL, "MSG_WAITALL"),
+        (libc::MSG_TRUNC, "MSG_TRUNC"),
+        (libc::MSG_CTRUNC, "MSG_CTRUNC"),
+        (libc::MSG_OOB, "MSG_OOB"),
+        (libc::MSG_ERRQUEUE, "MSG_ERRQUEUE"),
+        (libc::MSG_DONTWAIT, "MSG_DONTWAIT"),
+        #[cfg(target_os = "linux")]
+        (libc::MSG_CMSG_CLOEXEC, "MSG_CMSG_CLOEXEC"),
+    ];
+
+    let mut parts = Vec::new();
+    let mut remaining_flags = flags;
+
+    for (flag, name) in flag_defs.iter() {
+        if (flags & flag) != 0 {
+            parts.push(name.to_string());
+            remaining_flags &= !flag;
+        }
+    }
+
+    if remaining_flags != 0 {
+        parts.push(format!("0x{:x}", remaining_flags));
+    }
+
+    if parts.is_empty() {
+        "0".to_string()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_sockaddr_family(family: u16) -> Cow<'static, str> {
+    match family {
+        x if x == (libc::AF_UNIX as u16) => Cow::Borrowed("AF_UNIX"),
+        x if x == (libc::AF_INET as u16) => Cow::Borrowed("AF_INET"),
+        x if x == (libc::AF_INET6 as u16) => Cow::Borrowed("AF_INET6"),
+        x if x == (libc::AF_NETLINK as u16) => Cow::Borrowed("AF_NETLINK"),
+        x if x == (libc::AF_PACKET as u16) => Cow::Borrowed("AF_PACKET"),
+        _ => Cow::Owned(format!("{}", family)),
+    }
+}
+
+pub async fn format_msghdr(
+    sf: &mut SyscallFormatter<'_>,
+    msg: &pinchy_common::kernel_types::Msghdr,
+) -> anyhow::Result<()> {
+    // Format name/address
+    if msg.has_name {
+        argf!(
+            sf,
+            "name: {{family: {}, len: {}}}",
+            format_sockaddr_family(msg.name.sa_family),
+            msg.msg_namelen
+        );
+    } else if msg.msg_name != 0 {
+        argf!(
+            sf,
+            "name: {{ptr: 0x{:x}, len: {}}}",
+            msg.msg_name,
+            msg.msg_namelen
+        );
+    } else {
+        arg!(sf, "name: NULL");
+    }
+
+    // Format iovec array
+    if msg.msg_iovlen > 0 {
+        arg!(sf, "iov:");
+        with_array!(sf, {
+            let iov_count = std::cmp::min(
+                msg.msg_iovlen as usize,
+                pinchy_common::kernel_types::MSG_IOV_COUNT,
+            );
+            for i in 0..iov_count {
+                let iov = &msg.msg_iov[i];
+                if iov.iov_base != 0 || iov.iov_len != 0 {
+                    with_struct!(sf, {
+                        argf!(sf, "base: 0x{:x}", iov.iov_base);
+                        argf!(sf, "len: {}", iov.iov_len);
+                    });
+                }
+            }
+            if msg.msg_iovlen as usize > pinchy_common::kernel_types::MSG_IOV_COUNT {
+                arg!(sf, "...");
+            }
+        });
+        argf!(sf, "iovlen: {}", msg.msg_iovlen);
+    } else {
+        arg!(sf, "iov: NULL");
+        argf!(sf, "iovlen: {}", msg.msg_iovlen);
+    }
+
+    // Format control data
+    if msg.msg_control != 0 && msg.msg_controllen > 0 {
+        argf!(
+            sf,
+            "control: {{ptr: 0x{:x}, len: {}}}",
+            msg.msg_control,
+            msg.msg_controllen
+        );
+    } else {
+        arg!(sf, "control: NULL");
+    }
+
+    // Format flags
+    if msg.msg_flags != 0 {
+        argf!(sf, "flags: {}", format_recvmsg_flags(msg.msg_flags));
+    } else {
+        arg!(sf, "flags: 0");
+    }
+
+    Ok(())
 }

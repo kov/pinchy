@@ -1,6 +1,7 @@
 mod basic_io;
 mod filesystem;
 mod memory;
+mod network;
 mod process;
 mod scheduling;
 mod signal;

@@ -1,8 +1,10 @@
 use std::pin::Pin;
 
 use pinchy_common::{
-    syscalls::{SYS_faccessat, SYS_fstat, SYS_getdents64, SYS_newfstatat, SYS_statfs},
-    FaccessatData, SyscallEvent, DATA_READ_SIZE,
+    syscalls::{
+        SYS_faccessat, SYS_fstat, SYS_getdents64, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
+    },
+    FaccessatData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
 
 use crate::{
@@ -380,6 +382,41 @@ async fn parse_newfstatat() {
         String::from_utf8_lossy(&output),
         format!(
             "42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0\n"
+        )
+    );
+}
+
+#[tokio::test]
+async fn test_readlinkat_event_parsing() {
+    let exe_link = b"/proc/self/exe\0";
+    let bin_path = b"/usr/bin/pinchy\0";
+    let mut readlinkat = pinchy_common::ReadlinkatData {
+        dirfd: 3,
+        pathname: [0u8; MEDIUM_READ_SIZE],
+        buf: [0u8; MEDIUM_READ_SIZE],
+        bufsiz: 16,
+    };
+    readlinkat.pathname[..exe_link.len()].copy_from_slice(exe_link);
+    readlinkat.buf[..bin_path.len()].copy_from_slice(bin_path);
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_readlinkat,
+        pid: 1234,
+        tid: 5678,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData { readlinkat },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 0\n"
         )
     );
 }

@@ -9,7 +9,7 @@ use pinchy_common::{
         SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fchdir, SYS_fcntl,
         SYS_fstat, SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap,
         SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64,
-        SYS_read, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield,
+        SYS_read, SYS_readlinkat, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield,
         SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write,
     },
     SyscallEvent,
@@ -535,6 +535,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         SYS_fchdir => {
             let data = unsafe { event.data.fchdir };
             argf!(sf, "fd: {}", data.fd);
+            finish!(sf, event.return_value);
+        }
+        SYS_readlinkat => {
+            let data = unsafe { event.data.readlinkat };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "buf: {}", format_path(&data.buf, false));
+            argf!(sf, "bufsiz: {}", data.bufsiz);
+
             finish!(sf, event.return_value);
         }
         _ => {

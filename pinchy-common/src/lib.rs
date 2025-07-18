@@ -9,6 +9,7 @@ pub mod kernel_types;
 pub mod syscalls;
 
 pub const DATA_READ_SIZE: usize = 128;
+pub const MEDIUM_READ_SIZE: usize = 64;
 pub const SMALL_READ_SIZE: usize = 8;
 
 #[repr(C)]
@@ -53,6 +54,7 @@ pub union SyscallEventData {
     pub generic: GenericSyscallData,
     pub fcntl: FcntlData,
     pub fchdir: FchdirData,
+    pub readlinkat: ReadlinkatData,
 }
 
 #[repr(C)]
@@ -309,4 +311,13 @@ pub struct UnameData {
 #[derive(Clone, Copy)]
 pub struct FchdirData {
     pub fd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ReadlinkatData {
+    pub dirfd: i32,
+    pub pathname: [u8; MEDIUM_READ_SIZE],
+    pub buf: [u8; MEDIUM_READ_SIZE],
+    pub bufsiz: usize,
 }

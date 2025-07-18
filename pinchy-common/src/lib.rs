@@ -52,6 +52,7 @@ pub union SyscallEventData {
     pub uname: UnameData,
     pub generic: GenericSyscallData,
     pub fcntl: FcntlData,
+    pub fchdir: FchdirData,
 }
 
 #[repr(C)]
@@ -302,4 +303,10 @@ pub struct RseqData {
 #[derive(Clone, Copy)]
 pub struct UnameData {
     pub utsname: kernel_types::Utsname,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FchdirData {
+    pub fd: i32,
 }

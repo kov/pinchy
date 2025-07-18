@@ -6,11 +6,11 @@ use std::borrow::Cow;
 use log::{error, trace};
 use pinchy_common::{
     syscalls::{
-        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fcntl, SYS_fstat,
-        SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
-        SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read,
-        SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
-        SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write,
+        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fchdir, SYS_fcntl,
+        SYS_fstat, SYS_futex, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap,
+        SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64,
+        SYS_read, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield,
+        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write,
     },
     SyscallEvent,
 };
@@ -530,6 +530,11 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 format_utsname(&mut sf, &data.utsname).await?;
             });
 
+            finish!(sf, event.return_value);
+        }
+        SYS_fchdir => {
+            let data = unsafe { event.data.fchdir };
+            argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
         }
         _ => {

@@ -18,11 +18,11 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::{
     kernel_types::{EpollEvent, LinuxDirent64, Pollfd, Rlimit, Rseq, Stat, Timespec, Utsname},
     syscalls::{
-        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fcntl, SYS_fstat,
-        SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
-        SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_rseq, SYS_rt_sigaction,
-        SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
-        SYS_uname, SYS_write,
+        SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fchdir, SYS_fcntl,
+        SYS_fstat, SYS_getdents64, SYS_getrandom, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
+        SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_rseq,
+        SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
+        SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_write,
     },
     SyscallEvent, DATA_READ_SIZE, SMALL_READ_SIZE,
 };
@@ -278,6 +278,12 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         oldact,
                         sigsetsize,
                     },
+                }
+            }
+            SYS_fchdir => {
+                let fd = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    fchdir: pinchy_common::FchdirData { fd },
                 }
             }
             _ => {

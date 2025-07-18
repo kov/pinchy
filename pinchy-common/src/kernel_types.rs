@@ -133,3 +133,59 @@ impl Default for Utsname {
         }
     }
 }
+
+/// Socket address structure for generic socket addresses
+/// Note: we only capture the family and a small portion of the address data
+/// since the full structure varies by address family
+pub const SOCKADDR_DATA_SIZE: usize = 14;
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Sockaddr {
+    pub sa_family: u16,                    // Address family (AF_INET, AF_UNIX, etc.)
+    pub sa_data: [u8; SOCKADDR_DATA_SIZE], // Address data (truncated)
+}
+
+/// I/O vector structure for scatter-gather operations
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Iovec {
+    pub iov_base: u64, // Base address of buffer
+    pub iov_len: u64,  // Length of buffer
+}
+
+/// Message header structure for socket message operations
+/// Note: we only capture essential fields and a subset of the control message data
+/// due to eBPF stack limitations
+pub const MSG_IOV_COUNT: usize = 4; // Number of iovec structures to capture
+pub const MSG_CONTROL_SIZE: usize = 64; // Size of control message data to capture
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct Msghdr {
+    pub msg_name: u64,                        // Optional address pointer
+    pub msg_namelen: u32,                     // Size of address
+    pub msg_iov: [Iovec; MSG_IOV_COUNT],      // Scatter/gather array (truncated)
+    pub msg_iovlen: u32,                      // Number of elements in msg_iov
+    pub msg_control: u64,                     // Ancillary data pointer
+    pub msg_controllen: u32,                  // Ancillary data buffer size
+    pub msg_flags: i32,                       // Flags on received message
+    pub has_name: bool,                       // Whether we captured the name/address
+    pub name: Sockaddr,                       // The captured address (if any)
+    pub control_data: [u8; MSG_CONTROL_SIZE], // Captured control message data
+}
+
+impl Default for Msghdr {
+    fn default() -> Self {
+        Self {
+            msg_name: 0,
+            msg_namelen: 0,
+            msg_iov: [Iovec::default(); MSG_IOV_COUNT],
+            msg_iovlen: 0,
+            msg_control: 0,
+            msg_controllen: 0,
+            msg_flags: 0,
+            has_name: false,
+            name: Sockaddr::default(),
+            control_data: [0; MSG_CONTROL_SIZE],
+        }
+    }
+}

@@ -64,7 +64,9 @@ async fn parse_epoll_pwait() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1 epoll_pwait(epfd: 4, events: [ epoll_event {{ events: POLLIN|POLLERR|POLLHUP, data: 0xbeef }} ], max_events: 10, timeout: -1, sigmask) = 1\n")
+        format!(
+            "1 epoll_pwait(epfd: 4, events: [ epoll_event {{ events: POLLIN|POLLERR|POLLHUP, data: 0xbeef }} ], max_events: 10, timeout: -1, sigmask) = 1\n"
+        )
     );
 
     // Multi-line
@@ -127,7 +129,9 @@ async fn parse_ppoll() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("22 ppoll(fds: [ {{ 3, POLLIN }} ], nfds: 1, timeout: {{ secs: 0, nanos: 0 }}, sigmask) = Timeout [0]\n")
+        format!(
+            "22 ppoll(fds: [ {{ 3, POLLIN }} ], nfds: 1, timeout: {{ secs: 0, nanos: 0 }}, sigmask) = Timeout [0]\n"
+        )
     );
 }
 
@@ -164,7 +168,9 @@ async fn parse_read() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n")
+        format!(
+            "22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n"
+        )
     );
 }
 
@@ -201,7 +207,9 @@ async fn parse_write() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n")
+        format!(
+            "22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n"
+        )
     );
 }
 
@@ -286,7 +294,9 @@ async fn parse_openat() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3\n")
+        format!(
+            "22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3\n"
+        )
     );
 }
 
@@ -320,7 +330,9 @@ async fn parse_futex() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("22 futex(uaddr: 0xbeef, op: 10, val: 11, uaddr2: 0xbeef2, val3: 12, timeout: {{ secs: 13, nanos: 14 }}) = 0\n")
+        format!(
+            "22 futex(uaddr: 0xbeef, op: 10, val: 11, uaddr2: 0xbeef2, val3: 12, timeout: {{ secs: 13, nanos: 14 }}) = 0\n"
+        )
     );
 }
 
@@ -497,7 +509,9 @@ async fn parse_execve() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("22 execve(filename: \"/bin/find\", argv: [/etc\0, -name\0, org.pinc], envp: [HOME=/ro, WAYLAND=, ... (28 more)]) = 0\n")
+        format!(
+            "22 execve(filename: \"/bin/find\", argv: [/etc\0, -name\0, org.pinc], envp: [HOME=/ro, WAYLAND=, ... (28 more)]) = 0\n"
+        )
     );
 }
 
@@ -950,7 +964,9 @@ async fn parse_getrandom() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = 32\n")
+        format!(
+            "555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = 32\n"
+        )
     );
 
     // Test error case (would happen if entropy pool not initialized yet)
@@ -1181,7 +1197,9 @@ async fn test_faccessat_syscall() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0\n")
+        format!(
+            "1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0\n"
+        )
     );
 }
 
@@ -1214,7 +1232,9 @@ async fn test_faccessat_with_flags_syscall() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1\n")
+        format!(
+            "1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1\n"
+        )
     );
 }
 
@@ -1359,7 +1379,9 @@ async fn parse_prlimit64() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("9876 prlimit64(pid: 1234, resource: RLIMIT_NOFILE, new_limit: {{ rlim_cur: 2048, rlim_max: 4096 }}, old_limit: {{ rlim_cur: 1024, rlim_max: 4096 }}) = 0\n")
+        format!(
+            "9876 prlimit64(pid: 1234, resource: RLIMIT_NOFILE, new_limit: {{ rlim_cur: 2048, rlim_max: 4096 }}, old_limit: {{ rlim_cur: 1024, rlim_max: 4096 }}) = 0\n"
+        )
     );
 
     // Test with only old_limit (query case)
@@ -1391,7 +1413,9 @@ async fn parse_prlimit64() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("9876 prlimit64(pid: 0, resource: RLIMIT_STACK, new_limit: NULL, old_limit: {{ rlim_cur: 8388608, rlim_max: RLIM_INFINITY }}) = 0\n")
+        format!(
+            "9876 prlimit64(pid: 0, resource: RLIMIT_STACK, new_limit: NULL, old_limit: {{ rlim_cur: 8388608, rlim_max: RLIM_INFINITY }}) = 0\n"
+        )
     );
 
     // Test with only new_limit (set case) and error
@@ -1423,7 +1447,9 @@ async fn parse_prlimit64() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: {{ rlim_cur: 4294967296, rlim_max: 8589934592 }}, old_limit: NULL) = -1\n")
+        format!(
+            "9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: {{ rlim_cur: 4294967296, rlim_max: 8589934592 }}, old_limit: NULL) = -1\n"
+        )
     );
 }
 
@@ -1470,7 +1496,9 @@ async fn parse_rseq() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: 0, signature: 0xabcdef12, rseq content: {{ cpu_id_start: 0, cpu_id: -1, rseq_cs: {{ version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }}, flags: 0, node_id: 0, mm_cid: 0 }}) = 0\n")
+        format!(
+            "1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: 0, signature: 0xabcdef12, rseq content: {{ cpu_id_start: 0, cpu_id: -1, rseq_cs: {{ version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }}, flags: 0, node_id: 0, mm_cid: 0 }}) = 0\n"
+        )
     );
 
     // Test with NULL rseq argument
@@ -1545,7 +1573,9 @@ async fn parse_rseq() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: RSEQ_FLAG_UNREGISTER, signature: 0xabcdef12, rseq content: {{ cpu_id_start: 0, cpu_id: 2, rseq_cs: {{ version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }}, flags: 0, node_id: 0, mm_cid: 0 }}) = 0\n")
+        format!(
+            "1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: RSEQ_FLAG_UNREGISTER, signature: 0xabcdef12, rseq content: {{ cpu_id_start: 0, cpu_id: 2, rseq_cs: {{ version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }}, flags: 0, node_id: 0, mm_cid: 0 }}) = 0\n"
+        )
     );
 }
 
@@ -1755,7 +1785,9 @@ async fn parse_rt_sigprocmask() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 rt_sigprocmask(how: SIG_BLOCK, set: 0x7fff12345678, oldset: 0x7fff87654321, sigsetsize: 8) = 0\n")
+        format!(
+            "1234 rt_sigprocmask(how: SIG_BLOCK, set: 0x7fff12345678, oldset: 0x7fff87654321, sigsetsize: 8) = 0\n"
+        )
     );
 }
 
@@ -1785,7 +1817,9 @@ async fn parse_rt_sigprocmask_null_set() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("5678 rt_sigprocmask(how: SIG_SETMASK, set: 0x0, oldset: 0x7fff11223344, sigsetsize: 8) = 0\n")
+        format!(
+            "5678 rt_sigprocmask(how: SIG_SETMASK, set: 0x0, oldset: 0x7fff11223344, sigsetsize: 8) = 0\n"
+        )
     );
 }
 
@@ -1815,7 +1849,9 @@ async fn parse_rt_sigprocmask_unblock() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("9999 rt_sigprocmask(how: SIG_UNBLOCK, set: 0x7fffaabbccdd, oldset: 0x0, sigsetsize: 8) = 0\n")
+        format!(
+            "9999 rt_sigprocmask(how: SIG_UNBLOCK, set: 0x7fffaabbccdd, oldset: 0x0, sigsetsize: 8) = 0\n"
+        )
     );
 }
 
@@ -1845,7 +1881,9 @@ async fn parse_rt_sigaction() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("2468 rt_sigaction(signum: SIGTERM, act: 0x7fff12345678, oldact: 0x7fff87654321, sigsetsize: 8) = 0\n")
+        format!(
+            "2468 rt_sigaction(signum: SIGTERM, act: 0x7fff12345678, oldact: 0x7fff87654321, sigsetsize: 8) = 0\n"
+        )
     );
 }
 
@@ -1875,7 +1913,9 @@ async fn parse_rt_sigaction_null_act() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1357 rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: 0x7fff11223344, sigsetsize: 8) = 0\n")
+        format!(
+            "1357 rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: 0x7fff11223344, sigsetsize: 8) = 0\n"
+        )
     );
 }
 
@@ -1905,6 +1945,8 @@ async fn parse_rt_sigaction_realtime_signal() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("8642 rt_sigaction(signum: SIGRT1, act: 0x7fffaabbccdd, oldact: 0x0, sigsetsize: 8) = 0\n")
+        format!(
+            "8642 rt_sigaction(signum: SIGRT1, act: 0x7fffaabbccdd, oldact: 0x0, sigsetsize: 8) = 0\n"
+        )
     );
 }

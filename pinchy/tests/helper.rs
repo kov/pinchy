@@ -52,6 +52,7 @@ fn main() -> anyhow::Result<()> {
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
             "fcntl_test" => fcntl_test(),
+            "fchdir_test" => fchdir_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -189,6 +190,20 @@ fn rt_sigaction_standard() -> anyhow::Result<()> {
             "Failed to restore original signal handler for SIGUSR1"
         );
     }
+    Ok(())
+}
+
+fn fchdir_test() -> anyhow::Result<()> {
+    use std::{fs::File, os::unix::io::AsRawFd};
+
+    // Open the current directory
+    let file = File::open(".")?;
+    let fd = file.as_raw_fd();
+
+    // Call fchdir on the directory fd
+    let ret = unsafe { libc::fchdir(fd) };
+    assert_eq!(ret, 0, "fchdir failed");
+
     Ok(())
 }
 

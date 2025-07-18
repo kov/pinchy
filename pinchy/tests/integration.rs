@@ -297,6 +297,29 @@ fn escaped_regex(expected_output: &str) -> String {
         .replace("NUMBER", "[0-9]+")
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn fchdir_syscall() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["fchdir"], "fchdir_test");
+
+    let expected_output = escaped_regex(indoc! {r#"
+        PID fchdir(fd: 3) = 0
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 fn run_pinchyd(pid: Option<u32>) -> Child {
     let mut cmd = process::Command::new(cargo_bin("pinchyd"));
     let mut cmd = cmd

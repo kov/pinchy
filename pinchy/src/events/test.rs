@@ -1950,3 +1950,24 @@ async fn parse_rt_sigaction_realtime_signal() {
         )
     );
 }
+
+#[tokio::test]
+async fn parse_fchdir() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_fchdir,
+        pid: 42,
+        tid: 42,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fchdir: pinchy_common::FchdirData { fd: 5 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(String::from_utf8_lossy(&output), "42 fchdir(fd: 5) = 0\n");
+}

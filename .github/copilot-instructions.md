@@ -94,7 +94,10 @@ arguments reference and whether that data needs special handling.
 
 1. **Verify existence:** Confirm `SYS_<name>` exists in both arch files
    (see `pinchy-common/src/syscalls/aarch64.rs` and
-   `pinchy-common/src/syscalls/x86_64.rs`).
+   `pinchy-common/src/syscalls/x86_64.rs`). The `SYS_<name>` constants are
+   re-exported by `mod.rs` and can be imported from the following path:
+   `pinchy_common::syscalls::`. You should always import them when using them
+   on a file.
 2. **Trivial or complex:**
    - If trivial (no pointers, all arguments are plain integers):
      - Add to the match in `pinchy-ebpf/src/main.rs` in
@@ -125,15 +128,18 @@ arguments reference and whether that data needs special handling.
    to do any parsing that can be reasonably done in a short amount of time, use
    existing helpers when they exist, improve them if necessary.
 5. **Test:** Ensure the new syscall is being traced and parsed
-   correctly.
+   correctly by adding a test (see Adding tests below).
 
 ## Building
 When trying a build, always use `cargo check`, aya projects are not
 very friendly with `cargo build` or `cargo build --workspace`.
 
 ## Adding tests
-When adding tests for parsing syscalls, use the `pinchy/src/events/test.rs`
-module. Integration tests that run the binaries as root in a controlled environment
+When adding tests for parsing syscalls, use the files in `pinchy/src/tests/`.
+Look at several existing tests to understand the usual structure. When creating
+the expected output, take the event formatting code into consideration.
+
+Integration tests that run the binaries as root in a controlled environment
 are in `pinchy/tests/integration.rs`.
 
 ## Helper functions

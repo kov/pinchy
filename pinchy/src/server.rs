@@ -17,11 +17,11 @@ use log::{debug, trace, warn};
 use nix::unistd::{setgid, setuid, User};
 use pinchy_common::syscalls::{
     syscall_name_from_nr, SYS_accept4, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve,
-    SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getrandom,
-    SYS_getrusage, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat,
-    SYS_ppoll, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg, SYS_rseq, SYS_rt_sigaction,
-    SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
-    SYS_uname, SYS_wait4, SYS_write, ALL_SYSCALLS,
+    SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getpid,
+    SYS_getrandom, SYS_getrusage, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
+    SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
+    SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
+    SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write, ALL_SYSCALLS,
 };
 use tokio::{
     signal,
@@ -339,6 +339,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         SYS_close,
         SYS_lseek,
         SYS_sched_yield,
+        SYS_getpid,
         SYS_brk,
         SYS_mprotect,
         SYS_getrandom,

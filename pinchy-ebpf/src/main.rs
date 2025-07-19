@@ -13,7 +13,7 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::syscalls::{
-    SYS_brk, SYS_close, SYS_execve, SYS_fchdir, SYS_getrandom, SYS_lseek, SYS_mprotect,
+    SYS_brk, SYS_close, SYS_execve, SYS_fchdir, SYS_getpid, SYS_getrandom, SYS_lseek, SYS_mprotect,
     SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
     SYS_set_tid_address,
 };
@@ -206,6 +206,9 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
             }
             SYS_sched_yield => pinchy_common::SyscallEventData {
                 sched_yield: pinchy_common::SchedYieldData,
+            },
+            SYS_getpid => pinchy_common::SyscallEventData {
+                getpid: pinchy_common::GetpidData,
             },
             SYS_brk => pinchy_common::SyscallEventData {
                 brk: pinchy_common::BrkData { addr: args[0] },

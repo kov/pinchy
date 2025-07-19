@@ -59,6 +59,7 @@ pub union SyscallEventData {
     pub accept4: Accept4Data,
     pub wait4: Wait4Data,
     pub getrusage: GetrusageData,
+    pub getpid: GetpidData,
 }
 
 #[repr(C)]
@@ -133,6 +134,10 @@ pub struct FutexData {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SchedYieldData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetpidData;
 
 #[repr(C)]
 #[derive(Clone, Copy)]

@@ -57,6 +57,7 @@ pub union SyscallEventData {
     pub readlinkat: ReadlinkatData,
     pub recvmsg: RecvmsgData,
     pub accept4: Accept4Data,
+    pub wait4: Wait4Data,
 }
 
 #[repr(C)]
@@ -340,4 +341,14 @@ pub struct Accept4Data {
     pub has_addr: bool,
     pub addr: crate::kernel_types::Sockaddr,
     pub addrlen: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Wait4Data {
+    pub pid: i32,
+    pub wstatus: i32,
+    pub options: i32,
+    pub has_rusage: bool,
+    pub rusage: kernel_types::Rusage,
 }

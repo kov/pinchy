@@ -1331,3 +1331,86 @@ pub async fn format_msghdr(
 
     Ok(())
 }
+
+pub fn format_wait_options(options: i32) -> String {
+    if options == 0 {
+        return "0".to_string();
+    }
+
+    let mut flags = vec![];
+
+    if options & libc::WNOHANG != 0 {
+        flags.push("WNOHANG");
+    }
+
+    if options & libc::WUNTRACED != 0 {
+        flags.push("WUNTRACED");
+    }
+
+    if options & libc::WCONTINUED != 0 {
+        flags.push("WCONTINUED");
+    }
+
+    if flags.is_empty() {
+        format!("{options}")
+    } else {
+        flags.join("|")
+    }
+}
+
+pub fn format_wait_status(status: i32) -> String {
+    if libc::WIFEXITED(status) {
+        let exit_code = libc::WEXITSTATUS(status);
+        format!("{{WIFEXITED(s) && WEXITSTATUS(s) == {exit_code}}}")
+    } else if libc::WIFSIGNALED(status) {
+        let signal = libc::WTERMSIG(status);
+        let signal_name = format_signal_number(signal);
+        if libc::WCOREDUMP(status) {
+            format!("{{WIFSIGNALED(s) && WTERMSIG(s) == {signal_name} && WCOREDUMP(s)}}")
+        } else {
+            format!("{{WIFSIGNALED(s) && WTERMSIG(s) == {signal_name}}}")
+        }
+    } else if libc::WIFSTOPPED(status) {
+        let signal = libc::WSTOPSIG(status);
+        let signal_name = format_signal_number(signal);
+        format!("{{WIFSTOPPED(s) && WSTOPSIG(s) == {signal_name}}}")
+    } else if libc::WIFCONTINUED(status) {
+        "{WIFCONTINUED(s)}".to_string()
+    } else {
+        format!("{status}")
+    }
+}
+
+pub async fn format_rusage(
+    sf: &mut SyscallFormatter<'_>,
+    rusage: &pinchy_common::kernel_types::Rusage,
+) -> anyhow::Result<()> {
+    arg!(sf, "ru_utime:");
+    with_struct!(sf, {
+        argf!(sf, "tv_sec: {}", rusage.ru_utime.tv_sec);
+        argf!(sf, "tv_usec: {}", rusage.ru_utime.tv_usec);
+    });
+
+    arg!(sf, "ru_stime:");
+    with_struct!(sf, {
+        argf!(sf, "tv_sec: {}", rusage.ru_stime.tv_sec);
+        argf!(sf, "tv_usec: {}", rusage.ru_stime.tv_usec);
+    });
+
+    argf!(sf, "ru_maxrss: {}", rusage.ru_maxrss);
+    argf!(sf, "ru_ixrss: {}", rusage.ru_ixrss);
+    argf!(sf, "ru_idrss: {}", rusage.ru_idrss);
+    argf!(sf, "ru_isrss: {}", rusage.ru_isrss);
+    argf!(sf, "ru_minflt: {}", rusage.ru_minflt);
+    argf!(sf, "ru_majflt: {}", rusage.ru_majflt);
+    argf!(sf, "ru_nswap: {}", rusage.ru_nswap);
+    argf!(sf, "ru_inblock: {}", rusage.ru_inblock);
+    argf!(sf, "ru_oublock: {}", rusage.ru_oublock);
+    argf!(sf, "ru_msgsnd: {}", rusage.ru_msgsnd);
+    argf!(sf, "ru_msgrcv: {}", rusage.ru_msgrcv);
+    argf!(sf, "ru_nsignals: {}", rusage.ru_nsignals);
+    argf!(sf, "ru_nvcsw: {}", rusage.ru_nvcsw);
+    argf!(sf, "ru_nivcsw: {}", rusage.ru_nivcsw);
+
+    Ok(())
+}

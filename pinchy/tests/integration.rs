@@ -320,6 +320,39 @@ fn fchdir_syscall() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn network_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises network syscalls
+    let handle = run_workload(&["accept4", "recvmsg", "sendmsg"], "network_test");
+
+    // Expected output - we should see accept4, recvmsg, and sendmsg calls
+    // The exact addresses and file descriptors will vary, so we use regex patterns
+    let expected_output = escaped_regex(indoc! {r#"
+        PID accept4(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16, flags: 0x80000 (SOCK_CLOEXEC)) = NUMBER
+        PID sendmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: NUMBER } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER
+        PID recvmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: 1024 } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 fn run_pinchyd(pid: Option<u32>) -> Child {
     let mut cmd = process::Command::new(cargo_bin("pinchyd"));
     let mut cmd = cmd

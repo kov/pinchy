@@ -20,8 +20,9 @@ use pinchy_common::syscalls::{
     SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getpid,
     SYS_getrandom, SYS_getrusage, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
     SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
-    SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
-    SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write, ALL_SYSCALLS,
+    SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg,
+    SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
+    ALL_SYSCALLS,
 };
 use tokio::{
     signal,
@@ -377,6 +378,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_uname", SYS_uname),
         ("syscall_exit_readlinkat", SYS_readlinkat),
         ("syscall_exit_recvmsg", SYS_recvmsg),
+        ("syscall_exit_sendmsg", SYS_sendmsg),
         ("syscall_exit_accept4", SYS_accept4),
         ("syscall_exit_wait4", SYS_wait4),
         ("syscall_exit_getrusage", SYS_getrusage),

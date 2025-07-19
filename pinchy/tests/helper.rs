@@ -53,6 +53,7 @@ fn main() -> anyhow::Result<()> {
             "rt_sigaction_standard" => rt_sigaction_standard(),
             "fcntl_test" => fcntl_test(),
             "fchdir_test" => fchdir_test(),
+            "network_test" => network_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -253,6 +254,84 @@ fn fcntl_test() -> anyhow::Result<()> {
         libc::close(new_fd2);
         libc::close(new_fd);
         libc::close(fd);
+    }
+
+    Ok(())
+}
+
+fn network_test() -> anyhow::Result<()> {
+    use std::{
+        net::{TcpListener, TcpStream},
+        os::unix::io::AsRawFd,
+    };
+
+    // Create a TCP listener on localhost
+    let listener = TcpListener::bind("127.0.0.1:0")?;
+    let addr = listener.local_addr()?;
+
+    // Connect to ourselves - this is simpler than threading
+    let client = TcpStream::connect(addr)?;
+
+    // Accept the connection we just made - this generates accept4
+    let (server, _client_addr) = listener.accept()?;
+
+    // Get raw file descriptors for direct syscall usage
+    let client_fd = client.as_raw_fd();
+    let server_fd = server.as_raw_fd();
+
+    // Send some test data using sendmsg syscall directly
+    let test_message = b"Hello, network test!";
+    unsafe {
+        let mut iov = libc::iovec {
+            iov_base: test_message.as_ptr() as *mut libc::c_void,
+            iov_len: test_message.len(),
+        };
+
+        let msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut iov,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+
+        let bytes_sent = libc::sendmsg(client_fd, &msg, 0);
+        if bytes_sent < 0 {
+            bail!("sendmsg failed");
+        }
+    }
+
+    // Receive the data using recvmsg syscall directly
+    let mut buffer = [0u8; 1024];
+    unsafe {
+        let mut iov = libc::iovec {
+            iov_base: buffer.as_mut_ptr() as *mut libc::c_void,
+            iov_len: buffer.len(),
+        };
+
+        let msg = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut iov,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+
+        let bytes_received = libc::recvmsg(
+            server_fd,
+            &msg as *const libc::msghdr as *mut libc::msghdr,
+            0,
+        );
+        if bytes_received < 0 {
+            bail!("recvmsg failed");
+        }
+
+        // Verify we got the expected data
+        assert_eq!(&buffer[..bytes_received as usize], test_message);
     }
 
     Ok(())

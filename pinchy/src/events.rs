@@ -10,8 +10,8 @@ use pinchy_common::{
         SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getpid, SYS_getrandom,
         SYS_getrusage, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat,
         SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
-        SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
-        SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
+        SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg,
+        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
     },
     SyscallEvent,
 };
@@ -26,9 +26,9 @@ use crate::{
         format_dup3_flags, format_fcntl_cmd, format_flags, format_getrandom_flags,
         format_mmap_flags, format_mmap_prot, format_mode, format_msghdr, format_path,
         format_prctl_op, format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage,
-        format_rusage_who, format_signal_number, format_sigprocmask_how, format_sockaddr,
-        format_stat, format_statfs, format_timespec, format_utsname, format_wait_options,
-        format_wait_status, poll_bits_to_strs, prctl_op_arg_count,
+        format_rusage_who, format_sendmsg_flags, format_signal_number, format_sigprocmask_how,
+        format_sockaddr, format_stat, format_statfs, format_timespec, format_utsname,
+        format_wait_options, format_wait_status, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -570,6 +570,18 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 format_msghdr(&mut sf, &data.msghdr).await?;
             });
             argf!(sf, "flags: {}", format_recvmsg_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        SYS_sendmsg => {
+            let data = unsafe { event.data.sendmsg };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            arg!(sf, "msg:");
+            with_struct!(sf, {
+                format_msghdr(&mut sf, &data.msghdr).await?;
+            });
+            argf!(sf, "flags: {}", format_sendmsg_flags(data.flags));
 
             finish!(sf, event.return_value);
         }

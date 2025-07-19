@@ -5,8 +5,8 @@ use std::pin::Pin;
 
 use pinchy_common::{
     kernel_types::{Iovec, Msghdr, Sockaddr},
-    syscalls::{SYS_accept4, SYS_recvmsg},
-    Accept4Data, RecvmsgData, SyscallEvent,
+    syscalls::{SYS_accept4, SYS_recvmsg, SYS_sendmsg},
+    Accept4Data, RecvmsgData, SendmsgData, SyscallEvent,
 };
 
 use crate::{
@@ -81,6 +81,72 @@ async fn parse_recvmsg() {
         String::from_utf8_lossy(&output),
         format!(
             "1234 recvmsg(sockfd: 5, msg: {{ name: {{family: AF_INET, len: 16}}, iov: [  {{ base: 0x7fff87654321, len: 1024 }} {{ base: 0x7fff11111111, len: 512 }} ], iovlen: 2, control: {{ptr: 0x7fff99999999, len: 64}}, flags: 0x40 (MSG_DONTWAIT) }}, flags: 0x40 (MSG_DONTWAIT)) = 1536\n"
+        )
+    );
+}
+
+#[tokio::test]
+async fn parse_sendmsg() {
+    // Test basic sendmsg with AF_INET socket
+    let mut msghdr = Msghdr::default();
+
+    // Set up a basic AF_INET sockaddr
+    let mut sockaddr = Sockaddr {
+        sa_family: libc::AF_INET as u16,
+        ..Default::default()
+    };
+
+    sockaddr.sa_data[0] = 0x1f; // Port 8000 in network byte order (high byte)
+    sockaddr.sa_data[1] = 0x40; // Port 8000 in network byte order (low byte)
+    sockaddr.sa_data[2] = 127; // IP 127.0.0.1
+    sockaddr.sa_data[3] = 0;
+    sockaddr.sa_data[4] = 0;
+    sockaddr.sa_data[5] = 1;
+
+    msghdr.name = sockaddr;
+    msghdr.has_name = true;
+    msghdr.msg_name = 0x7fff12345678;
+    msghdr.msg_namelen = 16;
+
+    // Set up iovec entries
+    msghdr.msg_iov[0] = Iovec {
+        iov_base: 0x7fff87654321,
+        iov_len: 512,
+    };
+    msghdr.msg_iov[1] = Iovec {
+        iov_base: 0x7fff11111111,
+        iov_len: 256,
+    };
+    msghdr.msg_iovlen = 2;
+
+    // Set up control message data
+    msghdr.msg_control = 0x7fff99999999;
+    msghdr.msg_controllen = 32;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_sendmsg,
+        pid: 1234,
+        tid: 5678,
+        return_value: 768, // Total bytes sent (512 + 256)
+        data: pinchy_common::SyscallEventData {
+            sendmsg: SendmsgData {
+                sockfd: 7,
+                flags: libc::MSG_DONTWAIT,
+                msghdr,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "5678 sendmsg(sockfd: 7, msg: {{ name: {{family: AF_INET, len: 16}}, iov: [  {{ base: 0x7fff87654321, len: 512 }} {{ base: 0x7fff11111111, len: 256 }} ], iovlen: 2, control: {{ptr: 0x7fff99999999, len: 32}}, flags: 0 }}, flags: 0x40 (MSG_DONTWAIT)) = 768\n"
         )
     );
 }

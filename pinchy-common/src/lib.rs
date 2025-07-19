@@ -56,6 +56,7 @@ pub union SyscallEventData {
     pub fchdir: FchdirData,
     pub readlinkat: ReadlinkatData,
     pub recvmsg: RecvmsgData,
+    pub sendmsg: SendmsgData,
     pub accept4: Accept4Data,
     pub wait4: Wait4Data,
     pub getrusage: GetrusageData,
@@ -343,6 +344,14 @@ pub struct ReadlinkatData {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct RecvmsgData {
+    pub sockfd: i32,
+    pub flags: i32,
+    pub msghdr: crate::kernel_types::Msghdr,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SendmsgData {
     pub sockfd: i32,
     pub flags: i32,
     pub msghdr: crate::kernel_types::Msghdr,

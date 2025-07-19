@@ -1060,6 +1060,38 @@ pub fn format_fcntl_cmd(cmd: i32) -> String {
     }
 }
 
+pub fn format_sendmsg_flags(flags: i32) -> String {
+    let flag_defs = [
+        (libc::MSG_CONFIRM, "MSG_CONFIRM"),
+        (libc::MSG_DONTROUTE, "MSG_DONTROUTE"),
+        (libc::MSG_DONTWAIT, "MSG_DONTWAIT"),
+        (libc::MSG_EOR, "MSG_EOR"),
+        (libc::MSG_MORE, "MSG_MORE"),
+        (libc::MSG_NOSIGNAL, "MSG_NOSIGNAL"),
+        (libc::MSG_OOB, "MSG_OOB"),
+    ];
+
+    let mut parts = Vec::new();
+    let mut remaining_flags = flags;
+
+    for (flag, name) in flag_defs.iter() {
+        if (flags & flag) != 0 {
+            parts.push(name.to_string());
+            remaining_flags &= !flag;
+        }
+    }
+
+    if remaining_flags != 0 {
+        parts.push(format!("0x{remaining_flags:x}"));
+    }
+
+    if parts.is_empty() {
+        "0".to_string()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
 pub fn format_recvmsg_flags(flags: i32) -> String {
     let flag_defs = [
         (libc::MSG_PEEK, "MSG_PEEK"),
@@ -1084,7 +1116,7 @@ pub fn format_recvmsg_flags(flags: i32) -> String {
     }
 
     if remaining_flags != 0 {
-        parts.push(format!("0x{:x}", remaining_flags));
+        parts.push(format!("0x{remaining_flags:x}"));
     }
 
     if parts.is_empty() {

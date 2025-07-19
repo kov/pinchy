@@ -10,7 +10,7 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::Rlimit,
-    syscalls::{SYS_execve, SYS_prlimit64, SYS_wait4},
+    syscalls::{SYS_execve, SYS_getrusage, SYS_prlimit64, SYS_wait4},
     SMALL_READ_SIZE,
 };
 
@@ -293,6 +293,45 @@ pub fn syscall_exit_wait4(ctx: TracePointContext) -> u32 {
                     has_rusage,
                     rusage,
                 },
+            },
+        )
+    }
+
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_getrusage(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_getrusage;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let who = args[0] as i32;
+        let usage_ptr = args[1] as *const pinchy_common::kernel_types::Rusage;
+
+        let mut rusage = pinchy_common::kernel_types::Rusage::default();
+
+        // Only read rusage if the call was successful and pointer is not null
+        if return_value >= 0 && usage_ptr != core::ptr::null() {
+            unsafe {
+                if let Ok(usage) =
+                    bpf_probe_read_user::<pinchy_common::kernel_types::Rusage>(usage_ptr)
+                {
+                    rusage = usage;
+                }
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                getrusage: pinchy_common::GetrusageData { who, rusage },
             },
         )
     }

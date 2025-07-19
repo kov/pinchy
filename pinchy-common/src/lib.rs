@@ -58,6 +58,7 @@ pub union SyscallEventData {
     pub recvmsg: RecvmsgData,
     pub accept4: Accept4Data,
     pub wait4: Wait4Data,
+    pub getrusage: GetrusageData,
 }
 
 #[repr(C)]
@@ -350,5 +351,12 @@ pub struct Wait4Data {
     pub wstatus: i32,
     pub options: i32,
     pub has_rusage: bool,
+    pub rusage: kernel_types::Rusage,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetrusageData {
+    pub who: i32,
     pub rusage: kernel_types::Rusage,
 }

@@ -1,8 +1,8 @@
 use std::pin::Pin;
 
 use pinchy_common::{
-    syscalls::{SYS_execve, SYS_fchdir, SYS_set_tid_address, SYS_wait4},
-    ExecveData, SetTidAddressData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
+    syscalls::{SYS_execve, SYS_fchdir, SYS_getrusage, SYS_set_tid_address, SYS_wait4},
+    ExecveData, GetrusageData, SetTidAddressData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
 };
 
 use crate::{
@@ -427,4 +427,113 @@ async fn test_wait4_no_rusage() {
         String::from_utf8_lossy(&output),
         "2001 wait4(pid: 1234, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 9}, options: 0, rusage: NULL) = 5678\n"
     );
+}
+
+#[tokio::test]
+async fn test_getrusage_self() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getrusage,
+        pid: 3000,
+        tid: 3001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            getrusage: GetrusageData {
+                who: libc::RUSAGE_SELF,
+                rusage: pinchy_common::kernel_types::Rusage {
+                    ru_utime: pinchy_common::kernel_types::Timeval {
+                        tv_sec: 1,
+                        tv_usec: 250000,
+                    },
+                    ru_stime: pinchy_common::kernel_types::Timeval {
+                        tv_sec: 0,
+                        tv_usec: 150000,
+                    },
+                    ru_maxrss: 2048,
+                    ru_minflt: 200,
+                    ru_majflt: 10,
+                    ru_nvcsw: 50,
+                    ru_nivcsw: 5,
+                    ..Default::default()
+                },
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "3001 getrusage(who: RUSAGE_SELF, rusage: { ru_utime: { tv_sec: 1, tv_usec: 250000 }, ru_stime: { tv_sec: 0, tv_usec: 150000 }, ru_maxrss: 2048, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 200, ru_majflt: 10, ru_nswap: 0, ru_inblock: 0, ru_oublock: 0, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 50, ru_nivcsw: 5 }) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn test_getrusage_children() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getrusage,
+        pid: 4000,
+        tid: 4001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            getrusage: GetrusageData {
+                who: libc::RUSAGE_CHILDREN,
+                rusage: pinchy_common::kernel_types::Rusage {
+                    ru_utime: pinchy_common::kernel_types::Timeval {
+                        tv_sec: 5,
+                        tv_usec: 750000,
+                    },
+                    ru_stime: pinchy_common::kernel_types::Timeval {
+                        tv_sec: 2,
+                        tv_usec: 500000,
+                    },
+                    ru_maxrss: 4096,
+                    ru_inblock: 100,
+                    ru_oublock: 50,
+                    ..Default::default()
+                },
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "4001 getrusage(who: RUSAGE_CHILDREN, rusage: { ru_utime: { tv_sec: 5, tv_usec: 750000 }, ru_stime: { tv_sec: 2, tv_usec: 500000 }, ru_maxrss: 4096, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 0, ru_majflt: 0, ru_nswap: 0, ru_inblock: 100, ru_oublock: 50, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 0, ru_nivcsw: 0 }) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn test_getrusage_error() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getrusage,
+        pid: 5000,
+        tid: 5001,
+        return_value: -22, // -EINVAL
+        data: pinchy_common::SyscallEventData {
+            getrusage: GetrusageData {
+                who: 999,                   // invalid who parameter
+                rusage: Default::default(), // should be ignored for failed calls
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "5001 getrusage(who: UNKNOWN, rusage: NULL) = -22\n");
 }

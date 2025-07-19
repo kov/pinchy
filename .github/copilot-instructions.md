@@ -92,12 +92,34 @@ arguments reference and whether that data needs special handling.
 
 ## Checklist for Adding a New Syscall
 
-1. **Verify existence:** Confirm `SYS_<name>` exists in both arch files
+1. **Verify existence and categorize:** Confirm `SYS_<name>` exists in both arch files
    (see `pinchy-common/src/syscalls/aarch64.rs` and
    `pinchy-common/src/syscalls/x86_64.rs`). The `SYS_<name>` constants are
    re-exported by `mod.rs` and can be imported from the following path:
    `pinchy_common::syscalls::`. You should always import them when using them
    on a file.
+
+   The following are the categories we use for syscalls. They will eventually be used
+   for treating syscalls as a set, but right now they are used to decide in which file
+   to add the eBPF handlers under `pinchy-ebpf/src` and parse tests under
+   `pinchy/src/tests/`. Pick the one that most aligns with the syscall functionality,
+   when in doubt ask for a decision.
+
+   pub enum SyscallCategory {
+     BasicIO,        // read, write, open, close, select, poll
+     FileSystem,     // stat, chmod, chown, mkdir, statfs
+     Process,        // clone, fork, execve, wait,  kill
+     Memory,         // brk, mmap, munmap, mprotect
+     Network,        // socket, bind, connect, send/recv
+     Signal,         // signal, sigaction
+     Time,           // time, gettimeofday, nanosleep
+     IPC,            // pipe, msgget, semget
+     Scheduling,     // sched_yield, rseq
+     Sync,           // set_robust_list, futex
+     System,         // uname, sysinfo, getrlimit
+     Security,       // ptrace, prctl, seccomp
+   }
+
 2. **Trivial or complex:**
    - If trivial (no pointers, all arguments are plain integers):
      - Add to the match in `pinchy-ebpf/src/main.rs` in

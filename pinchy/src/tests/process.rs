@@ -1,8 +1,9 @@
 use std::pin::Pin;
 
 use pinchy_common::{
-    syscalls::{SYS_execve, SYS_fchdir, SYS_getrusage, SYS_set_tid_address, SYS_wait4},
-    ExecveData, GetrusageData, SetTidAddressData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
+    syscalls::{SYS_execve, SYS_fchdir, SYS_getpid, SYS_getrusage, SYS_set_tid_address, SYS_wait4},
+    ExecveData, GetpidData, GetrusageData, SetTidAddressData, SyscallEvent, Wait4Data,
+    SMALL_READ_SIZE,
 };
 
 use crate::{
@@ -220,6 +221,28 @@ async fn parse_set_tid_address() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!("5678 set_tid_address(tidptr: 0x0) = 5678\n")
+    );
+}
+
+#[tokio::test]
+async fn test_getpid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getpid,
+        pid: 1234,
+        tid: 1234,
+        return_value: 1234, // getpid returns the process ID
+        data: pinchy_common::SyscallEventData { getpid: GetpidData },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1234 getpid() = 1234\n")
     );
 }
 

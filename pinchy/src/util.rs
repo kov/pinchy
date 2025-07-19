@@ -1414,3 +1414,13 @@ pub async fn format_rusage(
 
     Ok(())
 }
+
+pub fn format_rusage_who(who: i32) -> &'static str {
+    match who {
+        libc::RUSAGE_SELF => "RUSAGE_SELF",
+        libc::RUSAGE_CHILDREN => "RUSAGE_CHILDREN",
+        #[cfg(any(target_os = "linux", target_os = "android"))]
+        libc::RUSAGE_THREAD => "RUSAGE_THREAD",
+        _ => "UNKNOWN",
+    }
+}

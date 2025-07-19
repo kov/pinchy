@@ -6,7 +6,7 @@ use aya_ebpf::{
     macros::tracepoint,
     programs::TracePointContext,
 };
-use pinchy_common::syscalls::SYS_recvmsg;
+use pinchy_common::syscalls::{SYS_accept4, SYS_recvmsg};
 
 use crate::util::{get_args, get_return_value, output_event};
 
@@ -104,6 +104,69 @@ pub fn syscall_exit_recvmsg(ctx: TracePointContext) -> u32 {
                     sockfd,
                     flags,
                     msghdr,
+                },
+            },
+        )
+    }
+
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_accept4(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_accept4;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let sockfd = args[0] as i32;
+        let addr_ptr = args[1] as *const u8;
+        let addrlen_ptr = args[2] as *const u32;
+        let flags = args[3] as i32;
+
+        let mut addr = pinchy_common::kernel_types::Sockaddr::default();
+        let mut addrlen = 0u32;
+        let mut has_addr = false;
+
+        unsafe {
+            // Only read address data if the call was successful and addr_ptr is not null
+            if return_value >= 0
+                && addr_ptr != core::ptr::null()
+                && addrlen_ptr != core::ptr::null()
+            {
+                if let Ok(len) = bpf_probe_read_user::<u32>(addrlen_ptr) {
+                    addrlen = len;
+
+                    if len > 0
+                        && len
+                            <= core::mem::size_of::<pinchy_common::kernel_types::Sockaddr>() as u32
+                    {
+                        if let Ok(sockaddr) = bpf_probe_read_user::<
+                            pinchy_common::kernel_types::Sockaddr,
+                        >(addr_ptr as *const _)
+                        {
+                            addr = sockaddr;
+                            has_addr = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                accept4: pinchy_common::Accept4Data {
+                    sockfd,
+                    flags,
+                    has_addr,
+                    addr,
+                    addrlen,
                 },
             },
         )

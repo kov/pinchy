@@ -17,6 +17,9 @@ mod formatting;
 mod ioctls;
 mod util;
 
+#[cfg(test)]
+mod tests;
+
 #[proxy(interface = "org.pinchy.Service", default_path = "/org/pinchy/Service")]
 trait Pinchy {
     fn trace_pid(&self, pid: u32, syscalls: Vec<i64>) -> zbus::Result<zbus::zvariant::OwnedFd>;

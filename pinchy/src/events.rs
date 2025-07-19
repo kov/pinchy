@@ -561,6 +561,3 @@ trait JoinTakeMap: Iterator + Sized {
 }
 
 impl<I: Iterator> JoinTakeMap for I {}
-
-#[cfg(test)]
-mod test;

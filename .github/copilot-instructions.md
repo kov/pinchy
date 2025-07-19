@@ -127,10 +127,13 @@ arguments reference and whether that data needs special handling.
      - Add to the `TRIVIAL_SYSCALLS` array in
        `pinchy/src/server.rs` in `load_tailcalls()`.
    - If complex (has pointer arguments or needs special handling):
-     - Add a new tracepoint named `syscall_exit_<name>` in
-       `pinchy-ebpf/src/main.rs`.
+     - Add a new tracepoint named `syscall_exit_<name>` in one of the files in
+       `pinchy-ebpf/src/`, see the discussion on categories above.
      - Register it in the appropriate array in `load_tailcalls()` in
        `pinchy/src/server.rs`.
+     - When adding new handlers, always look at several existing handlers to
+       understand how things are done, do not limit yourself to looking at only
+       the file you will add the handler to, read at least 2 others.
      - When parsing structs on the eBPF side, use `bpf_probe_read_user()`;
        only use `bpf_probe_read_buf()` when reading byte arrays.
 3. **Syscall arguments:**

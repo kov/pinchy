@@ -60,12 +60,21 @@ pub union SyscallEventData {
     pub wait4: Wait4Data,
     pub getrusage: GetrusageData,
     pub getpid: GetpidData,
+    pub dup3: Dup3Data,
 }
 
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct CloseData {
     pub fd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Dup3Data {
+    pub oldfd: i32,
+    pub newfd: i32,
+    pub flags: i32,
 }
 
 #[repr(C)]

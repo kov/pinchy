@@ -16,7 +16,7 @@ use aya::{maps::ProgramArray, programs::TracePoint, Ebpf};
 use log::{debug, trace, warn};
 use nix::unistd::{setgid, setuid, User};
 use pinchy_common::syscalls::{
-    syscall_name_from_nr, SYS_accept4, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve,
+    syscall_name_from_nr, SYS_accept4, SYS_brk, SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_execve,
     SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getpid,
     SYS_getrandom, SYS_getrusage, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
     SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
@@ -337,6 +337,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     // Use the same tail call handler for trivial syscalls.
     const TRIVIAL_SYSCALLS: &[i64] = &[
         SYS_close,
+        SYS_dup3,
         SYS_lseek,
         SYS_sched_yield,
         SYS_getpid,

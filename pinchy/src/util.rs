@@ -187,6 +187,23 @@ pub fn format_flags(flags: i32) -> String {
     format!("0x{:x} ({})", flags, parts.join("|"))
 }
 
+pub fn format_dup3_flags(flags: i32) -> String {
+    if flags == 0 {
+        return "0".to_string();
+    }
+
+    let mut parts = vec![];
+    if flags & libc::O_CLOEXEC != 0 {
+        parts.push("O_CLOEXEC");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
 pub fn format_mmap_flags(flags: i32) -> String {
     let defs = [
         (libc::MAP_SHARED, "MAP_SHARED"),

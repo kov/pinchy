@@ -6,11 +6,11 @@ use std::borrow::Cow;
 use log::{error, trace};
 use pinchy_common::{
     syscalls::{
-        SYS_accept4, SYS_brk, SYS_close, SYS_epoll_pwait, SYS_execve, SYS_faccessat, SYS_fchdir,
-        SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getpid, SYS_getrandom, SYS_getrusage,
-        SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat,
-        SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg, SYS_rseq,
-        SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
+        SYS_accept4, SYS_brk, SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_execve, SYS_faccessat,
+        SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getpid, SYS_getrandom,
+        SYS_getrusage, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat,
+        SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
+        SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
         SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
     },
     SyscallEvent,
@@ -23,12 +23,12 @@ use crate::{
     raw,
     util::{
         format_accept4_flags, format_access_mode, format_at_flags, format_bytes, format_dirfd,
-        format_fcntl_cmd, format_flags, format_getrandom_flags, format_mmap_flags,
-        format_mmap_prot, format_mode, format_msghdr, format_path, format_prctl_op,
-        format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage, format_rusage_who,
-        format_signal_number, format_sigprocmask_how, format_sockaddr, format_stat, format_statfs,
-        format_timespec, format_utsname, format_wait_options, format_wait_status,
-        poll_bits_to_strs, prctl_op_arg_count,
+        format_dup3_flags, format_fcntl_cmd, format_flags, format_getrandom_flags,
+        format_mmap_flags, format_mmap_prot, format_mode, format_msghdr, format_path,
+        format_prctl_op, format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage,
+        format_rusage_who, format_signal_number, format_sigprocmask_how, format_sockaddr,
+        format_stat, format_statfs, format_timespec, format_utsname, format_wait_options,
+        format_wait_status, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -46,6 +46,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let data = unsafe { event.data.close };
 
             argf!(sf, "fd: {}", data.fd);
+            finish!(sf, event.return_value);
+        }
+        SYS_dup3 => {
+            let data = unsafe { event.data.dup3 };
+
+            argf!(sf, "oldfd: {}", data.oldfd);
+            argf!(sf, "newfd: {}", data.newfd);
+            argf!(sf, "flags: {}", format_dup3_flags(data.flags));
             finish!(sf, event.return_value);
         }
         SYS_epoll_pwait => {

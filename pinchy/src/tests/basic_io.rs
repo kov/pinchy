@@ -7,11 +7,11 @@ use indoc::indoc;
 use pinchy_common::{
     kernel_types::{EpollEvent, Timespec},
     syscalls::{
-        SYS_close, SYS_epoll_pwait, SYS_fcntl, SYS_lseek, SYS_openat, SYS_ppoll, SYS_read,
-        SYS_write,
+        SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek, SYS_openat, SYS_ppoll,
+        SYS_read, SYS_write,
     },
-    CloseData, EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, ReadData, SyscallEvent,
-    WriteData, DATA_READ_SIZE,
+    CloseData, Dup3Data, EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, ReadData,
+    SyscallEvent, WriteData, DATA_READ_SIZE,
 };
 
 use crate::{
@@ -40,6 +40,62 @@ async fn parse_close() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!("1 close(fd: 2) = 0\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_dup3() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_dup3,
+        pid: 1,
+        tid: 1,
+        return_value: 4,
+        data: pinchy_common::SyscallEventData {
+            dup3: Dup3Data {
+                oldfd: 3,
+                newfd: 4,
+                flags: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1 dup3(oldfd: 3, newfd: 4, flags: 0) = 4\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_dup3_with_flags() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_dup3,
+        pid: 1,
+        tid: 1,
+        return_value: 5,
+        data: pinchy_common::SyscallEventData {
+            dup3: Dup3Data {
+                oldfd: 3,
+                newfd: 5,
+                flags: libc::O_CLOEXEC,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1 dup3(oldfd: 3, newfd: 5, flags: 0x80000 (O_CLOEXEC)) = 5\n")
     );
 }
 

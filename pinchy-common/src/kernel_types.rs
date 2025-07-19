@@ -135,14 +135,14 @@ impl Default for Utsname {
 }
 
 /// Socket address structure for generic socket addresses
-/// Note: we only capture the family and a small portion of the address data
-/// since the full structure varies by address family
-pub const SOCKADDR_DATA_SIZE: usize = 14;
+/// Note: we capture enough data to handle IPv6 addresses and most other
+/// address families, though some may still be truncated
+pub const SOCKADDR_DATA_SIZE: usize = 26; // Sufficient for IPv6 (26 bytes needed)
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Sockaddr {
     pub sa_family: u16,                    // Address family (AF_INET, AF_UNIX, etc.)
-    pub sa_data: [u8; SOCKADDR_DATA_SIZE], // Address data (truncated)
+    pub sa_data: [u8; SOCKADDR_DATA_SIZE], // Address data
 }
 
 /// I/O vector structure for scatter-gather operations

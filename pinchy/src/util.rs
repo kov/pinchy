@@ -1077,6 +1077,37 @@ pub fn format_recvmsg_flags(flags: i32) -> String {
     }
 }
 
+pub fn format_accept4_flags(flags: i32) -> String {
+    if flags == 0 {
+        return "0".to_string();
+    }
+
+    let flag_defs = [
+        (libc::SOCK_CLOEXEC, "SOCK_CLOEXEC"),
+        (libc::SOCK_NONBLOCK, "SOCK_NONBLOCK"),
+    ];
+
+    let mut parts = Vec::new();
+    let mut remaining_flags = flags;
+
+    for (flag, name) in flag_defs.iter() {
+        if (flags & flag) != 0 {
+            parts.push(name.to_string());
+            remaining_flags &= !flag;
+        }
+    }
+
+    if remaining_flags != 0 {
+        parts.push(format!("0x{remaining_flags:x}"));
+    }
+
+    if parts.is_empty() {
+        "0".to_string()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
 pub fn format_sockaddr_family(family: u16) -> Cow<'static, str> {
     match family {
         x if x == (libc::AF_UNIX as u16) => Cow::Borrowed("AF_UNIX"),
@@ -1084,8 +1115,149 @@ pub fn format_sockaddr_family(family: u16) -> Cow<'static, str> {
         x if x == (libc::AF_INET6 as u16) => Cow::Borrowed("AF_INET6"),
         x if x == (libc::AF_NETLINK as u16) => Cow::Borrowed("AF_NETLINK"),
         x if x == (libc::AF_PACKET as u16) => Cow::Borrowed("AF_PACKET"),
-        _ => Cow::Owned(format!("{}", family)),
+        _ => Cow::Owned(format!("{family}")),
     }
+}
+
+pub async fn format_sockaddr(
+    sf: &mut SyscallFormatter<'_>,
+    addr: &pinchy_common::kernel_types::Sockaddr,
+) -> anyhow::Result<()> {
+    argf!(sf, "family: {}", format_sockaddr_family(addr.sa_family));
+
+    match addr.sa_family {
+        x if x == (libc::AF_INET as u16) => {
+            // sockaddr_in: port (2 bytes) + IPv4 address (4 bytes)
+            if addr.sa_data.len() >= 6 {
+                let port = u16::from_be_bytes([addr.sa_data[0], addr.sa_data[1]]);
+                let ip_bytes = &addr.sa_data[2..6];
+                argf!(
+                    sf,
+                    "addr: {}:{}",
+                    format!(
+                        "{}.{}.{}.{}",
+                        ip_bytes[0], ip_bytes[1], ip_bytes[2], ip_bytes[3]
+                    ),
+                    port
+                );
+            } else {
+                argf!(sf, "addr: <truncated>");
+            }
+        }
+        x if x == (libc::AF_INET6 as u16) => {
+            // sockaddr_in6: port (2 bytes) + flowinfo (4 bytes) + IPv6 address (16 bytes) + scope_id (4 bytes)
+            if addr.sa_data.len() >= 6 {
+                let port = u16::from_be_bytes([addr.sa_data[0], addr.sa_data[1]]);
+                let flowinfo = u32::from_be_bytes([
+                    addr.sa_data[2],
+                    addr.sa_data[3],
+                    addr.sa_data[4],
+                    addr.sa_data[5],
+                ]);
+
+                if addr.sa_data.len() >= 22 {
+                    // We have enough data for the IPv6 address
+                    let ipv6_bytes = &addr.sa_data[6..22];
+                    let mut ipv6_parts = Vec::new();
+                    for chunk in ipv6_bytes.chunks(2) {
+                        if chunk.len() == 2 {
+                            let part = u16::from_be_bytes([chunk[0], chunk[1]]);
+                            ipv6_parts.push(format!("{part:x}"));
+                        }
+                    }
+                    argf!(sf, "addr: [{}]:{}", ipv6_parts.join(":"), port);
+                    if flowinfo != 0 {
+                        argf!(sf, "flowinfo: {}", flowinfo);
+                    }
+                } else {
+                    argf!(sf, "addr: <truncated IPv6>:{}", port);
+                }
+            } else {
+                argf!(sf, "addr: <truncated>");
+            }
+        }
+        x if x == (libc::AF_UNIX as u16) => {
+            // sockaddr_un: filesystem path (null-terminated string)
+            let path_bytes = &addr.sa_data;
+            let null_pos = path_bytes.iter().position(|&b| b == 0);
+            let path_end = null_pos.unwrap_or(path_bytes.len());
+            let path = String::from_utf8_lossy(&path_bytes[..path_end]);
+
+            if path.is_empty() {
+                argf!(sf, "path: <unnamed>");
+            } else if null_pos.is_none() {
+                argf!(sf, "path: {:?} ... (truncated)", path);
+            } else {
+                argf!(sf, "path: {:?}", path);
+            }
+        }
+        x if x == (libc::AF_NETLINK as u16) => {
+            // sockaddr_nl: nl_pid (4 bytes) + nl_groups (4 bytes)
+            if addr.sa_data.len() >= 8 {
+                let pid = u32::from_le_bytes([
+                    addr.sa_data[0],
+                    addr.sa_data[1],
+                    addr.sa_data[2],
+                    addr.sa_data[3],
+                ]);
+                let groups = u32::from_le_bytes([
+                    addr.sa_data[4],
+                    addr.sa_data[5],
+                    addr.sa_data[6],
+                    addr.sa_data[7],
+                ]);
+                argf!(sf, "pid: {}", pid);
+                argf!(sf, "groups: 0x{:x}", groups);
+            } else {
+                argf!(sf, "data: <truncated>");
+            }
+        }
+        x if x == (libc::AF_PACKET as u16) => {
+            // sockaddr_ll: protocol, ifindex, hatype, pkttype, halen, addr
+            if addr.sa_data.len() >= 8 {
+                let protocol = u16::from_be_bytes([addr.sa_data[0], addr.sa_data[1]]);
+                let ifindex = i32::from_le_bytes([
+                    addr.sa_data[2],
+                    addr.sa_data[3],
+                    addr.sa_data[4],
+                    addr.sa_data[5],
+                ]);
+
+                if addr.sa_data.len() >= 10 {
+                    let hatype = u16::from_le_bytes([addr.sa_data[6], addr.sa_data[7]]);
+                    let pkttype = addr.sa_data[8];
+                    let halen = addr.sa_data[9];
+
+                    argf!(sf, "protocol: 0x{:x}", protocol);
+                    argf!(sf, "ifindex: {}", ifindex);
+                    argf!(sf, "hatype: {}", hatype);
+                    argf!(sf, "pkttype: {}", pkttype);
+
+                    if halen > 0 && addr.sa_data.len() >= (10 + halen as usize) {
+                        let hw_addr = &addr.sa_data[10..(10 + halen as usize)];
+                        let hw_str = hw_addr
+                            .iter()
+                            .map(|b| format!("{b:02x}"))
+                            .collect::<Vec<_>>()
+                            .join(":");
+                        argf!(sf, "addr: {}", hw_str);
+                    }
+                } else {
+                    argf!(sf, "protocol: 0x{:x}", protocol);
+                    argf!(sf, "ifindex: {}", ifindex);
+                    argf!(sf, "data: <truncated>");
+                }
+            } else {
+                argf!(sf, "data: <truncated>");
+            }
+        }
+        _ => {
+            // Unknown/unsupported address family - show raw data
+            argf!(sf, "data: {}", format_bytes(&addr.sa_data));
+        }
+    }
+
+    Ok(())
 }
 
 pub async fn format_msghdr(

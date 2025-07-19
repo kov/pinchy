@@ -10,7 +10,7 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::Rlimit,
-    syscalls::{SYS_execve, SYS_prlimit64},
+    syscalls::{SYS_execve, SYS_prlimit64, SYS_wait4},
     SMALL_READ_SIZE,
 };
 
@@ -238,6 +238,65 @@ pub fn syscall_exit_prlimit64(ctx: TracePointContext) -> u32 {
             },
         )
     }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_wait4(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_wait4;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pid = args[0] as i32;
+        let wstatus_ptr = args[1] as *const i32;
+        let options = args[2] as i32;
+        let rusage_ptr = args[3] as *const pinchy_common::kernel_types::Rusage;
+
+        let mut wstatus = 0i32;
+        let mut rusage = pinchy_common::kernel_types::Rusage::default();
+        let mut has_rusage = false;
+
+        // Only read wstatus if the call was successful and pointer is not null
+        if return_value >= 0 && wstatus_ptr != core::ptr::null() {
+            unsafe {
+                if let Ok(status) = bpf_probe_read_user::<i32>(wstatus_ptr) {
+                    wstatus = status;
+                }
+            }
+        }
+
+        // Only read rusage if the call was successful and pointer is not null
+        if return_value >= 0 && rusage_ptr != core::ptr::null() {
+            unsafe {
+                if let Ok(usage) =
+                    bpf_probe_read_user::<pinchy_common::kernel_types::Rusage>(rusage_ptr)
+                {
+                    rusage = usage;
+                    has_rusage = true;
+                }
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                wait4: pinchy_common::Wait4Data {
+                    pid,
+                    wstatus,
+                    options,
+                    has_rusage,
+                    rusage,
+                },
+            },
+        )
+    }
+
     match inner(ctx) {
         Ok(_) => 0,
         Err(ret) => ret,

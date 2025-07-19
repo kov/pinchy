@@ -80,6 +80,36 @@ pub struct Rlimit {
     pub rlim_max: u64, /* Hard limit */
 }
 
+/// Time value structure for rusage
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Timeval {
+    pub tv_sec: i64,  // seconds
+    pub tv_usec: i64, // microseconds
+}
+
+/// Resource usage structure, matching the kernel's struct rusage
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Rusage {
+    pub ru_utime: Timeval, // user CPU time used
+    pub ru_stime: Timeval, // system CPU time used
+    pub ru_maxrss: i64,    // maximum resident set size
+    pub ru_ixrss: i64,     // integral shared memory size
+    pub ru_idrss: i64,     // integral unshared data size
+    pub ru_isrss: i64,     // integral unshared stack size
+    pub ru_minflt: i64,    // page reclaims (soft page faults)
+    pub ru_majflt: i64,    // page faults (hard page faults)
+    pub ru_nswap: i64,     // swaps
+    pub ru_inblock: i64,   // block input operations
+    pub ru_oublock: i64,   // block output operations
+    pub ru_msgsnd: i64,    // IPC messages sent
+    pub ru_msgrcv: i64,    // IPC messages received
+    pub ru_nsignals: i64,  // signals received
+    pub ru_nvcsw: i64,     // voluntary context switches
+    pub ru_nivcsw: i64,    // involuntary context switches
+}
+
 /// Restartable sequence critical section structure
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]

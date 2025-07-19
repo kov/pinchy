@@ -1,8 +1,8 @@
 use std::pin::Pin;
 
 use pinchy_common::{
-    syscalls::{SYS_execve, SYS_fchdir, SYS_set_tid_address},
-    ExecveData, SetTidAddressData, SyscallEvent, SMALL_READ_SIZE,
+    syscalls::{SYS_execve, SYS_fchdir, SYS_set_tid_address, SYS_wait4},
+    ExecveData, SetTidAddressData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
 };
 
 use crate::{
@@ -354,4 +354,77 @@ async fn parse_fchdir() {
     handle_event(&event, formatter).await.unwrap();
 
     assert_eq!(String::from_utf8_lossy(&output), "42 fchdir(fd: 5) = 0\n");
+}
+
+#[tokio::test]
+async fn test_wait4_successful() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_wait4,
+        pid: 1000,
+        tid: 1001,
+        return_value: 1234, // child PID that was waited on
+        data: pinchy_common::SyscallEventData {
+            wait4: Wait4Data {
+                pid: -1,    // wait for any child
+                wstatus: 0, // child exited with status 0 (WIFEXITED)
+                options: libc::WNOHANG | libc::WUNTRACED,
+                has_rusage: true,
+                rusage: pinchy_common::kernel_types::Rusage {
+                    ru_utime: pinchy_common::kernel_types::Timeval {
+                        tv_sec: 0,
+                        tv_usec: 123456,
+                    },
+                    ru_stime: pinchy_common::kernel_types::Timeval {
+                        tv_sec: 0,
+                        tv_usec: 78910,
+                    },
+                    ru_maxrss: 1024,
+                    ru_minflt: 100,
+                    ru_majflt: 5,
+                    ..Default::default()
+                },
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 wait4(pid: -1, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 0}, options: WNOHANG|WUNTRACED, rusage: { ru_utime: { tv_sec: 0, tv_usec: 123456 }, ru_stime: { tv_sec: 0, tv_usec: 78910 }, ru_maxrss: 1024, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 100, ru_majflt: 5, ru_nswap: 0, ru_inblock: 0, ru_oublock: 0, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 0, ru_nivcsw: 0 }) = 1234\n"
+    );
+}
+
+#[tokio::test]
+async fn test_wait4_no_rusage() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_wait4,
+        pid: 2000,
+        tid: 2001,
+        return_value: 5678,
+        data: pinchy_common::SyscallEventData {
+            wait4: Wait4Data {
+                pid: 1234,       // wait for specific child
+                wstatus: 9 << 8, // child exited with status 9
+                options: 0,
+                has_rusage: false,          // no rusage requested
+                rusage: Default::default(), // should be ignored
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2001 wait4(pid: 1234, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 9}, options: 0, rusage: NULL) = 5678\n"
+    );
 }

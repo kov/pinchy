@@ -137,6 +137,9 @@ arguments reference and whether that data needs special handling.
      - When parsing structs on the eBPF side, use `bpf_probe_read_user()`;
        only use `bpf_probe_read_buf()` when reading byte arrays.
 3. **Syscall arguments:**
+   - Syscall arguments go into a struct called `<Syscall>Data` that should be
+   added to the `pinchy-common/src/lib.rs` file and be added to the SyscallEventData
+   union.
    - Identify any arguments with further parsing, especially those that
    could be reused by multiple syscalls (e.g. mode, flags, poll events,
    structs like timespec and stat).

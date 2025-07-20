@@ -1473,3 +1473,64 @@ pub fn format_rusage_who(who: i32) -> &'static str {
         _ => "UNKNOWN",
     }
 }
+
+pub fn format_clone_flags(flags: u64) -> String {
+    let flag_defs = [
+        (libc::CLONE_VM as u64, "CLONE_VM"),
+        (libc::CLONE_FS as u64, "CLONE_FS"),
+        (libc::CLONE_FILES as u64, "CLONE_FILES"),
+        (libc::CLONE_SIGHAND as u64, "CLONE_SIGHAND"),
+        (libc::CLONE_PIDFD as u64, "CLONE_PIDFD"),
+        (libc::CLONE_PTRACE as u64, "CLONE_PTRACE"),
+        (libc::CLONE_VFORK as u64, "CLONE_VFORK"),
+        (libc::CLONE_PARENT as u64, "CLONE_PARENT"),
+        (libc::CLONE_THREAD as u64, "CLONE_THREAD"),
+        (libc::CLONE_NEWNS as u64, "CLONE_NEWNS"),
+        (libc::CLONE_SYSVSEM as u64, "CLONE_SYSVSEM"),
+        (libc::CLONE_SETTLS as u64, "CLONE_SETTLS"),
+        (libc::CLONE_PARENT_SETTID as u64, "CLONE_PARENT_SETTID"),
+        (libc::CLONE_CHILD_CLEARTID as u64, "CLONE_CHILD_CLEARTID"),
+        (libc::CLONE_DETACHED as u64, "CLONE_DETACHED"),
+        (libc::CLONE_UNTRACED as u64, "CLONE_UNTRACED"),
+        (libc::CLONE_CHILD_SETTID as u64, "CLONE_CHILD_SETTID"),
+        (libc::CLONE_NEWCGROUP as u64, "CLONE_NEWCGROUP"),
+        (libc::CLONE_NEWUTS as u64, "CLONE_NEWUTS"),
+        (libc::CLONE_NEWIPC as u64, "CLONE_NEWIPC"),
+        (libc::CLONE_NEWUSER as u64, "CLONE_NEWUSER"),
+        (libc::CLONE_NEWPID as u64, "CLONE_NEWPID"),
+        (libc::CLONE_NEWNET as u64, "CLONE_NEWNET"),
+        (libc::CLONE_IO as u64, "CLONE_IO"),
+        (libc::CLONE_CLEAR_SIGHAND as u64, "CLONE_CLEAR_SIGHAND"),
+        (libc::CLONE_INTO_CGROUP as u64, "CLONE_INTO_CGROUP"),
+    ];
+
+    let mut parts = Vec::new();
+    let mut remaining_flags = flags;
+
+    for (flag, name) in flag_defs.iter() {
+        if (flags & flag) != 0 {
+            parts.push(name.to_string());
+            remaining_flags &= !flag;
+        }
+    }
+
+    // Extract the exit signal (lower 8 bits)
+    let exit_signal = flags & 0xff;
+    if exit_signal != 0 {
+        match exit_signal {
+            17 => parts.push("SIGCHLD".to_string()), // Most common case
+            _ => parts.push(format!("exit_signal={}", exit_signal)),
+        }
+        remaining_flags &= !0xff; // Remove exit signal bits from remaining
+    }
+
+    if remaining_flags != 0 {
+        parts.push(format!("0x{:x}", remaining_flags));
+    }
+
+    if parts.is_empty() {
+        "0".to_string()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}

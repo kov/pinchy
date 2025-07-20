@@ -16,13 +16,14 @@ use aya::{maps::ProgramArray, programs::TracePoint, Ebpf};
 use log::{debug, trace, warn};
 use nix::unistd::{setgid, setuid, User};
 use pinchy_common::syscalls::{
-    syscall_name_from_nr, SYS_accept4, SYS_brk, SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_execve,
-    SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getegid,
-    SYS_geteuid, SYS_getgid, SYS_getpid, SYS_getppid, SYS_getrandom, SYS_getrusage, SYS_gettid,
-    SYS_getuid, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat,
-    SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg, SYS_rseq,
-    SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg, SYS_set_robust_list,
-    SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write, ALL_SYSCALLS,
+    syscall_name_from_nr, SYS_accept4, SYS_brk, SYS_clone3, SYS_close, SYS_dup3, SYS_epoll_pwait,
+    SYS_execve, SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64,
+    SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpid, SYS_getppid, SYS_getrandom, SYS_getrusage,
+    SYS_gettid, SYS_getuid, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap,
+    SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
+    SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg,
+    SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
+    ALL_SYSCALLS,
 };
 use tokio::{
     signal,
@@ -388,6 +389,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_accept4", SYS_accept4),
         ("syscall_exit_wait4", SYS_wait4),
         ("syscall_exit_getrusage", SYS_getrusage),
+        ("syscall_exit_clone3", SYS_clone3),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

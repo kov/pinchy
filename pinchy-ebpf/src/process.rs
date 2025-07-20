@@ -9,8 +9,8 @@ use aya_ebpf::{
     EbpfContext as _,
 };
 use pinchy_common::{
-    kernel_types::Rlimit,
-    syscalls::{SYS_execve, SYS_getrusage, SYS_prlimit64, SYS_wait4},
+    kernel_types::{CloneArgs, Rlimit},
+    syscalls::{SYS_clone3, SYS_execve, SYS_getrusage, SYS_prlimit64, SYS_wait4},
     SMALL_READ_SIZE,
 };
 
@@ -332,6 +332,74 @@ pub fn syscall_exit_getrusage(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 getrusage: pinchy_common::GetrusageData { who, rusage },
+            },
+        )
+    }
+
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_clone3(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_clone3;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let cl_args_ptr = args[0] as *const CloneArgs;
+        let size = args[1] as u64;
+
+        let mut cl_args = CloneArgs::default();
+        let mut set_tid_count = 0u32;
+        let mut set_tid_array = [0i32; pinchy_common::CLONE_SET_TID_MAX];
+
+        unsafe {
+            // Read only the amount of data that userspace provided, or at most the data we already know about.
+            let read_size = core::cmp::min(size as usize, core::mem::size_of::<CloneArgs>());
+
+            if read_size > 0 {
+                let _ = bpf_probe_read_buf(
+                    cl_args_ptr as *const u8,
+                    &mut core::slice::from_raw_parts_mut(
+                        &mut cl_args as *mut CloneArgs as *mut u8,
+                        read_size,
+                    ),
+                );
+            }
+
+            // If set_tid is provided, read the PID array
+            if cl_args.set_tid != 0 && cl_args.set_tid_size > 0 {
+                let set_tid_ptr = cl_args.set_tid as *const i32;
+                let max_count = core::cmp::min(
+                    cl_args.set_tid_size as usize,
+                    pinchy_common::CLONE_SET_TID_MAX,
+                );
+
+                for i in 0..max_count {
+                    if let Ok(pid) = bpf_probe_read_user::<i32>(set_tid_ptr.add(i)) {
+                        set_tid_array[i] = pid;
+                        set_tid_count += 1;
+                    } else {
+                        break;
+                    }
+                }
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                clone3: pinchy_common::Clone3Data {
+                    cl_args,
+                    size,
+                    set_tid_count,
+                    set_tid_array,
+                },
             },
         )
     }

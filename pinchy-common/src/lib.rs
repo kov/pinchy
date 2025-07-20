@@ -60,6 +60,7 @@ pub union SyscallEventData {
     pub accept4: Accept4Data,
     pub wait4: Wait4Data,
     pub getrusage: GetrusageData,
+    pub clone3: Clone3Data,
     pub getpid: GetpidData,
     pub gettid: GettidData,
     pub getuid: GetuidData,
@@ -412,4 +413,26 @@ pub struct Wait4Data {
 pub struct GetrusageData {
     pub who: i32,
     pub rusage: kernel_types::Rusage,
+}
+
+pub const CLONE_SET_TID_MAX: usize = 8; // Maximum set_tid array elements to capture
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Clone3Data {
+    pub cl_args: kernel_types::CloneArgs,
+    pub size: u64,
+    pub set_tid_count: u32, // Number of PIDs captured in set_tid_array
+    pub set_tid_array: [i32; CLONE_SET_TID_MAX], // Captured set_tid PIDs
+}
+
+impl Default for Clone3Data {
+    fn default() -> Self {
+        Self {
+            cl_args: kernel_types::CloneArgs::default(),
+            size: 0,
+            set_tid_count: 0,
+            set_tid_array: [0; CLONE_SET_TID_MAX],
+        }
+    }
 }

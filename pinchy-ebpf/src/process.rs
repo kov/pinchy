@@ -10,7 +10,7 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::{CloneArgs, Rlimit},
-    syscalls::{SYS_clone3, SYS_execve, SYS_getrusage, SYS_prlimit64, SYS_wait4},
+    syscalls::{SYS_clone, SYS_clone3, SYS_execve, SYS_getrusage, SYS_prlimit64, SYS_wait4},
     SMALL_READ_SIZE,
 };
 
@@ -399,6 +399,54 @@ pub fn syscall_exit_clone3(ctx: TracePointContext) -> u32 {
                     size,
                     set_tid_count,
                     set_tid_array,
+                },
+            },
+        )
+    }
+
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_clone(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let return_value = get_return_value(&ctx)?;
+
+        // Read syscall arguments
+        let args = get_args(&ctx, SYS_clone)?;
+        let flags = args[0] as u64;
+        let stack = args[1];
+        let parent_tid_ptr = args[2] as *const i32;
+        let child_tid_ptr = args[3] as *const i32;
+        let tls = args[4] as u64;
+
+        // Dereference parent_tid and child_tid pointers
+        let parent_tid = if !parent_tid_ptr.is_null() {
+            unsafe { bpf_probe_read_user(parent_tid_ptr).unwrap_or(0) }
+        } else {
+            0
+        };
+
+        let child_tid = if !child_tid_ptr.is_null() {
+            unsafe { bpf_probe_read_user(child_tid_ptr).unwrap_or(0) }
+        } else {
+            0
+        };
+
+        output_event(
+            &ctx,
+            SYS_clone,
+            return_value,
+            pinchy_common::SyscallEventData {
+                clone: pinchy_common::CloneData {
+                    flags,
+                    stack,
+                    parent_tid,
+                    child_tid,
+                    tls,
                 },
             },
         )

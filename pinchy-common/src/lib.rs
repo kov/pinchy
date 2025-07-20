@@ -69,6 +69,7 @@ pub union SyscallEventData {
     pub getegid: GetegidData,
     pub getppid: GetppidData,
     pub dup3: Dup3Data,
+    pub clone: CloneData,
 }
 
 #[repr(C)]
@@ -435,4 +436,14 @@ impl Default for Clone3Data {
             set_tid_array: [0; CLONE_SET_TID_MAX],
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct CloneData {
+    pub flags: u64,
+    pub stack: usize,
+    pub parent_tid: i32,
+    pub child_tid: i32,
+    pub tls: u64,
 }

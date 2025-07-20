@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use crate::SMALL_READ_SIZE;
+use crate::{DATA_READ_SIZE, SMALL_READ_SIZE};
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
@@ -233,6 +233,22 @@ impl Default for Msghdr {
             has_name: false,
             name: Sockaddr::default(),
             control_data: [0; MSG_CONTROL_SIZE],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct XattrList {
+    pub data: [u8; DATA_READ_SIZE],
+    pub size: usize,
+}
+
+impl Default for XattrList {
+    fn default() -> Self {
+        Self {
+            data: [0u8; DATA_READ_SIZE],
+            size: 0,
         }
     }
 }

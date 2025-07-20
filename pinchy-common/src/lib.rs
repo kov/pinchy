@@ -73,6 +73,9 @@ pub union SyscallEventData {
     pub exit_group: ExitGroupData,
     pub rt_sigreturn: RtSigreturnData,
     pub pipe2: Pipe2Data,
+    pub flistxattr: FlistxattrData,
+    pub listxattr: ListxattrData,
+    pub llistxattr: LlistxattrData,
 }
 
 #[repr(C)]
@@ -80,6 +83,33 @@ pub union SyscallEventData {
 pub struct Pipe2Data {
     pub pipefd: [i32; 2],
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct FlistxattrData {
+    pub fd: i32,
+    pub list: u64,
+    pub size: usize,
+    pub xattr_list: crate::kernel_types::XattrList,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct ListxattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub list: u64,
+    pub size: usize,
+    pub xattr_list: crate::kernel_types::XattrList,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct LlistxattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub list: u64,
+    pub size: usize,
+    pub xattr_list: crate::kernel_types::XattrList,
 }
 
 #[repr(C)]

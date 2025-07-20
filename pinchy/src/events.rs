@@ -18,8 +18,8 @@ use crate::{
         format_path, format_prctl_op, format_recvmsg_flags, format_rseq, format_rseq_flags,
         format_rusage, format_rusage_who, format_sendmsg_flags, format_signal_number,
         format_sigprocmask_how, format_sockaddr, format_stat, format_statfs, format_timespec,
-        format_utsname, format_wait_options, format_wait_status, poll_bits_to_strs,
-        prctl_op_arg_count,
+        format_utsname, format_wait_options, format_wait_status, format_xattr_list,
+        poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -42,6 +42,39 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_getgid
         | syscalls::SYS_getegid
         | syscalls::SYS_getppid => {
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_flistxattr => {
+            let data = unsafe { event.data.flistxattr };
+            argf!(sf, "fd: {}", data.fd);
+
+            arg!(sf, "list:");
+            format_xattr_list(&mut sf, &data.xattr_list).await?;
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_listxattr => {
+            let data = unsafe { event.data.listxattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+
+            arg!(sf, "list:");
+            format_xattr_list(&mut sf, &data.xattr_list).await?;
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_llistxattr => {
+            let data = unsafe { event.data.llistxattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+
+            arg!(sf, "list:");
+            format_xattr_list(&mut sf, &data.xattr_list).await?;
+
+            argf!(sf, "size: {}", data.size);
+
             finish!(sf, event.return_value);
         }
         syscalls::SYS_exit_group => {

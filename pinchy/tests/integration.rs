@@ -353,6 +353,47 @@ fn network_syscalls() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn identity_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises identity-related syscalls
+    let handle = run_workload(
+        &[
+            "getpid", "gettid", "getuid", "geteuid", "getgid", "getegid", "getppid",
+        ],
+        "identity_syscalls",
+    );
+
+    // Expected output - we should see all identity syscalls returning reasonable values
+    let expected_output = escaped_regex(indoc! {r#"
+        PID getpid() = PID
+        PID gettid() = NUMBER
+        PID getuid() = NUMBER
+        PID geteuid() = NUMBER
+        PID getgid() = NUMBER
+        PID getegid() = NUMBER
+        PID getppid() = NUMBER
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 fn run_pinchyd(pid: Option<u32>) -> Child {
     let mut cmd = process::Command::new(cargo_bin("pinchyd"));
     let mut cmd = cmd

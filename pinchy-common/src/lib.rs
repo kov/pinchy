@@ -61,6 +61,12 @@ pub union SyscallEventData {
     pub wait4: Wait4Data,
     pub getrusage: GetrusageData,
     pub getpid: GetpidData,
+    pub gettid: GettidData,
+    pub getuid: GetuidData,
+    pub geteuid: GeteuidData,
+    pub getgid: GetgidData,
+    pub getegid: GetegidData,
+    pub getppid: GetppidData,
     pub dup3: Dup3Data,
 }
 
@@ -148,6 +154,30 @@ pub struct SchedYieldData;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct GetpidData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GettidData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetuidData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GeteuidData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetgidData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetegidData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetppidData;
 
 #[repr(C)]
 #[derive(Clone, Copy)]

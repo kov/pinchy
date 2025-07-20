@@ -13,8 +13,9 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::syscalls::{
-    SYS_brk, SYS_close, SYS_dup3, SYS_execve, SYS_fchdir, SYS_getpid, SYS_getrandom, SYS_lseek,
-    SYS_mprotect, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
+    SYS_brk, SYS_close, SYS_dup3, SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid,
+    SYS_getpid, SYS_getppid, SYS_getrandom, SYS_gettid, SYS_getuid, SYS_lseek, SYS_mprotect,
+    SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
     SYS_set_tid_address,
 };
 
@@ -209,6 +210,24 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
             },
             SYS_getpid => pinchy_common::SyscallEventData {
                 getpid: pinchy_common::GetpidData,
+            },
+            SYS_gettid => pinchy_common::SyscallEventData {
+                gettid: pinchy_common::GettidData,
+            },
+            SYS_getuid => pinchy_common::SyscallEventData {
+                getuid: pinchy_common::GetuidData,
+            },
+            SYS_geteuid => pinchy_common::SyscallEventData {
+                geteuid: pinchy_common::GeteuidData,
+            },
+            SYS_getgid => pinchy_common::SyscallEventData {
+                getgid: pinchy_common::GetgidData,
+            },
+            SYS_getegid => pinchy_common::SyscallEventData {
+                getegid: pinchy_common::GetegidData,
+            },
+            SYS_getppid => pinchy_common::SyscallEventData {
+                getppid: pinchy_common::GetppidData,
             },
             SYS_brk => pinchy_common::SyscallEventData {
                 brk: pinchy_common::BrkData { addr: args[0] },

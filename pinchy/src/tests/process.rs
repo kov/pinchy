@@ -1,9 +1,12 @@
 use std::pin::Pin;
 
 use pinchy_common::{
-    syscalls::{SYS_execve, SYS_fchdir, SYS_getpid, SYS_getrusage, SYS_set_tid_address, SYS_wait4},
-    ExecveData, GetpidData, GetrusageData, SetTidAddressData, SyscallEvent, Wait4Data,
-    SMALL_READ_SIZE,
+    syscalls::{
+        SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpid, SYS_getppid,
+        SYS_getrusage, SYS_gettid, SYS_getuid, SYS_set_tid_address, SYS_wait4,
+    },
+    ExecveData, GetegidData, GeteuidData, GetgidData, GetpidData, GetppidData, GetrusageData,
+    GettidData, GetuidData, SetTidAddressData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
 };
 
 use crate::{
@@ -243,6 +246,144 @@ async fn test_getpid() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!("1234 getpid() = 1234\n")
+    );
+}
+
+#[tokio::test]
+async fn test_gettid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_gettid,
+        pid: 1234,
+        tid: 5678,
+        return_value: 5678, // gettid returns the thread ID
+        data: pinchy_common::SyscallEventData { gettid: GettidData },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("5678 gettid() = 5678\n")
+    );
+}
+
+#[tokio::test]
+async fn test_getuid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getuid,
+        pid: 1234,
+        tid: 1234,
+        return_value: 1000, // getuid returns the user ID
+        data: pinchy_common::SyscallEventData { getuid: GetuidData },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1234 getuid() = 1000\n")
+    );
+}
+
+#[tokio::test]
+async fn test_geteuid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_geteuid,
+        pid: 1234,
+        tid: 1234,
+        return_value: 1000, // geteuid returns the effective user ID
+        data: pinchy_common::SyscallEventData {
+            geteuid: GeteuidData,
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1234 geteuid() = 1000\n")
+    );
+}
+
+#[tokio::test]
+async fn test_getgid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getgid,
+        pid: 1234,
+        tid: 1234,
+        return_value: 1000, // getgid returns the group ID
+        data: pinchy_common::SyscallEventData { getgid: GetgidData },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1234 getgid() = 1000\n")
+    );
+}
+
+#[tokio::test]
+async fn test_getegid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getegid,
+        pid: 1234,
+        tid: 1234,
+        return_value: 1000, // getegid returns the effective group ID
+        data: pinchy_common::SyscallEventData {
+            getegid: GetegidData,
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1234 getegid() = 1000\n")
+    );
+}
+
+#[tokio::test]
+async fn test_getppid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getppid,
+        pid: 1234,
+        tid: 1234,
+        return_value: 987, // getppid returns the parent process ID
+        data: pinchy_common::SyscallEventData {
+            getppid: GetppidData,
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("1234 getppid() = 987\n")
     );
 }
 

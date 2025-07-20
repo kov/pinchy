@@ -4,19 +4,7 @@
 use std::borrow::Cow;
 
 use log::{error, trace};
-use pinchy_common::{
-    syscalls::{
-        SYS_accept4, SYS_brk, SYS_clone, SYS_clone3, SYS_close, SYS_dup3, SYS_epoll_pwait,
-        SYS_execve, SYS_exit_group, SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex,
-        SYS_getdents64, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpid, SYS_getppid,
-        SYS_getrandom, SYS_getrusage, SYS_gettid, SYS_getuid, SYS_ioctl, SYS_lseek, SYS_mmap,
-        SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64,
-        SYS_read, SYS_readlinkat, SYS_recvmsg, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask,
-        SYS_rt_sigreturn, SYS_sched_yield, SYS_sendmsg, SYS_set_robust_list, SYS_set_tid_address,
-        SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
-    },
-    SyscallEvent,
-};
+use pinchy_common::{syscalls, SyscallEvent};
 
 use crate::{
     arg, argf, finish,
@@ -45,22 +33,29 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
     };
 
     match event.syscall_nr {
-        SYS_rt_sigreturn | SYS_sched_yield | SYS_getpid | SYS_gettid | SYS_getuid | SYS_geteuid
-        | SYS_getgid | SYS_getegid | SYS_getppid => {
+        syscalls::SYS_rt_sigreturn
+        | syscalls::SYS_sched_yield
+        | syscalls::SYS_getpid
+        | syscalls::SYS_gettid
+        | syscalls::SYS_getuid
+        | syscalls::SYS_geteuid
+        | syscalls::SYS_getgid
+        | syscalls::SYS_getegid
+        | syscalls::SYS_getppid => {
             finish!(sf, event.return_value);
         }
-        SYS_exit_group => {
+        syscalls::SYS_exit_group => {
             let data = unsafe { event.data.exit_group };
             argf!(sf, "status: {}", data.status);
             finish!(sf, event.return_value);
         }
-        SYS_close => {
+        syscalls::SYS_close => {
             let data = unsafe { event.data.close };
 
             argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
         }
-        SYS_dup3 => {
+        syscalls::SYS_dup3 => {
             let data = unsafe { event.data.dup3 };
 
             argf!(sf, "oldfd: {}", data.oldfd);
@@ -68,7 +63,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "flags: {}", format_dup3_flags(data.flags));
             finish!(sf, event.return_value);
         }
-        SYS_epoll_pwait => {
+        syscalls::SYS_epoll_pwait => {
             let data = unsafe { event.data.epoll_pwait };
 
             argf!(sf, "epfd: {}", data.epfd);
@@ -96,7 +91,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_ppoll => {
+        syscalls::SYS_ppoll => {
             let data = unsafe { event.data.ppoll };
 
             let return_meaning = match event.return_value {
@@ -134,7 +129,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, return_meaning);
         }
-        SYS_read => {
+        syscalls::SYS_read => {
             let data = unsafe { event.data.read };
             let bytes_read = event.return_value as usize;
             let buf = &data.buf[..bytes_read.min(data.buf.len())];
@@ -154,7 +149,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_write => {
+        syscalls::SYS_write => {
             let data = unsafe { event.data.write };
             let bytes_written = event.return_value as usize;
             let buf = &data.buf[..bytes_written.min(data.buf.len())];
@@ -174,7 +169,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_lseek => {
+        syscalls::SYS_lseek => {
             let data = unsafe { event.data.lseek };
 
             argf!(sf, "fd: {}", data.fd);
@@ -183,7 +178,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_openat => {
+        syscalls::SYS_openat => {
             let data = unsafe { event.data.openat };
 
             argf!(sf, "dfd: {}", format_dirfd(data.dfd));
@@ -193,7 +188,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_futex => {
+        syscalls::SYS_futex => {
             let data = unsafe { event.data.futex };
 
             argf!(sf, "uaddr: 0x{:x}", data.uaddr);
@@ -207,7 +202,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_ioctl => {
+        syscalls::SYS_ioctl => {
             let data = unsafe { event.data.ioctl };
             let request = format_ioctl_request(data.request);
 
@@ -223,7 +218,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_fcntl => {
+        syscalls::SYS_fcntl => {
             let data = unsafe { event.data.fcntl };
 
             argf!(sf, "fd: {}", data.fd);
@@ -232,7 +227,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_execve => {
+        syscalls::SYS_execve => {
             use std::{ffi::OsString, os::unix::ffi::OsStringExt};
             let data = unsafe { event.data.execve };
 
@@ -285,7 +280,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_fstat => {
+        syscalls::SYS_fstat => {
             let data = unsafe { event.data.fstat };
 
             argf!(sf, "fd: {}", data.fd);
@@ -296,7 +291,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_newfstatat => {
+        syscalls::SYS_newfstatat => {
             let data = unsafe { event.data.newfstatat };
 
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
@@ -313,7 +308,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_getdents64 => {
+        syscalls::SYS_getdents64 => {
             let data = unsafe { event.data.getdents64 };
             let mut entries = Vec::new();
 
@@ -346,7 +341,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 ));
             }
         }
-        SYS_mmap => {
+        syscalls::SYS_mmap => {
             let data = unsafe { event.data.mmap };
             let ret_str = if event.return_value == -1 {
                 "-1 (error)".to_string()
@@ -363,7 +358,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, ret_str);
         }
-        SYS_munmap => {
+        syscalls::SYS_munmap => {
             let data = unsafe { event.data.munmap };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
@@ -371,7 +366,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_mprotect => {
+        syscalls::SYS_mprotect => {
             let data = unsafe { event.data.mprotect };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
@@ -380,7 +375,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_getrandom => {
+        syscalls::SYS_getrandom => {
             let data = unsafe { event.data.getrandom };
 
             argf!(sf, "buf: 0x{:x}", data.buf);
@@ -389,14 +384,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_brk => {
+        syscalls::SYS_brk => {
             let data = unsafe { event.data.brk };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
 
             finish!(sf, format!("0x{:x}", event.return_value));
         }
-        SYS_statfs => {
+        syscalls::SYS_statfs => {
             let data = unsafe { event.data.statfs };
 
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
@@ -411,7 +406,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_prctl => {
+        syscalls::SYS_prctl => {
             let data = unsafe { event.data.generic };
             let op_code = data.args[0] as i32;
             let op_name = format_prctl_op(op_code);
@@ -426,7 +421,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_faccessat => {
+        syscalls::SYS_faccessat => {
             let data = unsafe { event.data.faccessat };
 
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
@@ -439,7 +434,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_set_robust_list => {
+        syscalls::SYS_set_robust_list => {
             let data = unsafe { event.data.set_robust_list };
 
             argf!(sf, "head: 0x{:x}", data.head);
@@ -447,14 +442,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_set_tid_address => {
+        syscalls::SYS_set_tid_address => {
             let data = unsafe { event.data.set_tid_address };
 
             argf!(sf, "tidptr: 0x{:x}", data.tidptr);
 
             finish!(sf, event.return_value);
         }
-        SYS_rt_sigprocmask => {
+        syscalls::SYS_rt_sigprocmask => {
             let data = unsafe { event.data.rt_sigprocmask };
 
             argf!(sf, "how: {}", format_sigprocmask_how(data.how));
@@ -468,7 +463,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_rt_sigaction => {
+        syscalls::SYS_rt_sigaction => {
             let data = unsafe { event.data.rt_sigaction };
 
             argf!(sf, "signum: {}", format_signal_number(data.signum));
@@ -478,7 +473,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_prlimit64 => {
+        syscalls::SYS_prlimit64 => {
             let data = unsafe { event.data.prlimit };
 
             argf!(sf, "pid: {}", data.pid);
@@ -512,7 +507,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_rseq => {
+        syscalls::SYS_rseq => {
             let data = unsafe { event.data.rseq };
 
             argf!(
@@ -542,7 +537,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_uname => {
+        syscalls::SYS_uname => {
             let data = unsafe { event.data.uname };
 
             arg!(sf, "struct utsname:");
@@ -552,12 +547,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_fchdir => {
+        syscalls::SYS_fchdir => {
             let data = unsafe { event.data.fchdir };
             argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
         }
-        SYS_readlinkat => {
+        syscalls::SYS_readlinkat => {
             let data = unsafe { event.data.readlinkat };
 
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
@@ -567,7 +562,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_recvmsg => {
+        syscalls::SYS_recvmsg => {
             let data = unsafe { event.data.recvmsg };
 
             argf!(sf, "sockfd: {}", data.sockfd);
@@ -579,7 +574,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_sendmsg => {
+        syscalls::SYS_sendmsg => {
             let data = unsafe { event.data.sendmsg };
 
             argf!(sf, "sockfd: {}", data.sockfd);
@@ -591,7 +586,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_accept4 => {
+        syscalls::SYS_accept4 => {
             let data = unsafe { event.data.accept4 };
 
             argf!(sf, "sockfd: {}", data.sockfd);
@@ -610,7 +605,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_wait4 => {
+        syscalls::SYS_wait4 => {
             let data = unsafe { event.data.wait4 };
 
             argf!(sf, "pid: {}", data.pid);
@@ -635,7 +630,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_getrusage => {
+        syscalls::SYS_getrusage => {
             let data = unsafe { event.data.getrusage };
 
             argf!(sf, "who: {}", format_rusage_who(data.who));
@@ -651,7 +646,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_clone3 => {
+        syscalls::SYS_clone3 => {
             let data = unsafe { event.data.clone3 };
 
             arg!(sf, "cl_args:");
@@ -686,7 +681,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        SYS_clone => {
+        syscalls::SYS_clone => {
             let data = unsafe { event.data.clone };
 
             argf!(sf, "flags: {}", format_clone_flags(data.flags));

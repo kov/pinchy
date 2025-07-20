@@ -61,8 +61,8 @@ architecture-agnostic by `pinchy-common/src/syscalls/mod.rs`, e.g.
 **Do not modify `aarch64.rs` or `x86_64.rs` directly. Only use them as
 references.**
 
-**Always import SYS_* constants from `pinchy_common::syscalls` in all
-code outside the arch files.**
+**Always import the module `pinchy_common::syscalls` and use the constants as
+`syscalls::SYS_<name>` in all code outside the arch files.**
 
 ## Determining if a syscall is trivial or complex
 

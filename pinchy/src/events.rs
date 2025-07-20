@@ -7,11 +7,12 @@ use log::{error, trace};
 use pinchy_common::{
     syscalls::{
         SYS_accept4, SYS_brk, SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_execve, SYS_faccessat,
-        SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getpid, SYS_getrandom,
-        SYS_getrusage, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat,
-        SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
-        SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg,
-        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
+        SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getegid, SYS_geteuid,
+        SYS_getgid, SYS_getpid, SYS_getppid, SYS_getrandom, SYS_getrusage, SYS_gettid, SYS_getuid,
+        SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat,
+        SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg, SYS_rseq,
+        SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg, SYS_set_robust_list,
+        SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
     },
     SyscallEvent,
 };
@@ -175,6 +176,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             finish!(sf, event.return_value);
         }
         SYS_getpid => {
+            finish!(sf, event.return_value);
+        }
+        SYS_gettid => {
+            finish!(sf, event.return_value);
+        }
+        SYS_getuid => {
+            finish!(sf, event.return_value);
+        }
+        SYS_geteuid => {
+            finish!(sf, event.return_value);
+        }
+        SYS_getgid => {
+            finish!(sf, event.return_value);
+        }
+        SYS_getegid => {
+            finish!(sf, event.return_value);
+        }
+        SYS_getppid => {
             finish!(sf, event.return_value);
         }
         SYS_openat => {

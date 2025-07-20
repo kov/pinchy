@@ -54,6 +54,7 @@ fn main() -> anyhow::Result<()> {
             "fcntl_test" => fcntl_test(),
             "fchdir_test" => fchdir_test(),
             "network_test" => network_test(),
+            "identity_syscalls" => identity_syscalls(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -332,6 +333,21 @@ fn network_test() -> anyhow::Result<()> {
 
         // Verify we got the expected data
         assert_eq!(&buffer[..bytes_received as usize], test_message);
+    }
+
+    Ok(())
+}
+
+fn identity_syscalls() -> anyhow::Result<()> {
+    unsafe {
+        // Call all identity-related syscalls
+        let _pid = libc::getpid();
+        let _tid = libc::gettid();
+        let _uid = libc::getuid();
+        let _euid = libc::geteuid();
+        let _gid = libc::getgid();
+        let _egid = libc::getegid();
+        let _ppid = libc::getppid();
     }
 
     Ok(())

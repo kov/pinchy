@@ -313,6 +313,11 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     exit_group: pinchy_common::ExitGroupData { status },
                 }
             }
+            pinchy_common::syscalls::SYS_rt_sigreturn => {
+                pinchy_common::SyscallEventData {
+                    rt_sigreturn: pinchy_common::RtSigreturnData {},
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

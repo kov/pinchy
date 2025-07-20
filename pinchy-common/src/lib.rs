@@ -71,6 +71,7 @@ pub union SyscallEventData {
     pub dup3: Dup3Data,
     pub clone: CloneData,
     pub exit_group: ExitGroupData,
+    pub rt_sigreturn: RtSigreturnData,
 }
 
 #[repr(C)]
@@ -121,6 +122,10 @@ pub struct WriteData {
     pub buf: [u8; DATA_READ_SIZE],
     pub count: usize,
 }
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RtSigreturnData {}
 
 #[repr(C)]
 #[derive(Clone, Copy)]

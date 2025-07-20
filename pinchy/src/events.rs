@@ -6,13 +6,13 @@ use std::borrow::Cow;
 use log::{error, trace};
 use pinchy_common::{
     syscalls::{
-        SYS_accept4, SYS_brk, SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_execve, SYS_faccessat,
-        SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getegid, SYS_geteuid,
-        SYS_getgid, SYS_getpid, SYS_getppid, SYS_getrandom, SYS_getrusage, SYS_gettid, SYS_getuid,
-        SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat,
-        SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg, SYS_rseq,
-        SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg, SYS_set_robust_list,
-        SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
+        SYS_accept4, SYS_brk, SYS_clone3, SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_execve,
+        SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat, SYS_futex, SYS_getdents64, SYS_getegid,
+        SYS_geteuid, SYS_getgid, SYS_getpid, SYS_getppid, SYS_getrandom, SYS_getrusage, SYS_gettid,
+        SYS_getuid, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_newfstatat,
+        SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read, SYS_readlinkat, SYS_recvmsg,
+        SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg,
+        SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
     },
     SyscallEvent,
 };
@@ -23,13 +23,14 @@ use crate::{
     ioctls::format_ioctl_request,
     raw,
     util::{
-        format_accept4_flags, format_access_mode, format_at_flags, format_bytes, format_dirfd,
-        format_dup3_flags, format_fcntl_cmd, format_flags, format_getrandom_flags,
-        format_mmap_flags, format_mmap_prot, format_mode, format_msghdr, format_path,
-        format_prctl_op, format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage,
-        format_rusage_who, format_sendmsg_flags, format_signal_number, format_sigprocmask_how,
-        format_sockaddr, format_stat, format_statfs, format_timespec, format_utsname,
-        format_wait_options, format_wait_status, poll_bits_to_strs, prctl_op_arg_count,
+        format_accept4_flags, format_access_mode, format_at_flags, format_bytes,
+        format_clone_flags, format_dirfd, format_dup3_flags, format_fcntl_cmd, format_flags,
+        format_getrandom_flags, format_mmap_flags, format_mmap_prot, format_mode, format_msghdr,
+        format_path, format_prctl_op, format_recvmsg_flags, format_rseq, format_rseq_flags,
+        format_rusage, format_rusage_who, format_sendmsg_flags, format_signal_number,
+        format_sigprocmask_how, format_sockaddr, format_stat, format_statfs, format_timespec,
+        format_utsname, format_wait_options, format_wait_status, poll_bits_to_strs,
+        prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -661,6 +662,41 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             } else {
                 raw!(sf, " NULL"); // For failed calls, just show NULL
             }
+
+            finish!(sf, event.return_value);
+        }
+        SYS_clone3 => {
+            let data = unsafe { event.data.clone3 };
+
+            arg!(sf, "cl_args:");
+            with_struct!(sf, {
+                argf!(sf, "flags: {}", format_clone_flags(data.cl_args.flags));
+                argf!(sf, "pidfd: {:#x}", data.cl_args.pidfd);
+                argf!(sf, "child_tid: {:#x}", data.cl_args.child_tid);
+                argf!(sf, "parent_tid: {:#x}", data.cl_args.parent_tid);
+                argf!(sf, "exit_signal: {}", data.cl_args.exit_signal);
+                argf!(sf, "stack: {:#x}", data.cl_args.stack);
+                argf!(sf, "stack_size: {}", data.cl_args.stack_size);
+                argf!(sf, "tls: {:#x}", data.cl_args.tls);
+                if data.cl_args.set_tid != 0 || data.set_tid_count > 0 {
+                    if data.set_tid_count > 0 {
+                        arg!(sf, "set_tid:");
+                        with_array!(sf, {
+                            for i in 0..data.set_tid_count as usize {
+                                argf!(sf, "{}", data.set_tid_array[i]);
+                            }
+                        });
+                    } else {
+                        argf!(sf, "set_tid: {:#x}", data.cl_args.set_tid);
+                    }
+                    argf!(sf, "set_tid_size: {}", data.cl_args.set_tid_size);
+                }
+                if data.cl_args.cgroup != 0 {
+                    argf!(sf, "cgroup: {}", data.cl_args.cgroup);
+                }
+            });
+
+            argf!(sf, "size: {}", data.size);
 
             finish!(sf, event.return_value);
         }

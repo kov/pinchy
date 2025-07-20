@@ -1,12 +1,14 @@
 use std::pin::Pin;
 
 use pinchy_common::{
+    kernel_types::CloneArgs,
     syscalls::{
-        SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpid, SYS_getppid,
-        SYS_getrusage, SYS_gettid, SYS_getuid, SYS_set_tid_address, SYS_wait4,
+        SYS_clone3, SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpid,
+        SYS_getppid, SYS_getrusage, SYS_gettid, SYS_getuid, SYS_set_tid_address, SYS_wait4,
     },
-    ExecveData, GetegidData, GeteuidData, GetgidData, GetpidData, GetppidData, GetrusageData,
-    GettidData, GetuidData, SetTidAddressData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
+    Clone3Data, ExecveData, GetegidData, GeteuidData, GetgidData, GetpidData, GetppidData,
+    GetrusageData, GettidData, GetuidData, SetTidAddressData, SyscallEvent, Wait4Data,
+    SMALL_READ_SIZE,
 };
 
 use crate::{
@@ -700,4 +702,88 @@ async fn test_getrusage_error() {
 
     let result = String::from_utf8_lossy(&output);
     assert_eq!(result, "5001 getrusage(who: UNKNOWN, rusage: NULL) = -22\n");
+}
+
+#[tokio::test]
+async fn test_clone3() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_clone3,
+        pid: 1000,
+        tid: 1001,
+        return_value: 1234, // child PID
+        data: pinchy_common::SyscallEventData {
+            clone3: Clone3Data {
+                cl_args: CloneArgs {
+                    flags: 0x11200,
+                    pidfd: 0,
+                    child_tid: 0x7fff12345678,
+                    parent_tid: 0x7fff87654321,
+                    exit_signal: 17, // SIGCHLD
+                    stack: 0x7fff00001000,
+                    stack_size: 8192,
+                    tls: 0x7fff00002000,
+                    set_tid: 0,
+                    set_tid_size: 0,
+                    cgroup: 0,
+                },
+                size: 88,
+                set_tid_count: 0,
+                set_tid_array: [0; pinchy_common::CLONE_SET_TID_MAX],
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000 }, size: 88) = 1234\n"
+    );
+}
+
+#[tokio::test]
+async fn test_clone3_with_set_tid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_clone3,
+        pid: 1000,
+        tid: 1001,
+        return_value: 1234, // child PID
+        data: pinchy_common::SyscallEventData {
+            clone3: Clone3Data {
+                cl_args: CloneArgs {
+                    flags: 0x11200,
+                    pidfd: 0,
+                    child_tid: 0x7fff12345678,
+                    parent_tid: 0x7fff87654321,
+                    exit_signal: 17, // SIGCHLD
+                    stack: 0x7fff00001000,
+                    stack_size: 8192,
+                    tls: 0x7fff00002000,
+                    set_tid: 0x7fff00003000, // Pointer to set_tid array
+                    set_tid_size: 3,
+                    cgroup: 0,
+                },
+                size: 88,
+                set_tid_count: 3,                             // We captured 3 PIDs
+                set_tid_array: [7, 42, 31496, 0, 0, 0, 0, 0], // Example from manpage
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000, set_tid: [ 7, 42, 31496 ], set_tid_size: 3 }, size: 88) = 1234\n"
+    );
 }

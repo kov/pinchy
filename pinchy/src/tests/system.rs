@@ -1,3 +1,25 @@
+#[tokio::test]
+async fn parse_rt_sigreturn() {
+    use pinchy_common::RtSigreturnData;
+
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_rt_sigreturn,
+        pid: 123,
+        tid: 123,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            rt_sigreturn: RtSigreturnData {},
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(String::from_utf8_lossy(&output), "123 rt_sigreturn() = 0\n");
+}
 use std::pin::Pin;
 
 use pinchy_common::{

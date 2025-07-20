@@ -151,10 +151,11 @@ arguments reference and whether that data needs special handling.
    - When adding or modifying formatting helpers, use `libc::` constants whenever
    possible for mapping numeric values to strings; when they are not available,
    declare constants outside of the function and use those.
-4. **Event parsing:** Add to the event parsing code in
-   `pinchy/src/events.rs`. For structs and other types with further parsing, try
-   to do any parsing that can be reasonably done in a short amount of time, use
-   existing helpers when they exist, improve them if necessary.
+4. **Event parsing:** Add to the event parsing code in `pinchy/src/events.rs`. For
+   structs and other types with further parsing, try to do any parsing that can be
+   reasonably done in a short amount of time, use existing helpers when they exist,
+   improve them if necessary. If the function takes no arguments, add it to the match
+   arm that only calls finish!().
 5. **Test:** Ensure the new syscall is being traced and parsed
    correctly by adding a test (see Adding tests below).
 

@@ -8,10 +8,7 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::{LinuxDirent64, Stat},
-    syscalls::{
-        SYS_faccessat, SYS_fstat, SYS_getdents64, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
-    },
-    DATA_READ_SIZE,
+    syscalls, DATA_READ_SIZE,
 };
 
 use crate::util::{get_args, get_return_value, output_event};
@@ -19,7 +16,7 @@ use crate::util::{get_args, get_return_value, output_event};
 #[tracepoint]
 pub fn syscall_exit_fstat(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_fstat;
+        let syscall_nr = syscalls::SYS_fstat;
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
 
@@ -53,7 +50,7 @@ pub fn syscall_exit_fstat(ctx: TracePointContext) -> u32 {
 #[tracepoint]
 pub fn syscall_exit_newfstatat(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_newfstatat;
+        let syscall_nr = syscalls::SYS_newfstatat;
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
 
@@ -104,7 +101,7 @@ pub fn syscall_exit_newfstatat(ctx: TracePointContext) -> u32 {
 #[tracepoint]
 pub fn syscall_exit_getdents64(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_getdents64;
+        let syscall_nr = syscalls::SYS_getdents64;
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
 
@@ -157,7 +154,7 @@ pub fn syscall_exit_getdents64(ctx: TracePointContext) -> u32 {
 #[tracepoint]
 pub fn syscall_exit_readlinkat(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_readlinkat;
+        let syscall_nr = syscalls::SYS_readlinkat;
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
 
@@ -192,7 +189,7 @@ pub fn syscall_exit_readlinkat(ctx: TracePointContext) -> u32 {
 #[tracepoint]
 pub fn syscall_exit_statfs(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_statfs;
+        let syscall_nr = syscalls::SYS_statfs;
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
 
@@ -232,7 +229,7 @@ pub fn syscall_exit_statfs(ctx: TracePointContext) -> u32 {
 #[tracepoint]
 pub fn syscall_exit_faccessat(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_faccessat;
+        let syscall_nr = syscalls::SYS_faccessat;
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
 
@@ -256,6 +253,129 @@ pub fn syscall_exit_faccessat(ctx: TracePointContext) -> u32 {
                     pathname,
                     mode,
                     flags,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+fn parse_xattr_list(list_ptr: *const u8, size: usize) -> pinchy_common::kernel_types::XattrList {
+    let mut xattr_list = pinchy_common::kernel_types::XattrList::default();
+    if !list_ptr.is_null() && size > 0 {
+        let read_size = core::cmp::min(size, DATA_READ_SIZE);
+        unsafe {
+            let _ = bpf_probe_read_buf(list_ptr, &mut xattr_list.data[..read_size]);
+        }
+        xattr_list.size = read_size;
+    }
+    xattr_list
+}
+
+#[tracepoint]
+pub fn syscall_exit_flistxattr(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_flistxattr;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let list_ptr = args[1] as *const u8;
+        let size = args[2] as usize;
+
+        let xattr_list = parse_xattr_list(list_ptr, size);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                flistxattr: pinchy_common::FlistxattrData {
+                    fd,
+                    list: list_ptr as u64,
+                    size,
+                    xattr_list,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_listxattr(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_listxattr;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pathname_ptr = args[0] as *const u8;
+        let list_ptr = args[1] as *const u8;
+        let size = args[2] as usize;
+
+        let mut pathname = [0u8; DATA_READ_SIZE];
+
+        unsafe {
+            let _ = bpf_probe_read_buf(pathname_ptr, &mut pathname);
+        }
+
+        let xattr_list = parse_xattr_list(list_ptr, size);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                listxattr: pinchy_common::ListxattrData {
+                    pathname,
+                    list: list_ptr as u64,
+                    size,
+                    xattr_list,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_llistxattr(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_llistxattr;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pathname_ptr = args[0] as *const u8;
+        let list_ptr = args[1] as *const u8;
+        let size = args[2] as usize;
+
+        let mut pathname = [0u8; DATA_READ_SIZE];
+
+        unsafe {
+            let _ = bpf_probe_read_buf(pathname_ptr, &mut pathname);
+        }
+
+        let xattr_list = parse_xattr_list(list_ptr, size);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                llistxattr: pinchy_common::LlistxattrData {
+                    pathname,
+                    list: list_ptr as u64,
+                    size,
+                    xattr_list,
                 },
             },
         )

@@ -385,6 +385,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_getrusage", syscalls::SYS_getrusage),
         ("syscall_exit_clone3", syscalls::SYS_clone3),
         ("syscall_exit_clone", syscalls::SYS_clone),
+        ("syscall_exit_flistxattr", syscalls::SYS_flistxattr),
+        ("syscall_exit_listxattr", syscalls::SYS_listxattr),
+        ("syscall_exit_llistxattr", syscalls::SYS_llistxattr),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

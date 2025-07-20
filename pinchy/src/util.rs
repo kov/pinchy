@@ -1534,3 +1534,25 @@ pub fn format_clone_flags(flags: u64) -> String {
         format!("0x{:x} ({})", flags, parts.join("|"))
     }
 }
+
+pub async fn format_xattr_list(
+    sf: &mut crate::formatting::SyscallFormatter<'_>,
+    xattr_list: &pinchy_common::kernel_types::XattrList,
+) -> anyhow::Result<()> {
+    let mut start = 0;
+    with_array!(sf, {
+        for i in 0..xattr_list.size {
+            if xattr_list.data[i] == 0 {
+                if start < i {
+                    argf!(
+                        sf,
+                        "{}",
+                        String::from_utf8_lossy(&xattr_list.data[start..i])
+                    );
+                }
+                start = i + 1;
+            }
+        }
+    });
+    Ok(())
+}

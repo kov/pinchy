@@ -420,3 +420,127 @@ async fn test_readlinkat_event_parsing() {
         )
     );
 }
+
+#[tokio::test]
+async fn parse_flistxattr() {
+    use pinchy_common::{kernel_types::XattrList, syscalls::SYS_flistxattr, FlistxattrData};
+
+    let mut xattr_list = XattrList::default();
+    let names = b"user.attr1\0user.attr2\0";
+    xattr_list.data[..names.len()].copy_from_slice(names);
+    xattr_list.size = names.len();
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_flistxattr,
+        pid: 42,
+        tid: 42,
+        return_value: names.len() as i64,
+        data: pinchy_common::SyscallEventData {
+            flistxattr: FlistxattrData {
+                fd: 7,
+                list: 0xdeadbeef,
+                size: 256,
+                xattr_list,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    crate::events::handle_event(&event, formatter)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "42 flistxattr(fd: 7, list: [ user.attr1, user.attr2 ], size: 256) = 22\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_listxattr() {
+    use pinchy_common::{kernel_types::XattrList, syscalls::SYS_listxattr, ListxattrData};
+
+    let mut xattr_list = XattrList::default();
+    let names = b"user.attr1\0user.attr2\0";
+    xattr_list.data[..names.len()].copy_from_slice(names);
+    xattr_list.size = names.len();
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_listxattr,
+        pid: 43,
+        tid: 43,
+        return_value: names.len() as i64,
+        data: pinchy_common::SyscallEventData {
+            listxattr: ListxattrData {
+                pathname: {
+                    let mut arr = [0u8; pinchy_common::DATA_READ_SIZE];
+                    let path = b"/tmp/testfile\0";
+                    arr[..path.len()].copy_from_slice(path);
+                    arr
+                },
+                list: 0xabadcafe,
+                size: 128,
+                xattr_list,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    crate::events::handle_event(&event, formatter)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "43 listxattr(pathname: \"/tmp/testfile\", list: [ user.attr1, user.attr2 ], size: 128) = 22\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_llistxattr() {
+    use pinchy_common::{kernel_types::XattrList, syscalls::SYS_llistxattr, LlistxattrData};
+
+    let mut xattr_list = XattrList::default();
+    let names = b"user.attr1\0user.attr2\0";
+    xattr_list.data[..names.len()].copy_from_slice(names);
+    xattr_list.size = names.len();
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_llistxattr,
+        pid: 44,
+        tid: 44,
+        return_value: names.len() as i64,
+        data: pinchy_common::SyscallEventData {
+            llistxattr: LlistxattrData {
+                pathname: {
+                    let mut arr = [0u8; pinchy_common::DATA_READ_SIZE];
+                    let path = b"/tmp/testlink\0";
+                    arr[..path.len()].copy_from_slice(path);
+                    arr
+                },
+                list: 0xfeedface,
+                size: 64,
+                xattr_list,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    crate::events::handle_event(&event, formatter)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "44 llistxattr(pathname: \"/tmp/testlink\", list: [ user.attr1, user.attr2 ], size: 64) = 22\n"
+    );
+}

@@ -12,12 +12,7 @@ use aya_ebpf::{
     EbpfContext as _,
 };
 use aya_log_ebpf::{error, trace};
-use pinchy_common::syscalls::{
-    SYS_brk, SYS_close, SYS_dup3, SYS_execve, SYS_exit_group, SYS_fchdir, SYS_getegid, SYS_geteuid,
-    SYS_getgid, SYS_getpid, SYS_getppid, SYS_getrandom, SYS_gettid, SYS_getuid, SYS_lseek,
-    SYS_mprotect, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
-    SYS_set_tid_address,
-};
+use pinchy_common::syscalls;
 
 use crate::util::{get_args, get_return_value, get_syscall_nr, output_event};
 
@@ -103,7 +98,7 @@ pub fn pinchy(ctx: TracePointContext) -> u32 {
         }
 
         // execve has its own enter entry point
-        if syscall_nr == SYS_execve {
+        if syscall_nr == syscalls::SYS_execve {
             return Ok(0);
         }
 
@@ -191,13 +186,13 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
         let return_value = get_return_value(&ctx)?;
 
         let data = match syscall_nr {
-            SYS_close => {
+            syscalls::SYS_close => {
                 let fd = args[0] as i32;
                 pinchy_common::SyscallEventData {
                     close: pinchy_common::CloseData { fd },
                 }
             }
-            SYS_lseek => {
+            syscalls::SYS_lseek => {
                 let fd = args[0] as i32;
                 let offset = args[1] as i64;
                 let whence = args[2] as i32;
@@ -205,34 +200,34 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     lseek: pinchy_common::LseekData { fd, offset, whence },
                 }
             }
-            SYS_sched_yield => pinchy_common::SyscallEventData {
+            syscalls::SYS_sched_yield => pinchy_common::SyscallEventData {
                 sched_yield: pinchy_common::SchedYieldData,
             },
-            SYS_getpid => pinchy_common::SyscallEventData {
+            syscalls::SYS_getpid => pinchy_common::SyscallEventData {
                 getpid: pinchy_common::GetpidData,
             },
-            SYS_gettid => pinchy_common::SyscallEventData {
+            syscalls::SYS_gettid => pinchy_common::SyscallEventData {
                 gettid: pinchy_common::GettidData,
             },
-            SYS_getuid => pinchy_common::SyscallEventData {
+            syscalls::SYS_getuid => pinchy_common::SyscallEventData {
                 getuid: pinchy_common::GetuidData,
             },
-            SYS_geteuid => pinchy_common::SyscallEventData {
+            syscalls::SYS_geteuid => pinchy_common::SyscallEventData {
                 geteuid: pinchy_common::GeteuidData,
             },
-            SYS_getgid => pinchy_common::SyscallEventData {
+            syscalls::SYS_getgid => pinchy_common::SyscallEventData {
                 getgid: pinchy_common::GetgidData,
             },
-            SYS_getegid => pinchy_common::SyscallEventData {
+            syscalls::SYS_getegid => pinchy_common::SyscallEventData {
                 getegid: pinchy_common::GetegidData,
             },
-            SYS_getppid => pinchy_common::SyscallEventData {
+            syscalls::SYS_getppid => pinchy_common::SyscallEventData {
                 getppid: pinchy_common::GetppidData,
             },
-            SYS_brk => pinchy_common::SyscallEventData {
+            syscalls::SYS_brk => pinchy_common::SyscallEventData {
                 brk: pinchy_common::BrkData { addr: args[0] },
             },
-            SYS_mprotect => {
+            syscalls::SYS_mprotect => {
                 let addr = args[0];
                 let length = args[1];
                 let prot = args[2] as i32;
@@ -240,7 +235,7 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     mprotect: pinchy_common::MprotectData { addr, length, prot },
                 }
             }
-            SYS_getrandom => {
+            syscalls::SYS_getrandom => {
                 let buf = args[0];
                 let buflen = args[1];
                 let flags = args[2] as u32;
@@ -248,20 +243,20 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     getrandom: pinchy_common::GetrandomData { buf, buflen, flags },
                 }
             }
-            SYS_set_robust_list => {
+            syscalls::SYS_set_robust_list => {
                 let head = args[0];
                 let len = args[1];
                 pinchy_common::SyscallEventData {
                     set_robust_list: pinchy_common::SetRobustListData { head, len },
                 }
             }
-            SYS_set_tid_address => {
+            syscalls::SYS_set_tid_address => {
                 let tidptr = args[0];
                 pinchy_common::SyscallEventData {
                     set_tid_address: pinchy_common::SetTidAddressData { tidptr },
                 }
             }
-            SYS_rt_sigprocmask => {
+            syscalls::SYS_rt_sigprocmask => {
                 let how = args[0] as i32;
                 let set = args[1];
                 let oldset = args[2];
@@ -275,7 +270,7 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     },
                 }
             }
-            SYS_rt_sigaction => {
+            syscalls::SYS_rt_sigaction => {
                 let signum = args[0] as i32;
                 let act = args[1];
                 let oldact = args[2];
@@ -289,13 +284,13 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     },
                 }
             }
-            SYS_fchdir => {
+            syscalls::SYS_fchdir => {
                 let fd = args[0] as i32;
                 pinchy_common::SyscallEventData {
                     fchdir: pinchy_common::FchdirData { fd },
                 }
             }
-            SYS_dup3 => {
+            syscalls::SYS_dup3 => {
                 let oldfd = args[0] as i32;
                 let newfd = args[1] as i32;
                 let flags = args[2] as i32;
@@ -307,17 +302,15 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     },
                 }
             }
-            SYS_exit_group => {
+            syscalls::SYS_exit_group => {
                 let status = args[0] as i32;
                 pinchy_common::SyscallEventData {
                     exit_group: pinchy_common::ExitGroupData { status },
                 }
             }
-            pinchy_common::syscalls::SYS_rt_sigreturn => {
-                pinchy_common::SyscallEventData {
-                    rt_sigreturn: pinchy_common::RtSigreturnData {},
-                }
-            }
+            syscalls::SYS_rt_sigreturn => pinchy_common::SyscallEventData {
+                rt_sigreturn: pinchy_common::RtSigreturnData {},
+            },
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

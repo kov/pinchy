@@ -15,16 +15,7 @@ use anyhow::{anyhow, Context};
 use aya::{maps::ProgramArray, programs::TracePoint, Ebpf};
 use log::{debug, trace, warn};
 use nix::unistd::{setgid, setuid, User};
-use pinchy_common::syscalls::{
-    syscall_name_from_nr, SYS_accept4, SYS_brk, SYS_clone, SYS_clone3, SYS_close, SYS_dup3,
-    SYS_epoll_pwait, SYS_execve, SYS_exit_group, SYS_faccessat, SYS_fchdir, SYS_fcntl, SYS_fstat,
-    SYS_futex, SYS_getdents64, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpid, SYS_getppid,
-    SYS_getrandom, SYS_getrusage, SYS_gettid, SYS_getuid, SYS_ioctl, SYS_lseek, SYS_mmap,
-    SYS_mprotect, SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read,
-    SYS_readlinkat, SYS_recvmsg, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield,
-    SYS_sendmsg, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4,
-    SYS_write, SYS_rt_sigreturn, ALL_SYSCALLS,
-};
+use pinchy_common::syscalls::{self, syscall_name_from_nr};
 use tokio::{
     signal,
     sync::RwLock,
@@ -338,27 +329,27 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 
     // Use the same tail call handler for trivial syscalls.
     const TRIVIAL_SYSCALLS: &[i64] = &[
-        SYS_close,
-        SYS_dup3,
-        SYS_lseek,
-        SYS_sched_yield,
-        SYS_getpid,
-        SYS_gettid,
-        SYS_getuid,
-        SYS_geteuid,
-        SYS_getgid,
-        SYS_getegid,
-        SYS_getppid,
-        SYS_brk,
-        SYS_mprotect,
-        SYS_getrandom,
-        SYS_set_robust_list,
-        SYS_set_tid_address,
-        SYS_rt_sigprocmask,
-        SYS_rt_sigaction,
-        SYS_fchdir,
-        SYS_exit_group,
-        SYS_rt_sigreturn,
+        syscalls::SYS_close,
+        syscalls::SYS_dup3,
+        syscalls::SYS_lseek,
+        syscalls::SYS_sched_yield,
+        syscalls::SYS_getpid,
+        syscalls::SYS_gettid,
+        syscalls::SYS_getuid,
+        syscalls::SYS_geteuid,
+        syscalls::SYS_getgid,
+        syscalls::SYS_getegid,
+        syscalls::SYS_getppid,
+        syscalls::SYS_brk,
+        syscalls::SYS_mprotect,
+        syscalls::SYS_getrandom,
+        syscalls::SYS_set_robust_list,
+        syscalls::SYS_set_tid_address,
+        syscalls::SYS_rt_sigprocmask,
+        syscalls::SYS_rt_sigaction,
+        syscalls::SYS_fchdir,
+        syscalls::SYS_exit_group,
+        syscalls::SYS_rt_sigreturn,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -366,33 +357,33 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
-        ("syscall_exit_epoll_pwait", SYS_epoll_pwait),
-        ("syscall_exit_ppoll", SYS_ppoll),
-        ("syscall_exit_read", SYS_read),
-        ("syscall_exit_write", SYS_write),
-        ("syscall_exit_openat", SYS_openat),
-        ("syscall_exit_fstat", SYS_fstat),
-        ("syscall_exit_newfstatat", SYS_newfstatat),
-        ("syscall_exit_getdents64", SYS_getdents64),
-        ("syscall_exit_futex", SYS_futex),
-        ("syscall_exit_ioctl", SYS_ioctl),
-        ("syscall_exit_fcntl", SYS_fcntl),
-        ("syscall_exit_execve", SYS_execve),
-        ("syscall_exit_mmap", SYS_mmap),
-        ("syscall_exit_munmap", SYS_munmap),
-        ("syscall_exit_statfs", SYS_statfs),
-        ("syscall_exit_prlimit64", SYS_prlimit64),
-        ("syscall_exit_rseq", SYS_rseq),
-        ("syscall_exit_faccessat", SYS_faccessat),
-        ("syscall_exit_uname", SYS_uname),
-        ("syscall_exit_readlinkat", SYS_readlinkat),
-        ("syscall_exit_recvmsg", SYS_recvmsg),
-        ("syscall_exit_sendmsg", SYS_sendmsg),
-        ("syscall_exit_accept4", SYS_accept4),
-        ("syscall_exit_wait4", SYS_wait4),
-        ("syscall_exit_getrusage", SYS_getrusage),
-        ("syscall_exit_clone3", SYS_clone3),
-        ("syscall_exit_clone", SYS_clone),
+        ("syscall_exit_epoll_pwait", syscalls::SYS_epoll_pwait),
+        ("syscall_exit_ppoll", syscalls::SYS_ppoll),
+        ("syscall_exit_read", syscalls::SYS_read),
+        ("syscall_exit_write", syscalls::SYS_write),
+        ("syscall_exit_openat", syscalls::SYS_openat),
+        ("syscall_exit_fstat", syscalls::SYS_fstat),
+        ("syscall_exit_newfstatat", syscalls::SYS_newfstatat),
+        ("syscall_exit_getdents64", syscalls::SYS_getdents64),
+        ("syscall_exit_futex", syscalls::SYS_futex),
+        ("syscall_exit_ioctl", syscalls::SYS_ioctl),
+        ("syscall_exit_fcntl", syscalls::SYS_fcntl),
+        ("syscall_exit_execve", syscalls::SYS_execve),
+        ("syscall_exit_mmap", syscalls::SYS_mmap),
+        ("syscall_exit_munmap", syscalls::SYS_munmap),
+        ("syscall_exit_statfs", syscalls::SYS_statfs),
+        ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
+        ("syscall_exit_rseq", syscalls::SYS_rseq),
+        ("syscall_exit_faccessat", syscalls::SYS_faccessat),
+        ("syscall_exit_uname", syscalls::SYS_uname),
+        ("syscall_exit_readlinkat", syscalls::SYS_readlinkat),
+        ("syscall_exit_recvmsg", syscalls::SYS_recvmsg),
+        ("syscall_exit_sendmsg", syscalls::SYS_sendmsg),
+        ("syscall_exit_accept4", syscalls::SYS_accept4),
+        ("syscall_exit_wait4", syscalls::SYS_wait4),
+        ("syscall_exit_getrusage", syscalls::SYS_getrusage),
+        ("syscall_exit_clone3", syscalls::SYS_clone3),
+        ("syscall_exit_clone", syscalls::SYS_clone),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)
@@ -415,7 +406,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         .with_context(|| "trying to load syscall_exit_generic into eBPF".to_string())?;
 
     // Register generic handler for all other syscalls
-    for &syscall_nr in ALL_SYSCALLS {
+    for &syscall_nr in syscalls::ALL_SYSCALLS {
         if (0..512).contains(&syscall_nr) && !explicitly_supported.contains(&syscall_nr) {
             prog_array.set(syscall_nr as u32, generic_prog.fd()?, 0)?;
             if let Some(name) = syscall_name_from_nr(syscall_nr) {

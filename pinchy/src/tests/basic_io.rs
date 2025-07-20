@@ -7,8 +7,8 @@ use indoc::indoc;
 use pinchy_common::{
     kernel_types::{EpollEvent, Timespec},
     syscalls::{
-        SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek, SYS_openat, SYS_ppoll,
-        SYS_read, SYS_write,
+        SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2,
+        SYS_ppoll, SYS_read, SYS_write,
     },
     CloseData, Dup3Data, EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, ReadData,
     SyscallEvent, WriteData, DATA_READ_SIZE,
@@ -424,5 +424,35 @@ async fn parse_fcntl_dupfd() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!("100 fcntl(fd: 3, cmd: F_DUPFD, arg: 0x4) = 7\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_pipe2() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_pipe2,
+        pid: 1,
+        tid: 1,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            pipe2: pinchy_common::Pipe2Data {
+                pipefd: [3, 4],
+                flags: libc::O_CLOEXEC,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "1 pipe2(pipefd: [ 3, 4 ], flags: 0x{:x}) = 0\n",
+            libc::O_CLOEXEC
+        )
     );
 }

@@ -72,6 +72,14 @@ pub union SyscallEventData {
     pub clone: CloneData,
     pub exit_group: ExitGroupData,
     pub rt_sigreturn: RtSigreturnData,
+    pub pipe2: Pipe2Data,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub struct Pipe2Data {
+    pub pipefd: [i32; 2],
+    pub flags: i32,
 }
 
 #[repr(C)]

@@ -55,6 +55,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_pipe2 => {
+            let data = unsafe { event.data.pipe2 };
+            arg!(sf, "pipefd:");
+            with_array!(sf, {
+                argf!(sf, "{}", data.pipefd[0]);
+                argf!(sf, "{}", data.pipefd[1]);
+            });
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_dup3 => {
             let data = unsafe { event.data.dup3 };
 

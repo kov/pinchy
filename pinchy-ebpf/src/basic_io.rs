@@ -8,7 +8,7 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd},
-    syscalls::{SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_ppoll, SYS_read, SYS_write},
+    syscalls::{SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_read, SYS_write},
     DATA_READ_SIZE,
 };
 
@@ -223,6 +223,40 @@ pub fn syscall_exit_ppoll(ctx: TracePointContext) -> u32 {
                     nfds: nfds as u32,
                     timeout,
                 },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_pipe2(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_pipe2;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pipefd_ptr = args[0] as *const i32;
+        let flags = args[1] as i32;
+
+        let mut pipefd_bytes = [0u8; core::mem::size_of::<[i32; 2]>()];
+        unsafe {
+            let _ = bpf_probe_read_buf(pipefd_ptr as *const u8, &mut pipefd_bytes);
+        }
+
+        let pipefd = unsafe {
+            core::mem::transmute::<[u8; core::mem::size_of::<[i32; 2]>()], [i32; 2]>(pipefd_bytes)
+        };
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                pipe2: pinchy_common::Pipe2Data { pipefd, flags },
             },
         )
     }

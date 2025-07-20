@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+// Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
+
 #[tokio::test]
 async fn parse_rt_sigreturn() {
     use pinchy_common::RtSigreturnData;

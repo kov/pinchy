@@ -13,9 +13,9 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::syscalls::{
-    SYS_brk, SYS_close, SYS_dup3, SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid,
-    SYS_getpid, SYS_getppid, SYS_getrandom, SYS_gettid, SYS_getuid, SYS_lseek, SYS_mprotect,
-    SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
+    SYS_brk, SYS_close, SYS_dup3, SYS_execve, SYS_exit_group, SYS_fchdir, SYS_getegid, SYS_geteuid,
+    SYS_getgid, SYS_getpid, SYS_getppid, SYS_getrandom, SYS_gettid, SYS_getuid, SYS_lseek,
+    SYS_mprotect, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_set_robust_list,
     SYS_set_tid_address,
 };
 
@@ -305,6 +305,12 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         newfd,
                         flags,
                     },
+                }
+            }
+            SYS_exit_group => {
+                let status = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    exit_group: pinchy_common::ExitGroupData { status },
                 }
             }
             _ => {

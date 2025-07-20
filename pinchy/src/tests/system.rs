@@ -214,3 +214,29 @@ async fn parse_uname_truncated() {
         "1234 uname(struct utsname: { sysname: \"Linux\", nodename: \"jabuticaba\", release: \"6.15.4-200.fc42.aarch64\", version: \"#1 SMP PREEMPT_DYNAMIC Fri Jun 27 15:55:20 UTC 2025 aarch64 GNU/L ... (truncated)\", machine: \"aarch64\", domainname: \"(none)\" }) = 0\n"
     );
 }
+
+#[tokio::test]
+async fn parse_exit_group() {
+    use pinchy_common::ExitGroupData;
+
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_exit_group,
+        pid: 123,
+        tid: 123,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            exit_group: ExitGroupData { status: 42 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 exit_group(status: 42) = 0\n"
+    );
+}

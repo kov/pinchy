@@ -13,7 +13,7 @@ use pinchy_common::{
         SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prctl, SYS_prlimit64, SYS_read,
         SYS_readlinkat, SYS_recvmsg, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask,
         SYS_sched_yield, SYS_sendmsg, SYS_set_robust_list, SYS_set_tid_address, SYS_statfs,
-        SYS_uname, SYS_wait4, SYS_write,
+        SYS_uname, SYS_wait4, SYS_write, SYS_exit_group,
     },
     SyscallEvent,
 };
@@ -45,6 +45,11 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
     };
 
     match event.syscall_nr {
+        SYS_exit_group => {
+            let data = unsafe { event.data.exit_group };
+            argf!(sf, "status: {}", data.status);
+            finish!(sf, event.return_value);
+        }
         SYS_close => {
             let data = unsafe { event.data.close };
 

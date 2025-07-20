@@ -3,11 +3,12 @@ use std::pin::Pin;
 use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
-        SYS_clone3, SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpid,
-        SYS_getppid, SYS_getrusage, SYS_gettid, SYS_getuid, SYS_set_tid_address, SYS_wait4,
+        SYS_clone, SYS_clone3, SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid,
+        SYS_getpid, SYS_getppid, SYS_getrusage, SYS_gettid, SYS_getuid, SYS_set_tid_address,
+        SYS_wait4,
     },
-    Clone3Data, ExecveData, GetegidData, GeteuidData, GetgidData, GetpidData, GetppidData,
-    GetrusageData, GettidData, GetuidData, SetTidAddressData, SyscallEvent, Wait4Data,
+    Clone3Data, CloneData, ExecveData, GetegidData, GeteuidData, GetgidData, GetpidData,
+    GetppidData, GetrusageData, GettidData, GetuidData, SetTidAddressData, SyscallEvent, Wait4Data,
     SMALL_READ_SIZE,
 };
 
@@ -785,5 +786,36 @@ async fn test_clone3_with_set_tid() {
     assert_eq!(
         result,
         "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000, set_tid: [ 7, 42, 31496 ], set_tid_size: 3 }, size: 88) = 1234\n"
+    );
+}
+
+#[tokio::test]
+async fn test_clone() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_clone,
+        pid: 1000,
+        tid: 1001,
+        return_value: 4321, // child PID
+        data: pinchy_common::SyscallEventData {
+            clone: CloneData {
+                flags: libc::CLONE_FS as u64 | libc::CLONE_THREAD as u64 | libc::CLONE_VM as u64,
+                stack: 0x7fff00001000,
+                parent_tid: 41,
+                child_tid: 42,
+                tls: 0x7fff00002000,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 clone(flags: 0x10300 (CLONE_VM|CLONE_FS|CLONE_THREAD), stack: 0x7fff00001000, parent_tid: 41, child_tid: 42, tls: 0x7fff00002000) = 4321\n"
     );
 }

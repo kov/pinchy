@@ -1519,13 +1519,13 @@ pub fn format_clone_flags(flags: u64) -> String {
     if exit_signal != 0 {
         match exit_signal {
             17 => parts.push("SIGCHLD".to_string()), // Most common case
-            _ => parts.push(format!("exit_signal={}", exit_signal)),
+            _ => parts.push(format!("exit_signal={exit_signal}")),
         }
         remaining_flags &= !0xff; // Remove exit signal bits from remaining
     }
 
     if remaining_flags != 0 {
-        parts.push(format!("0x{:x}", remaining_flags));
+        parts.push(format!("0x{remaining_flags:x}"));
     }
 
     if parts.is_empty() {

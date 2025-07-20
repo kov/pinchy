@@ -70,6 +70,7 @@ pub union SyscallEventData {
     pub getppid: GetppidData,
     pub dup3: Dup3Data,
     pub clone: CloneData,
+    pub exit_group: ExitGroupData,
 }
 
 #[repr(C)]
@@ -446,4 +447,10 @@ pub struct CloneData {
     pub parent_tid: i32,
     pub child_tid: i32,
     pub tls: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExitGroupData {
+    pub status: i32,
 }

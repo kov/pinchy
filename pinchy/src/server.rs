@@ -22,7 +22,7 @@ use pinchy_common::syscalls::{
     SYS_getrusage, SYS_gettid, SYS_getuid, SYS_ioctl, SYS_lseek, SYS_mmap, SYS_mprotect,
     SYS_munmap, SYS_newfstatat, SYS_openat, SYS_ppoll, SYS_prlimit64, SYS_read, SYS_readlinkat,
     SYS_recvmsg, SYS_rseq, SYS_rt_sigaction, SYS_rt_sigprocmask, SYS_sched_yield, SYS_sendmsg,
-    SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write,
+    SYS_set_robust_list, SYS_set_tid_address, SYS_statfs, SYS_uname, SYS_wait4, SYS_write, SYS_exit_group,
     ALL_SYSCALLS,
 };
 use tokio::{
@@ -357,6 +357,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         SYS_rt_sigprocmask,
         SYS_rt_sigaction,
         SYS_fchdir,
+        SYS_exit_group,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

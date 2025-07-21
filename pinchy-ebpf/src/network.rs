@@ -6,7 +6,7 @@ use aya_ebpf::{
     macros::tracepoint,
     programs::TracePointContext,
 };
-use pinchy_common::syscalls::{SYS_accept4, SYS_recvmsg, SYS_sendmsg};
+use pinchy_common::syscalls::{SYS_accept4, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg};
 
 use crate::util::{get_args, get_return_value, output_event};
 
@@ -205,6 +205,88 @@ pub fn syscall_exit_accept4(ctx: TracePointContext) -> u32 {
                     has_addr,
                     addr,
                     addrlen,
+                },
+            },
+        )
+    }
+
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_recvfrom(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_recvfrom;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let sockfd = args[0] as i32;
+        let buf_ptr = args[1] as *const u8;
+        let size = args[2] as usize;
+        let flags = args[3] as i32;
+        let src_addr_ptr = args[4] as *const u8;
+        let addrlen_ptr = args[5] as *const u32;
+
+        let mut addr = pinchy_common::kernel_types::Sockaddr::default();
+        let mut addrlen = 0u32;
+        let mut has_addr = false;
+
+        let mut received_data = [0u8; pinchy_common::DATA_READ_SIZE];
+        let mut received_len = 0usize;
+
+        unsafe {
+            // Only read address data if the call was successful and pointers are not null
+            if return_value >= 0
+                && src_addr_ptr != core::ptr::null()
+                && addrlen_ptr != core::ptr::null()
+            {
+                if let Ok(len) = bpf_probe_read_user::<u32>(addrlen_ptr) {
+                    addrlen = len;
+
+                    if len > 0
+                        && len
+                            <= core::mem::size_of::<pinchy_common::kernel_types::Sockaddr>() as u32
+                    {
+                        if let Ok(sockaddr) = bpf_probe_read_user::<
+                            pinchy_common::kernel_types::Sockaddr,
+                        >(src_addr_ptr as *const _)
+                        {
+                            addr = sockaddr;
+                            has_addr = true;
+                        }
+                    }
+                }
+            }
+
+            // Read received data if the call was successful and buffer is not null
+            if return_value > 0 && buf_ptr != core::ptr::null() {
+                let read_size =
+                    core::cmp::min(return_value as usize, pinchy_common::DATA_READ_SIZE);
+
+                if read_size > 0 {
+                    let _ = bpf_probe_read_buf(buf_ptr, &mut received_data[..read_size]);
+                    received_len = read_size;
+                }
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                recvfrom: pinchy_common::RecvfromData {
+                    sockfd,
+                    size,
+                    flags,
+                    has_addr,
+                    addr,
+                    addrlen,
+                    received_data,
+                    received_len,
                 },
             },
         )

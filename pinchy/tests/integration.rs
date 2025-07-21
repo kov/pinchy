@@ -356,6 +356,37 @@ fn network_syscalls() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn recvfrom_syscall() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises recvfrom syscall
+    let handle = run_workload(&["recvfrom"], "recvfrom_test");
+
+    // Expected output - we should see recvfrom calls with and without source address
+    let expected_output = escaped_regex(indoc! {r#"
+        PID recvfrom(sockfd: NUMBER, buf: "UDP recvfrom test!", size: 1024, flags: 0, src_addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: NUMBER) = 18
+        PID recvfrom(sockfd: NUMBER, buf: "second message", size: 1024, flags: 0, src_addr: NULL, addrlen: 0) = 14
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn identity_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 

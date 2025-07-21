@@ -5,8 +5,8 @@ use std::pin::Pin;
 
 use pinchy_common::{
     kernel_types::{Iovec, Msghdr, Sockaddr},
-    syscalls::{SYS_accept4, SYS_recvmsg, SYS_sendmsg},
-    Accept4Data, RecvmsgData, SendmsgData, SyscallEvent,
+    syscalls::{SYS_accept4, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg},
+    Accept4Data, RecvfromData, RecvmsgData, SendmsgData, SyscallEvent, SyscallEventData,
 };
 
 use crate::{
@@ -866,5 +866,118 @@ async fn parse_accept4_packet() {
         format!(
             "4234 accept4(sockfd: 6, addr: {{ family: AF_PACKET, protocol: 0x800, ifindex: 2, hatype: 1, pkttype: 0, addr: aa:bb:cc:dd:ee:ff }}, addrlen: 20, flags: 0x800 (SOCK_NONBLOCK)) = 7\n"
         )
+    );
+}
+
+#[tokio::test]
+async fn test_recvfrom_with_address() {
+    let mut addr = Sockaddr {
+        sa_family: libc::AF_INET as u16,
+        ..Default::default()
+    };
+
+    addr.sa_data[0] = 0x01;
+    addr.sa_data[1] = 0xbb;
+
+    let mut received_data = [0u8; pinchy_common::DATA_READ_SIZE];
+    received_data[..12].copy_from_slice(b"Hello world!");
+
+    let event = SyscallEvent {
+        pid: 1234,
+        tid: 1234,
+        syscall_nr: SYS_recvfrom,
+        return_value: 12,
+        data: SyscallEventData {
+            recvfrom: RecvfromData {
+                sockfd: 8,
+                size: 1024,
+                flags: libc::MSG_PEEK,
+                has_addr: true,
+                addr,
+                addrlen: 16,
+                received_data,
+                received_len: 12,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 recvfrom(sockfd: 8, buf: \"Hello world!\", size: 1024, flags: 0x2 (MSG_PEEK), src_addr: { family: AF_INET, addr: 0.0.0.0:443 }, addrlen: 16) = 12\n"
+    );
+}
+
+#[tokio::test]
+async fn test_recvfrom_without_address() {
+    let mut received_data = [0u8; pinchy_common::DATA_READ_SIZE];
+    received_data[..5].copy_from_slice(b"test!");
+
+    let event = SyscallEvent {
+        pid: 5678,
+        tid: 5678,
+        syscall_nr: SYS_recvfrom,
+        return_value: 5,
+        data: SyscallEventData {
+            recvfrom: RecvfromData {
+                sockfd: 3,
+                size: 512,
+                flags: 0,
+                has_addr: false,
+                addr: Sockaddr::default(),
+                addrlen: 0,
+                received_data,
+                received_len: 5,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "5678 recvfrom(sockfd: 3, buf: \"test!\", size: 512, flags: 0, src_addr: NULL, addrlen: 0) = 5\n"
+    );
+}
+
+#[tokio::test]
+async fn test_recvfrom_failed() {
+    let event = SyscallEvent {
+        pid: 9999,
+        tid: 9999,
+        syscall_nr: SYS_recvfrom,
+        return_value: -1,
+        data: SyscallEventData {
+            recvfrom: RecvfromData {
+                sockfd: 4,
+                size: 256,
+                flags: libc::MSG_DONTWAIT,
+                has_addr: false,
+                addr: Sockaddr::default(),
+                addrlen: 0,
+                received_data: [0u8; pinchy_common::DATA_READ_SIZE],
+                received_len: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 recvfrom(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), src_addr: NULL, addrlen: 0) = -1\n"
     );
 }

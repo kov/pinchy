@@ -372,6 +372,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_execve", syscalls::SYS_execve),
         ("syscall_exit_mmap", syscalls::SYS_mmap),
         ("syscall_exit_munmap", syscalls::SYS_munmap),
+        ("syscall_exit_madvise", syscalls::SYS_madvise),
         ("syscall_exit_statfs", syscalls::SYS_statfs),
         ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),

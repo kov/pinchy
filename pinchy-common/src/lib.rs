@@ -77,6 +77,7 @@ pub union SyscallEventData {
     pub flistxattr: FlistxattrData,
     pub listxattr: ListxattrData,
     pub llistxattr: LlistxattrData,
+    pub madvise: MadviseData,
 }
 
 #[repr(C)]
@@ -510,4 +511,12 @@ pub struct CloneData {
 #[derive(Clone, Copy)]
 pub struct ExitGroupData {
     pub status: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MadviseData {
+    pub addr: usize,
+    pub length: usize,
+    pub advice: i32,
 }

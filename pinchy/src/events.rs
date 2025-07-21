@@ -14,12 +14,12 @@ use crate::{
     util::{
         format_accept4_flags, format_access_mode, format_at_flags, format_bytes,
         format_clone_flags, format_dirfd, format_dup3_flags, format_fcntl_cmd, format_flags,
-        format_getrandom_flags, format_mmap_flags, format_mmap_prot, format_mode, format_msghdr,
-        format_path, format_prctl_op, format_recvmsg_flags, format_rseq, format_rseq_flags,
-        format_rusage, format_rusage_who, format_sendmsg_flags, format_signal_number,
-        format_sigprocmask_how, format_sockaddr, format_stat, format_statfs, format_timespec,
-        format_utsname, format_wait_options, format_wait_status, format_xattr_list,
-        poll_bits_to_strs, prctl_op_arg_count,
+        format_getrandom_flags, format_madvise_advice, format_mmap_flags, format_mmap_prot,
+        format_mode, format_msghdr, format_path, format_prctl_op, format_recvmsg_flags,
+        format_rseq, format_rseq_flags, format_rusage, format_rusage_who, format_sendmsg_flags,
+        format_signal_number, format_sigprocmask_how, format_sockaddr, format_stat, format_statfs,
+        format_timespec, format_utsname, format_wait_options, format_wait_status,
+        format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -415,6 +415,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
             argf!(sf, "prot: {}", format_mmap_prot(data.prot));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_madvise => {
+            let data = unsafe { event.data.madvise };
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "length: {}", data.length);
+            argf!(sf, "advice: {}", format_madvise_advice(data.advice));
 
             finish!(sf, event.return_value);
         }

@@ -278,6 +278,42 @@ pub fn format_getrandom_flags(flags: u32) -> String {
     }
 }
 
+// Constants for madvise advice not available in libc or with different values
+const MADV_WIPEONFORK: i32 = 18;
+const MADV_KEEPONFORK: i32 = 19;
+const MADV_COLD: i32 = 20;
+const MADV_PAGEOUT: i32 = 21;
+const MADV_POPULATE_READ: i32 = 22;
+const MADV_POPULATE_WRITE: i32 = 23;
+
+pub fn format_madvise_advice(advice: i32) -> String {
+    let name = match advice {
+        libc::MADV_NORMAL => "MADV_NORMAL",
+        libc::MADV_RANDOM => "MADV_RANDOM",
+        libc::MADV_SEQUENTIAL => "MADV_SEQUENTIAL",
+        libc::MADV_WILLNEED => "MADV_WILLNEED",
+        libc::MADV_DONTNEED => "MADV_DONTNEED",
+        libc::MADV_FREE => "MADV_FREE",
+        libc::MADV_REMOVE => "MADV_REMOVE",
+        libc::MADV_DONTFORK => "MADV_DONTFORK",
+        libc::MADV_DOFORK => "MADV_DOFORK",
+        libc::MADV_MERGEABLE => "MADV_MERGEABLE",
+        libc::MADV_UNMERGEABLE => "MADV_UNMERGEABLE",
+        libc::MADV_HUGEPAGE => "MADV_HUGEPAGE",
+        libc::MADV_NOHUGEPAGE => "MADV_NOHUGEPAGE",
+        libc::MADV_DONTDUMP => "MADV_DONTDUMP",
+        libc::MADV_DODUMP => "MADV_DODUMP",
+        MADV_WIPEONFORK => "MADV_WIPEONFORK",
+        MADV_KEEPONFORK => "MADV_KEEPONFORK",
+        MADV_COLD => "MADV_COLD",
+        MADV_PAGEOUT => "MADV_PAGEOUT",
+        MADV_POPULATE_READ => "MADV_POPULATE_READ",
+        MADV_POPULATE_WRITE => "MADV_POPULATE_WRITE",
+        _ => return format!("UNKNOWN ({advice})"),
+    };
+    format!("{name} ({advice})")
+}
+
 // Constants for prctl operations not available in libc
 const PR_SVE_SET_VL: i32 = 50;
 const PR_SVE_GET_VL: i32 = 51;

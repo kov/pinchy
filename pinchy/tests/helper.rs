@@ -56,6 +56,7 @@ fn main() -> anyhow::Result<()> {
             "network_test" => network_test(),
             "recvfrom_test" => recvfrom_test(),
             "identity_syscalls" => identity_syscalls(),
+            "madvise_test" => madvise_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -412,6 +413,63 @@ fn identity_syscalls() -> anyhow::Result<()> {
         let _gid = libc::getgid();
         let _egid = libc::getegid();
         let _ppid = libc::getppid();
+    }
+
+    Ok(())
+}
+
+fn madvise_test() -> anyhow::Result<()> {
+    unsafe {
+        // Allocate a page of memory using mmap
+        let page_size = 4096;
+        let addr = libc::mmap(
+            std::ptr::null_mut(),
+            page_size,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+
+        if addr == libc::MAP_FAILED {
+            bail!("mmap failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test different madvise advice values
+
+        // MADV_WILLNEED - tell kernel we will need these pages soon
+        let result = libc::madvise(addr, page_size, libc::MADV_WILLNEED);
+        if result != 0 {
+            bail!(
+                "madvise WILLNEED failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // MADV_DONTNEED - tell kernel we don't need these pages
+        let result = libc::madvise(addr, page_size, libc::MADV_DONTNEED);
+        if result != 0 {
+            bail!(
+                "madvise DONTNEED failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // MADV_NORMAL - reset to normal behavior
+        let result = libc::madvise(addr, page_size, libc::MADV_NORMAL);
+        if result != 0 {
+            bail!("madvise NORMAL failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test with an invalid address (should fail)
+        let result = libc::madvise(std::ptr::null_mut(), page_size, libc::MADV_WILLNEED);
+        assert_eq!(result, -1, "madvise with NULL address should fail");
+
+        // Clean up
+        let result = libc::munmap(addr, page_size);
+        if result != 0 {
+            bail!("munmap failed: {}", std::io::Error::last_os_error());
+        }
     }
 
     Ok(())

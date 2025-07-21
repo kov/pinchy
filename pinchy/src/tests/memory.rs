@@ -4,7 +4,7 @@
 use std::pin::Pin;
 
 use pinchy_common::{
-    syscalls::{SYS_brk, SYS_mmap, SYS_mprotect},
+    syscalls::{SYS_brk, SYS_madvise, SYS_mmap, SYS_mprotect},
     SyscallEvent,
 };
 
@@ -234,5 +234,89 @@ async fn parse_brk() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!("888 brk(addr: 0x0) = 0x7f1234500000\n")
+    );
+}
+
+#[tokio::test]
+async fn parse_madvise() {
+    use pinchy_common::MadviseData;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_madvise,
+        pid: 123,
+        tid: 123,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            madvise: MadviseData {
+                addr: 0x7f1234567000,
+                length: 4096,
+                advice: 4, // MADV_DONTNEED
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("123 madvise(addr: 0x7f1234567000, length: 4096, advice: MADV_DONTNEED (4)) = 0\n")
+    );
+
+    // Test with error return
+    let event_error = SyscallEvent {
+        syscall_nr: SYS_madvise,
+        pid: 456,
+        tid: 456,
+        return_value: -1, // Error
+        data: pinchy_common::SyscallEventData {
+            madvise: MadviseData {
+                addr: 0x0, // Invalid address
+                length: 4096,
+                advice: 3, // MADV_WILLNEED
+            },
+        },
+    };
+
+    let mut output_error: Vec<u8> = vec![];
+    let pin_output_error = unsafe { Pin::new_unchecked(&mut output_error) };
+    let formatter_error = Formatter::new(pin_output_error, FormattingStyle::OneLine);
+
+    handle_event(&event_error, formatter_error).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output_error),
+        format!("456 madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -1\n")
+    );
+
+    // Test with unknown advice value
+    let event_unknown = SyscallEvent {
+        syscall_nr: SYS_madvise,
+        pid: 789,
+        tid: 789,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            madvise: MadviseData {
+                addr: 0x7f1234567000,
+                length: 8192,
+                advice: 999, // Unknown advice value
+            },
+        },
+    };
+
+    let mut output_unknown: Vec<u8> = vec![];
+    let pin_output_unknown = unsafe { Pin::new_unchecked(&mut output_unknown) };
+    let formatter_unknown = Formatter::new(pin_output_unknown, FormattingStyle::OneLine);
+
+    handle_event(&event_unknown, formatter_unknown)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output_unknown),
+        format!("789 madvise(addr: 0x7f1234567000, length: 8192, advice: UNKNOWN (999)) = 0\n")
     );
 }

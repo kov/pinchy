@@ -661,3 +661,36 @@ async fn wait_for_name(bus_name: &str, timeout: Duration) -> anyhow::Result<()> 
 
     bail!("Time out waiting for Pinchyd to appear")
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn madvise_syscall() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises madvise syscall
+    let handle = run_workload(&["madvise"], "madvise_test");
+
+    // Expected output - we should see multiple madvise calls with different advice values
+    let expected_output = escaped_regex(indoc! {r#"
+        PID madvise(addr: ADDR, length: 4096, advice: MADV_WILLNEED (3)) = 0
+        PID madvise(addr: ADDR, length: 4096, advice: MADV_DONTNEED (4)) = 0
+        PID madvise(addr: ADDR, length: 4096, advice: MADV_NORMAL (0)) = 0
+        PID madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -12
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

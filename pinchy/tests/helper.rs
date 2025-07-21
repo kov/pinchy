@@ -54,6 +54,7 @@ fn main() -> anyhow::Result<()> {
             "fcntl_test" => fcntl_test(),
             "fchdir_test" => fchdir_test(),
             "network_test" => network_test(),
+            "recvfrom_test" => recvfrom_test(),
             "identity_syscalls" => identity_syscalls(),
             name => bail!("Unknown test name: {name}"),
         }
@@ -333,6 +334,69 @@ fn network_test() -> anyhow::Result<()> {
 
         // Verify we got the expected data
         assert_eq!(&buffer[..bytes_received as usize], test_message);
+    }
+
+    Ok(())
+}
+
+fn recvfrom_test() -> anyhow::Result<()> {
+    use std::{net::UdpSocket, os::unix::io::AsRawFd};
+
+    // Create UDP sockets for testing recvfrom
+    let server_socket = UdpSocket::bind("127.0.0.1:0")?;
+    let server_addr = server_socket.local_addr()?;
+
+    let client_socket = UdpSocket::bind("127.0.0.1:0")?;
+
+    // Get raw file descriptor for direct syscall usage
+    let server_fd = server_socket.as_raw_fd();
+
+    // Send test data from client to server using standard library (will generate some syscalls)
+    let test_message = b"UDP recvfrom test!";
+    client_socket.send_to(test_message, server_addr)?;
+
+    // Use recvfrom syscall directly to receive data
+    let mut buffer = [0u8; 1024];
+    unsafe {
+        let mut src_addr: libc::sockaddr_storage = std::mem::zeroed();
+        let mut addr_len = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+
+        let bytes_received = libc::recvfrom(
+            server_fd,
+            buffer.as_mut_ptr() as *mut libc::c_void,
+            buffer.len(),
+            0, // flags
+            &mut src_addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
+            &mut addr_len,
+        );
+
+        if bytes_received < 0 {
+            bail!("recvfrom failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Verify we got the expected data
+        assert_eq!(&buffer[..bytes_received as usize], test_message);
+
+        // Also test recvfrom without source address (NULL parameters)
+        client_socket.send_to(b"second message", server_addr)?;
+
+        let bytes_received2 = libc::recvfrom(
+            server_fd,
+            buffer.as_mut_ptr() as *mut libc::c_void,
+            buffer.len(),
+            0,                    // flags
+            std::ptr::null_mut(), // NULL src_addr
+            std::ptr::null_mut(), // NULL addr_len
+        );
+
+        if bytes_received2 < 0 {
+            bail!(
+                "second recvfrom failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        assert_eq!(&buffer[..bytes_received2 as usize], b"second message");
     }
 
     Ok(())

@@ -617,6 +617,42 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_recvfrom => {
+            let data = unsafe { event.data.recvfrom };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+
+            if event.return_value > 0 {
+                let buf = &data.received_data[..data.received_len];
+                let left_over = if event.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        event.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: NULL");
+            }
+
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_recvmsg_flags(data.flags));
+
+            arg!(sf, "src_addr:");
+            if data.has_addr {
+                with_struct!(sf, {
+                    format_sockaddr(&mut sf, &data.addr).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "addrlen: {}", data.addrlen);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_sendmsg => {
             let data = unsafe { event.data.sendmsg };
 

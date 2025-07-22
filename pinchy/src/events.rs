@@ -1,8 +1,6 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use std::borrow::Cow;
-
 use log::{error, trace};
 use pinchy_common::{syscalls, SyscallEvent};
 
@@ -137,19 +135,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_ppoll => {
             let data = unsafe { event.data.ppoll };
 
-            let return_meaning = match event.return_value {
-                0 => Cow::Borrowed("Timeout [0]"),
-                -1 => Cow::Borrowed("Error [-1]"),
-                _ => Cow::Owned(format!(
-                    "{} ready -> [{}]",
-                    data.nfds,
-                    data.fds.iter().zip(data.revents.iter()).join_take_map(
-                        data.nfds as usize,
-                        |(fd, event)| format!("{fd} = {}", poll_bits_to_strs(event).join("|"))
-                    )
-                )),
-            };
-
             arg!(sf, "fds:");
 
             with_array!(sf, {
@@ -170,44 +155,74 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             arg!(sf, "sigmask");
 
-            finish!(sf, return_meaning);
+            // For ppoll, provide detailed ready state information as extra output
+            let extra_info = match event.return_value {
+                0 => None,  // Timeout case
+                -1 => None, // Error case
+                _ => Some(format!(
+                    " [{}]",
+                    data.fds.iter().zip(data.revents.iter()).join_take_map(
+                        data.nfds as usize,
+                        |(fd, event)| format!("{fd} = {}", poll_bits_to_strs(event).join("|"))
+                    )
+                )),
+            };
+
+            match extra_info {
+                Some(extra) => finish!(sf, event.return_value, extra.as_bytes()),
+                None => finish!(sf, event.return_value),
+            };
         }
         syscalls::SYS_read => {
             let data = unsafe { event.data.read };
-            let bytes_read = event.return_value as usize;
-            let buf = &data.buf[..bytes_read.min(data.buf.len())];
-
-            let left_over = if event.return_value as usize > buf.len() {
-                format!(
-                    " ... ({} more bytes)",
-                    event.return_value as usize - buf.len()
-                )
-            } else {
-                String::new()
-            };
 
             argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+
+            if event.return_value >= 0 {
+                let bytes_read = event.return_value as usize;
+                let buf = &data.buf[..bytes_read.min(data.buf.len())];
+
+                let left_over = if event.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        event.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <error>");
+            }
+
             argf!(sf, "count: {}", data.count);
 
             finish!(sf, event.return_value);
         }
         syscalls::SYS_write => {
             let data = unsafe { event.data.write };
-            let bytes_written = event.return_value as usize;
-            let buf = &data.buf[..bytes_written.min(data.buf.len())];
-
-            let left_over = if event.return_value as usize > buf.len() {
-                format!(
-                    " ... ({} more bytes)",
-                    event.return_value as usize - buf.len()
-                )
-            } else {
-                String::new()
-            };
 
             argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+
+            if event.return_value >= 0 {
+                let bytes_written = event.return_value as usize;
+                let buf = &data.buf[..bytes_written.min(data.buf.len())];
+
+                let left_over = if event.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        event.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <error>");
+            }
+
             argf!(sf, "count: {}", data.count);
 
             finish!(sf, event.return_value);
@@ -386,11 +401,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         }
         syscalls::SYS_mmap => {
             let data = unsafe { event.data.mmap };
-            let ret_str = if event.return_value == -1 {
-                "-1 (error)".to_string()
-            } else {
-                format!("0x{:x}", event.return_value as usize)
-            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
@@ -399,7 +409,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "offset: 0x{:x}", data.offset);
 
-            finish!(sf, ret_str);
+            finish!(sf, event.return_value);
         }
         syscalls::SYS_munmap => {
             let data = unsafe { event.data.munmap };
@@ -441,7 +451,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "addr: 0x{:x}", data.addr);
 
-            finish!(sf, format!("0x{:x}", event.return_value));
+            finish!(sf, event.return_value);
         }
         syscalls::SYS_statfs => {
             let data = unsafe { event.data.statfs };

@@ -147,7 +147,7 @@ async fn parse_prctl() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("999 prctl(PR_CAPBSET_DROP, 0xa) = -1\n")
+        "999 prctl(PR_CAPBSET_DROP, 0xa) = -1 (error)\n"
     );
 
     // Test PR_CAP_AMBIENT with PR_CAP_AMBIENT_CLEAR_ALL sub-operation
@@ -251,7 +251,7 @@ async fn test_getpid() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 getpid() = 1234\n")
+        format!("1234 getpid() = 1234 (pid)\n")
     );
 }
 
@@ -273,7 +273,7 @@ async fn test_gettid() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("5678 gettid() = 5678\n")
+        format!("5678 gettid() = 5678 (pid)\n")
     );
 }
 
@@ -295,7 +295,7 @@ async fn test_getuid() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 getuid() = 1000\n")
+        format!("1234 getuid() = 1000 (id)\n")
     );
 }
 
@@ -319,7 +319,7 @@ async fn test_geteuid() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 geteuid() = 1000\n")
+        format!("1234 geteuid() = 1000 (id)\n")
     );
 }
 
@@ -341,7 +341,7 @@ async fn test_getgid() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 getgid() = 1000\n")
+        format!("1234 getgid() = 1000 (id)\n")
     );
 }
 
@@ -365,7 +365,7 @@ async fn test_getegid() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 getegid() = 1000\n")
+        format!("1234 getegid() = 1000 (id)\n")
     );
 }
 
@@ -389,7 +389,7 @@ async fn test_getppid() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 getppid() = 987\n")
+        format!("1234 getppid() = 987 (pid)\n")
     );
 }
 
@@ -499,9 +499,7 @@ async fn parse_prlimit64() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: {{ rlim_cur: 4294967296, rlim_max: 8589934592 }}, old_limit: NULL) = -1\n"
-        )
+        "9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: { rlim_cur: 4294967296, rlim_max: 8589934592 }, old_limit: NULL) = -1 (error)\n"
     );
 }
 
@@ -705,7 +703,10 @@ async fn test_getrusage_error() {
     handle_event(&event, formatter).await.unwrap();
 
     let result = String::from_utf8_lossy(&output);
-    assert_eq!(result, "5001 getrusage(who: UNKNOWN, rusage: NULL) = -22\n");
+    assert_eq!(
+        result,
+        "5001 getrusage(who: UNKNOWN, rusage: NULL) = -22 (error)\n"
+    );
 }
 
 #[tokio::test]
@@ -746,7 +747,7 @@ async fn test_clone3() {
     let result = String::from_utf8_lossy(&output);
     assert_eq!(
         result,
-        "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000 }, size: 88) = 1234\n"
+        "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000 }, size: 88) = 1234 (pid)\n"
     );
 }
 
@@ -788,7 +789,7 @@ async fn test_clone3_with_set_tid() {
     let result = String::from_utf8_lossy(&output);
     assert_eq!(
         result,
-        "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000, set_tid: [ 7, 42, 31496 ], set_tid_size: 3 }, size: 88) = 1234\n"
+        "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000, set_tid: [ 7, 42, 31496 ], set_tid_size: 3 }, size: 88) = 1234 (pid)\n"
     );
 }
 
@@ -819,6 +820,6 @@ async fn test_clone() {
     let result = String::from_utf8_lossy(&output);
     assert_eq!(
         result,
-        "1001 clone(flags: 0x10300 (CLONE_VM|CLONE_FS|CLONE_THREAD), stack: 0x7fff00001000, parent_tid: 41, child_tid: 42, tls: 0x7fff00002000) = 4321\n"
+        "1001 clone(flags: 0x10300 (CLONE_VM|CLONE_FS|CLONE_THREAD), stack: 0x7fff00001000, parent_tid: 41, child_tid: 42, tls: 0x7fff00002000) = 4321 (pid)\n"
     );
 }

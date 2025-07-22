@@ -114,7 +114,7 @@ async fn parse_rseq() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 rseq(rseq: NULL, rseq_len: 32, flags: 0, signature: 0xabcdef12) = -22\n")
+        "1234 rseq(rseq: NULL, rseq_len: 32, flags: 0, signature: 0xabcdef12) = -22 (error)\n"
     );
 
     // Test with unregister flag

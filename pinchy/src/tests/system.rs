@@ -151,9 +151,7 @@ async fn parse_getrandom() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = -11\n"
-        )
+        "555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = -11 (error)\n"
     );
 }
 

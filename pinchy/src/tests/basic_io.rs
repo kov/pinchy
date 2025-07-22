@@ -39,7 +39,7 @@ async fn parse_close() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1 close(fd: 2) = 0\n")
+        format!("1 close(fd: 2) = 0 (success)\n")
     );
 }
 
@@ -67,7 +67,7 @@ async fn parse_dup3() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1 dup3(oldfd: 3, newfd: 4, flags: 0) = 4\n")
+        format!("1 dup3(oldfd: 3, newfd: 4, flags: 0) = 4 (fd)\n")
     );
 }
 
@@ -95,7 +95,7 @@ async fn parse_dup3_with_flags() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1 dup3(oldfd: 3, newfd: 5, flags: 0x80000 (O_CLOEXEC)) = 5\n")
+        format!("1 dup3(oldfd: 3, newfd: 5, flags: 0x80000 (O_CLOEXEC)) = 5 (fd)\n")
     );
 }
 
@@ -194,8 +194,44 @@ async fn parse_ppoll() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "22 ppoll(fds: [ {{ 3, POLLIN }} ], nfds: 1, timeout: {{ secs: 0, nanos: 0 }}, sigmask) = Timeout [0]\n"
+            "22 ppoll(fds: [ {{ 3, POLLIN }} ], nfds: 1, timeout: {{ secs: 0, nanos: 0 }}, sigmask) = 0 (timeout)\n"
         )
+    );
+
+    // Test ppoll with ready results and detailed output
+    let mut event_ready = SyscallEvent {
+        syscall_nr: SYS_ppoll,
+        pid: 22,
+        tid: 22,
+        return_value: 1, // 1 fd ready
+        data: pinchy_common::SyscallEventData {
+            ppoll: PpollData {
+                fds: [0; 16],
+                events: [0; 16],
+                revents: [0; 16],
+                nfds: 1,
+                timeout: Timespec {
+                    seconds: 1,
+                    nanos: 0,
+                },
+            },
+        },
+    };
+
+    let ppoll_data_ready = unsafe { &mut event_ready.data.ppoll };
+    ppoll_data_ready.fds[0] = 5;
+    ppoll_data_ready.events[0] = libc::POLLIN;
+    ppoll_data_ready.revents[0] = libc::POLLIN; // Ready for reading
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event_ready, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "22 ppoll(fds: [ { 5, POLLIN } ], nfds: 1, timeout: { secs: 1, nanos: 0 }, sigmask) = 1 (ready) [5 = POLLIN]\n"
     );
 }
 
@@ -233,7 +269,7 @@ async fn parse_read() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n"
+            "22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192 (bytes)\n"
         )
     );
 }
@@ -272,7 +308,7 @@ async fn parse_write() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192\n"
+            "22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192 (bytes)\n"
         )
     );
 }
@@ -334,9 +370,7 @@ async fn parse_openat() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3\n"
-        )
+        "22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3 (fd)\n"
     );
 }
 

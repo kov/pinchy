@@ -6,6 +6,7 @@ mod filesystem;
 mod memory;
 mod network;
 mod process;
+mod return_values;
 mod scheduling;
 mod signal;
 mod sync;

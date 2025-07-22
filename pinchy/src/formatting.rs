@@ -34,11 +34,10 @@ macro_rules! raw {
 #[macro_export]
 macro_rules! finish {
     ($sf:expr, $retval:expr) => {
-        $sf.finish($retval.to_string().as_bytes(), None).await?
+        $sf.finish($retval, None).await?
     };
     ($sf:expr, $retval:expr, $extra:expr) => {
-        $sf.finish($retval.to_string().as_bytes(), Some($extra))
-            .await?
+        $sf.finish($retval, Some($extra)).await?
     };
 }
 
@@ -97,6 +96,7 @@ impl<'f> Formatter<'f> {
         Ok(SyscallFormatter {
             formatter: self,
             args: vec![0],
+            syscall_nr,
         })
     }
 }
@@ -104,6 +104,7 @@ impl<'f> Formatter<'f> {
 pub struct SyscallFormatter<'f> {
     formatter: Formatter<'f>,
     args: Vec<usize>,
+    syscall_nr: i64,
 }
 
 const INDENT_STEP: &[u8] = &[b' '; 4];
@@ -203,10 +204,12 @@ impl<'f> SyscallFormatter<'f> {
 
     pub async fn finish(
         mut self,
-        return_value: &[u8],
+        return_value: i64,
         suffix: Option<&[u8]>,
     ) -> Result<Formatter<'f>> {
         assert_eq!(self.get_depth(), 1);
+
+        let formatted = crate::util::format_return_value(self.syscall_nr, return_value);
 
         let output = &mut self.formatter.output;
 
@@ -215,7 +218,7 @@ impl<'f> SyscallFormatter<'f> {
         }
 
         output.write_all(b") = ").await?;
-        output.write_all(return_value).await?;
+        output.write_all(formatted.as_bytes()).await?;
 
         if let Some(suffix) = suffix {
             output.write_all(suffix).await?;
@@ -244,16 +247,16 @@ mod test {
         let mut sysformatter = formatter.push_syscall(1, SYS_close).await.unwrap();
         sysformatter.push_arg(b"fd: 1").await.unwrap();
 
-        let _ = sysformatter.finish(b"0", Some(b" <STUB>")).await.unwrap();
+        let _ = sysformatter.finish(0, Some(b" <STUB>")).await.unwrap();
         assert_eq!(
-            output.as_slice(),
-            indoc! {b"
+            String::from_utf8(output).unwrap(),
+            indoc! {"
                 1
                 \tclose(
                 \t    fd: 1
-                \t) = 0 <STUB>
+                \t) = 0 (success) <STUB>
             "}
-            .as_slice()
+            .to_string()
         );
     }
 
@@ -276,7 +279,7 @@ mod test {
 
         sf.pop_depth(b"}").await;
 
-        let _ = sf.finish(b"0", None).await.unwrap();
+        let _ = sf.finish(0, None).await.unwrap();
         assert_eq!(
             String::from_utf8_lossy(&output),
             indoc! {"
@@ -287,7 +290,7 @@ mod test {
                 \t        seconds: 2,
                 \t        nanos: 200
                 \t    }
-                \t) = 0
+                \t) = 0 (success)
             "}
         );
     }

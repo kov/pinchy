@@ -52,7 +52,7 @@ async fn parse_fstat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = 0\n"
+            "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = 0 (success)\n"
         )
     );
 
@@ -68,7 +68,7 @@ async fn parse_fstat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = -1\n"
+            "33 fstat(fd: 5, struct stat: {{ mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }}) = -1 (error)\n"
         )
     );
 }
@@ -131,7 +131,7 @@ async fn parse_statfs() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("44 statfs(pathname: \"/mnt/data\", buf: <unavailable>) = -1\n")
+        "44 statfs(pathname: \"/mnt/data\", buf: <unavailable>) = -1 (error)\n"
     );
 }
 
@@ -252,7 +252,7 @@ async fn test_faccessat_syscall() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0\n"
+            "1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0 (success)\n"
         )
     );
 }
@@ -286,9 +286,7 @@ async fn test_faccessat_with_flags_syscall() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1\n"
-        )
+        "1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
     );
 }
 
@@ -335,7 +333,7 @@ async fn parse_newfstatat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0\n"
+            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
         )
     );
 
@@ -351,7 +349,7 @@ async fn parse_newfstatat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1\n"
+            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
         )
     );
 
@@ -368,7 +366,7 @@ async fn parse_newfstatat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0\n"
+            "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0 (success)\n"
         )
     );
 
@@ -384,7 +382,7 @@ async fn parse_newfstatat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0\n"
+            "42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: {{ mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }}, flags: 0) = 0 (success)\n"
         )
     );
 }

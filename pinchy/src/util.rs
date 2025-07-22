@@ -1592,3 +1592,216 @@ pub async fn format_xattr_list(
     });
     Ok(())
 }
+
+/// Formats return values with meaningful interpretation based on syscall type and value
+pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::Cow<'static, str> {
+    use pinchy_common::syscalls;
+
+    // Handle the common error case first
+    if return_value == -1 {
+        return std::borrow::Cow::Borrowed("-1 (error)");
+    }
+
+    match syscall_nr {
+        // File descriptor returning syscalls - show success with fd number
+        syscalls::SYS_openat
+        | syscalls::SYS_dup
+        | syscalls::SYS_dup3
+        | syscalls::SYS_socket
+        | syscalls::SYS_accept
+        | syscalls::SYS_accept4
+        | syscalls::SYS_epoll_create1
+        | syscalls::SYS_signalfd4
+        | syscalls::SYS_eventfd2
+        | syscalls::SYS_timerfd_create
+        | syscalls::SYS_memfd_create
+        | syscalls::SYS_userfaultfd => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (fd)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        // File descriptor returning syscalls - show success with fd number
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_open
+        | syscalls::SYS_creat
+        | syscalls::SYS_dup2
+        | syscalls::SYS_epoll_create
+        | syscalls::SYS_signalfd
+        | syscalls::SYS_eventfd => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{} (fd)", return_value))
+            } else {
+                std::borrow::Cow::Owned(format!("{} (error)", return_value))
+            }
+        }
+
+        // Byte count returning syscalls - show success with byte count
+        syscalls::SYS_read
+        | syscalls::SYS_write
+        | syscalls::SYS_pread64
+        | syscalls::SYS_pwrite64
+        | syscalls::SYS_readv
+        | syscalls::SYS_writev
+        | syscalls::SYS_preadv
+        | syscalls::SYS_pwritev
+        | syscalls::SYS_splice
+        | syscalls::SYS_tee
+        | syscalls::SYS_vmsplice
+        | syscalls::SYS_recvmsg
+        | syscalls::SYS_sendmsg
+        | syscalls::SYS_recvfrom
+        | syscalls::SYS_sendto => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_sendfile => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{} (bytes)", return_value))
+            } else {
+                std::borrow::Cow::Owned(format!("{} (error)", return_value))
+            }
+        }
+
+        // Boolean-like syscalls - 0 for success, non-zero for error
+        syscalls::SYS_faccessat
+        | syscalls::SYS_fchmod
+        | syscalls::SYS_fchmodat
+        | syscalls::SYS_fchown
+        | syscalls::SYS_fchownat
+        | syscalls::SYS_close
+        | syscalls::SYS_fsync
+        | syscalls::SYS_fdatasync
+        | syscalls::SYS_sync
+        | syscalls::SYS_syncfs
+        | syscalls::SYS_truncate
+        | syscalls::SYS_ftruncate
+        | syscalls::SYS_mkdirat
+        | syscalls::SYS_unlinkat
+        | syscalls::SYS_linkat
+        | syscalls::SYS_symlinkat
+        | syscalls::SYS_renameat
+        | syscalls::SYS_renameat2
+        | syscalls::SYS_fstat
+        | syscalls::SYS_newfstatat => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_access
+        | syscalls::SYS_chmod
+        | syscalls::SYS_chown
+        | syscalls::SYS_lchown
+        | syscalls::SYS_mkdir
+        | syscalls::SYS_rmdir
+        | syscalls::SYS_unlink
+        | syscalls::SYS_link
+        | syscalls::SYS_symlink
+        | syscalls::SYS_rename
+        | syscalls::SYS_stat
+        | syscalls::SYS_lstat => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{} (error)", return_value)),
+        },
+
+        // Count returning syscalls - special handling for poll/select family
+        syscalls::SYS_pselect6 => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (timeout)"),
+            n if n > 0 => std::borrow::Cow::Owned(format!("{n} (ready)")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_poll | syscalls::SYS_select => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (timeout)"),
+            n if n > 0 => std::borrow::Cow::Owned(format!("{} (ready)", n)),
+            _ => std::borrow::Cow::Owned(format!("{} (error)", return_value)),
+        },
+
+        // ppoll gets special handling with detailed ready state - handled in events.rs
+        syscalls::SYS_ppoll => {
+            // This syscall needs custom formatting in events.rs, so return empty for now
+            // The events.rs handler will override this with the extra parameter
+            match return_value {
+                0 => std::borrow::Cow::Borrowed("0 (timeout)"),
+                -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+                _ => std::borrow::Cow::Owned(format!("{return_value} (ready)")),
+            }
+        }
+
+        // PID returning syscalls
+        syscalls::SYS_getpid
+        | syscalls::SYS_getppid
+        | syscalls::SYS_gettid
+        | syscalls::SYS_clone
+        | syscalls::SYS_clone3 => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (pid)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_fork | syscalls::SYS_vfork => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{} (pid)", return_value))
+            } else {
+                std::borrow::Cow::Owned(format!("{} (error)", return_value))
+            }
+        }
+
+        // UID/GID returning syscalls
+        syscalls::SYS_getuid
+        | syscalls::SYS_geteuid
+        | syscalls::SYS_getgid
+        | syscalls::SYS_getegid => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (id)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        // Memory address returning syscalls
+        syscalls::SYS_mmap | syscalls::SYS_mremap => {
+            if return_value == -1 {
+                std::borrow::Cow::Borrowed("-1 (error)")
+            } else {
+                std::borrow::Cow::Owned(format!("0x{return_value:x} (addr)"))
+            }
+        }
+
+        // brk returns the new program break address
+        syscalls::SYS_brk => std::borrow::Cow::Owned(format!("0x{return_value:x}")),
+
+        // Memory/protection syscalls that return 0 on success
+        syscalls::SYS_munmap | syscalls::SYS_mprotect | syscalls::SYS_madvise => match return_value
+        {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        // Syscalls that always succeed or have no meaningful return interpretation
+        syscalls::SYS_rt_sigreturn | syscalls::SYS_sched_yield => {
+            std::borrow::Cow::Owned(return_value.to_string())
+        }
+
+        // Default case - just show the raw value with error indication if negative
+        _ => {
+            if return_value < 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            } else {
+                std::borrow::Cow::Owned(return_value.to_string())
+            }
+        }
+    }
+}

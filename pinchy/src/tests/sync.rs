@@ -98,7 +98,7 @@ async fn parse_set_robust_list() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("1234 set_robust_list(head: 0x7f1234560000, len: 0) = -22\n")
+        "1234 set_robust_list(head: 0x7f1234560000, len: 0) = -22 (error)\n"
     );
 }
 

@@ -43,7 +43,7 @@ async fn parse_mmap() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "66 mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = 0x7f1234567000\n"
+            "66 mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = 0x7f1234567000 (addr)\n"
         )
     );
 
@@ -108,7 +108,7 @@ async fn test_munmap() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("123 munmap(addr: 0xffff8a9c2000, length: 57344) = 0\n")
+        "123 munmap(addr: 0xffff8a9c2000, length: 57344) = 0 (success)\n"
     );
 
     // Test with error return
@@ -122,7 +122,7 @@ async fn test_munmap() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("123 munmap(addr: 0xffff8a9c2000, length: 57344) = -1\n")
+        "123 munmap(addr: 0xffff8a9c2000, length: 57344) = -1 (error)\n"
     );
 }
 
@@ -152,9 +152,7 @@ async fn parse_mprotect() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "77 mprotect(addr: 0x7f5678901000, length: 8192, prot: 0x5 (PROT_READ|PROT_EXEC)) = 0\n"
-        )
+        "77 mprotect(addr: 0x7f5678901000, length: 8192, prot: 0x5 (PROT_READ|PROT_EXEC)) = 0 (success)\n"
     );
 
     // Test with error return value
@@ -180,7 +178,7 @@ async fn parse_mprotect() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("77 mprotect(addr: 0x1000, length: 4096, prot: 0x2 (PROT_WRITE)) = -22\n")
+        "77 mprotect(addr: 0x1000, length: 4096, prot: 0x2 (PROT_WRITE)) = -22 (error)\n"
     );
 }
 
@@ -263,7 +261,7 @@ async fn parse_madvise() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("123 madvise(addr: 0x7f1234567000, length: 4096, advice: MADV_DONTNEED (4)) = 0\n")
+        "123 madvise(addr: 0x7f1234567000, length: 4096, advice: MADV_DONTNEED (4)) = 0 (success)\n"
     );
 
     // Test with error return
@@ -289,7 +287,7 @@ async fn parse_madvise() {
 
     assert_eq!(
         String::from_utf8_lossy(&output_error),
-        format!("456 madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -1\n")
+        "456 madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -1 (error)\n"
     );
 
     // Test with unknown advice value
@@ -317,6 +315,6 @@ async fn parse_madvise() {
 
     assert_eq!(
         String::from_utf8_lossy(&output_unknown),
-        format!("789 madvise(addr: 0x7f1234567000, length: 8192, advice: UNKNOWN (999)) = 0\n")
+        "789 madvise(addr: 0x7f1234567000, length: 8192, advice: UNKNOWN (999)) = 0 (success)\n"
     );
 }

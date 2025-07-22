@@ -79,9 +79,7 @@ async fn parse_recvmsg() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "1234 recvmsg(sockfd: 5, msg: {{ name: {{family: AF_INET, len: 16}}, iov: [  {{ base: 0x7fff87654321, len: 1024 }} {{ base: 0x7fff11111111, len: 512 }} ], iovlen: 2, control: {{ptr: 0x7fff99999999, len: 64}}, flags: 0x40 (MSG_DONTWAIT) }}, flags: 0x40 (MSG_DONTWAIT)) = 1536\n"
-        )
+        "1234 recvmsg(sockfd: 5, msg: { name: {family: AF_INET, len: 16}, iov: [  { base: 0x7fff87654321, len: 1024 } { base: 0x7fff11111111, len: 512 } ], iovlen: 2, control: {ptr: 0x7fff99999999, len: 64}, flags: 0x40 (MSG_DONTWAIT) }, flags: 0x40 (MSG_DONTWAIT)) = 1536 (bytes)\n"
     );
 }
 
@@ -145,9 +143,7 @@ async fn parse_sendmsg() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "5678 sendmsg(sockfd: 7, msg: {{ name: {{family: AF_INET, len: 16}}, iov: [  {{ base: 0x7fff87654321, len: 512 }} {{ base: 0x7fff11111111, len: 256 }} ], iovlen: 2, control: {{ptr: 0x7fff99999999, len: 32}}, flags: 0 }}, flags: 0x40 (MSG_DONTWAIT)) = 768\n"
-        )
+        "5678 sendmsg(sockfd: 7, msg: { name: {family: AF_INET, len: 16}, iov: [  { base: 0x7fff87654321, len: 512 } { base: 0x7fff11111111, len: 256 } ], iovlen: 2, control: {ptr: 0x7fff99999999, len: 32}, flags: 0 }, flags: 0x40 (MSG_DONTWAIT)) = 768 (bytes)\n"
     );
 }
 
@@ -195,9 +191,7 @@ async fn parse_recvmsg_unix_socket() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "999 recvmsg(sockfd: 7, msg: {{ name: NULL, iov: [  {{ base: 0x7fff12345678, len: 256 }} ], iovlen: 1, control: NULL, flags: 0 }}, flags: 0) = 42\n"
-        )
+        "999 recvmsg(sockfd: 7, msg: { name: NULL, iov: [  { base: 0x7fff12345678, len: 256 } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = 42 (bytes)\n"
     );
 }
 
@@ -229,7 +223,7 @@ async fn parse_recvmsg_error() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "555 recvmsg(sockfd: 3, msg: {{ name: NULL, iov: NULL, iovlen: 0, control: NULL, flags: 0 }}, flags: 0x2 (MSG_PEEK)) = -1\n"
+            "555 recvmsg(sockfd: 3, msg: {{ name: NULL, iov: NULL, iovlen: 0, control: NULL, flags: 0 }}, flags: 0x2 (MSG_PEEK)) = -1 (error)\n"
         )
     );
 }
@@ -274,7 +268,7 @@ async fn parse_accept4_success() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "1234 accept4(sockfd: 3, addr: {{ family: AF_INET, addr: 192.168.1.1:80 }}, addrlen: 16, flags: 0x80800 (SOCK_CLOEXEC|SOCK_NONBLOCK)) = 4\n"
+            "1234 accept4(sockfd: 3, addr: {{ family: AF_INET, addr: 192.168.1.1:80 }}, addrlen: 16, flags: 0x80800 (SOCK_CLOEXEC|SOCK_NONBLOCK)) = 4 (fd)\n"
         )
     );
 }
@@ -306,7 +300,7 @@ async fn parse_accept4_null_addr() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("999 accept4(sockfd: 3, addr: NULL, addrlen: 0, flags: 0) = 5\n")
+        format!("999 accept4(sockfd: 3, addr: NULL, addrlen: 0, flags: 0) = 5 (fd)\n")
     );
 }
 
@@ -337,9 +331,7 @@ async fn parse_accept4_error() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "555 accept4(sockfd: 8, addr: NULL, addrlen: 0, flags: 0x800 (SOCK_NONBLOCK)) = -1\n"
-        )
+        "555 accept4(sockfd: 8, addr: NULL, addrlen: 0, flags: 0x800 (SOCK_NONBLOCK)) = -1 (error)\n"
     );
 }
 
@@ -381,7 +373,7 @@ async fn test_accept4_unix_socket() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "777 accept4(sockfd: 4, addr: {{ family: AF_UNIX, path: \"/tmp/test.soc\" }}, addrlen: 18, flags: 0x80000 (SOCK_CLOEXEC)) = 6\n"
+            "777 accept4(sockfd: 4, addr: {{ family: AF_UNIX, path: \"/tmp/test.soc\" }}, addrlen: 18, flags: 0x80000 (SOCK_CLOEXEC)) = 6 (fd)\n"
         )
     );
 }
@@ -438,7 +430,7 @@ async fn test_accept4_ipv6_socket() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "2001 accept4(sockfd: 6, addr: {{ family: AF_INET6, addr: [0:0:0:0:0:0:0:1]:8080 }}, addrlen: 28, flags: 0x80800 (SOCK_CLOEXEC|SOCK_NONBLOCK)) = 7\n"
+            "2001 accept4(sockfd: 6, addr: {{ family: AF_INET6, addr: [0:0:0:0:0:0:0:1]:8080 }}, addrlen: 28, flags: 0x80800 (SOCK_CLOEXEC|SOCK_NONBLOCK)) = 7 (fd)\n"
         )
     );
 }
@@ -495,7 +487,7 @@ async fn test_accept4_ipv6_full_address() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "3001 accept4(sockfd: 7, addr: {{ family: AF_INET6, addr: [2001:db8:0:0:0:0:0:1]:443 }}, addrlen: 28, flags: 0) = 8\n"
+            "3001 accept4(sockfd: 7, addr: {{ family: AF_INET6, addr: [2001:db8:0:0:0:0:0:1]:443 }}, addrlen: 28, flags: 0) = 8 (fd)\n"
         )
     );
 }
@@ -549,7 +541,7 @@ async fn test_accept4_netlink_socket() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "4001 accept4(sockfd: 8, addr: {{ family: AF_NETLINK, pid: 1234, groups: 0x1 }}, addrlen: 12, flags: 0x80000 (SOCK_CLOEXEC)) = 9\n"
+            "4001 accept4(sockfd: 8, addr: {{ family: AF_NETLINK, pid: 1234, groups: 0x1 }}, addrlen: 12, flags: 0x80000 (SOCK_CLOEXEC)) = 9 (fd)\n"
         )
     );
 }
@@ -615,7 +607,7 @@ async fn test_accept4_packet_socket() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "5001 accept4(sockfd: 9, addr: {{ family: AF_PACKET, protocol: 0x800, ifindex: 2, hatype: 1, pkttype: 0, addr: 00:11:22:33:44:55 }}, addrlen: 20, flags: 0x800 (SOCK_NONBLOCK)) = 10\n"
+            "5001 accept4(sockfd: 9, addr: {{ family: AF_PACKET, protocol: 0x800, ifindex: 2, hatype: 1, pkttype: 0, addr: 00:11:22:33:44:55 }}, addrlen: 20, flags: 0x800 (SOCK_NONBLOCK)) = 10 (fd)\n"
         )
     );
 }
@@ -659,7 +651,7 @@ async fn test_accept4_ipv6_with_larger_buffer() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "6001 accept4(sockfd: 10, addr: {{ family: AF_INET6, addr: [0:0:0:0:0:0:0:0]:8000 }}, addrlen: 8, flags: 0) = 11\n"
+            "6001 accept4(sockfd: 10, addr: {{ family: AF_INET6, addr: [0:0:0:0:0:0:0:0]:8000 }}, addrlen: 8, flags: 0) = 11 (fd)\n"
         )
     );
 }
@@ -702,7 +694,7 @@ async fn test_accept4_unknown_family() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "7001 accept4(sockfd: 11, addr: {{ family: 999, data: de ad be ef  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0 }}, addrlen: 8, flags: 0) = 12\n"
+            "7001 accept4(sockfd: 11, addr: {{ family: 999, data: de ad be ef  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0  0 }}, addrlen: 8, flags: 0) = 12 (fd)\n"
         )
     );
 }
@@ -753,9 +745,7 @@ async fn parse_accept4_ipv6() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "2234 accept4(sockfd: 4, addr: {{ family: AF_INET6, addr: [2001:db8:0:0:0:0:0:1]:8080 }}, addrlen: 28, flags: 0x80000 (SOCK_CLOEXEC)) = 5\n"
-        )
+        "2234 accept4(sockfd: 4, addr: { family: AF_INET6, addr: [2001:db8:0:0:0:0:0:1]:8080 }, addrlen: 28, flags: 0x80000 (SOCK_CLOEXEC)) = 5 (fd)\n"
     );
 }
 
@@ -803,7 +793,7 @@ async fn parse_accept4_netlink() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "3234 accept4(sockfd: 5, addr: {{ family: AF_NETLINK, pid: 1234, groups: 0x1 }}, addrlen: 12, flags: 0) = 6\n"
+            "3234 accept4(sockfd: 5, addr: {{ family: AF_NETLINK, pid: 1234, groups: 0x1 }}, addrlen: 12, flags: 0) = 6 (fd)\n"
         )
     );
 }
@@ -863,9 +853,7 @@ async fn parse_accept4_packet() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!(
-            "4234 accept4(sockfd: 6, addr: {{ family: AF_PACKET, protocol: 0x800, ifindex: 2, hatype: 1, pkttype: 0, addr: aa:bb:cc:dd:ee:ff }}, addrlen: 20, flags: 0x800 (SOCK_NONBLOCK)) = 7\n"
-        )
+        "4234 accept4(sockfd: 6, addr: { family: AF_PACKET, protocol: 0x800, ifindex: 2, hatype: 1, pkttype: 0, addr: aa:bb:cc:dd:ee:ff }, addrlen: 20, flags: 0x800 (SOCK_NONBLOCK)) = 7 (fd)\n"
     );
 }
 
@@ -909,7 +897,7 @@ async fn test_recvfrom_with_address() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "1234 recvfrom(sockfd: 8, buf: \"Hello world!\", size: 1024, flags: 0x2 (MSG_PEEK), src_addr: { family: AF_INET, addr: 0.0.0.0:443 }, addrlen: 16) = 12\n"
+        "1234 recvfrom(sockfd: 8, buf: \"Hello world!\", size: 1024, flags: 0x2 (MSG_PEEK), src_addr: { family: AF_INET, addr: 0.0.0.0:443 }, addrlen: 16) = 12 (bytes)\n"
     );
 }
 
@@ -945,7 +933,7 @@ async fn test_recvfrom_without_address() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "5678 recvfrom(sockfd: 3, buf: \"test!\", size: 512, flags: 0, src_addr: NULL, addrlen: 0) = 5\n"
+        "5678 recvfrom(sockfd: 3, buf: \"test!\", size: 512, flags: 0, src_addr: NULL, addrlen: 0) = 5 (bytes)\n"
     );
 }
 
@@ -978,6 +966,6 @@ async fn test_recvfrom_failed() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "9999 recvfrom(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), src_addr: NULL, addrlen: 0) = -1\n"
+        "9999 recvfrom(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), src_addr: NULL, addrlen: 0) = -1 (error)\n"
     );
 }

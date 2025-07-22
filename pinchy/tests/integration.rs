@@ -134,11 +134,11 @@ fn pinchy_reads() {
 
     // Client's output
     let expected_output = escaped_regex(indoc! {r#"
-           PID openat(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", flags: 0x0 (O_RDONLY), mode: 0) = 3
-           PID read(fd: 3, buf: "                    GNU GENERAL PUBLIC LICENSE\n                       Version 2, June 1991\n\n Copyright (C) 1989, 1991 Free Softw", count: 128) = 128
-           PID read(fd: 3, buf: "are Foundation, Inc.,\n 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n Everyone is permitted to copy and distribute " ... (896 more bytes), count: 1024) = 1024
+           PID openat(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", flags: 0x0 (O_RDONLY), mode: 0) = 3 (fd)
+           PID read(fd: 3, buf: "                    GNU GENERAL PUBLIC LICENSE\n                       Version 2, June 1991\n\n Copyright (C) 1989, 1991 Free Softw", count: 128) = 128 (bytes)
+           PID read(fd: 3, buf: "are Foundation, Inc.,\n 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n Everyone is permitted to copy and distribute " ... (896 more bytes), count: 1024) = 1024 (bytes)
            PID lseek(fd: 3, offset: 0, whence: 2) = 18092
-           PID read(fd: 3, buf: "", count: 1024) = 0
+           PID read(fd: 3, buf: "", count: 1024) = 0 (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -332,9 +332,9 @@ fn network_syscalls() {
     // Expected output - we should see accept4, recvmsg, and sendmsg calls
     // The exact addresses and file descriptors will vary, so we use regex patterns
     let expected_output = escaped_regex(indoc! {r#"
-        PID accept4(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16, flags: 0x80000 (SOCK_CLOEXEC)) = NUMBER
-        PID sendmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: NUMBER } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER
-        PID recvmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: 1024 } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER
+        PID accept4(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16, flags: 0x80000 (SOCK_CLOEXEC)) = NUMBER (fd)
+        PID sendmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: NUMBER } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER (bytes)
+        PID recvmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: 1024 } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -364,8 +364,8 @@ fn recvfrom_syscall() {
 
     // Expected output - we should see recvfrom calls with and without source address
     let expected_output = escaped_regex(indoc! {r#"
-        PID recvfrom(sockfd: NUMBER, buf: "UDP recvfrom test!", size: 1024, flags: 0, src_addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: NUMBER) = 18
-        PID recvfrom(sockfd: NUMBER, buf: "second message", size: 1024, flags: 0, src_addr: NULL, addrlen: 0) = 14
+        PID recvfrom(sockfd: NUMBER, buf: "UDP recvfrom test!", size: 1024, flags: 0, src_addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: NUMBER) = 18 (bytes)
+        PID recvfrom(sockfd: NUMBER, buf: "second message", size: 1024, flags: 0, src_addr: NULL, addrlen: 0) = 14 (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -400,13 +400,13 @@ fn identity_syscalls() {
 
     // Expected output - we should see all identity syscalls returning reasonable values
     let expected_output = escaped_regex(indoc! {r#"
-        PID getpid() = PID
-        PID gettid() = NUMBER
-        PID getuid() = NUMBER
-        PID geteuid() = NUMBER
-        PID getgid() = NUMBER
-        PID getegid() = NUMBER
-        PID getppid() = NUMBER
+        PID getpid() = PID (pid)
+        PID gettid() = NUMBER (pid)
+        PID getuid() = NUMBER (id)
+        PID geteuid() = NUMBER (id)
+        PID getgid() = NUMBER (id)
+        PID getegid() = NUMBER (id)
+        PID getppid() = NUMBER (pid)
     "#});
 
     let output = handle.join().unwrap();
@@ -673,10 +673,10 @@ fn madvise_syscall() {
 
     // Expected output - we should see multiple madvise calls with different advice values
     let expected_output = escaped_regex(indoc! {r#"
-        PID madvise(addr: ADDR, length: 4096, advice: MADV_WILLNEED (3)) = 0
-        PID madvise(addr: ADDR, length: 4096, advice: MADV_DONTNEED (4)) = 0
-        PID madvise(addr: ADDR, length: 4096, advice: MADV_NORMAL (0)) = 0
-        PID madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -12
+        PID madvise(addr: ADDR, length: 4096, advice: MADV_WILLNEED (3)) = 0 (success)
+        PID madvise(addr: ADDR, length: 4096, advice: MADV_DONTNEED (4)) = 0 (success)
+        PID madvise(addr: ADDR, length: 4096, advice: MADV_NORMAL (0)) = 0 (success)
+        PID madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -12 (error)
     "#});
 
     let output = handle.join().unwrap();

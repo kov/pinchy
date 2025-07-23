@@ -30,6 +30,7 @@ jobs:
       run: |
         cargo test --no-run --test integration
         cp $(ls target/debug/deps/integration-* | grep -v '\.d') target/debug/test-integration
+        cp $(ls target/debug/deps/auto_quit-* | grep -v '\.d') target/debug/test-auto_quit
     - uses: actions/upload-artifact@v4
       with:
         name: pinchy-build
@@ -39,6 +40,7 @@ jobs:
           ./target/debug/pinchy
           ./target/debug/test-helper
           ./target/debug/test-integration
+          ./target/debug/test-auto_quit
 
   test:
     needs: build
@@ -59,6 +61,7 @@ jobs:
           chmod +x target/debug/pinchyd
           chmod +x target/debug/test-helper
           chmod +x target/debug/test-integration
+          chmod +x target/debug/test-auto_quit
 
       - name: Install vng and dependencies
         run: |

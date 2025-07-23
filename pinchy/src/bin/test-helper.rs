@@ -63,6 +63,7 @@ fn main() -> anyhow::Result<()> {
             "system_operations_test" => system_operations_test(),
             "ioprio_test" => ioprio_test(),
             "scheduler_test" => scheduler_test(),
+            "pread_pwrite_test" => pread_pwrite_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -643,6 +644,66 @@ fn scheduler_test() -> anyhow::Result<()> {
                 std::io::Error::last_os_error()
             );
         }
+    }
+
+    Ok(())
+}
+
+fn pread_pwrite_test() -> anyhow::Result<()> {
+    unsafe {
+        // Create a temporary file for testing pread/pwrite
+        let fd = libc::openat(
+            libc::AT_FDCWD,
+            c"/tmp/pread_pwrite_test".as_ptr(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+            0o644,
+        );
+
+        if fd < 0 {
+            bail!(
+                "Failed to create temporary file: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Write some initial data using regular write
+        let initial_data = b"Hello, world! This is test data for pread/pwrite.";
+        let write_result = libc::write(
+            fd,
+            initial_data.as_ptr() as *const libc::c_void,
+            initial_data.len(),
+        );
+        if write_result < 0 {
+            bail!("Initial write failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test pwrite - write at offset 7 (overwriting "world")
+        let pwrite_data = b"pinch";
+        let pwrite_result = libc::pwrite64(
+            fd,
+            pwrite_data.as_ptr() as *const libc::c_void,
+            pwrite_data.len(),
+            7,
+        );
+        if pwrite_result < 0 {
+            bail!("pwrite64 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test pread - read from offset 3, skipping "Hel"
+        let mut read_buffer = vec![0u8; 28];
+        let pread_result = libc::pread64(
+            fd,
+            read_buffer.as_mut_ptr() as *mut libc::c_void,
+            read_buffer.len(),
+            3,
+        );
+        if pread_result < 0 {
+            bail!("pread64 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Clean up
+        libc::close(fd);
+        libc::unlink(c"/tmp/pread_pwrite_test".as_ptr());
     }
 
     Ok(())

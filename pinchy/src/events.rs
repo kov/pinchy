@@ -512,6 +512,62 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_pread64 => {
+            let data = unsafe { event.data.pread };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if event.return_value >= 0 {
+                let bytes_read = event.return_value as usize;
+                let buf = &data.buf[..bytes_read.min(data.buf.len())];
+
+                let left_over = if event.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        event.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <e>");
+            }
+
+            argf!(sf, "count: {}", data.count);
+            argf!(sf, "offset: {}", data.offset);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_pwrite64 => {
+            let data = unsafe { event.data.pwrite };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if event.return_value >= 0 {
+                let bytes_written = event.return_value as usize;
+                let buf = &data.buf[..bytes_written.min(data.buf.len())];
+
+                let left_over = if event.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        event.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <e>");
+            }
+
+            argf!(sf, "count: {}", data.count);
+            argf!(sf, "offset: {}", data.offset);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_lseek => {
             let data = unsafe { event.data.lseek };
 

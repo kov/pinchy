@@ -169,7 +169,13 @@ Look at several existing tests to understand the usual structure. When creating
 the expected output, take the event formatting code into consideration.
 
 Integration tests that run the binaries as root in a controlled environment
-are in `pinchy/tests/integration.rs`.
+are in `pinchy/tests/integration.rs`. The `test-helper` binary used for the tests
+is in `pinchy/src/bin/test-helper.rs`.
+
+The integration tests can only be run as root, since `pinchyd` needs to be able to load
+the eBPF programs into the kernel. To run them you need to use the following command:
+
+  cargo --config "target.'cfg(all())'.runner=['/bin/sudo', '-s']" test integration -- --ignored
 
 ## Helper functions
 Helper functions for parsing specific arguments should go under

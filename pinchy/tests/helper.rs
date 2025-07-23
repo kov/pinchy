@@ -57,6 +57,11 @@ fn main() -> anyhow::Result<()> {
             "recvfrom_test" => recvfrom_test(),
             "identity_syscalls" => identity_syscalls(),
             "madvise_test" => madvise_test(),
+            "file_descriptor_test" => file_descriptor_test(),
+            "session_process_test" => session_process_test(),
+            "uid_gid_test" => uid_gid_test(),
+            "system_operations_test" => system_operations_test(),
+            "ioprio_test" => ioprio_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -469,6 +474,146 @@ fn madvise_test() -> anyhow::Result<()> {
         let result = libc::munmap(addr, page_size);
         if result != 0 {
             bail!("munmap failed: {}", std::io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+
+fn file_descriptor_test() -> anyhow::Result<()> {
+    unsafe {
+        // Open a file to get a file descriptor
+        let fd = libc::openat(
+            libc::AT_FDCWD,
+            c"pinchy/tests/GPLv2".as_ptr(),
+            libc::O_RDONLY,
+        );
+        if fd < 0 {
+            bail!("Failed to open file: {}", std::io::Error::last_os_error());
+        }
+
+        // Test dup - duplicate the file descriptor
+        let dup_fd = libc::dup(fd);
+        if dup_fd < 0 {
+            bail!("dup failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test close_range - close a range of file descriptors
+        // We'll close from dup_fd to dup_fd (just one fd)
+        let result = libc::syscall(libc::SYS_close_range, dup_fd, dup_fd, 0);
+        if result != 0 {
+            // close_range might not be available on all systems, so we'll just close manually
+            libc::close(dup_fd);
+        }
+
+        libc::close(fd);
+    }
+
+    Ok(())
+}
+
+fn session_process_test() -> anyhow::Result<()> {
+    unsafe {
+        // Get current process group ID
+        let current_pgid = libc::getpgid(0);
+        if current_pgid < 0 {
+            bail!("getpgid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Get current session ID
+        let current_sid = libc::getsid(0);
+        if current_sid < 0 {
+            bail!("getsid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Set process group (should work with root privileges)
+        let result = libc::setpgid(0, current_pgid);
+        if result != 0 {
+            bail!("setpgid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Create new session (should work with root privileges)
+        let result = libc::setsid();
+        if result < 0 {
+            bail!("setsid failed: {}", std::io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+
+fn uid_gid_test() -> anyhow::Result<()> {
+    unsafe {
+        // Get current IDs
+        let uid = libc::getuid();
+        let gid = libc::getgid();
+
+        // Set to same values (should work with root privileges)
+
+        // Test setuid
+        let result = libc::setuid(uid);
+        if result != 0 {
+            bail!("setuid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test setgid
+        let result = libc::setgid(gid);
+        if result != 0 {
+            bail!("setgid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test setreuid
+        let result = libc::setreuid(uid, uid);
+        if result != 0 {
+            bail!("setreuid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test setregid
+        let result = libc::setregid(gid, gid);
+        if result != 0 {
+            bail!("setregid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test setresuid
+        let result = libc::syscall(libc::SYS_setresuid, uid, uid, uid);
+        if result != 0 {
+            bail!("setresuid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test setresgid
+        let result = libc::syscall(libc::SYS_setresgid, gid, gid, gid);
+        if result != 0 {
+            bail!("setresgid failed: {}", std::io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+fn system_operations_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test umask - get current mask and set it to 0o22, then back
+        let old_mask = libc::umask(0o22);
+        libc::umask(old_mask); // Restore original mask
+
+        // Test sync - synchronize file systems
+        libc::sync();
+    }
+
+    Ok(())
+}
+
+fn ioprio_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test ioprio_get - get I/O priority
+        let current_prio = libc::syscall(libc::SYS_ioprio_get, 1, 0); // IOPRIO_WHO_PROCESS, current process
+        if current_prio < 0 {
+            bail!("ioprio_get failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test ioprio_set - set I/O priority (should work with root privileges)
+        let result = libc::syscall(libc::SYS_ioprio_set, 1, 0, current_prio); // IOPRIO_WHO_PROCESS, current process
+        if result != 0 {
+            bail!("ioprio_set failed: {}", std::io::Error::last_os_error());
         }
     }
 

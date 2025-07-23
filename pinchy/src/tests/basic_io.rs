@@ -7,11 +7,11 @@ use indoc::indoc;
 use pinchy_common::{
     kernel_types::{EpollEvent, Timespec},
     syscalls::{
-        SYS_close, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2,
-        SYS_ppoll, SYS_read, SYS_write,
+        SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek,
+        SYS_openat, SYS_pipe2, SYS_ppoll, SYS_read, SYS_write,
     },
-    CloseData, Dup3Data, EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, ReadData,
-    SyscallEvent, WriteData, DATA_READ_SIZE,
+    CloseData, CloseRangeData, Dup3Data, DupData, EpollPWaitData, FcntlData, LseekData, OpenAtData,
+    PpollData, ReadData, SyscallEvent, WriteData, DATA_READ_SIZE,
 };
 
 use crate::{
@@ -488,5 +488,57 @@ async fn parse_pipe2() {
             "1 pipe2(pipefd: [ 3, 4 ], flags: 0x{:x}) = 0\n",
             libc::O_CLOEXEC
         )
+    );
+}
+
+#[tokio::test]
+async fn parse_dup() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_dup,
+        pid: 1,
+        tid: 1,
+        return_value: 4, // new fd
+        data: pinchy_common::SyscallEventData {
+            dup: DupData { oldfd: 3 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1 dup(oldfd: 3) = 4 (fd)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_close_range() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_close_range,
+        pid: 1,
+        tid: 1,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            close_range: CloseRangeData {
+                fd: 3,
+                max_fd: 10,
+                flags: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1 close_range(fd: 3, max_fd: 10, flags: 0x0) = 0 (success)\n"
     );
 }

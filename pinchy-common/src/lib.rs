@@ -78,6 +78,23 @@ pub union SyscallEventData {
     pub listxattr: ListxattrData,
     pub llistxattr: LlistxattrData,
     pub madvise: MadviseData,
+    pub dup: DupData,
+    pub sync: SyncData,
+    pub setsid: SetsidData,
+    pub setuid: SetuidData,
+    pub setgid: SetgidData,
+    pub close_range: CloseRangeData,
+    pub getpgid: GetpgidData,
+    pub getsid: GetsidData,
+    pub setpgid: SetpgidData,
+    pub umask: UmaskData,
+    pub vhangup: VhangupData,
+    pub ioprio_get: IoprioGetData,
+    pub ioprio_set: IoprioSetData,
+    pub setregid: SetregidData,
+    pub setresgid: SetresgidData,
+    pub setresuid: SetresuidData,
+    pub setreuid: SetreuidData,
 }
 
 #[repr(C)]
@@ -519,4 +536,112 @@ pub struct MadviseData {
     pub addr: usize,
     pub length: usize,
     pub advice: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct DupData {
+    pub oldfd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SyncData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetsidData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetuidData {
+    pub uid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetgidData {
+    pub gid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CloseRangeData {
+    pub fd: u32,
+    pub max_fd: u32,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetpgidData {
+    pub pid: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetsidData {
+    pub pid: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetpgidData {
+    pub pid: i32,
+    pub pgid: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UmaskData {
+    pub mask: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct VhangupData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IoprioGetData {
+    pub which: i32,
+    pub who: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IoprioSetData {
+    pub which: i32,
+    pub who: i32,
+    pub ioprio: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetregidData {
+    pub rgid: u32,
+    pub egid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetresgidData {
+    pub rgid: u32,
+    pub egid: u32,
+    pub sgid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetresuidData {
+    pub ruid: u32,
+    pub euid: u32,
+    pub suid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetreuidData {
+    pub ruid: u32,
+    pub euid: u32,
 }

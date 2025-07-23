@@ -561,3 +561,99 @@ async fn test_settimeofday() {
         "1001 settimeofday(tv: { tv_sec: 1672531200, tv_usec: 123456 }, tz: NULL) = 0 (success)\n"
     );
 }
+
+#[tokio::test]
+async fn parse_setfsuid() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_setfsuid,
+        pid: 1234,
+        tid: 1234,
+        return_value: 1000, // Previous fsuid
+        data: pinchy_common::SyscallEventData {
+            setfsuid: pinchy_common::SetfsuidData { uid: 1001 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 setfsuid(uid: 1001) = 1000\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_setfsuid_root() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_setfsuid,
+        pid: 5678,
+        tid: 5678,
+        return_value: 1001, // Previous fsuid
+        data: pinchy_common::SyscallEventData {
+            setfsuid: pinchy_common::SetfsuidData { uid: 0 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "5678 setfsuid(uid: 0) = 1001\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_setfsgid() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_setfsgid,
+        pid: 2468,
+        tid: 2468,
+        return_value: 1000, // Previous fsgid
+        data: pinchy_common::SyscallEventData {
+            setfsgid: pinchy_common::SetfsgidData { gid: 1001 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2468 setfsgid(gid: 1001) = 1000\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_setfsgid_root() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_setfsgid,
+        pid: 9999,
+        tid: 9999,
+        return_value: 1001, // Previous fsgid
+        data: pinchy_common::SyscallEventData {
+            setfsgid: pinchy_common::SetfsgidData { gid: 0 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 setfsgid(gid: 0) = 1001\n"
+    );
+}

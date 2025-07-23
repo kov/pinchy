@@ -105,6 +105,13 @@ pub union SyscallEventData {
     pub settimeofday: SettimeofdayData,
     pub getpriority: GetpriorityData,
     pub setpriority: SetpriorityData,
+    pub tkill: TkillData,
+    pub tgkill: TgkillData,
+    pub sched_getscheduler: SchedGetschedulerData,
+    pub setfsuid: SetfsuidData,
+    pub setfsgid: SetfsgidData,
+    pub sched_get_priority_max: SchedGetPriorityMaxData,
+    pub sched_get_priority_min: SchedGetPriorityMinData,
 }
 
 #[repr(C)]
@@ -721,4 +728,49 @@ pub struct SetpriorityData {
     pub which: i32,
     pub who: i32,
     pub prio: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TkillData {
+    pub pid: i32,
+    pub signal: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TgkillData {
+    pub tgid: i32,
+    pub pid: i32,
+    pub signal: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SchedGetschedulerData {
+    pub pid: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetfsuidData {
+    pub uid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetfsgidData {
+    pub gid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SchedGetPriorityMaxData {
+    pub policy: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SchedGetPriorityMinData {
+    pub policy: i32,
 }

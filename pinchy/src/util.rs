@@ -1676,6 +1676,21 @@ pub async fn format_tms(
     Ok(())
 }
 
+pub fn format_sched_policy(policy: i32) -> Cow<'static, str> {
+    match policy {
+        libc::SCHED_OTHER => Cow::Borrowed("SCHED_OTHER"),
+        libc::SCHED_FIFO => Cow::Borrowed("SCHED_FIFO"),
+        libc::SCHED_RR => Cow::Borrowed("SCHED_RR"),
+        #[cfg(target_os = "linux")]
+        libc::SCHED_BATCH => Cow::Borrowed("SCHED_BATCH"),
+        #[cfg(target_os = "linux")]
+        libc::SCHED_IDLE => Cow::Borrowed("SCHED_IDLE"),
+        #[cfg(target_os = "linux")]
+        libc::SCHED_DEADLINE => Cow::Borrowed("SCHED_DEADLINE"),
+        _ => Cow::Owned(policy.to_string()),
+    }
+}
+
 pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::Cow<'static, str> {
     use pinchy_common::syscalls;
 
@@ -1924,5 +1939,21 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
                 std::borrow::Cow::Owned(return_value.to_string())
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_sched_policy() {
+        // Test known policies
+        assert_eq!(format_sched_policy(libc::SCHED_OTHER), "SCHED_OTHER");
+        assert_eq!(format_sched_policy(libc::SCHED_FIFO), "SCHED_FIFO");
+        assert_eq!(format_sched_policy(libc::SCHED_RR), "SCHED_RR");
+
+        // Test unknown policy
+        assert_eq!(format_sched_policy(999), "999");
     }
 }

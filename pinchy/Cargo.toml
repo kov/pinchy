@@ -58,7 +58,7 @@ path = "src/client.rs"
 
 [[bin]]
 name = "test-helper"
-path = "tests/helper.rs"
+path = "src/bin/test-helper.rs"
 test = false
 
 [dev-dependencies]

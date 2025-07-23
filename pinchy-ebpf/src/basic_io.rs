@@ -8,7 +8,10 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd},
-    syscalls::{SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_read, SYS_write},
+    syscalls::{
+        SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_pwrite64,
+        SYS_read, SYS_write,
+    },
     DATA_READ_SIZE,
 };
 
@@ -132,6 +135,82 @@ pub fn syscall_exit_write(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 write: pinchy_common::WriteData { fd, buf, count },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_pread64(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_pread64;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let buf_addr = args[1];
+        let count = args[2];
+        let offset = args[3] as i64;
+
+        let mut buf = [0u8; DATA_READ_SIZE];
+        let to_read = core::cmp::min(return_value as usize, buf.len());
+        unsafe {
+            let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_read]);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                pread: pinchy_common::PreadData {
+                    fd,
+                    buf,
+                    count,
+                    offset,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_pwrite64(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_pwrite64;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let buf_addr = args[1];
+        let count = args[2];
+        let offset = args[3] as i64;
+
+        let mut buf = [0u8; DATA_READ_SIZE];
+        let to_copy = core::cmp::min(count as usize, buf.len());
+        unsafe {
+            let _ = bpf_probe_read_buf(buf_addr as *const _, &mut buf[..to_copy]);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                pwrite: pinchy_common::PwriteData {
+                    fd,
+                    buf,
+                    count,
+                    offset,
+                },
             },
         )
     }

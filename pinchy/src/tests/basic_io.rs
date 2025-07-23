@@ -8,10 +8,10 @@ use pinchy_common::{
     kernel_types::{EpollEvent, Timespec},
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek,
-        SYS_openat, SYS_pipe2, SYS_ppoll, SYS_read, SYS_write,
+        SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_pwrite64, SYS_read, SYS_write,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollPWaitData, FcntlData, LseekData, OpenAtData,
-    PpollData, ReadData, SyscallEvent, WriteData, DATA_READ_SIZE,
+    PpollData, PreadData, PwriteData, ReadData, SyscallEvent, WriteData, DATA_READ_SIZE,
 };
 
 use crate::{
@@ -540,5 +540,85 @@ async fn parse_close_range() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "1 close_range(fd: 3, max_fd: 10, flags: 0x0) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_pread() {
+    let mut event = SyscallEvent {
+        syscall_nr: SYS_pread64,
+        pid: 22,
+        tid: 22,
+        return_value: 4096,
+        data: pinchy_common::SyscallEventData {
+            pread: PreadData {
+                fd: 3,
+                buf: [0u8; DATA_READ_SIZE],
+                count: 4096,
+                offset: 1024,
+            },
+        },
+    };
+
+    let pread_data = unsafe { &mut event.data.pread };
+
+    // A = 65
+    pread_data
+        .buf
+        .iter_mut()
+        .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
+        .for_each(|(b, i)| *b = i + 65);
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "22 pread64(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (3968 more bytes), count: 4096, offset: 1024) = 4096 (bytes)\n"
+        )
+    );
+}
+
+#[tokio::test]
+async fn parse_pwrite() {
+    let mut event = SyscallEvent {
+        syscall_nr: SYS_pwrite64,
+        pid: 22,
+        tid: 22,
+        return_value: 4096,
+        data: pinchy_common::SyscallEventData {
+            pwrite: PwriteData {
+                fd: 3,
+                buf: [0u8; DATA_READ_SIZE],
+                count: 4096,
+                offset: 2048,
+            },
+        },
+    };
+
+    let pwrite_data = unsafe { &mut event.data.pwrite };
+
+    // A = 65
+    pwrite_data
+        .buf
+        .iter_mut()
+        .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
+        .for_each(|(b, i)| *b = i + 65);
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "22 pwrite64(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (3968 more bytes), count: 4096, offset: 2048) = 4096 (bytes)\n"
+        )
     );
 }

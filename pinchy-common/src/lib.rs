@@ -28,6 +28,8 @@ pub union SyscallEventData {
     pub ppoll: PpollData,
     pub read: ReadData,
     pub write: WriteData,
+    pub pread: PreadData,
+    pub pwrite: PwriteData,
     pub lseek: LseekData,
     pub openat: OpenAtData,
     pub futex: FutexData,
@@ -196,6 +198,24 @@ pub struct WriteData {
     pub fd: i32,
     pub buf: [u8; DATA_READ_SIZE],
     pub count: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PreadData {
+    pub fd: i32,
+    pub buf: [u8; DATA_READ_SIZE],
+    pub count: usize,
+    pub offset: i64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PwriteData {
+    pub fd: i32,
+    pub buf: [u8; DATA_READ_SIZE],
+    pub count: usize,
+    pub offset: i64,
 }
 
 #[repr(C)]

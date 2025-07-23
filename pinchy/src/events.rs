@@ -15,10 +15,10 @@ use crate::{
         format_getrandom_flags, format_madvise_advice, format_mmap_flags, format_mmap_prot,
         format_mode, format_msghdr, format_path, format_prctl_op, format_priority_which,
         format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage, format_rusage_who,
-        format_sendmsg_flags, format_signal_number, format_sigprocmask_how, format_sockaddr,
-        format_stat, format_statfs, format_sysinfo, format_timespec, format_timeval,
-        format_timezone, format_tms, format_utsname, format_wait_options, format_wait_status,
-        format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
+        format_sched_policy, format_sendmsg_flags, format_signal_number, format_sigprocmask_how,
+        format_sockaddr, format_stat, format_statfs, format_sysinfo, format_timespec,
+        format_timeval, format_timezone, format_tms, format_utsname, format_wait_options,
+        format_wait_status, format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -312,6 +312,51 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "which: {}", format_priority_which(data.which as u32));
             argf!(sf, "who: {}", data.who);
             argf!(sf, "prio: {}", data.prio);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_tkill => {
+            let data = unsafe { event.data.tkill };
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "sig: {}", format_signal_number(data.signal));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_tgkill => {
+            let data = unsafe { event.data.tgkill };
+
+            argf!(sf, "tgid: {}", data.tgid);
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "sig: {}", format_signal_number(data.signal));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_getscheduler => {
+            let data = unsafe { event.data.sched_getscheduler };
+
+            argf!(sf, "pid: {}", data.pid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setfsuid => {
+            let data = unsafe { event.data.setfsuid };
+
+            argf!(sf, "uid: {}", data.uid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setfsgid => {
+            let data = unsafe { event.data.setfsgid };
+
+            argf!(sf, "gid: {}", data.gid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_get_priority_max => {
+            let data = unsafe { event.data.sched_get_priority_max };
+
+            argf!(sf, "policy: {}", format_sched_policy(data.policy));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_get_priority_min => {
+            let data = unsafe { event.data.sched_get_priority_min };
+
+            argf!(sf, "policy: {}", format_sched_policy(data.policy));
             finish!(sf, event.return_value);
         }
         syscalls::SYS_epoll_pwait => {

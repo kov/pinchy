@@ -452,6 +452,51 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     setpriority: pinchy_common::SetpriorityData { which, who, prio },
                 }
             }
+            syscalls::SYS_tkill => {
+                let pid = args[0] as i32;
+                let signal = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    tkill: pinchy_common::TkillData { pid, signal },
+                }
+            }
+            syscalls::SYS_tgkill => {
+                let tgid = args[0] as i32;
+                let pid = args[1] as i32;
+                let signal = args[2] as i32;
+                pinchy_common::SyscallEventData {
+                    tgkill: pinchy_common::TgkillData { tgid, pid, signal },
+                }
+            }
+            syscalls::SYS_sched_getscheduler => {
+                let pid = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    sched_getscheduler: pinchy_common::SchedGetschedulerData { pid },
+                }
+            }
+            syscalls::SYS_setfsuid => {
+                let uid = args[0] as u32;
+                pinchy_common::SyscallEventData {
+                    setfsuid: pinchy_common::SetfsuidData { uid },
+                }
+            }
+            syscalls::SYS_setfsgid => {
+                let gid = args[0] as u32;
+                pinchy_common::SyscallEventData {
+                    setfsgid: pinchy_common::SetfsgidData { gid },
+                }
+            }
+            syscalls::SYS_sched_get_priority_max => {
+                let policy = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    sched_get_priority_max: pinchy_common::SchedGetPriorityMaxData { policy },
+                }
+            }
+            syscalls::SYS_sched_get_priority_min => {
+                let policy = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    sched_get_priority_min: pinchy_common::SchedGetPriorityMinData { policy },
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

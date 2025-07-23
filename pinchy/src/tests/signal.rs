@@ -204,3 +204,113 @@ async fn parse_rt_sigaction_realtime_signal() {
         )
     );
 }
+
+#[tokio::test]
+async fn parse_tkill() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_tkill,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            tkill: pinchy_common::TkillData {
+                pid: 5678,
+                signal: libc::SIGTERM,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 tkill(pid: 5678, sig: SIGTERM) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_tkill_with_sigusr1() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_tkill,
+        pid: 9999,
+        tid: 9999,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            tkill: pinchy_common::TkillData {
+                pid: 1111,
+                signal: libc::SIGUSR1,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 tkill(pid: 1111, sig: SIGUSR1) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_tgkill() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_tgkill,
+        pid: 2468,
+        tid: 2468,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            tgkill: pinchy_common::TgkillData {
+                tgid: 1357,
+                pid: 2468,
+                signal: libc::SIGKILL,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2468 tgkill(tgid: 1357, pid: 2468, sig: SIGKILL) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_tgkill_error() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_tgkill,
+        pid: 1111,
+        tid: 1111,
+        return_value: -3, // ESRCH
+        data: pinchy_common::SyscallEventData {
+            tgkill: pinchy_common::TgkillData {
+                tgid: 9999,
+                pid: 8888,
+                signal: libc::SIGTERM,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1111 tgkill(tgid: 9999, pid: 8888, sig: SIGTERM) = -3 (error)\n"
+    );
+}

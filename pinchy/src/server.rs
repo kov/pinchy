@@ -376,6 +376,13 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_personality,
         syscalls::SYS_getpriority,
         syscalls::SYS_setpriority,
+        syscalls::SYS_tkill,
+        syscalls::SYS_tgkill,
+        syscalls::SYS_sched_getscheduler,
+        syscalls::SYS_setfsuid,
+        syscalls::SYS_setfsgid,
+        syscalls::SYS_sched_get_priority_max,
+        syscalls::SYS_sched_get_priority_min,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

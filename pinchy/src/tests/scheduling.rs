@@ -215,3 +215,129 @@ async fn test_setpriority() {
         "1001 setpriority(which: PRIO_PROCESS, who: 0, prio: 10) = 0 (success)\n"
     );
 }
+
+#[tokio::test]
+async fn parse_sched_getscheduler() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_getscheduler,
+        pid: 2468,
+        tid: 2468,
+        return_value: 0, // SCHED_NORMAL
+        data: pinchy_common::SyscallEventData {
+            sched_getscheduler: pinchy_common::SchedGetschedulerData { pid: 1234 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2468 sched_getscheduler(pid: 1234) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_sched_getscheduler_self() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_getscheduler,
+        pid: 9999,
+        tid: 9999,
+        return_value: 1, // SCHED_FIFO
+        data: pinchy_common::SyscallEventData {
+            sched_getscheduler: pinchy_common::SchedGetschedulerData { pid: 0 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 sched_getscheduler(pid: 0) = 1\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_sched_get_priority_max() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_get_priority_max,
+        pid: 1357,
+        tid: 1357,
+        return_value: 99, // typical max priority for SCHED_FIFO
+        data: pinchy_common::SyscallEventData {
+            sched_get_priority_max: pinchy_common::SchedGetPriorityMaxData {
+                policy: libc::SCHED_FIFO,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1357 sched_get_priority_max(policy: SCHED_FIFO) = 99\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_sched_get_priority_min() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_get_priority_min,
+        pid: 2468,
+        tid: 2468,
+        return_value: 1, // typical min priority for SCHED_FIFO
+        data: pinchy_common::SyscallEventData {
+            sched_get_priority_min: pinchy_common::SchedGetPriorityMinData {
+                policy: libc::SCHED_FIFO,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2468 sched_get_priority_min(policy: SCHED_FIFO) = 1\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_sched_get_priority_max_normal() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_get_priority_max,
+        pid: 8642,
+        tid: 8642,
+        return_value: 0, // SCHED_NORMAL has priority 0
+        data: pinchy_common::SyscallEventData {
+            sched_get_priority_max: pinchy_common::SchedGetPriorityMaxData {
+                policy: libc::SCHED_OTHER,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "8642 sched_get_priority_max(policy: SCHED_OTHER) = 0\n"
+    );
+}

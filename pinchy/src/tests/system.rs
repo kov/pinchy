@@ -27,8 +27,12 @@ use std::pin::Pin;
 
 use pinchy_common::{
     kernel_types::Utsname,
-    syscalls::{SYS_getrandom, SYS_ioctl, SYS_uname},
-    IoctlData, SyscallEvent, UnameData,
+    syscalls::{
+        SYS_getrandom, SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_sync, SYS_umask, SYS_uname,
+        SYS_vhangup,
+    },
+    IoctlData, IoprioGetData, IoprioSetData, SyncData, SyscallEvent, UmaskData, UnameData,
+    VhangupData,
 };
 
 use crate::{
@@ -261,5 +265,127 @@ async fn parse_exit_group() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "123 exit_group(status: 42) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn test_sync() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_sync,
+        pid: 123,
+        tid: 123,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData { sync: SyncData },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 sync() = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_umask() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_umask,
+        pid: 123,
+        tid: 123,
+        return_value: 0o022, // previous mask
+        data: pinchy_common::SyscallEventData {
+            umask: UmaskData { mask: 0o027 }, // new mask
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 umask(mask: 0o27) = 18\n"
+    );
+}
+
+#[tokio::test]
+async fn test_vhangup() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_vhangup,
+        pid: 123,
+        tid: 123,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            vhangup: VhangupData,
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 vhangup() = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_ioprio_get() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_ioprio_get,
+        pid: 123,
+        tid: 123,
+        return_value: 4, // I/O priority value
+        data: pinchy_common::SyscallEventData {
+            ioprio_get: IoprioGetData { which: 1, who: 0 }, // IOPRIO_WHO_PROCESS, current process
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 ioprio_get(which: 1, who: 0) = 4\n"
+    );
+}
+
+#[tokio::test]
+async fn test_ioprio_set() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_ioprio_set,
+        pid: 123,
+        tid: 123,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            ioprio_set: IoprioSetData {
+                which: 1,
+                who: 0,
+                ioprio: 4,
+            }, // IOPRIO_WHO_PROCESS, current process, priority 4
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 ioprio_set(which: 1, who: 0, ioprio: 4) = 0 (success)\n"
     );
 }

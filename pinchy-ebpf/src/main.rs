@@ -311,6 +311,111 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
             syscalls::SYS_rt_sigreturn => pinchy_common::SyscallEventData {
                 rt_sigreturn: pinchy_common::RtSigreturnData {},
             },
+            syscalls::SYS_dup => {
+                let oldfd = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    dup: pinchy_common::DupData { oldfd },
+                }
+            }
+            syscalls::SYS_sync => pinchy_common::SyscallEventData {
+                sync: pinchy_common::SyncData,
+            },
+            syscalls::SYS_setsid => pinchy_common::SyscallEventData {
+                setsid: pinchy_common::SetsidData,
+            },
+            syscalls::SYS_setuid => {
+                let uid = args[0] as u32;
+                pinchy_common::SyscallEventData {
+                    setuid: pinchy_common::SetuidData { uid },
+                }
+            }
+            syscalls::SYS_setgid => {
+                let gid = args[0] as u32;
+                pinchy_common::SyscallEventData {
+                    setgid: pinchy_common::SetgidData { gid },
+                }
+            }
+            syscalls::SYS_close_range => {
+                let fd = args[0] as u32;
+                let max_fd = args[1] as u32;
+                let flags = args[2] as u32;
+                pinchy_common::SyscallEventData {
+                    close_range: pinchy_common::CloseRangeData { fd, max_fd, flags },
+                }
+            }
+            syscalls::SYS_getpgid => {
+                let pid = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    getpgid: pinchy_common::GetpgidData { pid },
+                }
+            }
+            syscalls::SYS_getsid => {
+                let pid = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    getsid: pinchy_common::GetsidData { pid },
+                }
+            }
+            syscalls::SYS_setpgid => {
+                let pid = args[0] as i32;
+                let pgid = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    setpgid: pinchy_common::SetpgidData { pid, pgid },
+                }
+            }
+            syscalls::SYS_umask => {
+                let mask = args[0] as u32;
+                pinchy_common::SyscallEventData {
+                    umask: pinchy_common::UmaskData { mask },
+                }
+            }
+            syscalls::SYS_vhangup => pinchy_common::SyscallEventData {
+                vhangup: pinchy_common::VhangupData,
+            },
+            syscalls::SYS_ioprio_get => {
+                let which = args[0] as i32;
+                let who = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    ioprio_get: pinchy_common::IoprioGetData { which, who },
+                }
+            }
+            syscalls::SYS_ioprio_set => {
+                let which = args[0] as i32;
+                let who = args[1] as i32;
+                let ioprio = args[2] as i32;
+                pinchy_common::SyscallEventData {
+                    ioprio_set: pinchy_common::IoprioSetData { which, who, ioprio },
+                }
+            }
+            syscalls::SYS_setregid => {
+                let rgid = args[0] as u32;
+                let egid = args[1] as u32;
+                pinchy_common::SyscallEventData {
+                    setregid: pinchy_common::SetregidData { rgid, egid },
+                }
+            }
+            syscalls::SYS_setresgid => {
+                let rgid = args[0] as u32;
+                let egid = args[1] as u32;
+                let sgid = args[2] as u32;
+                pinchy_common::SyscallEventData {
+                    setresgid: pinchy_common::SetresgidData { rgid, egid, sgid },
+                }
+            }
+            syscalls::SYS_setresuid => {
+                let ruid = args[0] as u32;
+                let euid = args[1] as u32;
+                let suid = args[2] as u32;
+                pinchy_common::SyscallEventData {
+                    setresuid: pinchy_common::SetresuidData { ruid, euid, suid },
+                }
+            }
+            syscalls::SYS_setreuid => {
+                let ruid = args[0] as u32;
+                let euid = args[1] as u32;
+                pinchy_common::SyscallEventData {
+                    setreuid: pinchy_common::SetreuidData { ruid, euid },
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

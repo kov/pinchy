@@ -7,12 +7,14 @@ use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
         SYS_clone, SYS_clone3, SYS_execve, SYS_fchdir, SYS_getegid, SYS_geteuid, SYS_getgid,
-        SYS_getpid, SYS_getppid, SYS_getrusage, SYS_gettid, SYS_getuid, SYS_set_tid_address,
-        SYS_wait4,
+        SYS_getpgid, SYS_getpid, SYS_getppid, SYS_getrusage, SYS_getsid, SYS_gettid, SYS_getuid,
+        SYS_set_tid_address, SYS_setgid, SYS_setpgid, SYS_setregid, SYS_setresgid, SYS_setresuid,
+        SYS_setreuid, SYS_setsid, SYS_setuid, SYS_wait4,
     },
-    Clone3Data, CloneData, ExecveData, GetegidData, GeteuidData, GetgidData, GetpidData,
-    GetppidData, GetrusageData, GettidData, GetuidData, SetTidAddressData, SyscallEvent, Wait4Data,
-    SMALL_READ_SIZE,
+    Clone3Data, CloneData, ExecveData, GetegidData, GeteuidData, GetgidData, GetpgidData,
+    GetpidData, GetppidData, GetrusageData, GetsidData, GettidData, GetuidData, SetTidAddressData,
+    SetgidData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData, SetsidData,
+    SetuidData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
 };
 
 use crate::{
@@ -821,5 +823,255 @@ async fn test_clone() {
     assert_eq!(
         result,
         "1001 clone(flags: 0x10300 (CLONE_VM|CLONE_FS|CLONE_THREAD), stack: 0x7fff00001000, parent_tid: 41, child_tid: 42, tls: 0x7fff00002000) = 4321 (pid)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_setuid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setuid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            setuid: SetuidData { uid: 1001 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 setuid(uid: 1001) = 0 (success)\n");
+}
+
+#[tokio::test]
+async fn test_setgid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setgid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            setgid: SetgidData { gid: 1001 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 setgid(gid: 1001) = 0 (success)\n");
+}
+
+#[tokio::test]
+async fn test_setsid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setsid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 1001, // new session ID (usually same as pid)
+        data: pinchy_common::SyscallEventData { setsid: SetsidData },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 setsid() = 1001 (pid)\n");
+}
+
+#[tokio::test]
+async fn test_getpgid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getpgid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 1234, // process group ID
+        data: pinchy_common::SyscallEventData {
+            getpgid: GetpgidData { pid: 0 }, // 0 means current process
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 getpgid(pid: 0) = 1234 (pid)\n");
+}
+
+#[tokio::test]
+async fn test_getsid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getsid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 5678, // session ID
+        data: pinchy_common::SyscallEventData {
+            getsid: GetsidData { pid: 1234 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 getsid(pid: 1234) = 5678 (pid)\n");
+}
+
+#[tokio::test]
+async fn test_setpgid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setpgid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            setpgid: SetpgidData {
+                pid: 1234,
+                pgid: 5678,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 setpgid(pid: 1234, pgid: 5678) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_setreuid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setreuid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            setreuid: SetreuidData {
+                ruid: 1001,
+                euid: 1002,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 setreuid(ruid: 1001, euid: 1002) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_setregid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setregid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            setregid: SetregidData {
+                rgid: 1001,
+                egid: 1002,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 setregid(rgid: 1001, egid: 1002) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_setresuid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setresuid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            setresuid: SetresuidData {
+                ruid: 1001,
+                euid: 1002,
+                suid: 1003,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 setresuid(ruid: 1001, euid: 1002, suid: 1003) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_setresgid() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setresgid,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0, // success
+        data: pinchy_common::SyscallEventData {
+            setresgid: SetresgidData {
+                rgid: 1001,
+                egid: 1002,
+                sgid: 1003,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(
+        result,
+        "1001 setresgid(rgid: 1001, egid: 1002, sgid: 1003) = 0 (success)\n"
     );
 }

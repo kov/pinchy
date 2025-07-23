@@ -694,3 +694,178 @@ fn madvise_syscall() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn file_descriptor_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises file descriptor syscalls
+    let handle = run_workload(&["dup", "close_range"], "file_descriptor_test");
+
+    // Expected output - we should see dup and close_range calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID dup(oldfd: NUMBER) = NUMBER (fd)
+        PID close_range(fd: NUMBER, max_fd: NUMBER, flags: 0x0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn session_process_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises session and process group syscalls
+    let handle = run_workload(
+        &["getpgid", "getsid", "setpgid", "setsid"],
+        "session_process_test",
+    );
+
+    // Expected output - we should see process group and session calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID getpgid(pid: 0) = NUMBER (pid)
+        PID getsid(pid: 0) = NUMBER (pid)
+        PID setpgid(pid: 0, pgid: NUMBER) = 0 (success)
+        PID setsid() = NUMBER (pid)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn uid_gid_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises user/group ID syscalls
+    let handle = run_workload(
+        &[
+            "setuid",
+            "setgid",
+            "setreuid",
+            "setregid",
+            "setresuid",
+            "setresgid",
+        ],
+        "uid_gid_test",
+    );
+
+    // Expected output - these should succeed with root privileges
+    let expected_output = escaped_regex(indoc! {r#"
+        PID setuid(uid: NUMBER) = 0 (success)
+        PID setgid(gid: NUMBER) = 0 (success)
+        PID setreuid(ruid: NUMBER, euid: NUMBER) = 0 (success)
+        PID setregid(rgid: NUMBER, egid: NUMBER) = 0 (success)
+        PID setresuid(ruid: NUMBER, euid: NUMBER, suid: NUMBER) = 0 (success)
+        PID setresgid(rgid: NUMBER, egid: NUMBER, sgid: NUMBER) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn system_operations() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises system operation syscalls
+    let handle = run_workload(&["umask", "sync"], "system_operations_test");
+
+    // Expected output - umask and sync calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID umask(mask: 0o22) = 18
+        PID umask(mask: 0o22) = 18
+        PID sync() = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn ioprio_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises I/O priority syscalls
+    let handle = run_workload(&["ioprio_get", "ioprio_set"], "ioprio_test");
+
+    // Expected output - ioprio_get and ioprio_set calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID ioprio_get(which: 1, who: 0) = 0
+        PID ioprio_set(which: 1, who: 0, ioprio: 0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

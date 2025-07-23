@@ -350,6 +350,23 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fchdir,
         syscalls::SYS_exit_group,
         syscalls::SYS_rt_sigreturn,
+        syscalls::SYS_dup,
+        syscalls::SYS_sync,
+        syscalls::SYS_setsid,
+        syscalls::SYS_setuid,
+        syscalls::SYS_setgid,
+        syscalls::SYS_close_range,
+        syscalls::SYS_getpgid,
+        syscalls::SYS_getsid,
+        syscalls::SYS_setpgid,
+        syscalls::SYS_umask,
+        syscalls::SYS_vhangup,
+        syscalls::SYS_ioprio_get,
+        syscalls::SYS_ioprio_set,
+        syscalls::SYS_setregid,
+        syscalls::SYS_setresgid,
+        syscalls::SYS_setresuid,
+        syscalls::SYS_setreuid,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

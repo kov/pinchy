@@ -39,7 +39,10 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_geteuid
         | syscalls::SYS_getgid
         | syscalls::SYS_getegid
-        | syscalls::SYS_getppid => {
+        | syscalls::SYS_getppid
+        | syscalls::SYS_sync
+        | syscalls::SYS_setsid
+        | syscalls::SYS_vhangup => {
             finish!(sf, event.return_value);
         }
         syscalls::SYS_flistxattr => {
@@ -102,6 +105,102 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "oldfd: {}", data.oldfd);
             argf!(sf, "newfd: {}", data.newfd);
             argf!(sf, "flags: {}", format_dup3_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_dup => {
+            let data = unsafe { event.data.dup };
+
+            argf!(sf, "oldfd: {}", data.oldfd);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setuid => {
+            let data = unsafe { event.data.setuid };
+
+            argf!(sf, "uid: {}", data.uid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setgid => {
+            let data = unsafe { event.data.setgid };
+
+            argf!(sf, "gid: {}", data.gid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_close_range => {
+            let data = unsafe { event.data.close_range };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "max_fd: {}", data.max_fd);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getpgid => {
+            let data = unsafe { event.data.getpgid };
+
+            argf!(sf, "pid: {}", data.pid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getsid => {
+            let data = unsafe { event.data.getsid };
+
+            argf!(sf, "pid: {}", data.pid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setpgid => {
+            let data = unsafe { event.data.setpgid };
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "pgid: {}", data.pgid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_umask => {
+            let data = unsafe { event.data.umask };
+
+            argf!(sf, "mask: 0o{:o}", data.mask);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_ioprio_get => {
+            let data = unsafe { event.data.ioprio_get };
+
+            argf!(sf, "which: {}", data.which);
+            argf!(sf, "who: {}", data.who);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_ioprio_set => {
+            let data = unsafe { event.data.ioprio_set };
+
+            argf!(sf, "which: {}", data.which);
+            argf!(sf, "who: {}", data.who);
+            argf!(sf, "ioprio: {}", data.ioprio);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setregid => {
+            let data = unsafe { event.data.setregid };
+
+            argf!(sf, "rgid: {}", data.rgid);
+            argf!(sf, "egid: {}", data.egid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setresgid => {
+            let data = unsafe { event.data.setresgid };
+
+            argf!(sf, "rgid: {}", data.rgid);
+            argf!(sf, "egid: {}", data.egid);
+            argf!(sf, "sgid: {}", data.sgid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setresuid => {
+            let data = unsafe { event.data.setresuid };
+
+            argf!(sf, "ruid: {}", data.ruid);
+            argf!(sf, "euid: {}", data.euid);
+            argf!(sf, "suid: {}", data.suid);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setreuid => {
+            let data = unsafe { event.data.setreuid };
+
+            argf!(sf, "ruid: {}", data.ruid);
+            argf!(sf, "euid: {}", data.euid);
             finish!(sf, event.return_value);
         }
         syscalls::SYS_epoll_pwait => {

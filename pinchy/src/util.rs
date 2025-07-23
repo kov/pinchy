@@ -1690,7 +1690,17 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_renameat
         | syscalls::SYS_renameat2
         | syscalls::SYS_fstat
-        | syscalls::SYS_newfstatat => match return_value {
+        | syscalls::SYS_newfstatat
+        | syscalls::SYS_setuid
+        | syscalls::SYS_setgid
+        | syscalls::SYS_close_range
+        | syscalls::SYS_setpgid
+        | syscalls::SYS_vhangup
+        | syscalls::SYS_ioprio_set
+        | syscalls::SYS_setregid
+        | syscalls::SYS_setresgid
+        | syscalls::SYS_setresuid
+        | syscalls::SYS_setreuid => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -1742,7 +1752,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_getppid
         | syscalls::SYS_gettid
         | syscalls::SYS_clone
-        | syscalls::SYS_clone3 => {
+        | syscalls::SYS_clone3
+        | syscalls::SYS_setsid
+        | syscalls::SYS_getpgid
+        | syscalls::SYS_getsid => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (pid)"))
             } else {
@@ -1791,9 +1804,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         },
 
         // Syscalls that always succeed or have no meaningful return interpretation
-        syscalls::SYS_rt_sigreturn | syscalls::SYS_sched_yield => {
-            std::borrow::Cow::Owned(return_value.to_string())
-        }
+        syscalls::SYS_rt_sigreturn
+        | syscalls::SYS_sched_yield
+        | syscalls::SYS_umask
+        | syscalls::SYS_ioprio_get => std::borrow::Cow::Owned(return_value.to_string()),
 
         // Default case - just show the raw value with error indication if negative
         _ => {

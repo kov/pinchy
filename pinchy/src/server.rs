@@ -367,6 +367,15 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_setresgid,
         syscalls::SYS_setresuid,
         syscalls::SYS_setreuid,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_alarm,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_pause,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_getpgrp,
+        syscalls::SYS_personality,
+        syscalls::SYS_getpriority,
+        syscalls::SYS_setpriority,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -407,6 +416,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_flistxattr", syscalls::SYS_flistxattr),
         ("syscall_exit_listxattr", syscalls::SYS_listxattr),
         ("syscall_exit_llistxattr", syscalls::SYS_llistxattr),
+        ("syscall_exit_gettimeofday", syscalls::SYS_gettimeofday),
+        ("syscall_exit_settimeofday", syscalls::SYS_settimeofday),
+        ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
+        ("syscall_exit_times", syscalls::SYS_times),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

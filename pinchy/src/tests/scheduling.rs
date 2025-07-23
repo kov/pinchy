@@ -5,8 +5,8 @@ use std::pin::Pin;
 
 use pinchy_common::{
     kernel_types::{Rseq, RseqCs},
-    syscalls::{SYS_rseq, SYS_sched_yield},
-    SchedYieldData, SyscallEvent,
+    syscalls::{SYS_getpriority, SYS_rseq, SYS_sched_yield, SYS_setpriority},
+    GetpriorityData, SchedYieldData, SetpriorityData, SyscallEvent,
 };
 
 use crate::{
@@ -161,5 +161,57 @@ async fn parse_rseq() {
         format!(
             "1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: RSEQ_FLAG_UNREGISTER, signature: 0xabcdef12, rseq content: {{ cpu_id_start: 0, cpu_id: 2, rseq_cs: {{ version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }}, flags: 0, node_id: 0, mm_cid: 0 }}) = 0\n"
         )
+    );
+}
+
+#[tokio::test]
+async fn test_getpriority() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getpriority,
+        pid: 1001,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            getpriority: GetpriorityData { which: 0, who: 0 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 getpriority(which: PRIO_PROCESS, who: 0) = 0\n"
+    );
+}
+
+#[tokio::test]
+async fn test_setpriority() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_setpriority,
+        pid: 1001,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            setpriority: SetpriorityData {
+                which: 0,
+                who: 0,
+                prio: 10,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 setpriority(which: PRIO_PROCESS, who: 0, prio: 10) = 0 (success)\n"
     );
 }

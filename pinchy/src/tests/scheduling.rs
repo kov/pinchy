@@ -341,3 +341,90 @@ async fn parse_sched_get_priority_max_normal() {
         "8642 sched_get_priority_max(policy: SCHED_OTHER) = 0\n"
     );
 }
+
+#[tokio::test]
+async fn parse_sched_setscheduler() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_setscheduler,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            sched_setscheduler: pinchy_common::SchedSetschedulerData {
+                pid: 1234,
+                policy: libc::SCHED_FIFO,
+                param: pinchy_common::kernel_types::SchedParam { sched_priority: 50 },
+                has_param: true,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 sched_setscheduler(pid: 1234, policy: SCHED_FIFO, param: { sched_priority: 50 }) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_sched_setscheduler_with_reset_on_fork() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_setscheduler,
+        pid: 5678,
+        tid: 5678,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            sched_setscheduler: pinchy_common::SchedSetschedulerData {
+                pid: 0, // calling process
+                policy: libc::SCHED_RR | libc::SCHED_RESET_ON_FORK,
+                param: pinchy_common::kernel_types::SchedParam { sched_priority: 10 },
+                has_param: true,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "5678 sched_setscheduler(pid: 0, policy: SCHED_RR|SCHED_RESET_ON_FORK, param: { sched_priority: 10 }) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_sched_setscheduler_null_param() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_sched_setscheduler,
+        pid: 9999,
+        tid: 9999,
+        return_value: -22, // EINVAL
+        data: pinchy_common::SyscallEventData {
+            sched_setscheduler: pinchy_common::SchedSetschedulerData {
+                pid: 1234,
+                policy: libc::SCHED_OTHER,
+                param: pinchy_common::kernel_types::SchedParam::default(),
+                has_param: false,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 sched_setscheduler(pid: 1234, policy: SCHED_OTHER, param: NULL) = -22 (error)\n"
+    );
+}

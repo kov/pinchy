@@ -1802,7 +1802,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_sysinfo
         | syscalls::SYS_gettimeofday
         | syscalls::SYS_settimeofday
-        | syscalls::SYS_setpriority => match return_value {
+        | syscalls::SYS_setpriority
+        | syscalls::SYS_sched_setscheduler => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },

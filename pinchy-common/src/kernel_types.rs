@@ -289,3 +289,9 @@ impl Default for XattrList {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct SchedParam {
+    pub sched_priority: i32,
+}

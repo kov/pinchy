@@ -335,6 +335,36 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "pid: {}", data.pid);
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_sched_setscheduler => {
+            let data = unsafe { event.data.sched_setscheduler };
+
+            argf!(sf, "pid: {}", data.pid);
+
+            // Handle policy flags - extract SCHED_RESET_ON_FORK flag if present
+            let reset_on_fork = (data.policy & libc::SCHED_RESET_ON_FORK) != 0;
+            let base_policy = data.policy & !libc::SCHED_RESET_ON_FORK;
+
+            if reset_on_fork {
+                argf!(
+                    sf,
+                    "policy: {}|SCHED_RESET_ON_FORK",
+                    format_sched_policy(base_policy)
+                );
+            } else {
+                argf!(sf, "policy: {}", format_sched_policy(base_policy));
+            }
+
+            if data.has_param {
+                arg!(sf, "param:");
+                with_struct!(sf, {
+                    argf!(sf, "sched_priority: {}", data.param.sched_priority);
+                });
+            } else {
+                argf!(sf, "param: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_setfsuid => {
             let data = unsafe { event.data.setfsuid };
 

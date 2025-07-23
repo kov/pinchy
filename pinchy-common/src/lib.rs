@@ -108,6 +108,7 @@ pub union SyscallEventData {
     pub tkill: TkillData,
     pub tgkill: TgkillData,
     pub sched_getscheduler: SchedGetschedulerData,
+    pub sched_setscheduler: SchedSetschedulerData,
     pub setfsuid: SetfsuidData,
     pub setfsgid: SetfsgidData,
     pub sched_get_priority_max: SchedGetPriorityMaxData,
@@ -749,6 +750,15 @@ pub struct TgkillData {
 #[derive(Clone, Copy)]
 pub struct SchedGetschedulerData {
     pub pid: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SchedSetschedulerData {
+    pub pid: i32,
+    pub policy: i32,
+    pub param: kernel_types::SchedParam,
+    pub has_param: bool,
 }
 
 #[repr(C)]

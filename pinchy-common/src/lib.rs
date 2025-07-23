@@ -95,6 +95,16 @@ pub union SyscallEventData {
     pub setresgid: SetresgidData,
     pub setresuid: SetresuidData,
     pub setreuid: SetreuidData,
+    pub alarm: AlarmData,
+    pub pause: PauseData,
+    pub getpgrp: GetpgrpData,
+    pub times: TimesData,
+    pub personality: PersonalityData,
+    pub sysinfo: SysinfoData,
+    pub gettimeofday: GettimeofdayData,
+    pub settimeofday: SettimeofdayData,
+    pub getpriority: GetpriorityData,
+    pub setpriority: SetpriorityData,
 }
 
 #[repr(C)]
@@ -644,4 +654,71 @@ pub struct SetresuidData {
 pub struct SetreuidData {
     pub ruid: u32,
     pub euid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AlarmData {
+    pub seconds: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PauseData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetpgrpData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TimesData {
+    pub buf: crate::kernel_types::Tms,
+    pub has_buf: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PersonalityData {
+    pub persona: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SysinfoData {
+    pub info: crate::kernel_types::Sysinfo,
+    pub has_info: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GettimeofdayData {
+    pub tv: crate::kernel_types::Timeval,
+    pub tz: crate::kernel_types::Timezone,
+    pub has_tv: bool,
+    pub has_tz: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SettimeofdayData {
+    pub tv: crate::kernel_types::Timeval,
+    pub tz: crate::kernel_types::Timezone,
+    pub has_tv: bool,
+    pub has_tz: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetpriorityData {
+    pub which: i32,
+    pub who: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetpriorityData {
+    pub which: i32,
+    pub who: i32,
+    pub prio: i32,
 }

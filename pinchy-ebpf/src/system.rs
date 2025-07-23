@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use aya_ebpf::{helpers::bpf_probe_read_buf, macros::tracepoint, programs::TracePointContext};
+use aya_ebpf::{
+    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    macros::tracepoint,
+    programs::TracePointContext,
+};
 use pinchy_common::{
-    kernel_types::Utsname,
-    syscalls::{SYS_ioctl, SYS_uname},
+    kernel_types::{Sysinfo, Timeval, Timezone, Tms, Utsname},
+    syscalls::{SYS_gettimeofday, SYS_ioctl, SYS_settimeofday, SYS_sysinfo, SYS_times, SYS_uname},
 };
 
 use crate::util::{get_args, get_return_value, output_event};
@@ -122,6 +126,178 @@ pub fn syscall_exit_ioctl(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 ioctl: pinchy_common::IoctlData { fd, request, arg },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_gettimeofday(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_gettimeofday;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let tv_ptr = args[0] as *const Timeval;
+        let tz_ptr = args[1] as *const Timezone;
+
+        let mut tv = Timeval::default();
+        let mut tz = Timezone::default();
+        let mut has_tv = false;
+        let mut has_tz = false;
+
+        // Read timeval struct if pointer is valid and syscall succeeded
+        if !tv_ptr.is_null() && return_value == 0 {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timeval>(tv_ptr) } {
+                tv = data;
+                has_tv = true;
+            }
+        }
+
+        // Read timezone struct if pointer is valid and syscall succeeded
+        if !tz_ptr.is_null() && return_value == 0 {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timezone>(tz_ptr) } {
+                tz = data;
+                has_tz = true;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                gettimeofday: pinchy_common::GettimeofdayData {
+                    tv,
+                    tz,
+                    has_tv,
+                    has_tz,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_settimeofday(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_settimeofday;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let tv_ptr = args[0] as *const Timeval;
+        let tz_ptr = args[1] as *const Timezone;
+
+        let mut tv = Timeval::default();
+        let mut tz = Timezone::default();
+        let mut has_tv = false;
+        let mut has_tz = false;
+
+        // Read timeval struct if pointer is valid (we read it even if syscall failed)
+        if !tv_ptr.is_null() {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timeval>(tv_ptr) } {
+                tv = data;
+                has_tv = true;
+            }
+        }
+
+        // Read timezone struct if pointer is valid (we read it even if syscall failed)
+        if !tz_ptr.is_null() {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timezone>(tz_ptr) } {
+                tz = data;
+                has_tz = true;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                settimeofday: pinchy_common::SettimeofdayData {
+                    tv,
+                    tz,
+                    has_tv,
+                    has_tz,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_sysinfo(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_sysinfo;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let info_ptr = args[0] as *const Sysinfo;
+
+        let mut info = Sysinfo::default();
+        let mut has_info = false;
+
+        // Read sysinfo struct if pointer is valid and syscall succeeded
+        if !info_ptr.is_null() && return_value == 0 {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Sysinfo>(info_ptr) } {
+                info = data;
+                has_info = true;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                sysinfo: pinchy_common::SysinfoData { info, has_info },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_times(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_times;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let buf_ptr = args[0] as *const Tms;
+
+        let mut buf = Tms::default();
+        let mut has_buf = false;
+
+        // Read tms struct if pointer is valid and syscall succeeded
+        if !buf_ptr.is_null() && return_value >= 0 {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Tms>(buf_ptr) } {
+                buf = data;
+                has_buf = true;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                times: pinchy_common::TimesData { buf, has_buf },
             },
         )
     }

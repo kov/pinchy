@@ -13,10 +13,11 @@ use crate::{
         format_accept4_flags, format_access_mode, format_at_flags, format_bytes,
         format_clone_flags, format_dirfd, format_dup3_flags, format_fcntl_cmd, format_flags,
         format_getrandom_flags, format_madvise_advice, format_mmap_flags, format_mmap_prot,
-        format_mode, format_msghdr, format_path, format_prctl_op, format_recvmsg_flags,
-        format_rseq, format_rseq_flags, format_rusage, format_rusage_who, format_sendmsg_flags,
-        format_signal_number, format_sigprocmask_how, format_sockaddr, format_stat, format_statfs,
-        format_timespec, format_utsname, format_wait_options, format_wait_status,
+        format_mode, format_msghdr, format_path, format_prctl_op, format_priority_which,
+        format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage, format_rusage_who,
+        format_sendmsg_flags, format_signal_number, format_sigprocmask_how, format_sockaddr,
+        format_stat, format_statfs, format_sysinfo, format_timespec, format_timeval,
+        format_timezone, format_tms, format_utsname, format_wait_options, format_wait_status,
         format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
@@ -43,6 +44,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_sync
         | syscalls::SYS_setsid
         | syscalls::SYS_vhangup => {
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_pause => {
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_getpgrp => {
             finish!(sf, event.return_value);
         }
         syscalls::SYS_flistxattr => {
@@ -201,6 +210,108 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "ruid: {}", data.ruid);
             argf!(sf, "euid: {}", data.euid);
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_alarm => {
+            let data = unsafe { event.data.alarm };
+
+            argf!(sf, "seconds: {}", data.seconds);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_times => {
+            let data = unsafe { event.data.times };
+
+            arg!(sf, "buf:");
+            if data.has_buf {
+                with_struct!(sf, {
+                    format_tms(&mut sf, &data.buf).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_personality => {
+            let data = unsafe { event.data.personality };
+
+            argf!(sf, "persona: 0x{:x}", data.persona);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sysinfo => {
+            let data = unsafe { event.data.sysinfo };
+
+            arg!(sf, "info:");
+            if data.has_info {
+                with_struct!(sf, {
+                    format_sysinfo(&mut sf, &data.info).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_gettimeofday => {
+            let data = unsafe { event.data.gettimeofday };
+
+            arg!(sf, "tv:");
+            if data.has_tv {
+                with_struct!(sf, {
+                    format_timeval(&mut sf, &data.tv).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "tz:");
+            if data.has_tz {
+                with_struct!(sf, {
+                    format_timezone(&mut sf, &data.tz).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_settimeofday => {
+            let data = unsafe { event.data.settimeofday };
+
+            arg!(sf, "tv:");
+            if data.has_tv {
+                with_struct!(sf, {
+                    format_timeval(&mut sf, &data.tv).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "tz:");
+            if data.has_tz {
+                with_struct!(sf, {
+                    format_timezone(&mut sf, &data.tz).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getpriority => {
+            let data = unsafe { event.data.getpriority };
+
+            argf!(sf, "which: {}", format_priority_which(data.which as u32));
+            argf!(sf, "who: {}", data.who);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setpriority => {
+            let data = unsafe { event.data.setpriority };
+
+            argf!(sf, "which: {}", format_priority_which(data.which as u32));
+            argf!(sf, "who: {}", data.who);
+            argf!(sf, "prio: {}", data.prio);
             finish!(sf, event.return_value);
         }
         syscalls::SYS_epoll_pwait => {

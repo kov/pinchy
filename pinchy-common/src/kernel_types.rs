@@ -88,6 +88,43 @@ pub struct Timeval {
     pub tv_usec: i64, // microseconds
 }
 
+/// Timezone structure for gettimeofday/settimeofday
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Timezone {
+    pub tz_minuteswest: i32, // minutes west of Greenwich
+    pub tz_dsttime: i32,     // type of DST correction
+}
+
+/// System information structure for sysinfo syscall
+/// Note: we ignore old kernel version differences and padding
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Sysinfo {
+    pub uptime: i64,     // Seconds since boot
+    pub loads: [u64; 3], // 1, 5, and 15 minute load averages
+    pub totalram: u64,   // Total usable main memory size
+    pub freeram: u64,    // Available memory size
+    pub sharedram: u64,  // Amount of shared memory
+    pub bufferram: u64,  // Memory used by buffers
+    pub totalswap: u64,  // Total swap space size
+    pub freeswap: u64,   // Swap space still available
+    pub procs: u16,      // Number of current processes
+    pub totalhigh: u64,  // Total high memory size
+    pub freehigh: u64,   // Available high memory size
+    pub mem_unit: u32,   // Memory unit size in bytes
+}
+
+/// Clock ticks information structure for times syscall
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Tms {
+    pub tms_utime: i64,  // User CPU time
+    pub tms_stime: i64,  // System CPU time
+    pub tms_cutime: i64, // User CPU time of children
+    pub tms_cstime: i64, // System CPU time of children
+}
+
 /// Resource usage structure, matching the kernel's struct rusage
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]

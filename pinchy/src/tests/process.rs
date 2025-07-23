@@ -3,6 +3,8 @@
 
 use std::pin::Pin;
 
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::syscalls::{SYS_alarm, SYS_getpgrp, SYS_pause};
 use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
@@ -16,6 +18,8 @@ use pinchy_common::{
     SetgidData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData, SetsidData,
     SetuidData, SyscallEvent, Wait4Data, SMALL_READ_SIZE,
 };
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::{AlarmData, GetpgrpData, PauseData};
 
 use crate::{
     events::handle_event,
@@ -1074,4 +1078,71 @@ async fn test_setresgid() {
         result,
         "1001 setresgid(rgid: 1001, egid: 1002, sgid: 1003) = 0 (success)\n"
     );
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn test_alarm() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_alarm,
+        pid: 1001,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            alarm: AlarmData { seconds: 60 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 alarm(seconds: 60) = 0\n");
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn test_pause() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_pause,
+        pid: 1001,
+        tid: 1001,
+        return_value: -4, // EINTR
+        data: pinchy_common::SyscallEventData { pause: PauseData },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 pause() = -4 (error)\n");
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn test_getpgrp() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_getpgrp,
+        pid: 1001,
+        tid: 1001,
+        return_value: 1001,
+        data: pinchy_common::SyscallEventData {
+            getpgrp: GetpgrpData,
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    let result = String::from_utf8_lossy(&output);
+    assert_eq!(result, "1001 getpgrp() = 1001 (pid)\n");
 }

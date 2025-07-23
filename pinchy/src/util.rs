@@ -1596,6 +1596,86 @@ pub async fn format_xattr_list(
 }
 
 /// Formats return values with meaningful interpretation based on syscall type and value
+/// Format the `which` parameter for getpriority/setpriority syscalls
+pub fn format_priority_which(which: u32) -> Cow<'static, str> {
+    match which {
+        libc::PRIO_PROCESS => Cow::Borrowed("PRIO_PROCESS"),
+        libc::PRIO_PGRP => Cow::Borrowed("PRIO_PGRP"),
+        libc::PRIO_USER => Cow::Borrowed("PRIO_USER"),
+        _ => Cow::Owned(format!("UNKNOWN({which})")),
+    }
+}
+
+/// Format timeval structure for display
+pub async fn format_timeval(
+    sf: &mut SyscallFormatter<'_>,
+    tv: &pinchy_common::kernel_types::Timeval,
+) -> anyhow::Result<()> {
+    argf!(sf, "tv_sec: {}", tv.tv_sec);
+    argf!(sf, "tv_usec: {}", tv.tv_usec);
+    Ok(())
+}
+
+/// Format timezone structure for display
+pub async fn format_timezone(
+    sf: &mut SyscallFormatter<'_>,
+    tz: &pinchy_common::kernel_types::Timezone,
+) -> anyhow::Result<()> {
+    argf!(sf, "tz_minuteswest: {}", tz.tz_minuteswest);
+    argf!(sf, "tz_dsttime: {}", tz.tz_dsttime);
+    Ok(())
+}
+
+/// Format sysinfo structure for display
+pub async fn format_sysinfo(
+    sf: &mut SyscallFormatter<'_>,
+    info: &pinchy_common::kernel_types::Sysinfo,
+) -> anyhow::Result<()> {
+    argf!(sf, "uptime: {} seconds", info.uptime);
+    argf!(
+        sf,
+        "loads: [{}, {}, {}]",
+        info.loads[0],
+        info.loads[1],
+        info.loads[2]
+    );
+
+    // Convert memory values to human-readable format
+    let mem_unit = if info.mem_unit > 0 {
+        info.mem_unit as u64
+    } else {
+        1
+    };
+    let total_ram_mb = (info.totalram * mem_unit) / (1024 * 1024);
+    let free_ram_mb = (info.freeram * mem_unit) / (1024 * 1024);
+    let shared_ram_mb = (info.sharedram * mem_unit) / (1024 * 1024);
+    let buffer_ram_mb = (info.bufferram * mem_unit) / (1024 * 1024);
+    let total_swap_mb = (info.totalswap * mem_unit) / (1024 * 1024);
+    let free_swap_mb = (info.freeswap * mem_unit) / (1024 * 1024);
+
+    argf!(sf, "totalram: {} MB", total_ram_mb);
+    argf!(sf, "freeram: {} MB", free_ram_mb);
+    argf!(sf, "sharedram: {} MB", shared_ram_mb);
+    argf!(sf, "bufferram: {} MB", buffer_ram_mb);
+    argf!(sf, "totalswap: {} MB", total_swap_mb);
+    argf!(sf, "freeswap: {} MB", free_swap_mb);
+    argf!(sf, "procs: {}", info.procs);
+    argf!(sf, "mem_unit: {} bytes", info.mem_unit);
+    Ok(())
+}
+
+/// Format tms structure for display
+pub async fn format_tms(
+    sf: &mut SyscallFormatter<'_>,
+    tms: &pinchy_common::kernel_types::Tms,
+) -> anyhow::Result<()> {
+    argf!(sf, "tms_utime: {} ticks", tms.tms_utime);
+    argf!(sf, "tms_stime: {} ticks", tms.tms_stime);
+    argf!(sf, "tms_cutime: {} ticks", tms.tms_cutime);
+    argf!(sf, "tms_cstime: {} ticks", tms.tms_cstime);
+    Ok(())
+}
+
 pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::Cow<'static, str> {
     use pinchy_common::syscalls;
 
@@ -1702,7 +1782,18 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_setregid
         | syscalls::SYS_setresgid
         | syscalls::SYS_setresuid
-        | syscalls::SYS_setreuid => match return_value {
+        | syscalls::SYS_setreuid
+        | syscalls::SYS_personality
+        | syscalls::SYS_sysinfo
+        | syscalls::SYS_gettimeofday
+        | syscalls::SYS_settimeofday
+        | syscalls::SYS_setpriority => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_pause => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -1766,6 +1857,15 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         }
 
         #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_getpgrp => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (pid)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_fork | syscalls::SYS_vfork => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{} (pid)", return_value))
@@ -1809,7 +1909,12 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_rt_sigreturn
         | syscalls::SYS_sched_yield
         | syscalls::SYS_umask
-        | syscalls::SYS_ioprio_get => std::borrow::Cow::Owned(return_value.to_string()),
+        | syscalls::SYS_ioprio_get
+        | syscalls::SYS_times
+        | syscalls::SYS_getpriority => std::borrow::Cow::Owned(return_value.to_string()),
+
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_alarm => std::borrow::Cow::Owned(return_value.to_string()),
 
         // Default case - just show the raw value with error indication if negative
         _ => {

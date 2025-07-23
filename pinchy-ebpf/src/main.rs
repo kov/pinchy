@@ -416,6 +416,42 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     setreuid: pinchy_common::SetreuidData { ruid, euid },
                 }
             }
+            #[cfg(target_arch = "x86_64")]
+            syscalls::SYS_alarm => {
+                let seconds = args[0] as u32;
+                pinchy_common::SyscallEventData {
+                    alarm: pinchy_common::AlarmData { seconds },
+                }
+            }
+            #[cfg(target_arch = "x86_64")]
+            syscalls::SYS_pause => pinchy_common::SyscallEventData {
+                pause: pinchy_common::PauseData,
+            },
+            #[cfg(target_arch = "x86_64")]
+            syscalls::SYS_getpgrp => pinchy_common::SyscallEventData {
+                getpgrp: pinchy_common::GetpgrpData,
+            },
+            syscalls::SYS_personality => {
+                let persona = args[0] as u64;
+                pinchy_common::SyscallEventData {
+                    personality: pinchy_common::PersonalityData { persona },
+                }
+            }
+            syscalls::SYS_getpriority => {
+                let which = args[0] as i32;
+                let who = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    getpriority: pinchy_common::GetpriorityData { which, who },
+                }
+            }
+            syscalls::SYS_setpriority => {
+                let which = args[0] as i32;
+                let who = args[1] as i32;
+                let prio = args[2] as i32;
+                pinchy_common::SyscallEventData {
+                    setpriority: pinchy_common::SetpriorityData { which, who, prio },
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

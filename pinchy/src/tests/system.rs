@@ -28,11 +28,12 @@ use std::pin::Pin;
 use pinchy_common::{
     kernel_types::Utsname,
     syscalls::{
-        SYS_getrandom, SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_sync, SYS_umask, SYS_uname,
+        SYS_getrandom, SYS_gettimeofday, SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set,
+        SYS_personality, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname,
         SYS_vhangup,
     },
-    IoctlData, IoprioGetData, IoprioSetData, SyncData, SyscallEvent, UmaskData, UnameData,
-    VhangupData,
+    GettimeofdayData, IoctlData, IoprioGetData, IoprioSetData, PersonalityData, SettimeofdayData,
+    SyncData, SyscallEvent, SysinfoData, TimesData, UmaskData, UnameData, VhangupData,
 };
 
 use crate::{
@@ -387,5 +388,176 @@ async fn test_ioprio_set() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "123 ioprio_set(which: 1, who: 0, ioprio: 4) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_personality() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_personality,
+        pid: 1001,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            personality: PersonalityData { persona: 0x200 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 personality(persona: 0x200) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_sysinfo() {
+    use pinchy_common::kernel_types::Sysinfo;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_sysinfo,
+        pid: 1001,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            sysinfo: SysinfoData {
+                info: Sysinfo {
+                    uptime: 3600,              // 1 hour uptime
+                    loads: [1024, 2048, 3072], // Load averages (scaled by 65536)
+                    totalram: 16777216,        // 16 GB in KB (assuming mem_unit=1024)
+                    freeram: 8388608,          // 8 GB free
+                    sharedram: 1048576,        // 1 GB shared
+                    bufferram: 524288,         // 512 MB buffers
+                    totalswap: 4194304,        // 4 GB swap
+                    freeswap: 4194304,         // 4 GB free swap
+                    procs: 150,                // 150 processes
+                    totalhigh: 0,              // No high memory
+                    freehigh: 0,               // No high memory
+                    mem_unit: 1024,            // 1 KB memory units
+                },
+                has_info: true,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 sysinfo(info: { uptime: 3600 seconds, loads: [1024, 2048, 3072], totalram: 16384 MB, freeram: 8192 MB, sharedram: 1024 MB, bufferram: 512 MB, totalswap: 4096 MB, freeswap: 4096 MB, procs: 150, mem_unit: 1024 bytes }) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_times() {
+    use pinchy_common::kernel_types::Tms;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_times,
+        pid: 1001,
+        tid: 1001,
+        return_value: 123456, // Clock ticks since boot
+        data: pinchy_common::SyscallEventData {
+            times: TimesData {
+                buf: Tms {
+                    tms_utime: 1234, // User CPU time in ticks
+                    tms_stime: 5678, // System CPU time in ticks
+                    tms_cutime: 100, // Children user CPU time
+                    tms_cstime: 200, // Children system CPU time
+                },
+                has_buf: true,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 times(buf: { tms_utime: 1234 ticks, tms_stime: 5678 ticks, tms_cutime: 100 ticks, tms_cstime: 200 ticks }) = 123456\n"
+    );
+}
+
+#[tokio::test]
+async fn test_gettimeofday() {
+    use pinchy_common::kernel_types::{Timeval, Timezone};
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_gettimeofday,
+        pid: 1001,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            gettimeofday: GettimeofdayData {
+                tv: Timeval {
+                    tv_sec: 1672531200, // 2023-01-01 00:00:00 UTC
+                    tv_usec: 123456,
+                },
+                tz: Timezone {
+                    tz_minuteswest: 480, // PST (8 hours west)
+                    tz_dsttime: 0,
+                },
+                has_tv: true,
+                has_tz: true,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 gettimeofday(tv: { tv_sec: 1672531200, tv_usec: 123456 }, tz: { tz_minuteswest: 480, tz_dsttime: 0 }) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_settimeofday() {
+    use pinchy_common::kernel_types::{Timeval, Timezone};
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_settimeofday,
+        pid: 1001,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            settimeofday: SettimeofdayData {
+                tv: Timeval {
+                    tv_sec: 1672531200, // 2023-01-01 00:00:00 UTC
+                    tv_usec: 123456,
+                },
+                tz: Timezone::default(), // tz is NULL (0x0)
+                has_tv: true,
+                has_tz: false,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 settimeofday(tv: { tv_sec: 1672531200, tv_usec: 123456 }, tz: NULL) = 0 (success)\n"
     );
 }

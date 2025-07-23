@@ -567,3 +567,37 @@ fn ioprio_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn scheduler_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises scheduler syscalls
+    let handle = run_workload(
+        &["sched_getscheduler", "sched_setscheduler"],
+        "scheduler_test",
+    );
+
+    // Expected output - sched_getscheduler and sched_setscheduler calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID sched_getscheduler(pid: 0) = 0
+        PID sched_setscheduler(pid: 0, policy: SCHED_OTHER, param: { sched_priority: 0 }) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

@@ -2,7 +2,10 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{helpers::bpf_probe_read_user, macros::tracepoint, programs::TracePointContext};
-use pinchy_common::{kernel_types::Rseq, syscalls::SYS_rseq};
+use pinchy_common::{
+    kernel_types::{Rseq, SchedParam},
+    syscalls::{SYS_rseq, SYS_sched_setscheduler},
+};
 
 use crate::util::{get_args, get_return_value, output_event};
 
@@ -57,6 +60,47 @@ pub fn syscall_exit_rseq(ctx: TracePointContext) -> u32 {
                     has_rseq,
                     rseq_cs,
                     has_rseq_cs,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_sched_setscheduler(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_sched_setscheduler;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pid = args[0] as i32;
+        let policy = args[1] as i32;
+        let param_ptr = args[2] as *const SchedParam;
+
+        // Read the sched_param structure if the pointer is valid
+        let mut param = SchedParam::default();
+        let has_param = !param_ptr.is_null();
+
+        if has_param {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<SchedParam>(param_ptr) } {
+                param = data;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                sched_setscheduler: pinchy_common::SchedSetschedulerData {
+                    pid,
+                    policy,
+                    param,
+                    has_param,
                 },
             },
         )

@@ -409,6 +409,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_statfs", syscalls::SYS_statfs),
         ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),
+        (
+            "syscall_exit_sched_setscheduler",
+            syscalls::SYS_sched_setscheduler,
+        ),
         ("syscall_exit_faccessat", syscalls::SYS_faccessat),
         ("syscall_exit_uname", syscalls::SYS_uname),
         ("syscall_exit_readlinkat", syscalls::SYS_readlinkat),

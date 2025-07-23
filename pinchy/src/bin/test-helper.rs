@@ -62,6 +62,7 @@ fn main() -> anyhow::Result<()> {
             "uid_gid_test" => uid_gid_test(),
             "system_operations_test" => system_operations_test(),
             "ioprio_test" => ioprio_test(),
+            "scheduler_test" => scheduler_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -614,6 +615,33 @@ fn ioprio_test() -> anyhow::Result<()> {
         let result = libc::syscall(libc::SYS_ioprio_set, 1, 0, current_prio); // IOPRIO_WHO_PROCESS, current process
         if result != 0 {
             bail!("ioprio_set failed: {}", std::io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+
+fn scheduler_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test sched_getscheduler - get current scheduling policy
+        let current_policy = libc::sched_getscheduler(0); // 0 = current process
+        if current_policy < 0 {
+            bail!(
+                "sched_getscheduler failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test sched_setscheduler - set scheduling policy back to SCHED_OTHER
+        // Create a sched_param structure with priority 0 (required for SCHED_OTHER)
+        let param = libc::sched_param { sched_priority: 0 };
+
+        let result = libc::sched_setscheduler(0, libc::SCHED_OTHER, &param);
+        if result != 0 {
+            bail!(
+                "sched_setscheduler failed: {}",
+                std::io::Error::last_os_error()
+            );
         }
     }
 

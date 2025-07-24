@@ -5,8 +5,8 @@ use std::pin::Pin;
 
 use pinchy_common::{
     syscalls::{
-        SYS_faccessat, SYS_fstat, SYS_getcwd, SYS_getdents64, SYS_newfstatat, SYS_readlinkat,
-        SYS_statfs,
+        SYS_chdir, SYS_faccessat, SYS_fstat, SYS_getcwd, SYS_getdents64, SYS_newfstatat,
+        SYS_readlinkat, SYS_statfs,
     },
     FaccessatData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
@@ -593,5 +593,52 @@ async fn parse_getcwd() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "55 getcwd(buf: 0x7ffe12345000, size: 4096) = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_chdir() {
+    use pinchy_common::ChdirData;
+
+    let mut event = SyscallEvent {
+        syscall_nr: SYS_chdir,
+        pid: 66,
+        tid: 66,
+        return_value: 0, // Success
+        data: pinchy_common::SyscallEventData {
+            chdir: ChdirData {
+                path: {
+                    let mut arr = [0u8; DATA_READ_SIZE];
+                    let path = b"/home/user/newdir\0";
+                    arr[..path.len()].copy_from_slice(path);
+                    arr
+                },
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "66 chdir(path: \"/home/user/newdir\") = 0\n"
+    );
+
+    // Test with error return value
+    event.return_value = -1;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "66 chdir(path: \"/home/user/newdir\") = -1 (error)\n"
     );
 }

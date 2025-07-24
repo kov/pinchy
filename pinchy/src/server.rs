@@ -422,6 +422,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_uname", syscalls::SYS_uname),
         ("syscall_exit_readlinkat", syscalls::SYS_readlinkat),
         ("syscall_exit_getcwd", syscalls::SYS_getcwd),
+        ("syscall_exit_chdir", syscalls::SYS_chdir),
         ("syscall_exit_recvmsg", syscalls::SYS_recvmsg),
         ("syscall_exit_recvfrom", syscalls::SYS_recvfrom),
         ("syscall_exit_sendmsg", syscalls::SYS_sendmsg),

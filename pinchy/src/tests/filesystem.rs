@@ -5,7 +5,8 @@ use std::pin::Pin;
 
 use pinchy_common::{
     syscalls::{
-        SYS_faccessat, SYS_fstat, SYS_getdents64, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
+        SYS_faccessat, SYS_fstat, SYS_getcwd, SYS_getdents64, SYS_newfstatat, SYS_readlinkat,
+        SYS_statfs,
     },
     FaccessatData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
@@ -543,5 +544,54 @@ async fn parse_llistxattr() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "44 llistxattr(pathname: \"/tmp/testlink\", list: [ user.attr1, user.attr2 ], size: 64) = 22\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_getcwd() {
+    use pinchy_common::GetcwdData;
+
+    let mut event = SyscallEvent {
+        syscall_nr: SYS_getcwd,
+        pid: 55,
+        tid: 55,
+        return_value: 16, // Return value is a pointer (success)
+        data: pinchy_common::SyscallEventData {
+            getcwd: GetcwdData {
+                buf: 0x7ffe12345000,
+                size: 4096,
+                path: {
+                    let mut arr = [0u8; DATA_READ_SIZE];
+                    let path = b"/home/user/work\0";
+                    arr[..path.len()].copy_from_slice(path);
+                    arr
+                },
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "55 getcwd(buf: 0x7ffe12345000, size: 4096, path: \"/home/user/work\") = 16\n"
+    );
+
+    // Test with error return value
+    event.return_value = -1;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "55 getcwd(buf: 0x7ffe12345000, size: 4096) = -1 (error)\n"
     );
 }

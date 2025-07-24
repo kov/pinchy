@@ -9,8 +9,9 @@ use aya_ebpf::{
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd},
     syscalls::{
-        SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_pwrite64,
-        SYS_read, SYS_write,
+        SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv,
+        SYS_preadv2, SYS_pwrite64, SYS_pwritev, SYS_pwritev2, SYS_read, SYS_readv, SYS_write,
+        SYS_writev,
     },
     DATA_READ_SIZE,
 };
@@ -336,6 +337,232 @@ pub fn syscall_exit_pipe2(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 pipe2: pinchy_common::Pipe2Data { pipefd, flags },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+use crate::util::read_iovec_array;
+#[tracepoint]
+pub fn syscall_exit_readv(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_readv;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let iov_addr = args[1] as u64;
+        let iovcnt = args[2] as usize;
+
+        let (iovecs, iov_lens, iov_bufs, count) =
+            read_iovec_array(iov_addr, iovcnt, true, return_value as usize);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                vector_io: pinchy_common::VectorIOData {
+                    fd,
+                    iovecs,
+                    iov_lens,
+                    iov_bufs,
+                    iovcnt: count,
+                    offset: 0,
+                    flags: 0,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_writev(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_writev;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let iov_addr = args[1] as u64;
+        let iovcnt = args[2] as usize;
+
+        let (iovecs, iov_lens, iov_bufs, count) = read_iovec_array(iov_addr, iovcnt, false, 0);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                vector_io: pinchy_common::VectorIOData {
+                    fd,
+                    iovecs,
+                    iov_lens,
+                    iov_bufs,
+                    iovcnt: count,
+                    offset: 0,
+                    flags: 0,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_preadv(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_preadv;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let iov_addr = args[1] as u64;
+        let iovcnt = args[2] as usize;
+        let offset = args[3] as i64;
+
+        let (iovecs, iov_lens, iov_bufs, count) =
+            read_iovec_array(iov_addr, iovcnt, true, return_value as usize);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                vector_io: pinchy_common::VectorIOData {
+                    fd,
+                    iovecs,
+                    iov_lens,
+                    iov_bufs,
+                    iovcnt: count,
+                    offset,
+                    flags: 0,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_pwritev(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_pwritev;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let iov_addr = args[1] as u64;
+        let iovcnt = args[2] as usize;
+        let offset = args[3] as i64;
+
+        let (iovecs, iov_lens, iov_bufs, count) = read_iovec_array(iov_addr, iovcnt, false, 0);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                vector_io: pinchy_common::VectorIOData {
+                    fd,
+                    iovecs,
+                    iov_lens,
+                    iov_bufs,
+                    iovcnt: count,
+                    offset,
+                    flags: 0,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_preadv2(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_preadv2;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let iov_addr = args[1] as u64;
+        let iovcnt = args[2] as usize;
+        let offset = args[3] as i64;
+        let flags = args[4] as u32;
+
+        let (iovecs, iov_lens, iov_bufs, count) =
+            read_iovec_array(iov_addr, iovcnt, true, return_value as usize);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                vector_io: pinchy_common::VectorIOData {
+                    fd,
+                    iovecs,
+                    iov_lens,
+                    iov_bufs,
+                    iovcnt: count,
+                    offset,
+                    flags,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_pwritev2(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_pwritev2;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let iov_addr = args[1] as u64;
+        let iovcnt = args[2] as usize;
+        let offset = args[3] as i64;
+        let flags = args[4] as u32;
+
+        let (iovecs, iov_lens, iov_bufs, count) = read_iovec_array(iov_addr, iovcnt, false, 0);
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                vector_io: pinchy_common::VectorIOData {
+                    fd,
+                    iovecs,
+                    iov_lens,
+                    iov_bufs,
+                    iovcnt: count,
+                    offset,
+                    flags,
+                },
             },
         )
     }

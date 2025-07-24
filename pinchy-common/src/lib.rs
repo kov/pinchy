@@ -115,6 +115,7 @@ pub union SyscallEventData {
     pub setfsgid: SetfsgidData,
     pub sched_get_priority_max: SchedGetPriorityMaxData,
     pub sched_get_priority_min: SchedGetPriorityMinData,
+    pub vector_io: VectorIOData,
 }
 
 #[repr(C)]
@@ -190,6 +191,20 @@ pub struct ReadData {
     pub fd: i32,
     pub buf: [u8; DATA_READ_SIZE],
     pub count: usize,
+}
+
+/// Data for vector I/O syscalls (readv, writev, preadv, pwritev, preadv2, pwritev2)
+pub const IOV_COUNT: usize = 2; // Number of iovec structures to capture
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct VectorIOData {
+    pub fd: i32,
+    pub iovecs: [crate::kernel_types::Iovec; IOV_COUNT],
+    pub iov_lens: [usize; IOV_COUNT],
+    pub iov_bufs: [[u8; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+    pub iovcnt: usize,
+    pub offset: i64, // Only used for preadv/pwritev variants
+    pub flags: u32,  // Only used for preadv2/pwritev2
 }
 
 #[repr(C)]

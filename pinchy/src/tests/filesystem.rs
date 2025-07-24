@@ -5,10 +5,10 @@ use std::pin::Pin;
 
 use pinchy_common::{
     syscalls::{
-        SYS_chdir, SYS_faccessat, SYS_fstat, SYS_getcwd, SYS_getdents64, SYS_newfstatat,
-        SYS_readlinkat, SYS_statfs,
+        SYS_chdir, SYS_faccessat, SYS_fstat, SYS_getcwd, SYS_getdents64, SYS_mkdirat,
+        SYS_newfstatat, SYS_readlinkat, SYS_statfs,
     },
-    FaccessatData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
+    FaccessatData, MkdiratData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
 
 use crate::{
@@ -640,5 +640,67 @@ async fn parse_chdir() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "66 chdir(path: \"/home/user/newdir\") = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_mkdirat() {
+    let mut event = SyscallEvent {
+        syscall_nr: SYS_mkdirat,
+        pid: 77,
+        tid: 77,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            mkdirat: MkdiratData {
+                dirfd: libc::AT_FDCWD,
+                pathname: {
+                    let mut arr = [0u8; DATA_READ_SIZE];
+                    let path = b"/home/user/newdir\0";
+                    arr[..path.len()].copy_from_slice(path);
+                    arr
+                },
+                mode: 0o755,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "77 mkdirat(dirfd: AT_FDCWD, pathname: \"/home/user/newdir\", mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
+    );
+
+    // Test with regular file descriptor
+    event.data.mkdirat.dirfd = 5;
+    event.data.mkdirat.mode = 0o700;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = 0 (success)\n"
+    );
+
+    // Test with error return value
+    event.return_value = -1;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = -1 (error)\n"
     );
 }

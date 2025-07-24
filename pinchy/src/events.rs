@@ -1103,6 +1103,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_mkdirat => {
+            let data = unsafe { event.data.mkdirat };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "mode: {}", format_mode(data.mode));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_recvmsg => {
             let data = unsafe { event.data.recvmsg };
 

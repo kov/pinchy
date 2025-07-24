@@ -125,6 +125,7 @@ pub union SyscallEventData {
     pub pselect6: Pselect6Data,
     pub getcwd: GetcwdData,
     pub chdir: ChdirData,
+    pub mkdirat: MkdiratData,
 }
 
 #[repr(C)]
@@ -909,4 +910,12 @@ pub struct GetcwdData {
 #[derive(Clone, Copy)]
 pub struct ChdirData {
     pub path: [u8; DATA_READ_SIZE], // The directory path to change to
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MkdiratData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub mode: u32,
 }

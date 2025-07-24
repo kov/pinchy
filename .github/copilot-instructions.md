@@ -5,7 +5,8 @@
   line for clarity and readability.
 - Add a blank line before and after each block or branch, unless it is
   immediately followed by a closing brace or another control flow
-  statement.
+  statement. There should be no blank line after #[] decorators.
+  There should be no blank line between branches of a match statement.
 - This applies to all Rust code, including eBPF handlers, event parsing,
   and helpers.
 - Do not add unnecessary comments. Never add comments that describe the

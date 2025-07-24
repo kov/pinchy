@@ -601,6 +601,7 @@ fn scheduler_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
@@ -615,6 +616,37 @@ fn pread_pwrite_syscalls() {
         PID write(fd: NUMBER, buf: "Hello, world! This is test data for pread/pwrite.", count: 49) = 49 (bytes)
         PID pwrite64(fd: NUMBER, buf: "pinch", count: 5, offset: 7) = 5 (bytes)
         PID pread64(fd: NUMBER, buf: "lo, pinch! This is test data", count: 28, offset: 3) = 28 (bytes)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn readv_writev_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises readv and writev syscalls
+    let handle = run_workload(&["writev", "readv"], "readv_writev_test");
+
+    // Expected output - readv and writev calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID writev(fd: NUMBER, iov: [ iovec { base: "Hello, ", len: 7 }, iovec { base: "world!", len: 6 } ], iovcnt: 2) = 13 (bytes)
+        PID readv(fd: NUMBER, iov: [ iovec { base: "Hello, ", len: 7 }, iovec { base: "world!", len: 6 } ], iovcnt: 2) = 13 (bytes)
     "#});
 
     let output = handle.join().unwrap();

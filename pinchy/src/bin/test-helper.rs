@@ -64,6 +64,7 @@ fn main() -> anyhow::Result<()> {
             "ioprio_test" => ioprio_test(),
             "scheduler_test" => scheduler_test(),
             "pread_pwrite_test" => pread_pwrite_test(),
+            "readv_writev_test" => readv_writev_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -704,6 +705,81 @@ fn pread_pwrite_test() -> anyhow::Result<()> {
         // Clean up
         libc::close(fd);
         libc::unlink(c"/tmp/pread_pwrite_test".as_ptr());
+    }
+
+    Ok(())
+}
+
+fn readv_writev_test() -> anyhow::Result<()> {
+    unsafe {
+        // Create a temporary file for testing readv/writev
+        let fd = libc::openat(
+            libc::AT_FDCWD,
+            c"/tmp/readv_writev_test".as_ptr(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+            0o644,
+        );
+
+        if fd < 0 {
+            bail!(
+                "Failed to create temporary file: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Prepare some data to write
+        let data1 = b"Hello, ";
+        let data2 = b"world!";
+        let iov = [
+            libc::iovec {
+                iov_base: data1.as_ptr() as *mut libc::c_void,
+                iov_len: data1.len(),
+            },
+            libc::iovec {
+                iov_base: data2.as_ptr() as *mut libc::c_void,
+                iov_len: data2.len(),
+            },
+        ];
+
+        // Test writev - write both buffers in one call
+        let result = libc::writev(fd, iov.as_ptr(), iov.len() as i32);
+        if result < 0 {
+            bail!("writev failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Prepare buffers for reading
+        let mut buffer1 = vec![0u8; 7]; // Enough space for "Hello, "
+        let mut buffer2 = vec![0u8; 6]; // Enough space for "world!"
+        let read_iov = [
+            libc::iovec {
+                iov_base: buffer1.as_mut_ptr() as *mut libc::c_void,
+                iov_len: buffer1.len(),
+            },
+            libc::iovec {
+                iov_base: buffer2.as_mut_ptr() as *mut libc::c_void,
+                iov_len: buffer2.len(),
+            },
+        ];
+
+        // Reset the file descriptor's position to the beginning of the file
+        let result = libc::lseek(fd, 0, libc::SEEK_SET);
+        if result < 0 {
+            bail!("lseek failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test readv - read into both buffers in one call
+        let result = libc::readv(fd, read_iov.as_ptr(), read_iov.len() as i32);
+        if result < 0 {
+            bail!("readv failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Verify the data
+        assert_eq!(&buffer1[..], &data1[..]);
+        assert_eq!(&buffer2[..], &data2[..]);
+
+        // Clean up
+        libc::close(fd);
+        libc::unlink(c"/tmp/readv_writev_test".as_ptr());
     }
 
     Ok(())

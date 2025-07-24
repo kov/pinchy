@@ -32,6 +32,45 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
     };
 
     match event.syscall_nr {
+        syscalls::SYS_readv
+        | syscalls::SYS_writev
+        | syscalls::SYS_preadv
+        | syscalls::SYS_pwritev
+        | syscalls::SYS_preadv2
+        | syscalls::SYS_pwritev2 => {
+            let data = unsafe { event.data.vector_io };
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "iov:");
+            with_array!(sf, {
+                for i in 0..data.iovcnt {
+                    arg!(sf, "iovec");
+                    with_struct!(sf, {
+                        let buf = &data.iov_bufs[i];
+                        let len = data.iov_lens[i].min(buf.len());
+                        if len > 0 {
+                            argf!(sf, "base: {}", format_bytes(&buf[..len]));
+                        } else {
+                            arg!(sf, "base: NULL");
+                        }
+                        argf!(sf, "len: {}", data.iov_lens[i]);
+                    });
+                }
+            });
+            argf!(sf, "iovcnt: {}", data.iovcnt);
+            if event.syscall_nr == syscalls::SYS_preadv
+                || event.syscall_nr == syscalls::SYS_pwritev
+                || event.syscall_nr == syscalls::SYS_preadv2
+                || event.syscall_nr == syscalls::SYS_pwritev2
+            {
+                argf!(sf, "offset: {}", data.offset);
+            }
+            if event.syscall_nr == syscalls::SYS_preadv2
+                || event.syscall_nr == syscalls::SYS_pwritev2
+            {
+                argf!(sf, "flags: 0x{:x}", data.flags);
+            }
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_rt_sigreturn
         | syscalls::SYS_sched_yield
         | syscalls::SYS_getpid

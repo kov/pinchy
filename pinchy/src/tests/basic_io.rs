@@ -5,13 +5,15 @@ use std::pin::Pin;
 
 use indoc::indoc;
 use pinchy_common::{
-    kernel_types::{EpollEvent, Timespec},
+    kernel_types::{EpollEvent, Iovec, Timespec},
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek,
-        SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_pwrite64, SYS_read, SYS_write,
+        SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read,
+        SYS_readv, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollPWaitData, FcntlData, LseekData, OpenAtData,
-    PpollData, PreadData, PwriteData, ReadData, SyscallEvent, WriteData, DATA_READ_SIZE,
+    PpollData, PreadData, PwriteData, ReadData, SyscallEvent, VectorIOData, WriteData,
+    DATA_READ_SIZE,
 };
 
 use crate::{
@@ -620,5 +622,117 @@ async fn parse_pwrite() {
         format!(
             "22 pwrite64(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (3968 more bytes), count: 4096, offset: 2048) = 4096 (bytes)\n"
         )
+    );
+}
+
+#[tokio::test]
+async fn parse_readv() {
+    let mut data = VectorIOData {
+        fd: 3,
+        iovecs: [Iovec {
+            iov_base: 0x1000,
+            iov_len: 4,
+        }; pinchy_common::IOV_COUNT],
+        iov_lens: [4; pinchy_common::IOV_COUNT],
+        iov_bufs: [[0u8; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+        iovcnt: 2,
+        offset: 0,
+        flags: 0,
+    };
+
+    data.iov_bufs[0][..4].copy_from_slice(b"test");
+    data.iov_bufs[1][..4].copy_from_slice(b"data");
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_readv,
+        pid: 1,
+        tid: 1,
+        return_value: 8,
+        data: pinchy_common::SyscallEventData { vector_io: data },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1 readv(fd: 3, iov: [ iovec { base: \"test\", len: 4 }, iovec { base: \"data\", len: 4 } ], iovcnt: 2) = 8 (bytes)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_writev() {
+    let mut data = VectorIOData {
+        fd: 4,
+        iovecs: [Iovec {
+            iov_base: 0x2000,
+            iov_len: 3,
+        }; pinchy_common::IOV_COUNT],
+        iov_lens: [3; pinchy_common::IOV_COUNT],
+        iov_bufs: [[0u8; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+        iovcnt: 1,
+        offset: 0,
+        flags: 0,
+    };
+
+    data.iov_bufs[0][..3].copy_from_slice(b"abc");
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_writev,
+        pid: 2,
+        tid: 2,
+        return_value: 3,
+        data: pinchy_common::SyscallEventData { vector_io: data },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2 writev(fd: 4, iov: [ iovec { base: \"abc\", len: 3 } ], iovcnt: 1) = 3 (bytes)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_preadv2() {
+    let mut data = VectorIOData {
+        fd: 5,
+        iovecs: [Iovec {
+            iov_base: 0x3000,
+            iov_len: 5,
+        }; pinchy_common::IOV_COUNT],
+        iov_lens: [5; pinchy_common::IOV_COUNT],
+        iov_bufs: [[0u8; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+        iovcnt: 1,
+        offset: 1234,
+        flags: 0x10,
+    };
+
+    data.iov_bufs[0][..5].copy_from_slice(b"hello");
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_preadv2,
+        pid: 3,
+        tid: 3,
+        return_value: 5,
+        data: pinchy_common::SyscallEventData { vector_io: data },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "3 preadv2(fd: 5, iov: [ iovec { base: \"hello\", len: 5 } ], iovcnt: 1, offset: 1234, flags: 0x10) = 5\n"
     );
 }

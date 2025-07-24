@@ -1,7 +1,9 @@
 use core::ops::DerefMut as _;
 
 use aya_ebpf::{
-    bindings::BPF_RB_FORCE_WAKEUP, helpers::bpf_probe_read_user, programs::TracePointContext,
+    bindings::BPF_RB_FORCE_WAKEUP,
+    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    programs::TracePointContext,
     EbpfContext as _,
 };
 use aya_log_ebpf::error;
@@ -109,4 +111,77 @@ pub fn output_event(
     }
 
     Ok(())
+}
+
+use pinchy_common::{kernel_types::Iovec, IOV_COUNT, MEDIUM_READ_SIZE};
+
+/// Reads an array of iovec structs and their pointed-to buffers from user memory.
+/// Returns the filled arrays for iovecs, lens, and bufs, and the count.
+#[inline(always)]
+pub fn read_iovec_array(
+    iov_addr: u64,
+    iovcnt: usize,
+    is_read: bool,
+    return_value: usize,
+) -> (
+    [Iovec; IOV_COUNT],
+    [usize; IOV_COUNT],
+    [[u8; MEDIUM_READ_SIZE]; IOV_COUNT],
+    usize,
+) {
+    let mut iovecs = [Iovec {
+        iov_base: 0,
+        iov_len: 0,
+    }; IOV_COUNT];
+    let mut iov_lens = [0usize; IOV_COUNT];
+    let mut iov_bufs = [[0u8; MEDIUM_READ_SIZE]; IOV_COUNT];
+    let count = core::cmp::min(iovcnt, IOV_COUNT);
+
+    let mut bytes_left = if is_read { return_value } else { usize::MAX };
+
+    for i in 0..count {
+        let iov_ptr = (iov_addr as *const u8).wrapping_add(i * size_of::<Iovec>());
+        let iov_base = unsafe {
+            bpf_probe_read_user::<*const u8>(iov_ptr as *const _).unwrap_or(core::ptr::null())
+        };
+
+        // Bail out early if we're dealing with a null pointer, the array item is zeroed already.
+        if iov_base.is_null() {
+            continue;
+        }
+
+        let iov_len =
+            unsafe { bpf_probe_read_user::<u64>((iov_ptr as *const u64).add(1)).unwrap_or(0) };
+
+        iovecs[i] = Iovec {
+            iov_base: iov_base as u64,
+            iov_len,
+        };
+        iov_lens[i] = iov_len as usize;
+
+        // Only read up to MEDIUM_READ_SIZE bytes per iovec, and only up to bytes_left for read
+        let to_read = core::cmp::min(
+            MEDIUM_READ_SIZE,
+            if is_read {
+                core::cmp::min(iov_len as usize, bytes_left)
+            } else {
+                iov_len as usize
+            },
+        );
+
+        if to_read > 0 {
+            unsafe {
+                let _ = bpf_probe_read_buf(iov_base as *const u8, &mut iov_bufs[i][..to_read]);
+            }
+        }
+
+        if is_read {
+            bytes_left = bytes_left.saturating_sub(to_read);
+            if bytes_left == 0 {
+                break;
+            }
+        }
+    }
+
+    (iovecs, iov_lens, iov_bufs, count)
 }

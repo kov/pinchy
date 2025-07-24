@@ -433,6 +433,12 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_settimeofday", syscalls::SYS_settimeofday),
         ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
         ("syscall_exit_times", syscalls::SYS_times),
+        ("syscall_exit_readv", syscalls::SYS_readv),
+        ("syscall_exit_writev", syscalls::SYS_writev),
+        ("syscall_exit_preadv", syscalls::SYS_preadv),
+        ("syscall_exit_pwritev", syscalls::SYS_pwritev),
+        ("syscall_exit_preadv2", syscalls::SYS_preadv2),
+        ("syscall_exit_pwritev2", syscalls::SYS_pwritev2),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

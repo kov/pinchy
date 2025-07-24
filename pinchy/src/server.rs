@@ -445,6 +445,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_pwritev2", syscalls::SYS_pwritev2),
         ("syscall_exit_bind", syscalls::SYS_bind),
         ("syscall_exit_connect", syscalls::SYS_connect),
+        ("syscall_exit_pselect6", syscalls::SYS_pselect6),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_select", syscalls::SYS_select),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

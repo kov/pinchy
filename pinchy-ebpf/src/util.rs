@@ -16,6 +16,16 @@ pub fn read_timespec(ptr: *const Timespec) -> Timespec {
     unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
 }
 
+// Helper function to read timeval from userspace
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::kernel_types::Timeval;
+
+#[cfg(target_arch = "x86_64")]
+#[inline(always)]
+pub fn read_timeval(timeval_ptr: *const Timeval) -> Timeval {
+    unsafe { bpf_probe_read_user::<Timeval>(timeval_ptr) }.unwrap_or_default()
+}
+
 #[inline(always)]
 pub fn get_syscall_nr(ctx: &TracePointContext) -> Result<i64, u32> {
     unsafe { ENTER_MAP.get(&ctx.pid()) }

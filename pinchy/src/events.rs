@@ -11,15 +11,15 @@ use crate::{
     raw,
     util::{
         format_accept4_flags, format_access_mode, format_at_flags, format_bytes,
-        format_clone_flags, format_dirfd, format_dup3_flags, format_fcntl_cmd, format_flags,
-        format_getrandom_flags, format_madvise_advice, format_mmap_flags, format_mmap_prot,
-        format_mode, format_msghdr, format_path, format_prctl_op, format_priority_which,
-        format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage, format_rusage_who,
-        format_sched_policy, format_sendmsg_flags, format_shutdown_how, format_signal_number,
-        format_sigprocmask_how, format_sockaddr, format_socket_domain, format_socket_type,
-        format_stat, format_statfs, format_sysinfo, format_timespec, format_timeval,
-        format_timezone, format_tms, format_utsname, format_wait_options, format_wait_status,
-        format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
+        format_clone_flags, format_dirfd, format_dup3_flags, format_fcntl_cmd, format_fdset,
+        format_flags, format_getrandom_flags, format_madvise_advice, format_mmap_flags,
+        format_mmap_prot, format_mode, format_msghdr, format_path, format_prctl_op,
+        format_priority_which, format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage,
+        format_rusage_who, format_sched_policy, format_sendmsg_flags, format_shutdown_how,
+        format_signal_number, format_sigprocmask_how, format_sockaddr, format_socket_domain,
+        format_socket_type, format_stat, format_statfs, format_sysinfo, format_timespec,
+        format_timeval, format_timezone, format_tms, format_utsname, format_wait_options,
+        format_wait_status, format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -497,6 +497,84 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 Some(extra) => finish!(sf, event.return_value, extra.as_bytes()),
                 None => finish!(sf, event.return_value),
             };
+        }
+        syscalls::SYS_pselect6 => {
+            let data = unsafe { event.data.pselect6 };
+
+            argf!(sf, "nfds: {}", data.nfds);
+
+            arg!(sf, "readfds:");
+            if data.has_readfds {
+                format_fdset(&mut sf, &data.readfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "writefds:");
+            if data.has_writefds {
+                format_fdset(&mut sf, &data.writefds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "exceptfds:");
+            if data.has_exceptfds {
+                format_fdset(&mut sf, &data.exceptfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "timeout:");
+            if data.has_timeout {
+                format_timespec(&mut sf, data.timeout).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "sigmask:");
+            if data.has_sigmask {
+                raw!(sf, " <present>");
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_select => {
+            let data = unsafe { event.data.select };
+
+            argf!(sf, "nfds: {}", data.nfds);
+
+            arg!(sf, "readfds:");
+            if data.has_readfds {
+                format_fdset(&mut sf, &data.readfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "writefds:");
+            if data.has_writefds {
+                format_fdset(&mut sf, &data.writefds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "exceptfds:");
+            if data.has_exceptfds {
+                format_fdset(&mut sf, &data.exceptfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "timeout:");
+            if data.has_timeout {
+                format_timeval(&mut sf, &data.timeout).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
         }
         syscalls::SYS_read => {
             let data = unsafe { event.data.read };

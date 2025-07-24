@@ -6,16 +6,20 @@ use aya_ebpf::{
     macros::tracepoint,
     programs::TracePointContext,
 };
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::syscalls::SYS_select;
 use pinchy_common::{
-    kernel_types::{EpollEvent, Pollfd},
+    kernel_types::{EpollEvent, Pollfd, Timespec},
     syscalls::{
         SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv,
-        SYS_preadv2, SYS_pwrite64, SYS_pwritev, SYS_pwritev2, SYS_read, SYS_readv, SYS_write,
-        SYS_writev,
+        SYS_preadv2, SYS_pselect6, SYS_pwrite64, SYS_pwritev, SYS_pwritev2, SYS_read, SYS_readv,
+        SYS_write, SYS_writev,
     },
     DATA_READ_SIZE,
 };
 
+#[cfg(target_arch = "x86_64")]
+use crate::util::read_timeval;
 use crate::util::{get_args, get_return_value, output_event, read_timespec};
 
 #[tracepoint]
@@ -562,6 +566,126 @@ pub fn syscall_exit_pwritev2(ctx: TracePointContext) -> u32 {
                     iovcnt: count,
                     offset,
                     flags,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+// Helper function to read fd_set from userspace as raw bytes
+fn read_fdset(fd_set_ptr: *const u8, nfds: i32) -> pinchy_common::kernel_types::FdSet {
+    let mut result = pinchy_common::kernel_types::FdSet::default();
+
+    if fd_set_ptr.is_null() || nfds <= 0 {
+        return result;
+    }
+
+    // Calculate how many bytes we need to read to cover nfds file descriptors
+    let bytes_needed = ((nfds + 7) / 8) as usize;
+    let bytes_to_read = core::cmp::min(bytes_needed, result.bytes.len());
+
+    unsafe {
+        if bpf_probe_read_buf(fd_set_ptr, &mut result.bytes[..bytes_to_read]).is_ok() {
+            result.len = bytes_to_read as u32;
+        }
+    }
+
+    result
+}
+
+#[tracepoint]
+pub fn syscall_exit_pselect6(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_pselect6;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let nfds = args[0] as i32;
+        let readfds_ptr = args[1] as *const u8;
+        let writefds_ptr = args[2] as *const u8;
+        let exceptfds_ptr = args[3] as *const u8;
+        let timeout_ptr = args[4] as *const Timespec;
+        let sigmask_ptr = args[5] as *const u8;
+
+        let readfds = read_fdset(readfds_ptr, nfds);
+        let writefds = read_fdset(writefds_ptr, nfds);
+        let exceptfds = read_fdset(exceptfds_ptr, nfds);
+
+        let timeout = if !timeout_ptr.is_null() {
+            read_timespec(timeout_ptr)
+        } else {
+            Timespec::default()
+        };
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                pselect6: pinchy_common::Pselect6Data {
+                    nfds,
+                    readfds,
+                    writefds,
+                    exceptfds,
+                    timeout,
+                    has_readfds: !readfds_ptr.is_null(),
+                    has_writefds: !writefds_ptr.is_null(),
+                    has_exceptfds: !exceptfds_ptr.is_null(),
+                    has_timeout: !timeout_ptr.is_null(),
+                    has_sigmask: !sigmask_ptr.is_null(),
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tracepoint]
+pub fn syscall_exit_select(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_select;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let nfds = args[0] as i32;
+        let readfds_ptr = args[1] as *const u8;
+        let writefds_ptr = args[2] as *const u8;
+        let exceptfds_ptr = args[3] as *const u8;
+        let timeout_ptr = args[4] as *const Timeval;
+
+        let readfds = read_fdset(readfds_ptr, nfds);
+        let writefds = read_fdset(writefds_ptr, nfds);
+        let exceptfds = read_fdset(exceptfds_ptr, nfds);
+
+        let timeout = if !timeout_ptr.is_null() {
+            read_timeval(timeout_ptr)
+        } else {
+            Timeval::default()
+        };
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                select: pinchy_common::SelectData {
+                    nfds,
+                    readfds,
+                    writefds,
+                    exceptfds,
+                    timeout,
+                    has_readfds: !readfds_ptr.is_null(),
+                    has_writefds: !writefds_ptr.is_null(),
+                    has_exceptfds: !exceptfds_ptr.is_null(),
+                    has_timeout: !timeout_ptr.is_null(),
                 },
             },
         )

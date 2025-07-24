@@ -5,7 +5,7 @@ use std::borrow::Cow;
 
 use pinchy_common::kernel_types::{Stat, Timespec};
 
-use crate::{arg, argf, formatting::SyscallFormatter, with_array, with_struct};
+use crate::{arg, argf, formatting::SyscallFormatter, raw, with_array, with_struct};
 
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     let mut strs = vec![];
@@ -1660,6 +1660,36 @@ pub async fn format_timeval(
 ) -> anyhow::Result<()> {
     argf!(sf, "tv_sec: {}", tv.tv_sec);
     argf!(sf, "tv_usec: {}", tv.tv_usec);
+    Ok(())
+}
+
+/// Format fd_set structure for display
+pub async fn format_fdset(
+    sf: &mut SyscallFormatter<'_>,
+    fdset: &pinchy_common::kernel_types::FdSet,
+) -> anyhow::Result<()> {
+    if fdset.len == 0 {
+        raw!(sf, " []");
+    } else {
+        // Decode the bitmap to extract set file descriptors
+        let mut set_fds = Vec::new();
+
+        for byte_idx in 0..(fdset.len as usize) {
+            let byte = fdset.bytes[byte_idx];
+            for bit_idx in 0..8 {
+                if byte & (1 << bit_idx) != 0 {
+                    let fd = byte_idx * 8 + bit_idx;
+                    set_fds.push(fd as i32);
+                }
+            }
+        }
+
+        with_array!(sf, {
+            for fd in set_fds {
+                argf!(sf, "{}", fd);
+            }
+        });
+    }
     Ok(())
 }
 

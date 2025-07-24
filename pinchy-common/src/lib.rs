@@ -121,6 +121,8 @@ pub union SyscallEventData {
     pub socket: SocketData,
     pub listen: ListenData,
     pub shutdown: ShutdownData,
+    pub select: SelectData,
+    pub pselect6: Pselect6Data,
 }
 
 #[repr(C)]
@@ -587,6 +589,35 @@ pub struct ListenData {
 pub struct ShutdownData {
     pub sockfd: i32,
     pub how: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SelectData {
+    pub nfds: i32,
+    pub readfds: kernel_types::FdSet,
+    pub writefds: kernel_types::FdSet,
+    pub exceptfds: kernel_types::FdSet,
+    pub timeout: kernel_types::Timeval,
+    pub has_readfds: bool,
+    pub has_writefds: bool,
+    pub has_exceptfds: bool,
+    pub has_timeout: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Pselect6Data {
+    pub nfds: i32,
+    pub readfds: kernel_types::FdSet,
+    pub writefds: kernel_types::FdSet,
+    pub exceptfds: kernel_types::FdSet,
+    pub timeout: Timespec,
+    pub has_readfds: bool,
+    pub has_writefds: bool,
+    pub has_exceptfds: bool,
+    pub has_timeout: bool,
+    pub has_sigmask: bool,
 }
 
 pub const CLONE_SET_TID_MAX: usize = 8; // Maximum set_tid array elements to capture

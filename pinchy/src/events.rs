@@ -1083,6 +1083,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_getcwd => {
+            let data = unsafe { event.data.getcwd };
+
+            argf!(sf, "buf: 0x{:x}", data.buf);
+            argf!(sf, "size: {}", data.size);
+
+            // Show the actual path if syscall succeeded
+            if event.return_value > 0 {
+                argf!(sf, "path: {}", format_path(&data.path, false));
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_recvmsg => {
             let data = unsafe { event.data.recvmsg };
 

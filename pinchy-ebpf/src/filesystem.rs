@@ -385,3 +385,41 @@ pub fn syscall_exit_llistxattr(ctx: TracePointContext) -> u32 {
         Err(ret) => ret,
     }
 }
+
+#[tracepoint]
+pub fn syscall_exit_getcwd(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_getcwd;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let buf_ptr = args[0] as *const u8;
+        let size = args[1] as usize;
+        let mut path = [0u8; DATA_READ_SIZE];
+
+        // Only read the buffer if the syscall succeeded
+        // The return value is a pointer to the buffer (or negative on error)
+        if return_value > 0 {
+            unsafe {
+                let _ = bpf_probe_read_buf(buf_ptr, &mut path);
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                getcwd: pinchy_common::GetcwdData {
+                    buf: buf_ptr as u64,
+                    size,
+                    path,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}

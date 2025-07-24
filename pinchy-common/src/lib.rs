@@ -123,6 +123,7 @@ pub union SyscallEventData {
     pub shutdown: ShutdownData,
     pub select: SelectData,
     pub pselect6: Pselect6Data,
+    pub getcwd: GetcwdData,
 }
 
 #[repr(C)]
@@ -893,4 +894,12 @@ pub struct SchedGetPriorityMaxData {
 #[derive(Clone, Copy)]
 pub struct SchedGetPriorityMinData {
     pub policy: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetcwdData {
+    pub buf: u64,                   // Pointer to the buffer
+    pub size: usize,                // Size of the buffer
+    pub path: [u8; DATA_READ_SIZE], // The actual current working directory path
 }

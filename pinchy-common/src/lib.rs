@@ -60,6 +60,7 @@ pub union SyscallEventData {
     pub recvmsg: RecvmsgData,
     pub recvfrom: RecvfromData,
     pub sendmsg: SendmsgData,
+    pub accept: AcceptData,
     pub accept4: Accept4Data,
     pub wait4: Wait4Data,
     pub getrusage: GetrusageData,
@@ -116,6 +117,10 @@ pub union SyscallEventData {
     pub sched_get_priority_max: SchedGetPriorityMaxData,
     pub sched_get_priority_min: SchedGetPriorityMinData,
     pub vector_io: VectorIOData,
+    pub sockaddr: SockaddrData,
+    pub socket: SocketData,
+    pub listen: ListenData,
+    pub shutdown: ShutdownData,
 }
 
 #[repr(C)]
@@ -520,6 +525,15 @@ pub struct RecvfromData {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct AcceptData {
+    pub sockfd: i32,
+    pub has_addr: bool,
+    pub addr: crate::kernel_types::Sockaddr,
+    pub addrlen: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct Accept4Data {
     pub sockfd: i32,
     pub flags: i32,
@@ -543,6 +557,36 @@ pub struct Wait4Data {
 pub struct GetrusageData {
     pub who: i32,
     pub rusage: kernel_types::Rusage,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SockaddrData {
+    pub sockfd: i32,
+    pub addr: crate::kernel_types::Sockaddr,
+    pub addrlen: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SocketData {
+    pub domain: i32,
+    pub type_: i32,
+    pub protocol: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ListenData {
+    pub sockfd: i32,
+    pub backlog: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ShutdownData {
+    pub sockfd: i32,
+    pub how: i32,
 }
 
 pub const CLONE_SET_TID_MAX: usize = 8; // Maximum set_tid array elements to capture

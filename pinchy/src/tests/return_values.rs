@@ -69,10 +69,32 @@ fn test_boolean_like_syscalls() {
         "0 (success)"
     );
 
+    // Socket syscalls should show success for 0
+    assert_eq!(
+        format_return_value(syscalls::SYS_bind, 0).as_ref(),
+        "0 (success)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_listen, 0).as_ref(),
+        "0 (success)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_connect, 0).as_ref(),
+        "0 (success)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_shutdown, 0).as_ref(),
+        "0 (success)"
+    );
+
     // Non-zero is error
     assert_eq!(
         format_return_value(syscalls::SYS_close, -2).as_ref(),
         "-2 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_bind, -1).as_ref(),
+        "-1 (error)"
     );
 }
 

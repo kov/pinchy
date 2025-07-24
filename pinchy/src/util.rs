@@ -1195,6 +1195,53 @@ pub fn format_accept4_flags(flags: i32) -> String {
     }
 }
 
+pub fn format_socket_domain(domain: i32) -> Cow<'static, str> {
+    match domain {
+        libc::AF_UNIX => Cow::Borrowed("AF_UNIX"),
+        libc::AF_INET => Cow::Borrowed("AF_INET"),
+        libc::AF_INET6 => Cow::Borrowed("AF_INET6"),
+        libc::AF_NETLINK => Cow::Borrowed("AF_NETLINK"),
+        libc::AF_PACKET => Cow::Borrowed("AF_PACKET"),
+        libc::AF_APPLETALK => Cow::Borrowed("AF_APPLETALK"),
+        libc::AF_X25 => Cow::Borrowed("AF_X25"),
+        _ => Cow::Owned(format!("{domain}")),
+    }
+}
+
+pub fn format_socket_type(socket_type: i32) -> String {
+    let base_type = socket_type & 0xFF; // Lower 8 bits are the base type
+    let flags = socket_type & !0xFF; // Upper bits are flags
+
+    let base_str = match base_type {
+        libc::SOCK_STREAM => "SOCK_STREAM",
+        libc::SOCK_DGRAM => "SOCK_DGRAM",
+        libc::SOCK_SEQPACKET => "SOCK_SEQPACKET",
+        libc::SOCK_RAW => "SOCK_RAW",
+        libc::SOCK_RDM => "SOCK_RDM",
+        _ => return format!("{socket_type}"),
+    };
+
+    let mut parts = vec![base_str];
+
+    if flags & libc::SOCK_NONBLOCK != 0 {
+        parts.push("SOCK_NONBLOCK");
+    }
+    if flags & libc::SOCK_CLOEXEC != 0 {
+        parts.push("SOCK_CLOEXEC");
+    }
+
+    parts.join("|")
+}
+
+pub fn format_shutdown_how(how: i32) -> Cow<'static, str> {
+    match how {
+        libc::SHUT_RD => Cow::Borrowed("SHUT_RD"),
+        libc::SHUT_WR => Cow::Borrowed("SHUT_WR"),
+        libc::SHUT_RDWR => Cow::Borrowed("SHUT_RDWR"),
+        _ => Cow::Owned(format!("{how}")),
+    }
+}
+
 pub fn format_sockaddr_family(family: u16) -> Cow<'static, str> {
     match family {
         x if x == (libc::AF_UNIX as u16) => Cow::Borrowed("AF_UNIX"),
@@ -1803,7 +1850,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_gettimeofday
         | syscalls::SYS_settimeofday
         | syscalls::SYS_setpriority
-        | syscalls::SYS_sched_setscheduler => match return_value {
+        | syscalls::SYS_sched_setscheduler
+        | syscalls::SYS_bind
+        | syscalls::SYS_listen
+        | syscalls::SYS_connect
+        | syscalls::SYS_shutdown => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },

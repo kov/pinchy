@@ -383,6 +383,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_setfsgid,
         syscalls::SYS_sched_get_priority_max,
         syscalls::SYS_sched_get_priority_min,
+        syscalls::SYS_socket,
+        syscalls::SYS_listen,
+        syscalls::SYS_shutdown,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -421,6 +424,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_recvmsg", syscalls::SYS_recvmsg),
         ("syscall_exit_recvfrom", syscalls::SYS_recvfrom),
         ("syscall_exit_sendmsg", syscalls::SYS_sendmsg),
+        ("syscall_exit_accept", syscalls::SYS_accept),
         ("syscall_exit_accept4", syscalls::SYS_accept4),
         ("syscall_exit_wait4", syscalls::SYS_wait4),
         ("syscall_exit_getrusage", syscalls::SYS_getrusage),
@@ -439,6 +443,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_pwritev", syscalls::SYS_pwritev),
         ("syscall_exit_preadv2", syscalls::SYS_preadv2),
         ("syscall_exit_pwritev2", syscalls::SYS_pwritev2),
+        ("syscall_exit_bind", syscalls::SYS_bind),
+        ("syscall_exit_connect", syscalls::SYS_connect),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

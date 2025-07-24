@@ -54,6 +54,8 @@ fn main() -> anyhow::Result<()> {
             "fcntl_test" => fcntl_test(),
             "fchdir_test" => fchdir_test(),
             "network_test" => network_test(),
+            "accept_test" => accept_test(),
+            "socket_lifecycle_test" => socket_lifecycle_test(),
             "recvfrom_test" => recvfrom_test(),
             "identity_syscalls" => identity_syscalls(),
             "madvise_test" => madvise_test(),
@@ -406,6 +408,88 @@ fn recvfrom_test() -> anyhow::Result<()> {
         }
 
         assert_eq!(&buffer[..bytes_received2 as usize], b"second message");
+    }
+
+    Ok(())
+}
+
+fn accept_test() -> anyhow::Result<()> {
+    unsafe {
+        // Create a socket for listening
+        let server_fd = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+        if server_fd < 0 {
+            bail!("socket() failed");
+        }
+
+        // Create sockaddr_in for binding
+        let mut server_addr: libc::sockaddr_in = std::mem::zeroed();
+        server_addr.sin_family = libc::AF_INET as u16;
+        server_addr.sin_port = 0u16.to_be(); // Let the OS choose port
+        server_addr.sin_addr.s_addr = u32::from_be_bytes([127, 0, 0, 1]).to_be(); // 127.0.0.1
+
+        let server_addr_ptr = &server_addr as *const libc::sockaddr_in as *const libc::sockaddr;
+
+        // Bind the socket
+        let bind_result = libc::bind(
+            server_fd,
+            server_addr_ptr,
+            std::mem::size_of::<libc::sockaddr_in>() as u32,
+        );
+        if bind_result < 0 {
+            bail!("bind() failed");
+        }
+
+        // Listen on the socket
+        let listen_result = libc::listen(server_fd, 1);
+        if listen_result < 0 {
+            bail!("listen() failed");
+        }
+
+        // Get the actual port that was assigned
+        let mut actual_addr: libc::sockaddr_in = std::mem::zeroed();
+        let mut addr_len = std::mem::size_of::<libc::sockaddr_in>() as u32;
+        let getsockname_result = libc::getsockname(
+            server_fd,
+            &mut actual_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+            &mut addr_len,
+        );
+        if getsockname_result < 0 {
+            bail!("getsockname() failed");
+        }
+
+        // Create a client socket to connect to the server
+        let client_fd = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+        if client_fd < 0 {
+            bail!("client socket() failed");
+        }
+
+        // Connect the client to the server
+        let connect_result = libc::connect(
+            client_fd,
+            &actual_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+            std::mem::size_of::<libc::sockaddr_in>() as u32,
+        );
+        if connect_result < 0 {
+            bail!("connect() failed");
+        }
+
+        // Use the accept() syscall (not accept4) to accept the connection
+        let mut client_addr: libc::sockaddr_in = std::mem::zeroed();
+        let mut client_addr_len = std::mem::size_of::<libc::sockaddr_in>() as u32;
+
+        let accepted_fd = libc::accept(
+            server_fd,
+            &mut client_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+            &mut client_addr_len,
+        );
+        if accepted_fd < 0 {
+            bail!("accept() failed");
+        }
+
+        // Clean up
+        libc::close(accepted_fd);
+        libc::close(client_fd);
+        libc::close(server_fd);
     }
 
     Ok(())
@@ -780,6 +864,113 @@ fn readv_writev_test() -> anyhow::Result<()> {
         // Clean up
         libc::close(fd);
         libc::unlink(c"/tmp/readv_writev_test".as_ptr());
+    }
+
+    Ok(())
+}
+
+fn socket_lifecycle_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test socket() syscall - create a TCP socket
+        let sock_fd = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+        if sock_fd < 0 {
+            bail!("socket() failed");
+        }
+
+        // Test socket() syscall - create a UDP socket
+        let udp_fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
+        if udp_fd < 0 {
+            bail!("UDP socket() failed");
+        }
+
+        // Create sockaddr_in for binding
+        let mut server_addr: libc::sockaddr_in = std::mem::zeroed();
+        server_addr.sin_family = libc::AF_INET as u16;
+        server_addr.sin_port = 0u16.to_be(); // Let the OS choose port
+        server_addr.sin_addr.s_addr = u32::from_be_bytes([127, 0, 0, 1]).to_be(); // 127.0.0.1 in network byte order
+
+        let server_addr_ptr = &server_addr as *const libc::sockaddr_in as *const libc::sockaddr;
+
+        // Test bind() syscall
+        let bind_result = libc::bind(
+            sock_fd,
+            server_addr_ptr,
+            std::mem::size_of::<libc::sockaddr_in>() as u32,
+        );
+        if bind_result < 0 {
+            bail!("bind() failed");
+        }
+
+        // Test listen() syscall
+        let listen_result = libc::listen(sock_fd, 5);
+        if listen_result < 0 {
+            bail!("listen() failed");
+        }
+
+        // Get the actual port that was assigned
+        let mut actual_addr: libc::sockaddr_in = std::mem::zeroed();
+        let mut addr_len = std::mem::size_of::<libc::sockaddr_in>() as u32;
+        let getsockname_result = libc::getsockname(
+            sock_fd,
+            &mut actual_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+            &mut addr_len,
+        );
+        if getsockname_result < 0 {
+            bail!("getsockname() failed");
+        }
+
+        // Create client socket for connection test
+        let client_fd = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+        if client_fd < 0 {
+            bail!("client socket() failed");
+        }
+
+        // Test connect() syscall
+        let connect_result = libc::connect(
+            client_fd,
+            &actual_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+            std::mem::size_of::<libc::sockaddr_in>() as u32,
+        );
+        if connect_result < 0 {
+            bail!("connect() failed");
+        }
+
+        // Test shutdown() syscall with different modes
+        let shutdown_read = libc::shutdown(client_fd, libc::SHUT_RD);
+        if shutdown_read < 0 {
+            bail!("shutdown(SHUT_RD) failed");
+        }
+
+        let shutdown_write = libc::shutdown(client_fd, libc::SHUT_WR);
+        if shutdown_write < 0 {
+            bail!("shutdown(SHUT_WR) failed");
+        }
+
+        // Create another client for SHUT_RDWR test
+        let client_fd2 = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+        if client_fd2 < 0 {
+            bail!("second client socket() failed");
+        }
+
+        let connect_result2 = libc::connect(
+            client_fd2,
+            &actual_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+            std::mem::size_of::<libc::sockaddr_in>() as u32,
+        );
+        if connect_result2 < 0 {
+            bail!("second connect() failed");
+        }
+
+        let shutdown_rdwr = libc::shutdown(client_fd2, libc::SHUT_RDWR);
+        if shutdown_rdwr < 0 {
+            bail!("shutdown(SHUT_RDWR) failed");
+        }
+
+        // Clean up
+        libc::close(client_fd);
+        libc::close(client_fd2);
+        libc::close(sock_fd);
+        libc::close(udp_fd);
     }
 
     Ok(())

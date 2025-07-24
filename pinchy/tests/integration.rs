@@ -664,3 +664,78 @@ fn readv_writev_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn socket_lifecycle_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises socket lifecycle syscalls
+    let handle = run_workload(
+        &["socket", "bind", "connect", "listen", "shutdown"],
+        "socket_lifecycle_test",
+    );
+
+    // Expected output - we should see all socket lifecycle syscalls
+    // The exact addresses and file descriptors will vary, so we use regex patterns
+    let expected_output = escaped_regex(indoc! {r#"
+        PID socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = NUMBER (fd)
+        PID socket(domain: AF_INET, type: SOCK_DGRAM, protocol: 0) = NUMBER (fd)
+        PID bind(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:0 }, addrlen: 16) = 0 (success)
+        PID listen(sockfd: NUMBER, backlog: 5) = 0 (success)
+        PID socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = NUMBER (fd)
+        PID connect(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16) = 0 (success)
+        PID shutdown(sockfd: NUMBER, how: SHUT_RD) = 0 (success)
+        PID shutdown(sockfd: NUMBER, how: SHUT_WR) = 0 (success)
+        PID socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = NUMBER (fd)
+        PID connect(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16) = 0 (success)
+        PID shutdown(sockfd: NUMBER, how: SHUT_RDWR) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn accept_syscall() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises accept syscall
+    let handle = run_workload(&["accept"], "accept_test");
+
+    // Expected output - we should see accept call
+    // The exact addresses and file descriptors will vary, so we use regex patterns
+    let expected_output = escaped_regex(indoc! {r#"
+        PID accept(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16) = NUMBER (fd)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

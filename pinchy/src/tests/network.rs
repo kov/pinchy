@@ -5,8 +5,12 @@ use std::pin::Pin;
 
 use pinchy_common::{
     kernel_types::{Iovec, Msghdr, Sockaddr},
-    syscalls::{SYS_accept4, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg},
-    Accept4Data, RecvfromData, RecvmsgData, SendmsgData, SyscallEvent, SyscallEventData,
+    syscalls::{
+        SYS_accept, SYS_accept4, SYS_bind, SYS_connect, SYS_listen, SYS_recvfrom, SYS_recvmsg,
+        SYS_sendmsg, SYS_shutdown, SYS_socket,
+    },
+    Accept4Data, AcceptData, ListenData, RecvfromData, RecvmsgData, SendmsgData, ShutdownData,
+    SockaddrData, SocketData, SyscallEvent, SyscallEventData,
 };
 
 use crate::{
@@ -225,6 +229,80 @@ async fn parse_recvmsg_error() {
         format!(
             "555 recvmsg(sockfd: 3, msg: {{ name: NULL, iov: NULL, iovlen: 0, control: NULL, flags: 0 }}, flags: 0x2 (MSG_PEEK)) = -1 (error)\n"
         )
+    );
+}
+
+#[tokio::test]
+async fn parse_accept_success() {
+    // Test accept with AF_INET address (no flags)
+    let mut addr = Sockaddr {
+        sa_family: libc::AF_INET as u16,
+        ..Default::default()
+    };
+
+    addr.sa_data[0] = 0x00; // Port 80 in network byte order high byte
+    addr.sa_data[1] = 0x50; // Port 80 in network byte order low byte
+    addr.sa_data[2] = 192; // IP address 192.168.1.1
+    addr.sa_data[3] = 168;
+    addr.sa_data[4] = 1;
+    addr.sa_data[5] = 1;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_accept,
+        pid: 1000,
+        tid: 1234,
+        return_value: 4,
+        data: pinchy_common::SyscallEventData {
+            accept: AcceptData {
+                sockfd: 3,
+                has_addr: true,
+                addr,
+                addrlen: 16,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!(
+            "1234 accept(sockfd: 3, addr: {{ family: AF_INET, addr: 192.168.1.1:80 }}, addrlen: 16) = 4 (fd)\n"
+        )
+    );
+}
+
+#[tokio::test]
+async fn parse_accept_null_addr() {
+    // Test accept with NULL address
+    let event = SyscallEvent {
+        syscall_nr: SYS_accept,
+        pid: 1000,
+        tid: 999,
+        return_value: 5,
+        data: pinchy_common::SyscallEventData {
+            accept: AcceptData {
+                sockfd: 3,
+                has_addr: false,
+                addr: Sockaddr::default(),
+                addrlen: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        format!("999 accept(sockfd: 3, addr: NULL, addrlen: 0) = 5 (fd)\n")
     );
 }
 
@@ -967,5 +1045,400 @@ async fn test_recvfrom_failed() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "9999 recvfrom(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), src_addr: NULL, addrlen: 0) = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_bind_inet() {
+    // Test bind with AF_INET socket
+    let mut sockaddr = Sockaddr {
+        sa_family: libc::AF_INET as u16,
+        ..Default::default()
+    };
+
+    // Set up address 0.0.0.0:8080
+    sockaddr.sa_data[0] = 0x1f; // Port 8080 in network byte order (high byte)
+    sockaddr.sa_data[1] = 0x90; // Port 8080 in network byte order (low byte)
+    sockaddr.sa_data[2] = 0; // IP 0.0.0.0
+    sockaddr.sa_data[3] = 0;
+    sockaddr.sa_data[4] = 0;
+    sockaddr.sa_data[5] = 0;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_bind,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: SyscallEventData {
+            sockaddr: SockaddrData {
+                sockfd: 3,
+                addr: sockaddr,
+                addrlen: 16,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 bind(sockfd: 3, addr: { family: AF_INET, addr: 0.0.0.0:8080 }, addrlen: 16) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_connect_inet() {
+    // Test connect with AF_INET socket
+    let mut sockaddr = Sockaddr {
+        sa_family: libc::AF_INET as u16,
+        ..Default::default()
+    };
+
+    // Set up address 127.0.0.1:8080
+    sockaddr.sa_data[0] = 0x1f; // Port 8080 in network byte order (high byte)
+    sockaddr.sa_data[1] = 0x90; // Port 8080 in network byte order (low byte)
+    sockaddr.sa_data[2] = 127; // IP 127.0.0.1
+    sockaddr.sa_data[3] = 0;
+    sockaddr.sa_data[4] = 0;
+    sockaddr.sa_data[5] = 1;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_connect,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: SyscallEventData {
+            sockaddr: SockaddrData {
+                sockfd: 4,
+                addr: sockaddr,
+                addrlen: 16,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 connect(sockfd: 4, addr: { family: AF_INET, addr: 127.0.0.1:8080 }, addrlen: 16) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_bind_unix() {
+    // Test bind with AF_UNIX socket
+    let mut sockaddr = Sockaddr {
+        sa_family: libc::AF_UNIX as u16,
+        ..Default::default()
+    };
+
+    // Set up Unix socket path "/tmp/test.sock"
+    let path = b"/tmp/test.sock";
+    for (i, &byte) in path.iter().enumerate() {
+        if i < sockaddr.sa_data.len() {
+            sockaddr.sa_data[i] = byte;
+        }
+    }
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_bind,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: SyscallEventData {
+            sockaddr: SockaddrData {
+                sockfd: 3,
+                addr: sockaddr,
+                addrlen: 2 + path.len() as u32, // sa_family + path
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 bind(sockfd: 3, addr: { family: AF_UNIX, path: \"/tmp/test.sock\" }, addrlen: 16) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_connect_failed() {
+    // Test failed connect call
+    let mut sockaddr = Sockaddr {
+        sa_family: libc::AF_INET as u16,
+        ..Default::default()
+    };
+
+    // Set up address 192.168.1.100:443
+    sockaddr.sa_data[0] = 0x01; // Port 443 in network byte order (high byte)
+    sockaddr.sa_data[1] = 0xbb; // Port 443 in network byte order (low byte)
+    sockaddr.sa_data[2] = 192; // IP 192.168.1.100
+    sockaddr.sa_data[3] = 168;
+    sockaddr.sa_data[4] = 1;
+    sockaddr.sa_data[5] = 100;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_connect,
+        pid: 5678,
+        tid: 5678,
+        return_value: -1,
+        data: SyscallEventData {
+            sockaddr: SockaddrData {
+                sockfd: 5,
+                addr: sockaddr,
+                addrlen: 16,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "5678 connect(sockfd: 5, addr: { family: AF_INET, addr: 192.168.1.100:443 }, addrlen: 16) = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_socket_inet() {
+    // Test socket creation for AF_INET
+    let event = SyscallEvent {
+        syscall_nr: SYS_socket,
+        pid: 1234,
+        tid: 1234,
+        return_value: 3,
+        data: SyscallEventData {
+            socket: SocketData {
+                domain: libc::AF_INET,
+                type_: libc::SOCK_STREAM,
+                protocol: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = 3 (fd)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_socket_unix() {
+    // Test socket creation for AF_UNIX
+    let event = SyscallEvent {
+        syscall_nr: SYS_socket,
+        pid: 2345,
+        tid: 2345,
+        return_value: 4,
+        data: SyscallEventData {
+            socket: SocketData {
+                domain: libc::AF_UNIX,
+                type_: libc::SOCK_DGRAM,
+                protocol: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2345 socket(domain: AF_UNIX, type: SOCK_DGRAM, protocol: 0) = 4 (fd)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_socket_failed() {
+    // Test failed socket creation
+    let event = SyscallEvent {
+        syscall_nr: SYS_socket,
+        pid: 9999,
+        tid: 9999,
+        return_value: -1,
+        data: SyscallEventData {
+            socket: SocketData {
+                domain: libc::AF_INET6,
+                type_: libc::SOCK_RAW,
+                protocol: libc::IPPROTO_ICMP,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 socket(domain: AF_INET6, type: SOCK_RAW, protocol: 1) = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_listen_success() {
+    // Test successful listen
+    let event = SyscallEvent {
+        syscall_nr: SYS_listen,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: SyscallEventData {
+            listen: ListenData {
+                sockfd: 3,
+                backlog: 128,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 listen(sockfd: 3, backlog: 128) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_listen_failed() {
+    // Test failed listen
+    let event = SyscallEvent {
+        syscall_nr: SYS_listen,
+        pid: 5678,
+        tid: 5678,
+        return_value: -1,
+        data: SyscallEventData {
+            listen: ListenData {
+                sockfd: 7,
+                backlog: 50,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "5678 listen(sockfd: 7, backlog: 50) = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_shutdown_read() {
+    // Test shutdown for read
+    let event = SyscallEvent {
+        syscall_nr: SYS_shutdown,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: SyscallEventData {
+            shutdown: ShutdownData {
+                sockfd: 3,
+                how: libc::SHUT_RD,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 shutdown(sockfd: 3, how: SHUT_RD) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_shutdown_rdwr() {
+    // Test shutdown for read and write
+    let event = SyscallEvent {
+        syscall_nr: SYS_shutdown,
+        pid: 2345,
+        tid: 2345,
+        return_value: 0,
+        data: SyscallEventData {
+            shutdown: ShutdownData {
+                sockfd: 5,
+                how: libc::SHUT_RDWR,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2345 shutdown(sockfd: 5, how: SHUT_RDWR) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_shutdown_failed() {
+    // Test failed shutdown
+    let event = SyscallEvent {
+        syscall_nr: SYS_shutdown,
+        pid: 9999,
+        tid: 9999,
+        return_value: -1,
+        data: SyscallEventData {
+            shutdown: ShutdownData {
+                sockfd: 10,
+                how: libc::SHUT_WR,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 shutdown(sockfd: 10, how: SHUT_WR) = -1 (error)\n"
     );
 }

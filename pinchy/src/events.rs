@@ -15,10 +15,11 @@ use crate::{
         format_getrandom_flags, format_madvise_advice, format_mmap_flags, format_mmap_prot,
         format_mode, format_msghdr, format_path, format_prctl_op, format_priority_which,
         format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage, format_rusage_who,
-        format_sched_policy, format_sendmsg_flags, format_signal_number, format_sigprocmask_how,
-        format_sockaddr, format_stat, format_statfs, format_sysinfo, format_timespec,
-        format_timeval, format_timezone, format_tms, format_utsname, format_wait_options,
-        format_wait_status, format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
+        format_sched_policy, format_sendmsg_flags, format_shutdown_how, format_signal_number,
+        format_sigprocmask_how, format_sockaddr, format_socket_domain, format_socket_type,
+        format_stat, format_statfs, format_sysinfo, format_timespec, format_timeval,
+        format_timezone, format_tms, format_utsname, format_wait_options, format_wait_status,
+        format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -1064,6 +1065,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_accept => {
+            let data = unsafe { event.data.accept };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+
+            arg!(sf, "addr:");
+            if data.has_addr {
+                with_struct!(sf, {
+                    format_sockaddr(&mut sf, &data.addr).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "addrlen: {}", data.addrlen);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_accept4 => {
             let data = unsafe { event.data.accept4 };
 
@@ -1080,6 +1099,43 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "addrlen: {}", data.addrlen);
             argf!(sf, "flags: {}", format_accept4_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_bind | syscalls::SYS_connect => {
+            let data = unsafe { event.data.sockaddr };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            arg!(sf, "addr:");
+            with_struct!(sf, {
+                format_sockaddr(&mut sf, &data.addr).await?;
+            });
+            argf!(sf, "addrlen: {}", data.addrlen);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_socket => {
+            let data = unsafe { event.data.socket };
+
+            argf!(sf, "domain: {}", format_socket_domain(data.domain));
+            argf!(sf, "type: {}", format_socket_type(data.type_));
+            argf!(sf, "protocol: {}", data.protocol);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_listen => {
+            let data = unsafe { event.data.listen };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            argf!(sf, "backlog: {}", data.backlog);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_shutdown => {
+            let data = unsafe { event.data.shutdown };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            argf!(sf, "how: {}", format_shutdown_how(data.how));
 
             finish!(sf, event.return_value);
         }

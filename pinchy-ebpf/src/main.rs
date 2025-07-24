@@ -497,6 +497,32 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     sched_get_priority_min: pinchy_common::SchedGetPriorityMinData { policy },
                 }
             }
+            syscalls::SYS_socket => {
+                let domain = args[0] as i32;
+                let type_ = args[1] as i32;
+                let protocol = args[2] as i32;
+                pinchy_common::SyscallEventData {
+                    socket: pinchy_common::SocketData {
+                        domain,
+                        type_,
+                        protocol,
+                    },
+                }
+            }
+            syscalls::SYS_listen => {
+                let sockfd = args[0] as i32;
+                let backlog = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    listen: pinchy_common::ListenData { sockfd, backlog },
+                }
+            }
+            syscalls::SYS_shutdown => {
+                let sockfd = args[0] as i32;
+                let how = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    shutdown: pinchy_common::ShutdownData { sockfd, how },
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

@@ -416,18 +416,18 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     setreuid: pinchy_common::SetreuidData { ruid, euid },
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_alarm => {
                 let seconds = args[0] as u32;
                 pinchy_common::SyscallEventData {
                     alarm: pinchy_common::AlarmData { seconds },
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_pause => pinchy_common::SyscallEventData {
                 pause: pinchy_common::PauseData,
             },
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_getpgrp => pinchy_common::SyscallEventData {
                 getpgrp: pinchy_common::GetpgrpData,
             },

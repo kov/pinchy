@@ -17,10 +17,10 @@ pub fn read_timespec(ptr: *const Timespec) -> Timespec {
 }
 
 // Helper function to read timeval from userspace
-#[cfg(target_arch = "x86_64")]
+#[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 
-#[cfg(target_arch = "x86_64")]
+#[cfg(x86_64)]
 #[inline(always)]
 pub fn read_timeval(timeval_ptr: *const Timeval) -> Timeval {
     unsafe { bpf_probe_read_user::<Timeval>(timeval_ptr) }.unwrap_or_default()

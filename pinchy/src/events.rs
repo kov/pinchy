@@ -1096,6 +1096,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_chdir => {
+            let data = unsafe { event.data.chdir };
+
+            argf!(sf, "path: {}", format_path(&data.path, false));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_recvmsg => {
             let data = unsafe { event.data.recvmsg };
 

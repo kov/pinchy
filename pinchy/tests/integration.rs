@@ -739,3 +739,31 @@ fn accept_syscall() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn pselect6_syscall() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["pselect6"], "pselect6_test");
+
+    // Expected output - we should see two pselect6 calls:
+    // 1. One that times out (return 0)
+    // 2. One that finds a ready fd (return 1)
+    let expected_output = escaped_regex(indoc! {r#"
+        PID pselect6(nfds: 4, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, nanos: 0 }, sigmask: <present>) = 0 (timeout)
+        PID pselect6(nfds: 4, readfds: [ 3 ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, nanos: NUMBER }, sigmask: <present>) = 1 (ready)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

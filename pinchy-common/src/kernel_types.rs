@@ -295,3 +295,15 @@ impl Default for XattrList {
 pub struct SchedParam {
     pub sched_priority: i32,
 }
+
+/// File descriptor set for select/pselect operations
+/// fd_set is a bitmap representing file descriptors.
+/// We'll store the raw bytes and decode them in userspace for better eBPF compatibility.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct FdSet {
+    /// Raw bytes from the fd_set bitmap
+    pub bytes: [u8; 16], // 128 bits = 128 file descriptors
+    /// Number of bytes that are valid/meaningful
+    pub len: u32,
+}

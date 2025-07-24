@@ -67,6 +67,7 @@ fn main() -> anyhow::Result<()> {
             "scheduler_test" => scheduler_test(),
             "pread_pwrite_test" => pread_pwrite_test(),
             "readv_writev_test" => readv_writev_test(),
+            "pselect6_test" => pselect6_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -971,6 +972,90 @@ fn socket_lifecycle_test() -> anyhow::Result<()> {
         libc::close(client_fd2);
         libc::close(sock_fd);
         libc::close(udp_fd);
+    }
+
+    Ok(())
+}
+
+fn pselect6_test() -> anyhow::Result<()> {
+    unsafe {
+        // Create a pipe for the test
+        let mut pipe_fds = [0i32; 2];
+        let pipe_result = libc::pipe(pipe_fds.as_mut_ptr());
+        if pipe_result < 0 {
+            bail!("pipe() failed");
+        }
+
+        let read_fd = pipe_fds[0];
+        let write_fd = pipe_fds[1];
+
+        // Test pselect6 with timeout (should timeout)
+        let mut readfds: libc::fd_set = std::mem::zeroed();
+        libc::FD_ZERO(&mut readfds);
+        libc::FD_SET(read_fd, &mut readfds);
+
+        let timeout = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 100_000_000, // 100ms
+        };
+
+        let nfds = read_fd + 1;
+        let result = libc::pselect(
+            nfds,
+            &mut readfds,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &timeout,
+            std::ptr::null(),
+        );
+
+        // Should timeout (return 0)
+        if result != 0 {
+            bail!("pselect6 should have timed out, got: {}", result);
+        }
+
+        // Write some data to make fd ready
+        let test_data = b"test";
+        let write_result = libc::write(
+            write_fd,
+            test_data.as_ptr() as *const c_void,
+            test_data.len(),
+        );
+        if write_result < 0 {
+            bail!("write() failed");
+        }
+
+        // Test pselect6 with ready fd (should return immediately)
+        libc::FD_ZERO(&mut readfds);
+        libc::FD_SET(read_fd, &mut readfds);
+
+        let timeout2 = libc::timespec {
+            tv_sec: 1,
+            tv_nsec: 0,
+        };
+
+        let result2 = libc::pselect(
+            nfds,
+            &mut readfds,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            &timeout2,
+            std::ptr::null(),
+        );
+
+        // Should return 1 (one fd ready)
+        if result2 != 1 {
+            bail!("pselect6 should have found 1 ready fd, got: {}", result2);
+        }
+
+        // Verify the fd is still set
+        if !libc::FD_ISSET(read_fd, &readfds) {
+            bail!("read_fd should be set in readfds");
+        }
+
+        // Clean up
+        libc::close(read_fd);
+        libc::close(write_fd);
     }
 
     Ok(())

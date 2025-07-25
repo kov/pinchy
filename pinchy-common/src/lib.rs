@@ -127,6 +127,7 @@ pub union SyscallEventData {
     pub chdir: ChdirData,
     pub mkdirat: MkdiratData,
     pub nanosleep: NanosleepData,
+    pub clock_nanosleep: ClockNanosleepData,
 }
 
 #[repr(C)]
@@ -924,6 +925,16 @@ pub struct MkdiratData {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct NanosleepData {
+    pub req: Timespec,
+    pub rem: Timespec,
+    pub has_rem: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ClockNanosleepData {
+    pub clockid: i32,
+    pub flags: i32,
     pub req: Timespec,
     pub rem: Timespec,
     pub has_rem: bool,

@@ -258,6 +258,32 @@ fn fchdir_syscall() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn filesystem_sync_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["fsync", "fdatasync", "ftruncate"], "filesystem_sync_test");
+
+    let expected_output = escaped_regex(indoc! {r#"
+        PID fsync(fd: PID) = 0 (success)
+        PID fdatasync(fd: PID) = 0 (success)
+        PID ftruncate(fd: PID, length: 10) = 0 (success)
+        PID ftruncate(fd: PID, length: 50) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn network_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 

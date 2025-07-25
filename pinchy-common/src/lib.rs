@@ -131,6 +131,9 @@ pub union SyscallEventData {
     pub mkdirat: MkdiratData,
     pub nanosleep: NanosleepData,
     pub clock_nanosleep: ClockNanosleepData,
+    pub fsync: FsyncData,
+    pub fdatasync: FdatasyncData,
+    pub ftruncate: FtruncateData,
 }
 
 #[repr(C)]
@@ -961,4 +964,23 @@ pub struct ClockNanosleepData {
     pub req: Timespec,
     pub rem: Timespec,
     pub has_rem: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FsyncData {
+    pub fd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FdatasyncData {
+    pub fd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FtruncateData {
+    pub fd: i32,
+    pub length: i64,
 }

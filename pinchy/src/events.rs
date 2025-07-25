@@ -1128,6 +1128,22 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_fsync => {
+            let data = unsafe { event.data.fsync };
+            argf!(sf, "fd: {}", data.fd);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fdatasync => {
+            let data = unsafe { event.data.fdatasync };
+            argf!(sf, "fd: {}", data.fd);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_ftruncate => {
+            let data = unsafe { event.data.ftruncate };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "length: {}", data.length);
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_readlinkat => {
             let data = unsafe { event.data.readlinkat };
 

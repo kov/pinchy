@@ -68,6 +68,7 @@ fn main() -> anyhow::Result<()> {
             "pread_pwrite_test" => pread_pwrite_test(),
             "readv_writev_test" => readv_writev_test(),
             "pselect6_test" => pselect6_test(),
+            "filesystem_sync_test" => filesystem_sync_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1057,6 +1058,52 @@ fn pselect6_test() -> anyhow::Result<()> {
         libc::close(read_fd);
         libc::close(write_fd);
     }
+
+    Ok(())
+}
+
+fn filesystem_sync_test() -> anyhow::Result<()> {
+    use std::{fs::OpenOptions, io::Write, os::fd::AsRawFd};
+
+    // Create a temporary file for testing
+    let mut file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .truncate(true)
+        .open("test_sync_file.tmp")?;
+
+    let fd = file.as_raw_fd();
+
+    // Write some data to the file
+    file.write_all(b"Hello, fsync and fdatasync test!")?;
+
+    // Test fsync syscall
+    let result = unsafe { libc::fsync(fd) };
+    if result != 0 {
+        bail!("fsync failed with error: {}", result);
+    }
+
+    // Test fdatasync syscall
+    let result = unsafe { libc::fdatasync(fd) };
+    if result != 0 {
+        bail!("fdatasync failed with error: {}", result);
+    }
+
+    // Test ftruncate syscall - truncate to 10 bytes
+    let result = unsafe { libc::ftruncate(fd, 10) };
+    if result != 0 {
+        bail!("ftruncate failed with error: {}", result);
+    }
+
+    // Test ftruncate syscall - expand to 50 bytes
+    let result = unsafe { libc::ftruncate(fd, 50) };
+    if result != 0 {
+        bail!("ftruncate expand failed with error: {}", result);
+    }
+
+    // Clean up - the file will be closed when it goes out of scope
+    drop(file);
+    let _ = std::fs::remove_file("test_sync_file.tmp");
 
     Ok(())
 }

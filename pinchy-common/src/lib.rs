@@ -139,6 +139,7 @@ pub union SyscallEventData {
     pub fchown: FchownData,
     pub fchownat: FchownatData,
     pub chown: ChownData,
+    pub truncate: TruncateData,
 }
 
 #[repr(C)]
@@ -1054,4 +1055,11 @@ pub struct FchmodatData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub mode: u32,
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TruncateData {
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub length: i64,
 }

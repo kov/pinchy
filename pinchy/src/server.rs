@@ -396,6 +396,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fchmod,
         syscalls::SYS_fchmodat,
         syscalls::SYS_fchown,
+        syscalls::SYS_truncate,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

@@ -7,7 +7,7 @@ use pinchy_common::{
     syscalls::{
         SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
         SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
-        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
+        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs, SYS_truncate,
     },
     FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData,
     FtruncateData, MkdiratData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
@@ -1008,5 +1008,36 @@ async fn parse_lchown() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "3001 lchown(pathname: \"/var/log\", uid: 2000, gid: 2000) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_truncate() {
+    let path = b"/tmp/testfile\0";
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    pathname[0..path.len()].copy_from_slice(path);
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_truncate,
+        pid: 123,
+        tid: 123,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            truncate: pinchy_common::TruncateData {
+                pathname,
+                length: 1024,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 truncate(pathname: \"/tmp/testfile\", length: 1024) = 0 (success)\n"
     );
 }

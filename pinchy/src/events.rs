@@ -339,6 +339,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_nanosleep => {
+            let data = unsafe { event.data.nanosleep };
+
+            arg!(sf, "req:");
+            format_timespec(&mut sf, data.req).await?;
+
+            arg!(sf, "rem:");
+            if data.has_rem {
+                format_timespec(&mut sf, data.rem).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getpriority => {
             let data = unsafe { event.data.getpriority };
 

@@ -7,8 +7,11 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 use pinchy_common::{
-    kernel_types::{Sysinfo, Timeval, Timezone, Tms, Utsname},
-    syscalls::{SYS_gettimeofday, SYS_ioctl, SYS_settimeofday, SYS_sysinfo, SYS_times, SYS_uname},
+    kernel_types::{Sysinfo, Timespec, Timeval, Timezone, Tms, Utsname},
+    syscalls::{
+        SYS_gettimeofday, SYS_ioctl, SYS_nanosleep, SYS_settimeofday, SYS_sysinfo, SYS_times,
+        SYS_uname,
+    },
 };
 
 use crate::util::{get_args, get_return_value, output_event};
@@ -301,6 +304,52 @@ pub fn syscall_exit_times(ctx: TracePointContext) -> u32 {
             },
         )
     }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_nanosleep(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_nanosleep;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let req_ptr = args[0] as *const Timespec;
+        let rem_ptr = args[1] as *const Timespec;
+
+        let mut req = Timespec::default();
+        let mut rem = Timespec::default();
+        let mut has_rem = false;
+
+        // Read the request timespec if pointer is valid
+        if !req_ptr.is_null() {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timespec>(req_ptr) } {
+                req = data;
+            }
+        }
+
+        // Read the remaining timespec if pointer is valid and syscall was interrupted (EINTR)
+        if !rem_ptr.is_null() && return_value == -4 {
+            // -4 is EINTR (interrupted system call)
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timespec>(rem_ptr) } {
+                rem = data;
+                has_rem = true;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                nanosleep: pinchy_common::NanosleepData { req, rem, has_rem },
+            },
+        )
+    }
+
     match inner(ctx) {
         Ok(_) => 0,
         Err(ret) => ret,

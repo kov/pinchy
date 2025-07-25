@@ -126,6 +126,7 @@ pub union SyscallEventData {
     pub getcwd: GetcwdData,
     pub chdir: ChdirData,
     pub mkdirat: MkdiratData,
+    pub nanosleep: NanosleepData,
 }
 
 #[repr(C)]
@@ -918,4 +919,12 @@ pub struct MkdiratData {
     pub dirfd: i32,
     pub pathname: [u8; DATA_READ_SIZE],
     pub mode: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct NanosleepData {
+    pub req: Timespec,
+    pub rem: Timespec,
+    pub has_rem: bool,
 }

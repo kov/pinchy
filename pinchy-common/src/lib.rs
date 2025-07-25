@@ -136,10 +136,63 @@ pub union SyscallEventData {
     pub ftruncate: FtruncateData,
     pub fchmod: FchmodData,
     pub fchmodat: FchmodatData,
+    pub fchown: FchownData,
+    pub fchownat: FchownatData,
+    pub chown: ChownData,
 }
 
 #[repr(C)]
-#[derive(Copy, Clone)]
+#[derive(Debug, Clone, Copy)]
+#[derive(Default)]
+pub struct FchownData {
+    pub fd: i32,
+    pub uid: u32,
+    pub gid: u32,
+}
+
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct FchownatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub uid: u32,
+    pub gid: u32,
+    pub flags: i32,
+}
+
+impl Default for FchownatData {
+    fn default() -> Self {
+        Self {
+            dirfd: 0,
+            pathname: [0; DATA_READ_SIZE],
+            uid: 0,
+            gid: 0,
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy)]
+pub struct ChownData {
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub uid: u32,
+    pub gid: u32,
+}
+
+impl Default for ChownData {
+    fn default() -> Self {
+        Self {
+            pathname: [0; DATA_READ_SIZE],
+            uid: 0,
+            gid: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
 pub struct Pipe2Data {
     pub pipefd: [i32; 2],
     pub flags: i32,

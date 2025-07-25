@@ -10,6 +10,7 @@ pub mod syscalls;
 
 pub const DATA_READ_SIZE: usize = 128;
 pub const MEDIUM_READ_SIZE: usize = 64;
+pub const SMALLISH_READ_SIZE: usize = 32;
 pub const SMALL_READ_SIZE: usize = 8;
 
 #[repr(C)]
@@ -140,17 +141,18 @@ pub union SyscallEventData {
     pub fchownat: FchownatData,
     pub chown: ChownData,
     pub truncate: TruncateData,
+    pub rename: RenameData,
+    pub renameat: RenameatData,
+    pub renameat2: Renameat2Data,
 }
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy)]
-#[derive(Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct FchownData {
     pub fd: i32,
     pub uid: u32,
     pub gid: u32,
 }
-
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
@@ -1055,6 +1057,32 @@ pub struct FchmodatData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub mode: u32,
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RenameData {
+    pub oldpath: [u8; SMALLISH_READ_SIZE],
+    pub newpath: [u8; SMALLISH_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RenameatData {
+    pub olddirfd: i32,
+    pub oldpath: [u8; SMALLISH_READ_SIZE],
+    pub newdirfd: i32,
+    pub newpath: [u8; SMALLISH_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Renameat2Data {
+    pub olddirfd: i32,
+    pub oldpath: [u8; SMALLISH_READ_SIZE],
+    pub newdirfd: i32,
+    pub newpath: [u8; SMALLISH_READ_SIZE],
+    pub flags: u32,
 }
 
 #[repr(C)]

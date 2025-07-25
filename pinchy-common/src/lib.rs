@@ -82,6 +82,7 @@ pub union SyscallEventData {
     pub llistxattr: LlistxattrData,
     pub madvise: MadviseData,
     pub dup: DupData,
+    pub dup2: Dup2Data,
     pub sync: SyncData,
     pub setsid: SetsidData,
     pub setuid: SetuidData,
@@ -677,6 +678,13 @@ pub struct MadviseData {
 #[derive(Clone, Copy)]
 pub struct DupData {
     pub oldfd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Dup2Data {
+    pub oldfd: i32,
+    pub newfd: i32,
 }
 
 #[repr(C)]

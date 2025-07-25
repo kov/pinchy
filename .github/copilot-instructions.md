@@ -7,6 +7,8 @@
   immediately followed by a closing brace or another control flow
   statement. There should be no blank line after #[] decorators.
   There should be no blank line between branches of a match statement.
+  Ignore the blank lines style rule when acting as a reviewer, it is only
+  important when generating code.
 - This applies to all Rust code, including eBPF handlers, event parsing,
   and helpers.
 - Do not add unnecessary comments. Never add comments that describe the

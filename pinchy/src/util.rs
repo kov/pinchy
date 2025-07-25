@@ -1996,8 +1996,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_brk => std::borrow::Cow::Owned(format!("0x{return_value:x}")),
 
         // Memory/protection syscalls that return 0 on success
-        syscalls::SYS_munmap | syscalls::SYS_mprotect | syscalls::SYS_madvise => match return_value
-        {
+        syscalls::SYS_munmap
+        | syscalls::SYS_mprotect
+        | syscalls::SYS_madvise
+        | syscalls::SYS_nanosleep
+        | syscalls::SYS_clock_nanosleep => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },

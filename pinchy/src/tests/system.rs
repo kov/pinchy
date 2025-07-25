@@ -28,12 +28,13 @@ use std::pin::Pin;
 use pinchy_common::{
     kernel_types::Utsname,
     syscalls::{
-        SYS_getrandom, SYS_gettimeofday, SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set,
+        SYS_getrandom, SYS_gettimeofday, SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep,
         SYS_personality, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname,
         SYS_vhangup,
     },
-    GettimeofdayData, IoctlData, IoprioGetData, IoprioSetData, PersonalityData, SettimeofdayData,
-    SyncData, SyscallEvent, SysinfoData, TimesData, UmaskData, UnameData, VhangupData,
+    GettimeofdayData, IoctlData, IoprioGetData, IoprioSetData, NanosleepData, PersonalityData,
+    SettimeofdayData, SyncData, SyscallEvent, SysinfoData, TimesData, UmaskData, UnameData,
+    VhangupData,
 };
 
 use crate::{
@@ -655,5 +656,107 @@ async fn parse_setfsgid_root() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "9999 setfsgid(gid: 0) = 1001\n"
+    );
+}
+
+#[tokio::test]
+async fn test_nanosleep_success() {
+    use pinchy_common::kernel_types::Timespec;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_nanosleep,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0, // Success
+        data: pinchy_common::SyscallEventData {
+            nanosleep: NanosleepData {
+                req: Timespec {
+                    seconds: 2,
+                    nanos: 500_000_000, // 2.5 seconds
+                },
+                rem: Timespec::default(), // Not used when successful
+                has_rem: false,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 nanosleep(req: { secs: 2, nanos: 500000000 }, rem: NULL) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_nanosleep_interrupted() {
+    use pinchy_common::kernel_types::Timespec;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_nanosleep,
+        pid: 5678,
+        tid: 5678,
+        return_value: -4, // EINTR (interrupted)
+        data: pinchy_common::SyscallEventData {
+            nanosleep: NanosleepData {
+                req: Timespec {
+                    seconds: 10,
+                    nanos: 0, // 10 seconds requested
+                },
+                rem: Timespec {
+                    seconds: 7,
+                    nanos: 250_000_000, // 7.25 seconds remaining
+                },
+                has_rem: true,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "5678 nanosleep(req: { secs: 10, nanos: 0 }, rem: { secs: 7, nanos: 250000000 }) = -4 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_nanosleep_zero_time() {
+    use pinchy_common::kernel_types::Timespec;
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_nanosleep,
+        pid: 9999,
+        tid: 9999,
+        return_value: 0, // Success (immediately returns)
+        data: pinchy_common::SyscallEventData {
+            nanosleep: NanosleepData {
+                req: Timespec {
+                    seconds: 0,
+                    nanos: 0, // Zero sleep time
+                },
+                rem: Timespec::default(),
+                has_rem: false,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 nanosleep(req: { secs: 0, nanos: 0 }, rem: NULL) = 0 (success)\n"
     );
 }

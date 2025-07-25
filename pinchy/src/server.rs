@@ -438,6 +438,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_llistxattr", syscalls::SYS_llistxattr),
         ("syscall_exit_gettimeofday", syscalls::SYS_gettimeofday),
         ("syscall_exit_settimeofday", syscalls::SYS_settimeofday),
+        ("syscall_exit_nanosleep", syscalls::SYS_nanosleep),
         ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
         ("syscall_exit_times", syscalls::SYS_times),
         ("syscall_exit_readv", syscalls::SYS_readv),

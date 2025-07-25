@@ -135,6 +135,7 @@ pub union SyscallEventData {
     pub fdatasync: FdatasyncData,
     pub ftruncate: FtruncateData,
     pub fchmod: FchmodData,
+    pub fchmodat: FchmodatData,
 }
 
 #[repr(C)]
@@ -991,4 +992,13 @@ pub struct FtruncateData {
 pub struct FchmodData {
     pub fd: i32,
     pub mode: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FchmodatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub mode: u32,
+    pub flags: i32,
 }

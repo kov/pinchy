@@ -513,3 +513,40 @@ pub fn syscall_exit_fchmod(ctx: TracePointContext) -> u32 {
         Err(ret) => ret,
     }
 }
+
+#[tracepoint]
+pub fn syscall_exit_fchmodat(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_fchmodat;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let dirfd = args[0] as i32;
+        let pathname_ptr = args[1] as *const u8;
+        let mode = args[2] as u32;
+        let flags = args[3] as i32;
+
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        unsafe {
+            let _ = bpf_probe_read_buf(pathname_ptr, &mut pathname);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                fchmodat: pinchy_common::FchmodatData {
+                    dirfd,
+                    pathname,
+                    mode,
+                    flags,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}

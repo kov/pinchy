@@ -5,12 +5,12 @@ use std::pin::Pin;
 
 use pinchy_common::{
     syscalls::{
-        SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fdatasync, SYS_fstat, SYS_fsync,
-        SYS_ftruncate, SYS_getcwd, SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat,
-        SYS_statfs,
+        SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
+        SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
+        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
     },
-    FaccessatData, FchmodData, FchmodatData, FdatasyncData, FsyncData, FtruncateData, MkdiratData,
-    SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
+    FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData,
+    FtruncateData, MkdiratData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
 
 use crate::{
@@ -880,5 +880,133 @@ async fn parse_fchmodat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: 0) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_fchown_syscall() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_fchown,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fchown: FchownData {
+                fd: 3,
+                uid: 1000,
+                gid: 1000,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 fchown(fd: 3, uid: 1000, gid: 1000) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn test_fchownat_syscall() {
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    let path = b"/etc/passwd";
+    pathname[0..path.len()].copy_from_slice(path);
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_fchownat,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fchownat: FchownatData {
+                dirfd: libc::AT_FDCWD,
+                pathname,
+                uid: 1000,
+                gid: 1000,
+                flags: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 fchownat(dirfd: AT_FDCWD, pathname: \"/etc/passwd\", uid: 1000, gid: 1000, flags: 0) = 0 (success)\n"
+    );
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn parse_chown() {
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    let path = b"/home/user";
+    pathname[0..path.len()].copy_from_slice(path);
+
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_chown,
+        pid: 2000,
+        tid: 2001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            chown: pinchy_common::ChownData {
+                pathname,
+                uid: 1000,
+                gid: 1000,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "2001 chown(pathname: \"/home/user\", uid: 1000, gid: 1000) = 0 (success)\n"
+    );
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn parse_lchown() {
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    let path = b"/var/log";
+    pathname[0..path.len()].copy_from_slice(path);
+
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_lchown,
+        pid: 3000,
+        tid: 3001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            chown: pinchy_common::ChownData {
+                pathname,
+                uid: 2000,
+                gid: 2000,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "3001 lchown(pathname: \"/var/log\", uid: 2000, gid: 2000) = 0 (success)\n"
     );
 }

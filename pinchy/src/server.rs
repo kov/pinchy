@@ -395,6 +395,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_ftruncate,
         syscalls::SYS_fchmod,
         syscalls::SYS_fchmodat,
+        syscalls::SYS_fchown,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -466,6 +467,11 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_pselect6", syscalls::SYS_pselect6),
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_select", syscalls::SYS_select),
+        ("syscall_exit_fchownat", syscalls::SYS_fchownat),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_chown", syscalls::SYS_chown),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_lchown", syscalls::SYS_lchown),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

@@ -563,6 +563,14 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     ftruncate: pinchy_common::FtruncateData { fd, length },
                 }
             }
+            syscalls::SYS_fchown => {
+                let fd = args[0] as i32;
+                let uid = args[1] as u32;
+                let gid = args[2] as u32;
+                pinchy_common::SyscallEventData {
+                    fchown: pinchy_common::FchownData { fd, uid, gid },
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

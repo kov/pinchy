@@ -378,6 +378,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_setpriority,
         syscalls::SYS_tkill,
         syscalls::SYS_tgkill,
+        syscalls::SYS_kill,
+        syscalls::SYS_exit,
         syscalls::SYS_sched_getscheduler,
         syscalls::SYS_setfsuid,
         syscalls::SYS_setfsgid,

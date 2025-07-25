@@ -110,6 +110,8 @@ pub union SyscallEventData {
     pub setpriority: SetpriorityData,
     pub tkill: TkillData,
     pub tgkill: TgkillData,
+    pub kill: KillData,
+    pub exit: ExitData,
     pub sched_getscheduler: SchedGetschedulerData,
     pub sched_setscheduler: SchedSetschedulerData,
     pub setfsuid: SetfsuidData,
@@ -859,6 +861,19 @@ pub struct TgkillData {
     pub tgid: i32,
     pub pid: i32,
     pub signal: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KillData {
+    pub pid: i32,
+    pub signal: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExitData {
+    pub status: i32,
 }
 
 #[repr(C)]

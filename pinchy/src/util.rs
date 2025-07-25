@@ -2016,6 +2016,16 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_alarm => std::borrow::Cow::Owned(return_value.to_string()),
 
+        // Process-related syscalls - show success or error
+        syscalls::SYS_kill
+        | syscalls::SYS_tkill
+        | syscalls::SYS_tgkill
+        | syscalls::SYS_exit
+        | syscalls::SYS_exit_group => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
         // Default case - just show the raw value with error indication if negative
         _ => {
             if return_value < 0 {

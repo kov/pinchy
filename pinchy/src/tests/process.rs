@@ -1146,3 +1146,51 @@ async fn test_getpgrp() {
     let result = String::from_utf8_lossy(&output);
     assert_eq!(result, "1001 getpgrp() = 1001 (pid)\n");
 }
+
+#[tokio::test]
+async fn parse_exit() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_exit,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            exit: pinchy_common::ExitData { status: 42 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 exit(status: 42) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_exit_with_zero() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_exit,
+        pid: 9999,
+        tid: 9999,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            exit: pinchy_common::ExitData { status: 0 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 exit(status: 0) = 0 (success)\n"
+    );
+}

@@ -228,7 +228,7 @@ async fn parse_tkill() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "1234 tkill(pid: 5678, sig: SIGTERM) = 0\n"
+        "1234 tkill(pid: 5678, sig: SIGTERM) = 0 (success)\n"
     );
 }
 
@@ -255,7 +255,7 @@ async fn parse_tkill_with_sigusr1() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "9999 tkill(pid: 1111, sig: SIGUSR1) = 0\n"
+        "9999 tkill(pid: 1111, sig: SIGUSR1) = 0 (success)\n"
     );
 }
 
@@ -283,7 +283,7 @@ async fn parse_tgkill() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "2468 tgkill(tgid: 1357, pid: 2468, sig: SIGKILL) = 0\n"
+        "2468 tgkill(tgid: 1357, pid: 2468, sig: SIGKILL) = 0 (success)\n"
     );
 }
 
@@ -312,5 +312,59 @@ async fn parse_tgkill_error() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "1111 tgkill(tgid: 9999, pid: 8888, sig: SIGTERM) = -3 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_kill() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_kill,
+        pid: 1234,
+        tid: 1234,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            kill: pinchy_common::KillData {
+                pid: 5678,
+                signal: libc::SIGTERM,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1234 kill(pid: 5678, sig: SIGTERM) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_kill_with_sigkill() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_kill,
+        pid: 9999,
+        tid: 9999,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            kill: pinchy_common::KillData {
+                pid: 1111,
+                signal: libc::SIGKILL,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "9999 kill(pid: 1111, sig: SIGKILL) = 0 (success)\n"
     );
 }

@@ -9,8 +9,8 @@ use aya_ebpf::{
 use pinchy_common::{
     kernel_types::{Sysinfo, Timespec, Timeval, Timezone, Tms, Utsname},
     syscalls::{
-        SYS_gettimeofday, SYS_ioctl, SYS_nanosleep, SYS_settimeofday, SYS_sysinfo, SYS_times,
-        SYS_uname,
+        SYS_clock_nanosleep, SYS_gettimeofday, SYS_ioctl, SYS_nanosleep, SYS_settimeofday,
+        SYS_sysinfo, SYS_times, SYS_uname,
     },
 };
 
@@ -346,6 +346,62 @@ pub fn syscall_exit_nanosleep(ctx: TracePointContext) -> u32 {
             return_value,
             pinchy_common::SyscallEventData {
                 nanosleep: pinchy_common::NanosleepData { req, rem, has_rem },
+            },
+        )
+    }
+
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_clock_nanosleep(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_clock_nanosleep;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let clockid = args[0] as i32;
+        let flags = args[1] as i32;
+        let req_ptr = args[2] as *const Timespec;
+        let rem_ptr = args[3] as *const Timespec;
+
+        let mut req = Timespec::default();
+        let mut rem = Timespec::default();
+        let mut has_rem = false;
+
+        // Read the request timespec if pointer is valid
+        if !req_ptr.is_null() {
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timespec>(req_ptr) } {
+                req = data;
+            }
+        }
+
+        // Read the remaining timespec if pointer is valid, syscall was interrupted (EINTR),
+        // and it's a relative sleep (flags == 0)
+        if !rem_ptr.is_null() && return_value == -4 && flags == 0 {
+            // -4 is EINTR (interrupted system call)
+            // Only relative sleeps (flags == 0) set the remaining time
+            if let Ok(data) = unsafe { bpf_probe_read_user::<Timespec>(rem_ptr) } {
+                rem = data;
+                has_rem = true;
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                clock_nanosleep: pinchy_common::ClockNanosleepData {
+                    clockid,
+                    flags,
+                    req,
+                    rem,
+                    has_rem,
+                },
             },
         )
     }

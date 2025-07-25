@@ -2027,6 +2027,36 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
     }
 }
 
+pub fn format_clockid(clockid: i32) -> Cow<'static, str> {
+    match clockid {
+        libc::CLOCK_REALTIME => Cow::Borrowed("CLOCK_REALTIME"),
+        libc::CLOCK_MONOTONIC => Cow::Borrowed("CLOCK_MONOTONIC"),
+        libc::CLOCK_PROCESS_CPUTIME_ID => Cow::Borrowed("CLOCK_PROCESS_CPUTIME_ID"),
+        libc::CLOCK_THREAD_CPUTIME_ID => Cow::Borrowed("CLOCK_THREAD_CPUTIME_ID"),
+        #[cfg(target_os = "linux")]
+        libc::CLOCK_MONOTONIC_RAW => Cow::Borrowed("CLOCK_MONOTONIC_RAW"),
+        #[cfg(target_os = "linux")]
+        libc::CLOCK_REALTIME_COARSE => Cow::Borrowed("CLOCK_REALTIME_COARSE"),
+        #[cfg(target_os = "linux")]
+        libc::CLOCK_MONOTONIC_COARSE => Cow::Borrowed("CLOCK_MONOTONIC_COARSE"),
+        #[cfg(target_os = "linux")]
+        libc::CLOCK_BOOTTIME => Cow::Borrowed("CLOCK_BOOTTIME"),
+        #[cfg(target_os = "linux")]
+        libc::CLOCK_REALTIME_ALARM => Cow::Borrowed("CLOCK_REALTIME_ALARM"),
+        #[cfg(target_os = "linux")]
+        libc::CLOCK_BOOTTIME_ALARM => Cow::Borrowed("CLOCK_BOOTTIME_ALARM"),
+        _ => Cow::Owned(format!("{clockid}")),
+    }
+}
+
+pub fn format_clock_nanosleep_flags(flags: i32) -> &'static str {
+    match flags {
+        0 => "0",
+        libc::TIMER_ABSTIME => "TIMER_ABSTIME",
+        _ => "UNKNOWN",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

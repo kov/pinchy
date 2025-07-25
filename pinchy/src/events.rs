@@ -11,15 +11,16 @@ use crate::{
     raw,
     util::{
         format_accept4_flags, format_access_mode, format_at_flags, format_bytes,
-        format_clone_flags, format_dirfd, format_dup3_flags, format_fcntl_cmd, format_fdset,
-        format_flags, format_getrandom_flags, format_madvise_advice, format_mmap_flags,
-        format_mmap_prot, format_mode, format_msghdr, format_path, format_prctl_op,
-        format_priority_which, format_recvmsg_flags, format_rseq, format_rseq_flags, format_rusage,
-        format_rusage_who, format_sched_policy, format_sendmsg_flags, format_shutdown_how,
-        format_signal_number, format_sigprocmask_how, format_sockaddr, format_socket_domain,
-        format_socket_type, format_stat, format_statfs, format_sysinfo, format_timespec,
-        format_timeval, format_timezone, format_tms, format_utsname, format_wait_options,
-        format_wait_status, format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
+        format_clock_nanosleep_flags, format_clockid, format_clone_flags, format_dirfd,
+        format_dup3_flags, format_fcntl_cmd, format_fdset, format_flags, format_getrandom_flags,
+        format_madvise_advice, format_mmap_flags, format_mmap_prot, format_mode, format_msghdr,
+        format_path, format_prctl_op, format_priority_which, format_recvmsg_flags, format_rseq,
+        format_rseq_flags, format_rusage, format_rusage_who, format_sched_policy,
+        format_sendmsg_flags, format_shutdown_how, format_signal_number, format_sigprocmask_how,
+        format_sockaddr, format_socket_domain, format_socket_type, format_stat, format_statfs,
+        format_sysinfo, format_timespec, format_timeval, format_timezone, format_tms,
+        format_utsname, format_wait_options, format_wait_status, format_xattr_list,
+        poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -341,6 +342,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         }
         syscalls::SYS_nanosleep => {
             let data = unsafe { event.data.nanosleep };
+
+            arg!(sf, "req:");
+            format_timespec(&mut sf, data.req).await?;
+
+            arg!(sf, "rem:");
+            if data.has_rem {
+                format_timespec(&mut sf, data.rem).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_clock_nanosleep => {
+            let data = unsafe { event.data.clock_nanosleep };
+
+            argf!(sf, "clockid: {}", format_clockid(data.clockid));
+            argf!(sf, "flags: {}", format_clock_nanosleep_flags(data.flags));
 
             arg!(sf, "req:");
             format_timespec(&mut sf, data.req).await?;

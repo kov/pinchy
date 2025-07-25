@@ -14,13 +14,13 @@ use crate::{
         format_clock_nanosleep_flags, format_clockid, format_clone_flags, format_dirfd,
         format_dup3_flags, format_fcntl_cmd, format_fdset, format_flags, format_getrandom_flags,
         format_madvise_advice, format_mmap_flags, format_mmap_prot, format_mode, format_msghdr,
-        format_path, format_prctl_op, format_priority_which, format_recvmsg_flags, format_rseq,
-        format_rseq_flags, format_rusage, format_rusage_who, format_sched_policy,
-        format_sendmsg_flags, format_shutdown_how, format_signal_number, format_sigprocmask_how,
-        format_sockaddr, format_socket_domain, format_socket_type, format_stat, format_statfs,
-        format_sysinfo, format_timespec, format_timeval, format_timezone, format_tms,
-        format_utsname, format_wait_options, format_wait_status, format_xattr_list,
-        poll_bits_to_strs, prctl_op_arg_count,
+        format_path, format_prctl_op, format_priority_which, format_recvmsg_flags,
+        format_renameat2_flags, format_rseq, format_rseq_flags, format_rusage, format_rusage_who,
+        format_sched_policy, format_sendmsg_flags, format_shutdown_how, format_signal_number,
+        format_sigprocmask_how, format_sockaddr, format_socket_domain, format_socket_type,
+        format_stat, format_statfs, format_sysinfo, format_timespec, format_timeval,
+        format_timezone, format_tms, format_utsname, format_wait_options, format_wait_status,
+        format_xattr_list, poll_bits_to_strs, prctl_op_arg_count,
     },
     with_array, with_struct,
 };
@@ -1447,6 +1447,30 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let data = unsafe { event.data.truncate };
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "length: {}", data.length);
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_rename => {
+            let data = unsafe { event.data.rename };
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_renameat => {
+            let data = unsafe { event.data.renameat };
+            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_renameat2 => {
+            let data = unsafe { event.data.renameat2 };
+            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            argf!(sf, "flags: {}", format_renameat2_flags(data.flags));
             finish!(sf, event.return_value);
         }
         _ => {

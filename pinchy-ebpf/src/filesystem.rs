@@ -683,3 +683,116 @@ pub fn syscall_exit_truncate(ctx: TracePointContext) -> u32 {
         Err(ret) => ret,
     }
 }
+
+#[cfg(x86_64)]
+#[tracepoint]
+pub fn syscall_exit_rename(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_rename;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let oldpath_ptr = args[0] as *const u8;
+        let newpath_ptr = args[1] as *const u8;
+
+        let mut oldpath = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        unsafe {
+            let _ = bpf_probe_read_buf(oldpath_ptr, &mut oldpath);
+            let _ = bpf_probe_read_buf(newpath_ptr, &mut newpath);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                rename: pinchy_common::RenameData { oldpath, newpath },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_renameat(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_renameat;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let olddirfd = args[0] as i32;
+        let oldpath_ptr = args[1] as *const u8;
+        let newdirfd = args[2] as i32;
+        let newpath_ptr = args[3] as *const u8;
+
+        let mut oldpath = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        unsafe {
+            let _ = bpf_probe_read_buf(oldpath_ptr, &mut oldpath);
+            let _ = bpf_probe_read_buf(newpath_ptr, &mut newpath);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                renameat: pinchy_common::RenameatData {
+                    olddirfd,
+                    oldpath,
+                    newdirfd,
+                    newpath,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_exit_renameat2(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_renameat2;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let olddirfd = args[0] as i32;
+        let oldpath_ptr = args[1] as *const u8;
+        let newdirfd = args[2] as i32;
+        let newpath_ptr = args[3] as *const u8;
+        let flags = args[4] as u32;
+
+        let mut oldpath = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        unsafe {
+            let _ = bpf_probe_read_buf(oldpath_ptr, &mut oldpath);
+            let _ = bpf_probe_read_buf(newpath_ptr, &mut newpath);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                renameat2: pinchy_common::Renameat2Data {
+                    olddirfd,
+                    oldpath,
+                    newdirfd,
+                    newpath,
+                    flags,
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}

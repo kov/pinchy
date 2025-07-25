@@ -7,10 +7,12 @@ use pinchy_common::{
     syscalls::{
         SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
         SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
-        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs, SYS_truncate,
+        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
+        SYS_truncate,
     },
     FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData,
-    FtruncateData, MkdiratData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
+    FtruncateData, MkdiratData, Renameat2Data, RenameatData, SyscallEvent, DATA_READ_SIZE,
+    MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
 use crate::{
@@ -1039,5 +1041,104 @@ async fn parse_truncate() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "123 truncate(pathname: \"/tmp/testfile\", length: 1024) = 0 (success)\n"
+    );
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn parse_rename() {
+    let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+    let mut newpath = [0u8; SMALLISH_READ_SIZE];
+    oldpath[..10].copy_from_slice(b"/old/path\0");
+    newpath[..10].copy_from_slice(b"/new/path\0");
+
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_rename,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            rename: pinchy_common::RenameData { oldpath, newpath },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 rename(oldpath: \"/old/path\", newpath: \"/new/path\") = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_renameat() {
+    let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+    let mut newpath = [0u8; SMALLISH_READ_SIZE];
+    oldpath[..10].copy_from_slice(b"/old/path\0");
+    newpath[..10].copy_from_slice(b"/new/path\0");
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_renameat,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            renameat: RenameatData {
+                olddirfd: libc::AT_FDCWD,
+                oldpath,
+                newdirfd: libc::AT_FDCWD,
+                newpath,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 renameat(olddirfd: AT_FDCWD, oldpath: \"/old/path\", newdirfd: AT_FDCWD, newpath: \"/new/path\") = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_renameat2() {
+    let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+    let mut newpath = [0u8; SMALLISH_READ_SIZE];
+    oldpath[..10].copy_from_slice(b"/old/path\0");
+    newpath[..10].copy_from_slice(b"/new/path\0");
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_renameat2,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            renameat2: Renameat2Data {
+                olddirfd: libc::AT_FDCWD,
+                oldpath,
+                newdirfd: libc::AT_FDCWD,
+                newpath,
+                flags: libc::RENAME_NOREPLACE,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 renameat2(olddirfd: AT_FDCWD, oldpath: \"/old/path\", newdirfd: AT_FDCWD, newpath: \"/new/path\", flags: 0x1 (RENAME_NOREPLACE)) = 0 (success)\n"
     );
 }

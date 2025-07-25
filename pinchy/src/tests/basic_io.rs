@@ -16,6 +16,12 @@ use pinchy_common::{
     DATA_READ_SIZE,
 };
 
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::{
+    syscalls::SYS_dup2,
+    Dup2Data,
+};
+
 use crate::{
     events::handle_event,
     formatting::{Formatter, FormattingStyle},
@@ -514,6 +520,31 @@ async fn parse_dup() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "1 dup(oldfd: 3) = 4 (fd)\n"
+    );
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn parse_dup2() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_dup2,
+        pid: 1,
+        tid: 1,
+        return_value: 5, // new fd
+        data: pinchy_common::SyscallEventData {
+            dup2: Dup2Data { oldfd: 3, newfd: 5 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1 dup2(oldfd: 3, newfd: 5) = 5 (fd)\n"
     );
 }
 

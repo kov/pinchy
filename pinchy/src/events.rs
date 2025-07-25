@@ -163,6 +163,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "oldfd: {}", data.oldfd);
             finish!(sf, event.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_dup2 => {
+            let data = unsafe { event.data.dup2 };
+
+            argf!(sf, "oldfd: {}", data.oldfd);
+            argf!(sf, "newfd: {}", data.newfd);
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_setuid => {
             let data = unsafe { event.data.setuid };
 

@@ -351,6 +351,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_exit_group,
         syscalls::SYS_rt_sigreturn,
         syscalls::SYS_dup,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_dup2,
         syscalls::SYS_sync,
         syscalls::SYS_setsid,
         syscalls::SYS_setuid,

@@ -317,6 +317,14 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     dup: pinchy_common::DupData { oldfd },
                 }
             }
+            #[cfg(x86_64)]
+            syscalls::SYS_dup2 => {
+                let oldfd = args[0] as i32;
+                let newfd = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    dup2: pinchy_common::Dup2Data { oldfd, newfd },
+                }
+            }
             syscalls::SYS_sync => pinchy_common::SyscallEventData {
                 sync: pinchy_common::SyncData,
             },

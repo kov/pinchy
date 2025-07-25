@@ -5,10 +5,11 @@ use std::pin::Pin;
 
 use pinchy_common::{
     syscalls::{
-        SYS_chdir, SYS_faccessat, SYS_fstat, SYS_getcwd, SYS_getdents64, SYS_mkdirat,
-        SYS_newfstatat, SYS_readlinkat, SYS_statfs,
+        SYS_chdir, SYS_faccessat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
+        SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
     },
-    FaccessatData, MkdiratData, SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
+    FaccessatData, FdatasyncData, FsyncData, FtruncateData, MkdiratData, SyscallEvent,
+    DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
 
 use crate::{
@@ -702,5 +703,95 @@ async fn parse_mkdirat() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_fsync() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_fsync,
+        pid: 123,
+        tid: 123,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fsync: FsyncData { fd: 5 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "123 fsync(fd: 5) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_fdatasync() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_fdatasync,
+        pid: 124,
+        tid: 124,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fdatasync: FdatasyncData { fd: 8 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "124 fdatasync(fd: 8) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_ftruncate() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_ftruncate,
+        pid: 125,
+        tid: 125,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            ftruncate: FtruncateData {
+                fd: 3,
+                length: 4096,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "125 ftruncate(fd: 3, length: 4096) = 0 (success)\n"
+    );
+
+    // Test with error return value
+    let mut event = event;
+    event.return_value = -1;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "125 ftruncate(fd: 3, length: 4096) = -1 (error)\n"
     );
 }

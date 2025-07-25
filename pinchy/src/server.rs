@@ -390,6 +390,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_socket,
         syscalls::SYS_listen,
         syscalls::SYS_shutdown,
+        syscalls::SYS_fsync,
+        syscalls::SYS_fdatasync,
+        syscalls::SYS_ftruncate,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

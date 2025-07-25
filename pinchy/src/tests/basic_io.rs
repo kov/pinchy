@@ -15,12 +15,8 @@ use pinchy_common::{
     PpollData, PreadData, PwriteData, ReadData, SyscallEvent, VectorIOData, WriteData,
     DATA_READ_SIZE,
 };
-
 #[cfg(target_arch = "x86_64")]
-use pinchy_common::{
-    syscalls::SYS_dup2,
-    Dup2Data,
-};
+use pinchy_common::{syscalls::SYS_dup2, Dup2Data};
 
 use crate::{
     events::handle_event,

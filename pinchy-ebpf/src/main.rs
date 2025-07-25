@@ -544,6 +544,25 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     shutdown: pinchy_common::ShutdownData { sockfd, how },
                 }
             }
+            syscalls::SYS_fsync => {
+                let fd = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    fsync: pinchy_common::FsyncData { fd },
+                }
+            }
+            syscalls::SYS_fdatasync => {
+                let fd = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    fdatasync: pinchy_common::FdatasyncData { fd },
+                }
+            }
+            syscalls::SYS_ftruncate => {
+                let fd = args[0] as i32;
+                let length = args[1] as i64;
+                pinchy_common::SyscallEventData {
+                    ftruncate: pinchy_common::FtruncateData { fd, length },
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

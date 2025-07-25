@@ -403,6 +403,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "sig: {}", format_signal_number(data.signal));
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_kill => {
+            let data = unsafe { event.data.kill };
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "sig: {}", format_signal_number(data.signal));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_exit => {
+            let data = unsafe { event.data.exit };
+
+            argf!(sf, "status: {}", data.status);
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_sched_getscheduler => {
             let data = unsafe { event.data.sched_getscheduler };
 

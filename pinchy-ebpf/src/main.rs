@@ -467,6 +467,19 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     tgkill: pinchy_common::TgkillData { tgid, pid, signal },
                 }
             }
+            syscalls::SYS_kill => {
+                let pid = args[0] as i32;
+                let signal = args[1] as i32;
+                pinchy_common::SyscallEventData {
+                    kill: pinchy_common::KillData { pid, signal },
+                }
+            }
+            syscalls::SYS_exit => {
+                let status = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    exit: pinchy_common::ExitData { status },
+                }
+            }
             syscalls::SYS_sched_getscheduler => {
                 let pid = args[0] as i32;
                 pinchy_common::SyscallEventData {

@@ -266,7 +266,7 @@ async fn parse_exit_group() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "123 exit_group(status: 42) = 0\n"
+        "123 exit_group(status: 42) = 0 (success)\n"
     );
 }
 

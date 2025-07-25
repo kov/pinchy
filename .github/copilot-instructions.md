@@ -157,7 +157,9 @@ arguments reference and whether that data needs special handling.
    reasonably done in a short amount of time, use existing helpers when they exist,
    improve them if necessary. If the function takes no arguments, add it to the match
    arm that only calls finish!().
-5. **Test:** Ensure the new syscall is being traced and parsed
+5. **Return pretty printing:** Ensure the syscall is present in `format_return_value`
+   in `pinchy/src/util.rs`, so that the return value is printed as expected.
+6. **Test:** Ensure the new syscall is being traced and parsed
    correctly by adding a test (see Adding tests below).
 
 ## Building

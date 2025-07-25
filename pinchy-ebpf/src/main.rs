@@ -571,6 +571,19 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     fchown: pinchy_common::FchownData { fd, uid, gid },
                 }
             }
+            #[cfg(x86_64)]
+            syscalls::SYS_epoll_create => {
+                let size = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    epoll_create: pinchy_common::EpollCreateData { size },
+                }
+            }
+            syscalls::SYS_epoll_create1 => {
+                let flags = args[0] as i32;
+                pinchy_common::SyscallEventData {
+                    epoll_create1: pinchy_common::EpollCreate1Data { flags },
+                }
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 return Ok(());

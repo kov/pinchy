@@ -7,7 +7,10 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 #[cfg(x86_64)]
-use pinchy_common::{kernel_types::Timeval, syscalls::SYS_select};
+use pinchy_common::{
+    kernel_types::Timeval,
+    syscalls::{SYS_poll, SYS_select},
+};
 use pinchy_common::{
     kernel_types::{EpollEvent, Pollfd, Timespec},
     syscalls::{
@@ -686,6 +689,60 @@ pub fn syscall_exit_select(ctx: TracePointContext) -> u32 {
                     has_writefds: !writefds_ptr.is_null(),
                     has_exceptfds: !exceptfds_ptr.is_null(),
                     has_timeout: !timeout_ptr.is_null(),
+                },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[cfg(x86_64)]
+#[tracepoint]
+pub fn syscall_exit_poll(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = SYS_poll;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let mut fds_ptr = args[0] as *const Pollfd;
+        let nfds = args[1] as u32;
+        let timeout = args[2] as i32;
+
+        let mut fds = [Pollfd::default(); 16];
+        let mut actual_nfds = 0u32;
+
+        // Only read pollfd array if pointer is valid and we have fds
+        if !fds_ptr.is_null() && nfds > 0 {
+            let max_fds = core::cmp::min(nfds, 16) as usize;
+            for i in 0..max_fds {
+                fds_ptr = unsafe { fds_ptr.add(i) };
+
+                if fds_ptr.is_null() {
+                    break;
+                }
+
+                if let Ok(pollfd) = unsafe { bpf_probe_read_user::<Pollfd>(fds_ptr) } {
+                    fds[i] = pollfd;
+                    actual_nfds += 1;
+                } else {
+                    break;
+                }
+            }
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                poll: pinchy_common::PollData {
+                    fds,
+                    nfds,
+                    timeout,
+                    actual_nfds,
                 },
             },
         )

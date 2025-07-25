@@ -1144,6 +1144,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "length: {}", data.length);
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_fchmod => {
+            let data = unsafe { event.data.fchmod };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "mode: {}", format_mode(data.mode));
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_readlinkat => {
             let data = unsafe { event.data.readlinkat };
 

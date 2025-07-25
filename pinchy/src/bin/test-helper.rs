@@ -1101,6 +1101,18 @@ fn filesystem_sync_test() -> anyhow::Result<()> {
         bail!("ftruncate expand failed with error: {}", result);
     }
 
+    // Test fchmod syscall - change permissions to 644
+    let result = unsafe { libc::fchmod(fd, 0o644) };
+    if result != 0 {
+        bail!("fchmod failed with error: {}", result);
+    }
+
+    // Test fchmod syscall - change permissions to 755
+    let result = unsafe { libc::fchmod(fd, 0o755) };
+    if result != 0 {
+        bail!("fchmod 755 failed with error: {}", result);
+    }
+
     // Clean up - the file will be closed when it goes out of scope
     drop(file);
     let _ = std::fs::remove_file("test_sync_file.tmp");

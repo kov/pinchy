@@ -1443,6 +1443,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "gid: {}", data.gid);
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_truncate => {
+            let data = unsafe { event.data.truncate };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "length: {}", data.length);
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

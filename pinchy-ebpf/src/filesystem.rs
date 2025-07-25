@@ -653,3 +653,33 @@ pub fn syscall_exit_lchown(ctx: TracePointContext) -> u32 {
         Err(ret) => ret,
     }
 }
+
+#[tracepoint]
+pub fn syscall_exit_truncate(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_truncate;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let pathname_ptr = args[0] as *const u8;
+        let length = args[1] as i64;
+
+        let mut pathname = [0u8; pinchy_common::DATA_READ_SIZE];
+        unsafe {
+            let _ = bpf_probe_read_buf(pathname_ptr, &mut pathname);
+        }
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                truncate: pinchy_common::TruncateData { pathname, length },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}

@@ -5,10 +5,10 @@ use std::pin::Pin;
 
 use pinchy_common::{
     syscalls::{
-        SYS_chdir, SYS_faccessat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
-        SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
+        SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate,
+        SYS_getcwd, SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
     },
-    FaccessatData, FdatasyncData, FsyncData, FtruncateData, MkdiratData, SyscallEvent,
+    FaccessatData, FchmodData, FdatasyncData, FsyncData, FtruncateData, MkdiratData, SyscallEvent,
     DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
 
@@ -793,5 +793,58 @@ async fn parse_ftruncate() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "125 ftruncate(fd: 3, length: 4096) = -1 (error)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_fchmod() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_fchmod,
+        pid: 126,
+        tid: 126,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fchmod: FchmodData { fd: 3, mode: 0o644 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = 0 (success)\n"
+    );
+
+    // Test with error return value
+    let mut event = event;
+    event.return_value = -1;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = -1 (error)\n"
+    );
+
+    event.return_value = 0;
+    event.data.fchmod.mode = 0o755;
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "126 fchmod(fd: 3, mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
     );
 }

@@ -261,13 +261,18 @@ fn fchdir_syscall() {
 fn filesystem_sync_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 
-    let handle = run_workload(&["fsync", "fdatasync", "ftruncate"], "filesystem_sync_test");
+    let handle = run_workload(
+        &["fsync", "fdatasync", "ftruncate", "fchmod"],
+        "filesystem_sync_test",
+    );
 
     let expected_output = escaped_regex(indoc! {r#"
         PID fsync(fd: PID) = 0 (success)
         PID fdatasync(fd: PID) = 0 (success)
         PID ftruncate(fd: PID, length: 10) = 0 (success)
         PID ftruncate(fd: PID, length: 50) = 0 (success)
+        PID fchmod(fd: PID, mode: 0o644 (rw-r--r--)) = 0 (success)
+        PID fchmod(fd: PID, mode: 0o755 (rwxr-xr-x)) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();

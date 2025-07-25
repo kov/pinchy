@@ -488,3 +488,28 @@ pub fn syscall_exit_mkdirat(ctx: TracePointContext) -> u32 {
         Err(ret) => ret,
     }
 }
+
+#[tracepoint]
+pub fn syscall_exit_fchmod(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = syscalls::SYS_fchmod;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = get_return_value(&ctx)?;
+
+        let fd = args[0] as i32;
+        let mode = args[1] as u32;
+
+        output_event(
+            &ctx,
+            syscall_nr,
+            return_value,
+            pinchy_common::SyscallEventData {
+                fchmod: pinchy_common::FchmodData { fd, mode },
+            },
+        )
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}

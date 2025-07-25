@@ -7,16 +7,19 @@ use indoc::indoc;
 use pinchy_common::{
     kernel_types::{EpollEvent, Iovec, Timespec},
     syscalls::{
-        SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_pwait, SYS_fcntl, SYS_lseek,
-        SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read,
-        SYS_readv, SYS_write, SYS_writev,
+        SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
+        SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv2,
+        SYS_pwrite64, SYS_read, SYS_readv, SYS_write, SYS_writev,
     },
-    CloseData, CloseRangeData, Dup3Data, DupData, EpollPWaitData, FcntlData, LseekData, OpenAtData,
-    PpollData, PreadData, PwriteData, ReadData, SyscallEvent, VectorIOData, WriteData,
-    DATA_READ_SIZE,
+    CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWaitData, FcntlData,
+    LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData, SyscallEvent, VectorIOData,
+    WriteData, DATA_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
-use pinchy_common::{syscalls::SYS_dup2, Dup2Data};
+use pinchy_common::{
+    syscalls::{SYS_dup2, SYS_epoll_create, SYS_poll},
+    Dup2Data, EpollCreateData, PollData,
+};
 
 use crate::{
     events::handle_event,
@@ -761,5 +764,100 @@ async fn parse_preadv2() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "3 preadv2(fd: 5, iov: [ iovec { base: \"hello\", len: 5 } ], iovcnt: 1, offset: 1234, flags: 0x10) = 5\n"
+    );
+}
+
+#[tokio::test]
+async fn test_epoll_create1() {
+    let event = SyscallEvent {
+        syscall_nr: SYS_epoll_create1,
+        pid: 1001,
+        tid: 1001,
+        return_value: 5, // epoll fd
+        data: pinchy_common::SyscallEventData {
+            epoll_create1: EpollCreate1Data {
+                flags: libc::EPOLL_CLOEXEC,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 epoll_create1(flags: EPOLL_CLOEXEC) = 5 (fd)\n"
+    );
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn test_epoll_create() {
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_epoll_create,
+        pid: 1001,
+        tid: 1001,
+        return_value: 5, // epoll fd
+        data: pinchy_common::SyscallEventData {
+            epoll_create: EpollCreateData { size: 10 },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 epoll_create(size: 10) = 5 (fd)\n"
+    );
+}
+
+#[cfg(target_arch = "x86_64")]
+#[tokio::test]
+async fn test_poll() {
+    use pinchy_common::kernel_types::Pollfd;
+
+    let mut fds = [Pollfd::default(); 16];
+    fds[0] = Pollfd {
+        fd: 0,
+        events: libc::POLLIN as i16,
+        revents: libc::POLLIN as i16,
+    };
+    fds[1] = Pollfd {
+        fd: 1,
+        events: libc::POLLOUT as i16,
+        revents: libc::POLLOUT as i16,
+    };
+
+    let event = SyscallEvent {
+        syscall_nr: pinchy_common::syscalls::SYS_poll,
+        pid: 1001,
+        tid: 1001,
+        return_value: 2, // number of ready fds
+        data: pinchy_common::SyscallEventData {
+            poll: PollData {
+                fds,
+                nfds: 2,
+                timeout: 1000,
+                actual_nfds: 2,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 poll(fds: [ pollfd { fd: 0, events: POLLIN, revents: POLLIN }, pollfd { fd: 1, events: POLLOUT, revents: POLLOUT } ], nfds: 2, timeout: 1000) = 2 (ready)\n"
     );
 }

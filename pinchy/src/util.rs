@@ -57,6 +57,16 @@ pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     strs
 }
 
+#[cfg(target_arch = "x86_64")]
+pub fn format_poll_events(events: i16) -> String {
+    let event_strs = poll_bits_to_strs(&events);
+    if event_strs.is_empty() {
+        "0".to_string()
+    } else {
+        event_strs.join("|")
+    }
+}
+
 /// Formats a path for display, including truncation indication if needed
 pub fn format_path(path_bytes: &[u8], known_truncated: bool) -> String {
     let null_pos = path_bytes.iter().position(|&b| b == 0);
@@ -201,6 +211,20 @@ pub fn format_dup3_flags(flags: i32) -> String {
         format!("0x{flags:x}")
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_epoll_create1_flags(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::EPOLL_CLOEXEC != 0 {
+        parts.push("EPOLL_CLOEXEC");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        parts.join("|")
     }
 }
 

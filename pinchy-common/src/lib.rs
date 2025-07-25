@@ -144,6 +144,9 @@ pub union SyscallEventData {
     pub rename: RenameData,
     pub renameat: RenameatData,
     pub renameat2: Renameat2Data,
+    pub poll: PollData,
+    pub epoll_create: EpollCreateData,
+    pub epoll_create1: EpollCreate1Data,
 }
 
 #[repr(C)]
@@ -1090,4 +1093,25 @@ pub struct Renameat2Data {
 pub struct TruncateData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub length: i64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PollData {
+    pub fds: [kernel_types::Pollfd; 16],
+    pub nfds: u32,
+    pub timeout: i32,
+    pub actual_nfds: u32, // How many we actually read
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EpollCreateData {
+    pub size: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct EpollCreate1Data {
+    pub flags: i32,
 }

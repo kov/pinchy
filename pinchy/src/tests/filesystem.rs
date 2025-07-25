@@ -5,11 +5,12 @@ use std::pin::Pin;
 
 use pinchy_common::{
     syscalls::{
-        SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate,
-        SYS_getcwd, SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_statfs,
+        SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fdatasync, SYS_fstat, SYS_fsync,
+        SYS_ftruncate, SYS_getcwd, SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat,
+        SYS_statfs,
     },
-    FaccessatData, FchmodData, FdatasyncData, FsyncData, FtruncateData, MkdiratData, SyscallEvent,
-    DATA_READ_SIZE, MEDIUM_READ_SIZE,
+    FaccessatData, FchmodData, FchmodatData, FdatasyncData, FsyncData, FtruncateData, MkdiratData,
+    SyscallEvent, DATA_READ_SIZE, MEDIUM_READ_SIZE,
 };
 
 use crate::{
@@ -846,5 +847,38 @@ async fn parse_fchmod() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "126 fchmod(fd: 3, mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
+    );
+}
+
+#[tokio::test]
+async fn parse_fchmodat() {
+    let mut pathname = [0u8; DATA_READ_SIZE];
+    let path = b"/tmp/testfile";
+    pathname[0..path.len()].copy_from_slice(path);
+
+    let event = SyscallEvent {
+        syscall_nr: SYS_fchmodat,
+        pid: 1000,
+        tid: 1001,
+        return_value: 0,
+        data: pinchy_common::SyscallEventData {
+            fchmodat: FchmodatData {
+                dirfd: 3,
+                pathname,
+                mode: 0o755,
+                flags: 0,
+            },
+        },
+    };
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
+    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
+
+    handle_event(&event, formatter).await.unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: 0) = 0 (success)\n"
     );
 }

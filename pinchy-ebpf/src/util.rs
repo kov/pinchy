@@ -3,6 +3,7 @@ use core::ops::DerefMut as _;
 use aya_ebpf::{
     bindings::BPF_RB_FORCE_WAKEUP,
     helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    maps::ring_buf::RingBufEntry,
     programs::TracePointContext,
     EbpfContext as _,
 };
@@ -121,6 +122,67 @@ pub fn output_event(
     }
 
     Ok(())
+}
+
+pub struct Entry {
+    inner: RingBufEntry<SyscallEvent>,
+}
+
+impl Entry {
+    pub fn new(ctx: &TracePointContext, syscall_nr: i64) -> Result<Self, u32> {
+        let Some(mut entry) = (unsafe { EVENTS.reserve::<SyscallEvent>(0) }) else {
+            error!(
+                ctx,
+                "Failed to reserve ringbuf entry for syscall {}", syscall_nr
+            );
+            return Err(1);
+        };
+
+        let event = entry.deref_mut();
+        event.write(unsafe { core::mem::zeroed::<SyscallEvent>() });
+
+        let event = unsafe { event.assume_init_mut() };
+
+        event.pid = ctx.pid();
+        event.tid = ctx.tgid();
+        event.syscall_nr = syscall_nr;
+        event.return_value = match get_return_value(&ctx) {
+            Ok(return_value) => return_value,
+            Err(e) => {
+                entry.discard(0);
+                return Err(e);
+            }
+        };
+
+        Ok(Entry { inner: entry })
+    }
+
+    fn event_mut(&mut self) -> &mut SyscallEvent {
+        unsafe { self.inner.deref_mut().assume_init_mut() }
+    }
+
+    pub fn submit(self) -> u32 {
+        self.inner.submit(BPF_RB_FORCE_WAKEUP.into());
+        0
+    }
+
+    pub fn discard(self) {
+        self.inner.discard(0);
+    }
+}
+
+impl core::ops::Deref for Entry {
+    type Target = SyscallEvent;
+
+    fn deref(&self) -> &Self::Target {
+        unsafe { self.inner.assume_init_ref() }
+    }
+}
+
+impl core::ops::DerefMut for Entry {
+    fn deref_mut(&mut self) -> &mut SyscallEvent {
+        self.event_mut()
+    }
 }
 
 use pinchy_common::{kernel_types::Iovec, IOV_COUNT, MEDIUM_READ_SIZE};

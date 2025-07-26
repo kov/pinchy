@@ -12,7 +12,7 @@ use pinchy_common::{
     syscalls::{SYS_poll, SYS_select},
 };
 use pinchy_common::{
-    kernel_types::{EpollEvent, Pollfd, Timespec},
+    kernel_types::{EpollEvent, FdSet, Pollfd, Timespec},
     syscalls::{
         SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv,
         SYS_preadv2, SYS_pselect6, SYS_pwrite64, SYS_pwritev, SYS_pwritev2, SYS_read, SYS_readv,
@@ -23,7 +23,7 @@ use pinchy_common::{
 
 #[cfg(x86_64)]
 use crate::util::read_timeval;
-use crate::util::{get_args, get_return_value, output_event, read_timespec};
+use crate::util::{get_args, get_return_value, output_event, read_timespec, Entry};
 
 #[tracepoint]
 pub fn syscall_exit_openat(ctx: TracePointContext) -> u32 {
@@ -580,73 +580,72 @@ pub fn syscall_exit_pwritev2(ctx: TracePointContext) -> u32 {
 }
 
 // Helper function to read fd_set from userspace as raw bytes
-fn read_fdset(fd_set_ptr: *const u8, nfds: i32) -> pinchy_common::kernel_types::FdSet {
-    let mut result = pinchy_common::kernel_types::FdSet::default();
-
+fn read_fdset(fdset: &mut FdSet, fd_set_ptr: *const u8, nfds: i32) {
     if fd_set_ptr.is_null() || nfds <= 0 {
-        return result;
+        return;
     }
 
     // Calculate how many bytes we need to read to cover nfds file descriptors
     let bytes_needed = ((nfds + 7) / 8) as usize;
-    let bytes_to_read = core::cmp::min(bytes_needed, result.bytes.len());
+    let bytes_to_read = core::cmp::min(bytes_needed, fdset.bytes.len());
 
     unsafe {
-        if bpf_probe_read_buf(fd_set_ptr, &mut result.bytes[..bytes_to_read]).is_ok() {
-            result.len = bytes_to_read as u32;
+        if bpf_probe_read_buf(fd_set_ptr, &mut fdset.bytes[..bytes_to_read]).is_ok() {
+            fdset.len = bytes_to_read as u32;
         }
     }
-
-    result
 }
 
 #[tracepoint]
 pub fn syscall_exit_pselect6(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_pselect6;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
+    let syscall_nr = SYS_pselect6;
+    aya_log_ebpf::info!(&ctx, "entered pselect6");
+    let Ok(mut entry) = Entry::new(&ctx, syscall_nr) else {
+        return 1;
+    };
 
-        let nfds = args[0] as i32;
+    fn inner(ctx: &TracePointContext, entry: &mut Entry) -> Result<(), u32> {
+        let args = get_args(ctx, entry.syscall_nr)?;
+
+        let data = unsafe { &mut entry.data.pselect6 };
+
+        data.nfds = args[0] as i32;
+
         let readfds_ptr = args[1] as *const u8;
         let writefds_ptr = args[2] as *const u8;
         let exceptfds_ptr = args[3] as *const u8;
         let timeout_ptr = args[4] as *const Timespec;
         let sigmask_ptr = args[5] as *const u8;
 
-        let readfds = read_fdset(readfds_ptr, nfds);
-        let writefds = read_fdset(writefds_ptr, nfds);
-        let exceptfds = read_fdset(exceptfds_ptr, nfds);
+        read_fdset(&mut data.readfds, readfds_ptr, data.nfds);
+        read_fdset(&mut data.writefds, writefds_ptr, data.nfds);
+        read_fdset(&mut data.exceptfds, exceptfds_ptr, data.nfds);
 
-        let timeout = if !timeout_ptr.is_null() {
+        data.timeout = if !timeout_ptr.is_null() {
             read_timespec(timeout_ptr)
         } else {
             Timespec::default()
         };
 
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                pselect6: pinchy_common::Pselect6Data {
-                    nfds,
-                    readfds,
-                    writefds,
-                    exceptfds,
-                    timeout,
-                    has_readfds: !readfds_ptr.is_null(),
-                    has_writefds: !writefds_ptr.is_null(),
-                    has_exceptfds: !exceptfds_ptr.is_null(),
-                    has_timeout: !timeout_ptr.is_null(),
-                    has_sigmask: !sigmask_ptr.is_null(),
-                },
-            },
-        )
+        data.has_readfds = !readfds_ptr.is_null();
+        data.has_writefds = !writefds_ptr.is_null();
+        data.has_exceptfds = !exceptfds_ptr.is_null();
+        data.has_timeout = !timeout_ptr.is_null();
+        data.has_sigmask = !sigmask_ptr.is_null();
+
+        Ok(())
     }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
+    match inner(&ctx, &mut entry) {
+        Ok(_) => {
+            let data = unsafe { &entry.data.pselect6 };
+            aya_log_ebpf::info!(&ctx, "Submitting with nfds: {}", data.nfds);
+            entry.submit()
+        }
+        Err(ret) => {
+            aya_log_ebpf::error!(&ctx, "Something failed... discarding...");
+            entry.discard();
+            ret
+        }
     }
 }
 
@@ -664,9 +663,12 @@ pub fn syscall_exit_select(ctx: TracePointContext) -> u32 {
         let exceptfds_ptr = args[3] as *const u8;
         let timeout_ptr = args[4] as *const Timeval;
 
-        let readfds = read_fdset(readfds_ptr, nfds);
-        let writefds = read_fdset(writefds_ptr, nfds);
-        let exceptfds = read_fdset(exceptfds_ptr, nfds);
+        let mut readfds = FdSet::default();
+        read_fdset(&mut readfds, readfds_ptr, nfds);
+        let mut writefds = FdSet::default();
+        read_fdset(&mut writefds, writefds_ptr, nfds);
+        let mut exceptfds = FdSet::default();
+        read_fdset(&mut exceptfds, exceptfds_ptr, nfds);
 
         let timeout = if !timeout_ptr.is_null() {
             read_timeval(timeout_ptr)
@@ -700,23 +702,27 @@ pub fn syscall_exit_select(ctx: TracePointContext) -> u32 {
 }
 
 #[cfg(x86_64)]
+//const SYS_poll: i64 = 0;
 #[tracepoint]
 pub fn syscall_exit_poll(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_poll;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
+    let syscall_nr = SYS_poll;
+    let Ok(mut entry) = Entry::new(&ctx, syscall_nr) else {
+        return 1;
+    };
+
+    fn inner(ctx: TracePointContext, entry: &mut Entry) -> Result<(), u32> {
+        let args = get_args(&ctx, entry.syscall_nr)?;
+
+        let data = unsafe { &mut entry.data.poll };
+        data.nfds = args[1] as u32;
+        data.timeout = args[2] as i32;
 
         let mut fds_ptr = args[0] as *const Pollfd;
-        let nfds = args[1] as u32;
-        let timeout = args[2] as i32;
-
-        let mut fds = [Pollfd::default(); 16];
-        let mut actual_nfds = 0u32;
+        let fds = &mut data.fds;
 
         // Only read pollfd array if pointer is valid and we have fds
-        if !fds_ptr.is_null() && nfds > 0 {
-            let max_fds = core::cmp::min(nfds, 16) as usize;
+        if !fds_ptr.is_null() && data.nfds > 0 {
+            let max_fds = core::cmp::min(data.nfds, 16) as usize;
             for i in 0..max_fds {
                 fds_ptr = unsafe { fds_ptr.add(i) };
 
@@ -726,29 +732,20 @@ pub fn syscall_exit_poll(ctx: TracePointContext) -> u32 {
 
                 if let Ok(pollfd) = unsafe { bpf_probe_read_user::<Pollfd>(fds_ptr) } {
                     fds[i] = pollfd;
-                    actual_nfds += 1;
+                    data.actual_nfds += 1;
                 } else {
                     break;
                 }
             }
         }
 
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                poll: pinchy_common::PollData {
-                    fds,
-                    nfds,
-                    timeout,
-                    actual_nfds,
-                },
-            },
-        )
+        Ok(())
     }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
+    match inner(ctx, &mut entry) {
+        Ok(_) => entry.submit(),
+        Err(ret) => {
+            entry.discard();
+            ret
+        }
     }
 }

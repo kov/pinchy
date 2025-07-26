@@ -4,8 +4,7 @@
 use std::{
     convert::TryFrom,
     io::{BufRead as _, BufReader, PipeReader},
-    os::fd::OwnedFd,
-    process::{self, Child, Command, Output, Stdio},
+    process::{self, Child, Command, Output},
     thread::JoinHandle,
     time::{Duration, Instant},
 };
@@ -16,11 +15,15 @@ use futures::StreamExt;
 use once_cell::sync::Lazy;
 use zbus::{fdo::DBusProxy, names::BusName, Connection};
 
-pub fn run_pinchyd(pid: Option<u32>) -> Child {
+pub fn run_pinchyd(pid: Option<u32>) -> (PipeReader, Child) {
     let mut cmd = process::Command::new(cargo_bin("pinchyd"));
+
+    let (reader, writer) = std::io::pipe().unwrap();
+
     let mut cmd = cmd
         //.env("RUST_LOG", "trace")
-        .stdout(Stdio::piped());
+        .stdout(writer.try_clone().unwrap())
+        .stderr(writer);
 
     if let Some(pid) = pid {
         cmd = cmd.arg(pid.to_string())
@@ -30,7 +33,7 @@ pub fn run_pinchyd(pid: Option<u32>) -> Child {
         panic!("Failed to run pinchyd process under dbus-launch for testing: {e}")
     });
 
-    child
+    (reader, child)
 }
 
 pub fn wait_for_output(child: Child) -> Output {
@@ -54,12 +57,22 @@ pub fn read_until(
     let reader_thread = std::thread::spawn(move || {
         let mut data = vec![];
         let mut buf = String::new();
+        let mut found_error = false;
         while let Ok(bytes_read) = reader.read_line(&mut buf) {
             if bytes_read == 0 {
                 break;
             }
             data.extend_from_slice(buf.as_bytes());
-            // eprintln!("{}", buf);
+
+            eprint!("{}", buf);
+
+            if buf.contains("Caused by:")
+                || buf.contains("Stack backtrace")
+                || buf.contains(" panicked at ")
+            {
+                found_error = true;
+            }
+
             if buf.contains(&needle) {
                 // Minor wait as what we are actually waiting for may come right
                 // after the message being printed.
@@ -68,16 +81,17 @@ pub fn read_until(
             }
             buf.clear();
         }
+        if found_error {
+            panic!("Found fatal error in pinchyd output");
+        }
         (reader, data)
     });
 
     reader_thread
 }
 
-pub fn wrap_stdout(child: &mut Child) -> BufReader<PipeReader> {
-    BufReader::new(PipeReader::from(OwnedFd::from(
-        child.stdout.take().unwrap(),
-    )))
+pub fn wrap_stdout(reader: PipeReader) -> BufReader<PipeReader> {
+    BufReader::new(PipeReader::from(reader))
 }
 
 pub enum TestState {
@@ -108,13 +122,13 @@ impl PinchyTest {
             ));
         assert!(result.is_ok());
 
-        let mut child = run_pinchyd(pid);
+        let (reader, child) = run_pinchyd(pid);
 
         // Wait synchronously for startup
-        let reader = wrap_stdout(&mut child);
+        let reader = wrap_stdout(reader);
         let (reader, data) = read_until(reader, "Waiting for Ctrl-C...".to_string())
             .join()
-            .unwrap();
+            .expect("pinchyd probably failed to run");
 
         let state = if let Some(needle) = first_needle {
             let handle = read_until(reader, needle);

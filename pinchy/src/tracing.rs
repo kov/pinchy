@@ -56,6 +56,8 @@ impl WriterTask {
                         log::trace!("Writer task ended: write error");
                         break;
                     }
+
+                    log::trace!("Writer task wrote: {} bytes", event_bytes.len());
                 },
                 _ = sleep(Duration::from_millis(10)) => {
                     if self.writer.flush().await.is_err() {
@@ -179,12 +181,17 @@ impl EventDispatch {
                             Ok(mut guard) => {
                                 *idle_since.write().await = Instant::now();
 
+                                log::trace!("RingBuf had something to read...");
+
                                 let ring = guard.get_inner_mut();
                                 while let Some(item) = ring.next() {
                                     let event = &*item;
                                     if event.len() == std::mem::size_of::<SyscallEvent>() {
                                         let event_bytes = Arc::new(event.to_vec());
+                                        log::trace!("Read {} bytes from ringbuf...", event_bytes.len());
                                         event_dispatch.read().await.dispatch_event(event_bytes);
+                                    } else {
+                                        log::trace!("RingBuf item had unexpected size, discarded...");
                                     }
                                 }
                                 guard.clear_ready();

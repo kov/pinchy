@@ -797,7 +797,7 @@ async fn test_epoll_create1() {
 #[tokio::test]
 async fn test_epoll_create() {
     let event = SyscallEvent {
-        syscall_nr: pinchy_common::syscalls::SYS_epoll_create,
+        syscall_nr: SYS_epoll_create,
         pid: 1001,
         tid: 1001,
         return_value: 5, // epoll fd
@@ -836,7 +836,7 @@ async fn test_poll() {
     };
 
     let event = SyscallEvent {
-        syscall_nr: pinchy_common::syscalls::SYS_poll,
+        syscall_nr: SYS_poll,
         pid: 1001,
         tid: 1001,
         return_value: 2, // number of ready fds

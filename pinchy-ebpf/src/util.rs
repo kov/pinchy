@@ -259,7 +259,7 @@ pub fn read_iovec_array(
             } else {
                 return_value as usize
             }
-        },
+        }
         IovecOp::Write => usize::MAX,
     };
 

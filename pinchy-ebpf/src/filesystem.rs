@@ -1,21 +1,14 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
-    macros::tracepoint,
-    programs::TracePointContext,
-};
+use aya_ebpf::helpers::{bpf_probe_read_buf, bpf_probe_read_user};
 use aya_log_ebpf::error;
 use pinchy_common::{
     kernel_types::{LinuxDirent64, Stat},
     DATA_READ_SIZE,
 };
 
-use crate::{
-    syscall_handler,
-    util::{get_args, get_return_value},
-};
+use crate::syscall_handler;
 
 syscall_handler!(fstat, args, data, {
     data.fd = args[0] as i32;

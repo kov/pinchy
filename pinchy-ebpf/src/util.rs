@@ -95,17 +95,22 @@ macro_rules! syscall_handler {
     };
 
     ($name:ident, $data_field:ident, $args:ident, $data:ident, $return_value:ident, $body:block) => {
+        syscall_handler!($name, $data_field, $args, $data, $return_value, _ctx, $body);
+    };
+
+    ($name:ident, $data_field:ident, $args:ident, $data:ident, $return_value:ident, $ctx:ident, $body:block) => {
         #[tracepoint]
         pub fn ${concat(syscall_exit_, $name)}(ctx: TracePointContext) -> u32 {
             let syscall_nr = pinchy_common::syscalls::${concat(SYS_, $name)};
-            let Ok(mut entry) = Entry::new(&ctx, syscall_nr) else {
+            let Ok(mut entry) = $crate::util::Entry::new(&ctx, syscall_nr) else {
                 return 1;
             };
 
-            fn inner(ctx: &TracePointContext, entry: &mut Entry) -> Result<(), u32> {
+            fn inner(ctx: &TracePointContext, entry: &mut $crate::util::Entry) -> Result<(), u32> {
                 let $args = get_args(ctx, entry.syscall_nr)?;
                 let $data = unsafe { &mut entry.data.$data_field };
                 let $return_value = get_return_value(&ctx)?;
+                let $ctx = ctx;
 
                 $body;
 

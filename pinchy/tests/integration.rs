@@ -93,6 +93,37 @@ fn pinchy_reads() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn filesystem_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises getdents64, fstat, newfstatat, faccessat
+    let handle = run_workload(
+        &["getdents64", "fstat", "newfstatat", "faccessat"],
+        "filesystem_syscalls_test",
+    );
+
+    // Client's output - we expect the syscalls from the workload
+    let expected_output = escaped_regex(indoc! {r#"
+        PID getdents64(fd: NUMBER, count: NUMBER, entries: [ dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED }, dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED }, dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED }, dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED } ]) = 184 (bytes)
+        PID fstat(fd: NUMBER, struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }) = 0 (success)
+        PID newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }, flags: 0) = 0 (success)
+        PID faccessat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn rt_sig() {
     let pinchy = PinchyTest::new(None, None);
 
@@ -230,6 +261,9 @@ fn escaped_regex(expected_output: &str) -> String {
         .replace("PID", r"\d+")
         .replace("ADDR", "0x[0-9a-f]+")
         .replace("NUMBER", "[0-9]+")
+        .replace("MODE", "[rwx-]+")
+        .replace("ALPHANUM", "[^ \"]+")
+        .replace("MAYBETRUNCATED", r"( ... \(truncated\))?")
 }
 
 #[test]

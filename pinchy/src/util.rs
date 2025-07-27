@@ -1845,6 +1845,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_writev
         | syscalls::SYS_preadv
         | syscalls::SYS_pwritev
+        | syscalls::SYS_getdents64
         | syscalls::SYS_splice
         | syscalls::SYS_tee
         | syscalls::SYS_vmsplice

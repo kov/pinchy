@@ -64,7 +64,7 @@ pub fn read_until(
             }
             data.extend_from_slice(buf.as_bytes());
 
-            eprint!("{}", buf);
+            eprint!("{buf}");
 
             if buf.contains("Caused by:")
                 || buf.contains("Stack backtrace")
@@ -91,7 +91,7 @@ pub fn read_until(
 }
 
 pub fn wrap_stdout(reader: PipeReader) -> BufReader<PipeReader> {
-    BufReader::new(PipeReader::from(reader))
+    BufReader::new(reader)
 }
 
 pub enum TestState {

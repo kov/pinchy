@@ -1,112 +1,44 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use aya_ebpf::{helpers::bpf_probe_read_user, macros::tracepoint, programs::TracePointContext};
-use pinchy_common::{
-    kernel_types::{Rseq, SchedParam},
-    syscalls::{SYS_rseq, SYS_sched_setscheduler},
-};
+use aya_ebpf::helpers::bpf_probe_read_user;
+use pinchy_common::kernel_types::{Rseq, RseqCs, SchedParam};
 
-use crate::util::{get_args, get_return_value, output_event};
+use crate::syscall_handler;
 
-#[tracepoint]
-pub fn syscall_exit_rseq(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_rseq;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
+syscall_handler!(rseq, args, data, {
+    let rseq_ptr = args[0] as *const Rseq;
+    data.rseq_ptr = rseq_ptr as u64;
+    data.rseq_len = args[1] as u32;
+    data.flags = args[2] as i32;
+    data.signature = args[3] as u32;
 
-        let rseq_ptr = args[0] as *const Rseq;
-        let rseq_len = args[1] as u32;
-        let flags = args[2] as i32;
-        let signature = args[3] as u32;
-
-        // Read the rseq structure if the pointer is valid
-        let mut rseq = Rseq::default();
-        let has_rseq = !rseq_ptr.is_null();
-
-        // Only try to read the rseq struct if the pointer is valid
-        if has_rseq {
-            if let Ok(data) = unsafe { bpf_probe_read_user::<Rseq>(rseq_ptr as *const _) } {
-                rseq = data;
-            }
+    data.has_rseq = !rseq_ptr.is_null();
+    if data.has_rseq {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<Rseq>(rseq_ptr as *const _) } {
+            data.rseq = val;
         }
+    }
 
-        // Read the rseq_cs structure if the rseq pointer is valid and rseq_cs is valid
-        let mut rseq_cs = pinchy_common::kernel_types::RseqCs::default();
-        let mut has_rseq_cs = false;
-
-        if has_rseq && rseq.rseq_cs != 0 {
-            let rseq_cs_ptr = rseq.rseq_cs as *const pinchy_common::kernel_types::RseqCs;
-            if let Ok(data) =
-                unsafe { bpf_probe_read_user::<pinchy_common::kernel_types::RseqCs>(rseq_cs_ptr) }
-            {
-                rseq_cs = data;
-                has_rseq_cs = true;
-            }
+    data.has_rseq_cs = false;
+    if data.has_rseq && data.rseq.rseq_cs != 0 {
+        let rseq_cs_ptr = data.rseq.rseq_cs as *const RseqCs;
+        if let Ok(val) = unsafe { bpf_probe_read_user::<RseqCs>(rseq_cs_ptr) } {
+            data.rseq_cs = val;
+            data.has_rseq_cs = true;
         }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                rseq: pinchy_common::RseqData {
-                    rseq_ptr: rseq_ptr as u64,
-                    rseq_len,
-                    flags,
-                    signature,
-                    rseq,
-                    has_rseq,
-                    rseq_cs,
-                    has_rseq_cs,
-                },
-            },
-        )
     }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
+});
 
-#[tracepoint]
-pub fn syscall_exit_sched_setscheduler(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_sched_setscheduler;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
+syscall_handler!(sched_setscheduler, args, data, {
+    data.pid = args[0] as i32;
+    data.policy = args[1] as i32;
 
-        let pid = args[0] as i32;
-        let policy = args[1] as i32;
-        let param_ptr = args[2] as *const SchedParam;
-
-        // Read the sched_param structure if the pointer is valid
-        let mut param = SchedParam::default();
-        let has_param = !param_ptr.is_null();
-
-        if has_param {
-            if let Ok(data) = unsafe { bpf_probe_read_user::<SchedParam>(param_ptr) } {
-                param = data;
-            }
+    let param_ptr = args[2] as *const SchedParam;
+    data.has_param = !param_ptr.is_null();
+    if data.has_param {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<SchedParam>(param_ptr) } {
+            data.param = val;
         }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                sched_setscheduler: pinchy_common::SchedSetschedulerData {
-                    pid,
-                    policy,
-                    param,
-                    has_param,
-                },
-            },
-        )
     }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
+});

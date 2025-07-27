@@ -331,6 +331,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     const TRIVIAL_SYSCALLS: &[i64] = &[
         syscalls::SYS_close,
         syscalls::SYS_dup3,
+        syscalls::SYS_fcntl,
         syscalls::SYS_lseek,
         syscalls::SYS_sched_yield,
         syscalls::SYS_getpid,
@@ -420,7 +421,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_getdents64", syscalls::SYS_getdents64),
         ("syscall_exit_futex", syscalls::SYS_futex),
         ("syscall_exit_ioctl", syscalls::SYS_ioctl),
-        ("syscall_exit_fcntl", syscalls::SYS_fcntl),
         ("syscall_exit_execve", syscalls::SYS_execve),
         ("syscall_exit_mmap", syscalls::SYS_mmap),
         ("syscall_exit_munmap", syscalls::SYS_munmap),

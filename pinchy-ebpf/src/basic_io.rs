@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
-    macros::tracepoint,
-    programs::TracePointContext,
-};
+use aya_ebpf::helpers::{bpf_probe_read_buf, bpf_probe_read_user};
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 use pinchy_common::kernel_types::{EpollEvent, FdSet, Pollfd, Timespec};
@@ -14,7 +10,7 @@ use pinchy_common::kernel_types::{EpollEvent, FdSet, Pollfd, Timespec};
 use crate::util::read_timeval;
 use crate::{
     syscall_handler,
-    util::{get_args, get_return_value, read_iovec_array, read_timespec, IovecOp},
+    util::{read_iovec_array, read_timespec, IovecOp},
 };
 
 syscall_handler!(openat, openat, args, data, {

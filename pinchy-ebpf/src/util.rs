@@ -99,17 +99,17 @@ macro_rules! syscall_handler {
     };
 
     ($name:ident, $data_field:ident, $args:ident, $data:ident, $return_value:ident, $ctx:ident, $body:block) => {
-        #[tracepoint]
-        pub fn ${concat(syscall_exit_, $name)}(ctx: TracePointContext) -> u32 {
+        #[::aya_ebpf::macros::tracepoint]
+        pub fn ${concat(syscall_exit_, $name)}(ctx: ::aya_ebpf::programs::TracePointContext) -> u32 {
             let syscall_nr = pinchy_common::syscalls::${concat(SYS_, $name)};
             let Ok(mut entry) = $crate::util::Entry::new(&ctx, syscall_nr) else {
                 return 1;
             };
 
-            fn inner(ctx: &TracePointContext, entry: &mut $crate::util::Entry) -> Result<(), u32> {
-                let $args = get_args(ctx, entry.syscall_nr)?;
+            fn inner(ctx: &::aya_ebpf::programs::TracePointContext, entry: &mut $crate::util::Entry) -> Result<(), u32> {
+                let $args = $crate::util::get_args(ctx, entry.syscall_nr)?;
                 let $data = unsafe { &mut entry.data.$data_field };
-                let $return_value = get_return_value(&ctx)?;
+                let $return_value = $crate::util::get_return_value(&ctx)?;
                 let $ctx = ctx;
 
                 $body;

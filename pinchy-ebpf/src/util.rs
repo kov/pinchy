@@ -14,7 +14,11 @@ use crate::{ENTER_MAP, EVENTS, SYSCALL_RETURN_OFFSET};
 
 #[inline(always)]
 pub fn read_timespec(ptr: *const Timespec) -> Timespec {
-    unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
+    if !ptr.is_null() {
+        unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
+    } else {
+        Timespec::default()
+    }
 }
 
 // Helper function to read timeval from userspace
@@ -81,8 +85,16 @@ pub fn get_return_value(ctx: &TracePointContext) -> Result<i64, u32> {
 
 #[macro_export]
 macro_rules! syscall_handler {
-    // Pattern with explicit data field
+    // Pattern with default data field (same as syscall name)
+    ($name:ident, $args:ident, $data:ident, $body:block) => {
+        syscall_handler!($name, $name, $args, $data, $body);
+    };
+
     ($name:ident, $data_field:ident, $args:ident, $data:ident, $body:block) => {
+        syscall_handler!($name, $data_field, $args, $data, _return_value, $body);
+    };
+
+    ($name:ident, $data_field:ident, $args:ident, $data:ident, $return_value:ident, $body:block) => {
         #[tracepoint]
         pub fn ${concat(syscall_exit_, $name)}(ctx: TracePointContext) -> u32 {
             let syscall_nr = pinchy_common::syscalls::${concat(SYS_, $name)};
@@ -93,6 +105,7 @@ macro_rules! syscall_handler {
             fn inner(ctx: &TracePointContext, entry: &mut Entry) -> Result<(), u32> {
                 let $args = get_args(ctx, entry.syscall_nr)?;
                 let $data = unsafe { &mut entry.data.$data_field };
+                let $return_value = get_return_value(&ctx)?;
 
                 $body;
 
@@ -107,11 +120,6 @@ macro_rules! syscall_handler {
                 }
             }
         }
-    };
-
-    // Pattern with default data field (same as syscall name)
-    ($name:ident, $args:ident, $data:ident, $body:block) => {
-        syscall_handler!($name, $name, $args, $data, $body);
     };
 }
 
@@ -223,31 +231,32 @@ impl core::ops::DerefMut for Entry {
 
 use pinchy_common::{kernel_types::Iovec, IOV_COUNT, MEDIUM_READ_SIZE};
 
+pub enum IovecOp {
+    Read,
+    Write,
+}
+
 /// Reads an array of iovec structs and their pointed-to buffers from user memory.
 /// Returns the filled arrays for iovecs, lens, and bufs, and the count.
 #[inline(always)]
 pub fn read_iovec_array(
     iov_addr: u64,
     iovcnt: usize,
-    is_read: bool,
-    return_value: usize,
-) -> (
-    [Iovec; IOV_COUNT],
-    [usize; IOV_COUNT],
-    [[u8; MEDIUM_READ_SIZE]; IOV_COUNT],
-    usize,
+    op: IovecOp,
+    iovecs: &mut [Iovec; IOV_COUNT],
+    iov_lens: &mut [usize; IOV_COUNT],
+    iov_bufs: &mut [[u8; MEDIUM_READ_SIZE]; IOV_COUNT],
+    read_count: &mut usize,
+    return_value: i64,
 ) {
-    let mut iovecs = [Iovec {
-        iov_base: 0,
-        iov_len: 0,
-    }; IOV_COUNT];
-    let mut iov_lens = [0usize; IOV_COUNT];
-    let mut iov_bufs = [[0u8; MEDIUM_READ_SIZE]; IOV_COUNT];
-    let count = core::cmp::min(iovcnt, IOV_COUNT);
+    *read_count = core::cmp::min(iovcnt, IOV_COUNT);
 
-    let mut bytes_left = if is_read { return_value } else { usize::MAX };
+    let mut bytes_left = match op {
+        IovecOp::Read => return_value as usize,
+        IovecOp::Write => usize::MAX,
+    };
 
-    for i in 0..count {
+    for i in 0..*read_count {
         let iov_ptr = (iov_addr as *const u8).wrapping_add(i * size_of::<Iovec>());
         let iov_base = unsafe {
             bpf_probe_read_user::<*const u8>(iov_ptr as *const _).unwrap_or(core::ptr::null())
@@ -270,10 +279,9 @@ pub fn read_iovec_array(
         // Only read up to MEDIUM_READ_SIZE bytes per iovec, and only up to bytes_left for read
         let to_read = core::cmp::min(
             MEDIUM_READ_SIZE,
-            if is_read {
-                core::cmp::min(iov_len as usize, bytes_left)
-            } else {
-                iov_len as usize
+            match op {
+                IovecOp::Read => core::cmp::min(iov_len as usize, bytes_left),
+                IovecOp::Write => iov_len as usize,
             },
         );
 
@@ -283,13 +291,11 @@ pub fn read_iovec_array(
             }
         }
 
-        if is_read {
+        if let IovecOp::Read = op {
             bytes_left = bytes_left.saturating_sub(to_read);
             if bytes_left == 0 {
                 break;
             }
         }
     }
-
-    (iovecs, iov_lens, iov_bufs, count)
 }

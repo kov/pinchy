@@ -79,6 +79,42 @@ pub fn get_return_value(ctx: &TracePointContext) -> Result<i64, u32> {
     })
 }
 
+#[macro_export]
+macro_rules! syscall_handler {
+    // Pattern with explicit data field
+    ($name:ident, $data_field:ident, $args:ident, $data:ident, $body:block) => {
+        #[tracepoint]
+        pub fn ${concat(syscall_exit_, $name)}(ctx: TracePointContext) -> u32 {
+            let syscall_nr = pinchy_common::syscalls::${concat(SYS_, $name)};
+            let Ok(mut entry) = Entry::new(&ctx, syscall_nr) else {
+                return 1;
+            };
+
+            fn inner(ctx: &TracePointContext, entry: &mut Entry) -> Result<(), u32> {
+                let $args = get_args(ctx, entry.syscall_nr)?;
+                let $data = unsafe { &mut entry.data.$data_field };
+
+                $body;
+
+                Ok(())
+            }
+
+            match inner(&ctx, &mut entry) {
+                Ok(_) => entry.submit(),
+                Err(ret) => {
+                    entry.discard();
+                    ret
+                }
+            }
+        }
+    };
+
+    // Pattern with default data field (same as syscall name)
+    ($name:ident, $args:ident, $data:ident, $body:block) => {
+        syscall_handler!($name, $name, $args, $data, $body);
+    };
+}
+
 #[inline(always)]
 pub fn output_event(
     ctx: &TracePointContext,

@@ -184,429 +184,286 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let syscall_nr = get_syscall_nr(&ctx)?;
         let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
 
-        let data = match syscall_nr {
+        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
+
+        match syscall_nr {
             syscalls::SYS_close => {
-                let fd = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    close: pinchy_common::CloseData { fd },
-                }
+                let data = unsafe { &mut entry.data.close };
+                data.fd = args[0] as i32;
             }
             syscalls::SYS_lseek => {
-                let fd = args[0] as i32;
-                let offset = args[1] as i64;
-                let whence = args[2] as i32;
-                pinchy_common::SyscallEventData {
-                    lseek: pinchy_common::LseekData { fd, offset, whence },
-                }
+                let data = unsafe { &mut entry.data.lseek };
+                data.fd = args[0] as i32;
+                data.offset = args[1] as i64;
+                data.whence = args[2] as i32;
             }
-            syscalls::SYS_sched_yield => pinchy_common::SyscallEventData {
-                sched_yield: pinchy_common::SchedYieldData,
-            },
-            syscalls::SYS_getpid => pinchy_common::SyscallEventData {
-                getpid: pinchy_common::GetpidData,
-            },
-            syscalls::SYS_gettid => pinchy_common::SyscallEventData {
-                gettid: pinchy_common::GettidData,
-            },
-            syscalls::SYS_getuid => pinchy_common::SyscallEventData {
-                getuid: pinchy_common::GetuidData,
-            },
-            syscalls::SYS_geteuid => pinchy_common::SyscallEventData {
-                geteuid: pinchy_common::GeteuidData,
-            },
-            syscalls::SYS_getgid => pinchy_common::SyscallEventData {
-                getgid: pinchy_common::GetgidData,
-            },
-            syscalls::SYS_getegid => pinchy_common::SyscallEventData {
-                getegid: pinchy_common::GetegidData,
-            },
-            syscalls::SYS_getppid => pinchy_common::SyscallEventData {
-                getppid: pinchy_common::GetppidData,
-            },
-            syscalls::SYS_brk => pinchy_common::SyscallEventData {
-                brk: pinchy_common::BrkData { addr: args[0] },
-            },
+            syscalls::SYS_brk => {
+                let data = unsafe { &mut entry.data.brk };
+                data.addr = args[0];
+            }
             syscalls::SYS_mprotect => {
-                let addr = args[0];
-                let length = args[1];
-                let prot = args[2] as i32;
-                pinchy_common::SyscallEventData {
-                    mprotect: pinchy_common::MprotectData { addr, length, prot },
-                }
+                let data = unsafe { &mut entry.data.mprotect };
+                data.addr = args[0];
+                data.length = args[1];
+                data.prot = args[2] as i32;
             }
             syscalls::SYS_getrandom => {
-                let buf = args[0];
-                let buflen = args[1];
-                let flags = args[2] as u32;
-                pinchy_common::SyscallEventData {
-                    getrandom: pinchy_common::GetrandomData { buf, buflen, flags },
-                }
+                let data = unsafe { &mut entry.data.getrandom };
+                data.buf = args[0];
+                data.buflen = args[1];
+                data.flags = args[2] as u32;
             }
             syscalls::SYS_set_robust_list => {
-                let head = args[0];
-                let len = args[1];
-                pinchy_common::SyscallEventData {
-                    set_robust_list: pinchy_common::SetRobustListData { head, len },
-                }
+                let data = unsafe { &mut entry.data.set_robust_list };
+                data.head = args[0];
+                data.len = args[1];
             }
             syscalls::SYS_set_tid_address => {
-                let tidptr = args[0];
-                pinchy_common::SyscallEventData {
-                    set_tid_address: pinchy_common::SetTidAddressData { tidptr },
-                }
+                let data = unsafe { &mut entry.data.set_tid_address };
+                data.tidptr = args[0];
             }
             syscalls::SYS_rt_sigprocmask => {
-                let how = args[0] as i32;
-                let set = args[1];
-                let oldset = args[2];
-                let sigsetsize = args[3];
-                pinchy_common::SyscallEventData {
-                    rt_sigprocmask: pinchy_common::RtSigprocmaskData {
-                        how,
-                        set,
-                        oldset,
-                        sigsetsize,
-                    },
-                }
+                let data = unsafe { &mut entry.data.rt_sigprocmask };
+                data.how = args[0] as i32;
+                data.set = args[1];
+                data.oldset = args[2];
+                data.sigsetsize = args[3];
             }
             syscalls::SYS_rt_sigaction => {
-                let signum = args[0] as i32;
-                let act = args[1];
-                let oldact = args[2];
-                let sigsetsize = args[3];
-                pinchy_common::SyscallEventData {
-                    rt_sigaction: pinchy_common::RtSigactionData {
-                        signum,
-                        act,
-                        oldact,
-                        sigsetsize,
-                    },
-                }
+                let data = unsafe { &mut entry.data.rt_sigaction };
+                data.signum = args[0] as i32;
+                data.act = args[1];
+                data.oldact = args[2];
+                data.sigsetsize = args[3];
             }
             syscalls::SYS_fchdir => {
-                let fd = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    fchdir: pinchy_common::FchdirData { fd },
-                }
+                let data = unsafe { &mut entry.data.fchdir };
+                data.fd = args[0] as i32;
             }
             syscalls::SYS_dup3 => {
-                let oldfd = args[0] as i32;
-                let newfd = args[1] as i32;
-                let flags = args[2] as i32;
-                pinchy_common::SyscallEventData {
-                    dup3: pinchy_common::Dup3Data {
-                        oldfd,
-                        newfd,
-                        flags,
-                    },
-                }
+                let data = unsafe { &mut entry.data.dup3 };
+                data.oldfd = args[0] as i32;
+                data.newfd = args[1] as i32;
+                data.flags = args[2] as i32;
             }
             syscalls::SYS_exit_group => {
-                let status = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    exit_group: pinchy_common::ExitGroupData { status },
-                }
+                let data = unsafe { &mut entry.data.exit_group };
+                data.status = args[0] as i32;
             }
-            syscalls::SYS_rt_sigreturn => pinchy_common::SyscallEventData {
-                rt_sigreturn: pinchy_common::RtSigreturnData {},
-            },
             syscalls::SYS_dup => {
-                let oldfd = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    dup: pinchy_common::DupData { oldfd },
-                }
+                let data = unsafe { &mut entry.data.dup };
+                data.oldfd = args[0] as i32;
             }
             #[cfg(x86_64)]
             syscalls::SYS_dup2 => {
-                let oldfd = args[0] as i32;
-                let newfd = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    dup2: pinchy_common::Dup2Data { oldfd, newfd },
-                }
+                let data = unsafe { &mut entry.data.dup2 };
+                data.oldfd = args[0] as i32;
+                data.newfd = args[1] as i32;
             }
-            syscalls::SYS_sync => pinchy_common::SyscallEventData {
-                sync: pinchy_common::SyncData,
-            },
-            syscalls::SYS_setsid => pinchy_common::SyscallEventData {
-                setsid: pinchy_common::SetsidData,
-            },
             syscalls::SYS_setuid => {
-                let uid = args[0] as u32;
-                pinchy_common::SyscallEventData {
-                    setuid: pinchy_common::SetuidData { uid },
-                }
+                let data = unsafe { &mut entry.data.setuid };
+                data.uid = args[0] as u32;
             }
             syscalls::SYS_setgid => {
-                let gid = args[0] as u32;
-                pinchy_common::SyscallEventData {
-                    setgid: pinchy_common::SetgidData { gid },
-                }
+                let data = unsafe { &mut entry.data.setgid };
+                data.gid = args[0] as u32;
             }
             syscalls::SYS_close_range => {
-                let fd = args[0] as u32;
-                let max_fd = args[1] as u32;
-                let flags = args[2] as u32;
-                pinchy_common::SyscallEventData {
-                    close_range: pinchy_common::CloseRangeData { fd, max_fd, flags },
-                }
+                let data = unsafe { &mut entry.data.close_range };
+                data.fd = args[0] as u32;
+                data.max_fd = args[1] as u32;
+                data.flags = args[2] as u32;
             }
             syscalls::SYS_getpgid => {
-                let pid = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    getpgid: pinchy_common::GetpgidData { pid },
-                }
+                let data = unsafe { &mut entry.data.getpgid };
+                data.pid = args[0] as i32;
             }
             syscalls::SYS_getsid => {
-                let pid = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    getsid: pinchy_common::GetsidData { pid },
-                }
+                let data = unsafe { &mut entry.data.getsid };
+                data.pid = args[0] as i32;
             }
             syscalls::SYS_setpgid => {
-                let pid = args[0] as i32;
-                let pgid = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    setpgid: pinchy_common::SetpgidData { pid, pgid },
-                }
+                let data = unsafe { &mut entry.data.setpgid };
+                data.pid = args[0] as i32;
+                data.pgid = args[1] as i32;
             }
             syscalls::SYS_umask => {
-                let mask = args[0] as u32;
-                pinchy_common::SyscallEventData {
-                    umask: pinchy_common::UmaskData { mask },
-                }
+                let data = unsafe { &mut entry.data.umask };
+                data.mask = args[0] as u32;
             }
-            syscalls::SYS_vhangup => pinchy_common::SyscallEventData {
-                vhangup: pinchy_common::VhangupData,
-            },
             syscalls::SYS_ioprio_get => {
-                let which = args[0] as i32;
-                let who = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    ioprio_get: pinchy_common::IoprioGetData { which, who },
-                }
+                let data = unsafe { &mut entry.data.ioprio_get };
+                data.which = args[0] as i32;
+                data.who = args[1] as i32;
             }
             syscalls::SYS_ioprio_set => {
-                let which = args[0] as i32;
-                let who = args[1] as i32;
-                let ioprio = args[2] as i32;
-                pinchy_common::SyscallEventData {
-                    ioprio_set: pinchy_common::IoprioSetData { which, who, ioprio },
-                }
+                let data = unsafe { &mut entry.data.ioprio_set };
+                data.which = args[0] as i32;
+                data.who = args[1] as i32;
+                data.ioprio = args[2] as i32;
             }
             syscalls::SYS_setregid => {
-                let rgid = args[0] as u32;
-                let egid = args[1] as u32;
-                pinchy_common::SyscallEventData {
-                    setregid: pinchy_common::SetregidData { rgid, egid },
-                }
+                let data = unsafe { &mut entry.data.setregid };
+                data.rgid = args[0] as u32;
+                data.egid = args[1] as u32;
             }
             syscalls::SYS_setresgid => {
-                let rgid = args[0] as u32;
-                let egid = args[1] as u32;
-                let sgid = args[2] as u32;
-                pinchy_common::SyscallEventData {
-                    setresgid: pinchy_common::SetresgidData { rgid, egid, sgid },
-                }
+                let data = unsafe { &mut entry.data.setresgid };
+                data.rgid = args[0] as u32;
+                data.egid = args[1] as u32;
+                data.sgid = args[2] as u32;
             }
             syscalls::SYS_setresuid => {
-                let ruid = args[0] as u32;
-                let euid = args[1] as u32;
-                let suid = args[2] as u32;
-                pinchy_common::SyscallEventData {
-                    setresuid: pinchy_common::SetresuidData { ruid, euid, suid },
-                }
+                let data = unsafe { &mut entry.data.setresuid };
+                data.ruid = args[0] as u32;
+                data.euid = args[1] as u32;
+                data.suid = args[2] as u32;
             }
             syscalls::SYS_setreuid => {
-                let ruid = args[0] as u32;
-                let euid = args[1] as u32;
-                pinchy_common::SyscallEventData {
-                    setreuid: pinchy_common::SetreuidData { ruid, euid },
-                }
+                let data = unsafe { &mut entry.data.setreuid };
+                data.ruid = args[0] as u32;
+                data.euid = args[1] as u32;
             }
             #[cfg(x86_64)]
             syscalls::SYS_alarm => {
-                let seconds = args[0] as u32;
-                pinchy_common::SyscallEventData {
-                    alarm: pinchy_common::AlarmData { seconds },
-                }
+                let data = unsafe { &mut entry.data.alarm };
+                data.seconds = args[0] as u32;
             }
-            #[cfg(x86_64)]
-            syscalls::SYS_pause => pinchy_common::SyscallEventData {
-                pause: pinchy_common::PauseData,
-            },
-            #[cfg(x86_64)]
-            syscalls::SYS_getpgrp => pinchy_common::SyscallEventData {
-                getpgrp: pinchy_common::GetpgrpData,
-            },
             syscalls::SYS_personality => {
-                let persona = args[0] as u64;
-                pinchy_common::SyscallEventData {
-                    personality: pinchy_common::PersonalityData { persona },
-                }
+                let data = unsafe { &mut entry.data.personality };
+                data.persona = args[0] as u64;
             }
             syscalls::SYS_getpriority => {
-                let which = args[0] as i32;
-                let who = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    getpriority: pinchy_common::GetpriorityData { which, who },
-                }
+                let data = unsafe { &mut entry.data.getpriority };
+                data.which = args[0] as i32;
+                data.who = args[1] as i32;
             }
             syscalls::SYS_setpriority => {
-                let which = args[0] as i32;
-                let who = args[1] as i32;
-                let prio = args[2] as i32;
-                pinchy_common::SyscallEventData {
-                    setpriority: pinchy_common::SetpriorityData { which, who, prio },
-                }
+                let data = unsafe { &mut entry.data.setpriority };
+                data.which = args[0] as i32;
+                data.who = args[1] as i32;
+                data.prio = args[2] as i32;
             }
             syscalls::SYS_tkill => {
-                let pid = args[0] as i32;
-                let signal = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    tkill: pinchy_common::TkillData { pid, signal },
-                }
+                let data = unsafe { &mut entry.data.tkill };
+                data.pid = args[0] as i32;
+                data.signal = args[1] as i32;
             }
             syscalls::SYS_tgkill => {
-                let tgid = args[0] as i32;
-                let pid = args[1] as i32;
-                let signal = args[2] as i32;
-                pinchy_common::SyscallEventData {
-                    tgkill: pinchy_common::TgkillData { tgid, pid, signal },
-                }
+                let data = unsafe { &mut entry.data.tgkill };
+                data.tgid = args[0] as i32;
+                data.pid = args[1] as i32;
+                data.signal = args[2] as i32;
             }
             syscalls::SYS_kill => {
-                let pid = args[0] as i32;
-                let signal = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    kill: pinchy_common::KillData { pid, signal },
-                }
+                let data = unsafe { &mut entry.data.kill };
+                data.pid = args[0] as i32;
+                data.signal = args[1] as i32;
             }
             syscalls::SYS_exit => {
-                let status = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    exit: pinchy_common::ExitData { status },
-                }
+                let data = unsafe { &mut entry.data.exit };
+                data.status = args[0] as i32;
             }
             syscalls::SYS_sched_getscheduler => {
-                let pid = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    sched_getscheduler: pinchy_common::SchedGetschedulerData { pid },
-                }
+                let data = unsafe { &mut entry.data.sched_getscheduler };
+                data.pid = args[0] as i32;
             }
             syscalls::SYS_setfsuid => {
-                let uid = args[0] as u32;
-                pinchy_common::SyscallEventData {
-                    setfsuid: pinchy_common::SetfsuidData { uid },
-                }
+                let data = unsafe { &mut entry.data.setfsuid };
+                data.uid = args[0] as u32;
             }
             syscalls::SYS_setfsgid => {
-                let gid = args[0] as u32;
-                pinchy_common::SyscallEventData {
-                    setfsgid: pinchy_common::SetfsgidData { gid },
-                }
+                let data = unsafe { &mut entry.data.setfsgid };
+                data.gid = args[0] as u32;
             }
             syscalls::SYS_sched_get_priority_max => {
-                let policy = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    sched_get_priority_max: pinchy_common::SchedGetPriorityMaxData { policy },
-                }
+                let data = unsafe { &mut entry.data.sched_get_priority_max };
+                data.policy = args[0] as i32;
             }
             syscalls::SYS_sched_get_priority_min => {
-                let policy = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    sched_get_priority_min: pinchy_common::SchedGetPriorityMinData { policy },
-                }
+                let data = unsafe { &mut entry.data.sched_get_priority_min };
+                data.policy = args[0] as i32;
             }
             syscalls::SYS_socket => {
-                let domain = args[0] as i32;
-                let type_ = args[1] as i32;
-                let protocol = args[2] as i32;
-                pinchy_common::SyscallEventData {
-                    socket: pinchy_common::SocketData {
-                        domain,
-                        type_,
-                        protocol,
-                    },
-                }
+                let data = unsafe { &mut entry.data.socket };
+                data.domain = args[0] as i32;
+                data.type_ = args[1] as i32;
+                data.protocol = args[2] as i32;
             }
             syscalls::SYS_listen => {
-                let sockfd = args[0] as i32;
-                let backlog = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    listen: pinchy_common::ListenData { sockfd, backlog },
-                }
+                let data = unsafe { &mut entry.data.listen };
+                data.sockfd = args[0] as i32;
+                data.backlog = args[1] as i32;
             }
             syscalls::SYS_shutdown => {
-                let sockfd = args[0] as i32;
-                let how = args[1] as i32;
-                pinchy_common::SyscallEventData {
-                    shutdown: pinchy_common::ShutdownData { sockfd, how },
-                }
+                let data = unsafe { &mut entry.data.shutdown };
+                data.sockfd = args[0] as i32;
+                data.how = args[1] as i32;
             }
             syscalls::SYS_fcntl => {
-                let fd = args[0] as i32;
-                let cmd = args[1] as i32;
-                let arg = args[2];
-                pinchy_common::SyscallEventData {
-                    fcntl: pinchy_common::FcntlData { fd, cmd, arg },
-                }
+                let data = unsafe { &mut entry.data.fcntl };
+                data.fd = args[0] as i32;
+                data.cmd = args[1] as i32;
+                data.arg = args[2];
             }
             syscalls::SYS_fchmod => {
-                let fd = args[0] as i32;
-                let mode = args[1] as u32;
-                pinchy_common::SyscallEventData {
-                    fchmod: pinchy_common::FchmodData { fd, mode },
-                }
+                let data = unsafe { &mut entry.data.fchmod };
+                data.fd = args[0] as i32;
+                data.mode = args[1] as u32;
             }
             syscalls::SYS_fsync => {
-                let fd = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    fsync: pinchy_common::FsyncData { fd },
-                }
+                let data = unsafe { &mut entry.data.fsync };
+                data.fd = args[0] as i32;
             }
             syscalls::SYS_fdatasync => {
-                let fd = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    fdatasync: pinchy_common::FdatasyncData { fd },
-                }
+                let data = unsafe { &mut entry.data.fdatasync };
+                data.fd = args[0] as i32;
             }
             syscalls::SYS_ftruncate => {
-                let fd = args[0] as i32;
-                let length = args[1] as i64;
-                pinchy_common::SyscallEventData {
-                    ftruncate: pinchy_common::FtruncateData { fd, length },
-                }
+                let data = unsafe { &mut entry.data.ftruncate };
+                data.fd = args[0] as i32;
+                data.length = args[1] as i64;
             }
             syscalls::SYS_fchown => {
-                let fd = args[0] as i32;
-                let uid = args[1] as u32;
-                let gid = args[2] as u32;
-                pinchy_common::SyscallEventData {
-                    fchown: pinchy_common::FchownData { fd, uid, gid },
-                }
+                let data = unsafe { &mut entry.data.fchown };
+                data.fd = args[0] as i32;
+                data.uid = args[1] as u32;
+                data.gid = args[2] as u32;
             }
             #[cfg(x86_64)]
             syscalls::SYS_epoll_create => {
-                let size = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    epoll_create: pinchy_common::EpollCreateData { size },
-                }
+                let data = unsafe { &mut entry.data.epoll_create };
+                data.size = args[0] as i32;
             }
             syscalls::SYS_epoll_create1 => {
-                let flags = args[0] as i32;
-                pinchy_common::SyscallEventData {
-                    epoll_create1: pinchy_common::EpollCreate1Data { flags },
-                }
+                let data = unsafe { &mut entry.data.epoll_create1 };
+                data.flags = args[0] as i32;
             }
+            #[cfg(x86_64)]
+            syscalls::SYS_pause | syscalls::SYS_getpgrp => {}
+            syscalls::SYS_sched_yield
+            | syscalls::SYS_getpid
+            | syscalls::SYS_gettid
+            | syscalls::SYS_getuid
+            | syscalls::SYS_geteuid
+            | syscalls::SYS_getgid
+            | syscalls::SYS_getegid
+            | syscalls::SYS_getppid
+            | syscalls::SYS_rt_sigreturn
+            | syscalls::SYS_sync
+            | syscalls::SYS_setsid
+            | syscalls::SYS_vhangup => {}
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
+                entry.discard();
                 return Ok(());
             }
-        };
+        }
 
-        output_event(&ctx, syscall_nr, return_value, data)
+        entry.submit();
+
+        Ok(())
     }
     match inner(ctx) {
         Ok(_) => 0,

@@ -131,14 +131,20 @@ arguments reference and whether that data needs special handling.
        `pinchy/src/server.rs` in `load_tailcalls()`.
    - If complex (has pointer arguments or needs special handling):
      - Add a new tracepoint named `syscall_exit_<name>` in one of the files in
-       `pinchy-ebpf/src/`, see the discussion on categories above.
+       `pinchy-ebpf/src/`, see the discussion on categories above. The tracepoint
+       should be added by using the syscall_handler!() macro.
+       IMPORTANT: Do not make any changes before reading the macro in
+       `pinchy-ebp/src/util.rs` and looking at several uses in existing handlers.
      - Register it in the appropriate array in `load_tailcalls()` in
        `pinchy/src/server.rs`.
-     - When adding new handlers, always look at several existing handlers to
-       understand how things are done, do not limit yourself to looking at only
+     - IMPORTANT: When adding new handlers, always look at several existing handlers
+       to understand how things are done, do not limit yourself to looking at only
        the file you will add the handler to, read at least 2 others.
-     - When parsing structs on the eBPF side, use `bpf_probe_read_user()`;
-       only use `bpf_probe_read_buf()` when reading byte arrays.
+     - When parsing structs on the eBPF side, use `bpf_probe_read_user()` only when
+       reading small structs; use `bpf_probe_read_buf()` when reading byte arrays
+       and bigger structs so that the read can be done directly into the reserved
+       ringbuf memory (see the syscall_handler!() macro and the Entry type in the
+       `pinchy-ebpf/src/util.rs` for context), thus saving on stack usage.
 3. **Syscall arguments:**
    - Syscall arguments go into a struct called `<Syscall>Data` that should be
    added to the `pinchy-common/src/lib.rs` file and be added to the SyscallEventData
@@ -172,6 +178,10 @@ very friendly with `cargo build` or `cargo build --workspace`.
 When adding tests for parsing syscalls, use the files in `pinchy/src/tests/`.
 Look at several existing tests to understand the usual structure. When creating
 the expected output, take the event formatting code into consideration.
+
+IMPORTANT: Do not make any changes before looking at the syscall_test!() macro
+defined in `pinchy/src/tests/mod.rs` and several existing tests to understand how
+everything works.
 
 Integration tests that run the binaries as root in a controlled environment
 are in `pinchy/tests/integration.rs`. The `test-helper` binary used for the tests

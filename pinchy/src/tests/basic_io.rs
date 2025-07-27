@@ -668,6 +668,7 @@ async fn parse_readv() {
         iovcnt: 2,
         offset: 0,
         flags: 0,
+        read_count: 2,
     };
 
     data.iov_bufs[0][..4].copy_from_slice(b"test");
@@ -706,6 +707,7 @@ async fn parse_writev() {
         iovcnt: 1,
         offset: 0,
         flags: 0,
+        read_count: 1,
     };
 
     data.iov_bufs[0][..3].copy_from_slice(b"abc");
@@ -743,6 +745,7 @@ async fn parse_preadv2() {
         iovcnt: 1,
         offset: 1234,
         flags: 0x10,
+        read_count: 1,
     };
 
     data.iov_bufs[0][..5].copy_from_slice(b"hello");

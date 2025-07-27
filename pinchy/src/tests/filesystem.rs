@@ -203,7 +203,7 @@ async fn parse_getdents64() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         format!(
-            "55 getdents64(fd: 7, count: 1024, entries: [ dirent {{ ino: 123456, off: 1, reclen: 24, type: 4, name: \".\" }}, dirent {{ ino: 123457, off: 2, reclen: 25, type: 4, name: \"..\" }}, dirent {{ ino: 123458, off: 3, reclen: 32, type: 8, name: \"file.txt\" ... (truncated) }} ]) = 3\n"
+            "55 getdents64(fd: 7, count: 1024, entries: [ dirent {{ ino: 123456, off: 1, reclen: 24, type: 4, name: \".\" }}, dirent {{ ino: 123457, off: 2, reclen: 25, type: 4, name: \"..\" }}, dirent {{ ino: 123458, off: 3, reclen: 32, type: 8, name: \"file.txt\" ... (truncated) }} ]) = 3 (bytes)\n"
         )
     );
 
@@ -223,7 +223,7 @@ async fn parse_getdents64() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        format!("55 getdents64(fd: 7, count: 1024, entries: [  ]) = 0\n")
+        format!("55 getdents64(fd: 7, count: 1024, entries: [  ]) = 0 (bytes)\n")
     );
 }
 

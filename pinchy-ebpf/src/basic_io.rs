@@ -14,7 +14,7 @@ use pinchy_common::kernel_types::{EpollEvent, FdSet, Pollfd, Timespec};
 use crate::util::read_timeval;
 use crate::{
     syscall_handler,
-    util::{get_args, get_return_value, read_iovec_array, read_timespec, Entry, IovecOp},
+    util::{get_args, get_return_value, read_iovec_array, read_timespec, IovecOp},
 };
 
 syscall_handler!(openat, openat, args, data, {

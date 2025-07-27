@@ -1,6 +1,6 @@
 use std::{
     env::{current_dir, set_current_dir},
-    ffi::c_void,
+    ffi::{c_void, CString},
     fs,
     path::PathBuf,
 };
@@ -37,7 +37,7 @@ fn main() -> anyhow::Result<()> {
         set_current_dir(&workspace_root)?;
     }
 
-    assert!(fs::exists("pinchy/tests/GPLv2").expect("probably not on the correct cwd"));
+    fs::exists("pinchy/tests/GPLv2").expect("probably not on the correct cwd");
 
     let mut args = std::env::args();
 
@@ -69,11 +69,69 @@ fn main() -> anyhow::Result<()> {
             "readv_writev_test" => readv_writev_test(),
             "pselect6_test" => pselect6_test(),
             "filesystem_sync_test" => filesystem_sync_test(),
+            "filesystem_syscalls_test" => filesystem_syscalls_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
         bail!("Need a test name as the first argument, nothing provided.")
     }
+}
+
+fn filesystem_syscalls_test() -> anyhow::Result<()> {
+    use std::{
+        fs::{self, File},
+        os::unix::io::AsRawFd,
+        path::Path,
+    };
+
+    // Use the GPLv2 file and its directory as test targets
+    let gpl_path = Path::new("pinchy/tests/GPLv2");
+    let gpl_cpath =
+        CString::new(gpl_path.as_os_str().as_encoded_bytes()).expect("Converting path to CString");
+    let dir_path = gpl_path.parent().expect("should have parent directory");
+
+    // --- getdents64 ---
+    let dir = fs::File::open(dir_path)?;
+    let dir_fd = dir.as_raw_fd();
+    let mut buf = vec![0u8; 4096];
+    let nread = unsafe { libc::syscall(libc::SYS_getdents64, dir_fd, buf.as_mut_ptr(), buf.len()) };
+    assert!(nread > 0, "getdents64 should return > 0");
+
+    // --- fstat ---
+    let file = File::open(gpl_path)?;
+    let fd = file.as_raw_fd();
+    let mut stat: libc::stat = unsafe { std::mem::zeroed() };
+    let res = unsafe { libc::fstat(fd, &mut stat) };
+    assert_eq!(res, 0, "fstat should succeed");
+    assert!(stat.st_size > 0, "GPLv2 file should not be empty");
+
+    // --- newfstatat ---
+    let mut stat2: pinchy_common::kernel_types::Stat = unsafe { std::mem::zeroed() };
+    let res = unsafe {
+        libc::syscall(
+            libc::SYS_newfstatat,
+            libc::AT_FDCWD,
+            gpl_cpath.as_ptr(),
+            &mut stat2,
+            0,
+        )
+    };
+    assert_eq!(res, 0, "newfstatat should succeed");
+    assert_eq!(stat2.st_size, stat.st_size, "sizes should match");
+
+    // --- faccessat ---
+    let res = unsafe {
+        libc::syscall(
+            libc::SYS_faccessat,
+            libc::AT_FDCWD,
+            gpl_cpath.as_ptr(),
+            libc::R_OK,
+            0,
+        )
+    };
+    assert_eq!(res, 0, "faccessat should succeed for readable file");
+
+    Ok(())
 }
 
 fn pinchy_reads() -> anyhow::Result<()> {

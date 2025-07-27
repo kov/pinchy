@@ -253,7 +253,13 @@ pub fn read_iovec_array(
     *read_count = core::cmp::min(iovcnt, IOV_COUNT);
 
     let mut bytes_left = match op {
-        IovecOp::Read => return_value as usize,
+        IovecOp::Read => {
+            if return_value < 0 {
+                0
+            } else {
+                return_value as usize
+            }
+        },
         IovecOp::Write => usize::MAX,
     };
 

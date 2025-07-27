@@ -15,7 +15,7 @@ use aya_ebpf::{
 use aya_log_ebpf::{error, trace};
 use pinchy_common::syscalls;
 
-use crate::util::{get_args, get_return_value, get_syscall_nr, output_event};
+use crate::util::{get_args, get_syscall_nr};
 
 mod basic_io;
 mod filesystem;
@@ -476,16 +476,16 @@ pub fn syscall_exit_generic(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let syscall_nr = get_syscall_nr(&ctx)?;
         let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
 
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                generic: pinchy_common::GenericSyscallData { args },
-            },
-        )
+        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
+
+        let data = unsafe { &mut entry.data.generic };
+
+        data.args = args;
+
+        entry.submit();
+
+        Ok(())
     }
     match inner(ctx) {
         Ok(_) => 0,

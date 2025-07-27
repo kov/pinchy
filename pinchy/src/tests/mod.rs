@@ -12,40 +12,50 @@ mod signal;
 mod sync;
 mod system;
 
-use std::pin::Pin;
+#[macro_export]
+macro_rules! syscall_test {
+    ($name:ident, $init:block, $expected:expr) => {
+        #[::tokio::test]
+        async fn $name() {
+            let event = $init;
 
-use crate::{
-    events::handle_event,
-    formatting::{Formatter, FormattingStyle},
-};
+            let mut output: Vec<u8> = vec![];
+            let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+            let formatter = $crate::formatting::Formatter::new(
+                pin_output,
+                $crate::formatting::FormattingStyle::OneLine,
+            );
 
-#[tokio::test]
-async fn parse_generic_syscall() {
-    use pinchy_common::{
-        syscalls::SYS_generic_parse_test, GenericSyscallData, SyscallEvent, SyscallEventData,
+            $crate::events::handle_event(&event, formatter)
+                .await
+                .unwrap();
+
+            assert_eq!(
+                String::from_utf8_lossy(&output).to_string().as_str(),
+                $expected
+            );
+        }
     };
-
-    // Test the generic syscall handler using a fake syscall
-    let event = SyscallEvent {
-        syscall_nr: SYS_generic_parse_test,
-        pid: 1234,
-        tid: 1234,
-        return_value: 42,
-        data: SyscallEventData {
-            generic: GenericSyscallData {
-                args: [0, 1, 2, 3, 4, 5],
-            },
-        },
-    };
-
-    let mut output: Vec<u8> = vec![];
-    let pin_output = unsafe { Pin::new_unchecked(&mut output) };
-    let formatter = Formatter::new(pin_output, FormattingStyle::OneLine);
-
-    handle_event(&event, formatter).await.unwrap();
-
-    assert_eq!(
-        String::from_utf8_lossy(&output),
-        format!("1234 generic_parse_test(0, 1, 2, 3, 4, 5) = 42 <STUB>\n")
-    );
 }
+
+syscall_test!(
+    parse_generic_syscall,
+    {
+        use pinchy_common::{
+            syscalls::SYS_generic_parse_test, GenericSyscallData, SyscallEvent, SyscallEventData,
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_generic_parse_test,
+            pid: 1234,
+            tid: 1234,
+            return_value: 42,
+            data: SyscallEventData {
+                generic: GenericSyscallData {
+                    args: [0, 1, 2, 3, 4, 5],
+                },
+            },
+        }
+    },
+    "1234 generic_parse_test(0, 1, 2, 3, 4, 5) = 42 <STUB>\n"
+);

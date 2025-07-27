@@ -14,11 +14,7 @@ use crate::{ENTER_MAP, EVENTS, SYSCALL_RETURN_OFFSET};
 
 #[inline(always)]
 pub fn read_timespec(ptr: *const Timespec) -> Timespec {
-    if !ptr.is_null() {
-        unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
-    } else {
-        Timespec::default()
-    }
+    unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
 }
 
 // Helper function to read timeval from userspace

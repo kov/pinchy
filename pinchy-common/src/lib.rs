@@ -284,6 +284,7 @@ pub struct VectorIOData {
     pub iovcnt: usize,
     pub offset: i64, // Only used for preadv/pwritev variants
     pub flags: u32,  // Only used for preadv2/pwritev2
+    pub read_count: usize,
 }
 
 #[repr(C)]

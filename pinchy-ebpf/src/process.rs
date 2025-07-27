@@ -9,15 +9,11 @@ use aya_ebpf::{
     EbpfContext as _,
 };
 use pinchy_common::{
-    kernel_types::{CloneArgs, Rlimit},
-    syscalls::{SYS_clone, SYS_clone3, SYS_execve, SYS_getrusage, SYS_prlimit64, SYS_wait4},
+    kernel_types::{CloneArgs, Rlimit, Rusage},
     SMALL_READ_SIZE,
 };
 
-use crate::{
-    util::{get_args, get_return_value, output_event},
-    PID_FILTER, SYSCALL_ARGS_OFFSET,
-};
+use crate::{syscall_handler, PID_FILTER, SYSCALL_ARGS_OFFSET};
 
 #[map]
 static mut EXECVE_ENTER_MAP: HashMap<u32, ExecveEnterData> =
@@ -39,13 +35,14 @@ pub struct ExecveEnterData {
 pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let tid = ctx.pid();
-        let return_value = get_return_value(&ctx)?;
+        let return_value = crate::util::get_return_value(&ctx)?;
+
         let enter_data = unsafe { EXECVE_ENTER_MAP.get(&tid) };
         if let Some(enter_data) = enter_data {
             let _ = unsafe { EXECVE_ENTER_MAP.remove(&tid) };
-            output_event(
+            crate::util::output_event(
                 &ctx,
-                SYS_execve,
+                pinchy_common::syscalls::SYS_execve,
                 return_value,
                 pinchy_common::SyscallEventData {
                     execve: pinchy_common::ExecveData {
@@ -61,15 +58,12 @@ pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
                 },
             )
         } else {
-            // fallback: emit empty event
-            output_event(
+            aya_log_ebpf::error!(
                 &ctx,
-                SYS_execve,
-                return_value,
-                pinchy_common::SyscallEventData {
-                    execve: unsafe { core::mem::zeroed() },
-                },
-            )
+                "did not find matching enter data for execve for PID",
+                tid
+            );
+            return Err(1);
         }
     }
     match inner(ctx) {
@@ -91,6 +85,7 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
             ctx.read_at::<[usize; 6]>(SYSCALL_ARGS_OFFSET)
                 .map_err(|e| e as u32)?
         };
+
         let filename_ptr = args[0] as *const u8;
         let argv_ptr = args[1] as *const *const u8;
         let envp_ptr = args[2] as *const *const u8;
@@ -99,6 +94,7 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
         unsafe {
             let _ = bpf_probe_read_buf(filename_ptr as *const _, &mut filename);
         }
+
         let mut filename_truncated = true;
         for byte in filename {
             if byte == 0 {
@@ -165,19 +161,22 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
             }
         }
 
-        let data = ExecveEnterData {
-            filename,
-            filename_truncated,
-            argv,
-            argv_len,
-            argc,
-            envp,
-            envp_len,
-            envc,
-        };
         unsafe {
             EXECVE_ENTER_MAP
-                .insert(&tid, &data, 0)
+                .insert(
+                    &tid,
+                    &ExecveEnterData {
+                        filename,
+                        filename_truncated,
+                        argv,
+                        argv_len,
+                        argc,
+                        envp,
+                        envp_len,
+                        envc,
+                    },
+                    0,
+                )
                 .map_err(|e| e as u32)?;
         }
         Ok(())
@@ -188,272 +187,119 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
     }
 }
 
-#[tracepoint]
-pub fn syscall_exit_prlimit64(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_prlimit64;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
+syscall_handler!(prlimit64, prlimit, args, data, return_value, {
+    data.pid = args[0] as i32;
+    data.resource = args[1] as i32;
+    let new_limit_ptr = args[2] as *const Rlimit;
+    let old_limit_ptr = args[3] as *const Rlimit;
 
-        let pid = args[0] as i32;
-        let resource = args[1] as i32;
-        let new_limit_ptr = args[2] as *const Rlimit;
-        let old_limit_ptr = args[3] as *const Rlimit;
+    data.has_new = !new_limit_ptr.is_null();
+    data.has_old = !old_limit_ptr.is_null();
+    data.new_limit = Rlimit::default();
+    data.old_limit = Rlimit::default();
 
-        // Default values for limits
-        let mut new_limit = Rlimit::default();
-        let mut old_limit = Rlimit::default();
-
-        // Track whether new and old limits are present
-        let has_new = !new_limit_ptr.is_null();
-        let has_old = !old_limit_ptr.is_null();
-
-        // Only try to read the new limit if provided
-        if has_new {
-            if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(new_limit_ptr as *const _) } {
-                new_limit = limit;
-            }
+    if data.has_new {
+        if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(new_limit_ptr as *const _) } {
+            data.new_limit = limit;
         }
-
-        // Only try to read the old limit if provided and call was successful
-        if has_old && return_value == 0 {
-            if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(old_limit_ptr as *const _) } {
-                old_limit = limit;
-            }
+    }
+    if data.has_old && return_value == 0 {
+        if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(old_limit_ptr as *const _) } {
+            data.old_limit = limit;
         }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                prlimit: pinchy_common::PrlimitData {
-                    pid,
-                    resource,
-                    has_old,
-                    has_new,
-                    old_limit,
-                    new_limit,
-                },
-            },
-        )
     }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
+});
 
-#[tracepoint]
-pub fn syscall_exit_wait4(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_wait4;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
+syscall_handler!(wait4, wait4, args, data, return_value, {
+    data.pid = args[0] as i32;
+    let wstatus_ptr = args[1] as *const i32;
+    data.options = args[2] as i32;
+    let rusage_ptr = args[3] as *const Rusage;
 
-        let pid = args[0] as i32;
-        let wstatus_ptr = args[1] as *const i32;
-        let options = args[2] as i32;
-        let rusage_ptr = args[3] as *const pinchy_common::kernel_types::Rusage;
+    data.wstatus = 0i32;
+    data.rusage = Rusage::default();
+    data.has_rusage = false;
 
-        let mut wstatus = 0i32;
-        let mut rusage = pinchy_common::kernel_types::Rusage::default();
-        let mut has_rusage = false;
-
-        // Only read wstatus if the call was successful and pointer is not null
-        if return_value >= 0 && wstatus_ptr != core::ptr::null() {
-            unsafe {
-                if let Ok(status) = bpf_probe_read_user::<i32>(wstatus_ptr) {
-                    wstatus = status;
-                }
-            }
-        }
-
-        // Only read rusage if the call was successful and pointer is not null
-        if return_value >= 0 && rusage_ptr != core::ptr::null() {
-            unsafe {
-                if let Ok(usage) =
-                    bpf_probe_read_user::<pinchy_common::kernel_types::Rusage>(rusage_ptr)
-                {
-                    rusage = usage;
-                    has_rusage = true;
-                }
-            }
-        }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                wait4: pinchy_common::Wait4Data {
-                    pid,
-                    wstatus,
-                    options,
-                    has_rusage,
-                    rusage,
-                },
-            },
-        )
-    }
-
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
-
-#[tracepoint]
-pub fn syscall_exit_getrusage(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_getrusage;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
-
-        let who = args[0] as i32;
-        let usage_ptr = args[1] as *const pinchy_common::kernel_types::Rusage;
-
-        let mut rusage = pinchy_common::kernel_types::Rusage::default();
-
-        // Only read rusage if the call was successful and pointer is not null
-        if return_value >= 0 && usage_ptr != core::ptr::null() {
-            unsafe {
-                if let Ok(usage) =
-                    bpf_probe_read_user::<pinchy_common::kernel_types::Rusage>(usage_ptr)
-                {
-                    rusage = usage;
-                }
-            }
-        }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                getrusage: pinchy_common::GetrusageData { who, rusage },
-            },
-        )
-    }
-
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
-
-#[tracepoint]
-pub fn syscall_exit_clone3(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_clone3;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
-
-        let cl_args_ptr = args[0] as *const CloneArgs;
-        let size = args[1] as u64;
-
-        let mut cl_args = CloneArgs::default();
-        let mut set_tid_count = 0u32;
-        let mut set_tid_array = [0i32; pinchy_common::CLONE_SET_TID_MAX];
-
+    if return_value >= 0 && !wstatus_ptr.is_null() {
         unsafe {
-            // Read only the amount of data that userspace provided, or at most the data we already know about.
-            let read_size = core::cmp::min(size as usize, core::mem::size_of::<CloneArgs>());
-
-            if read_size > 0 {
-                let _ = bpf_probe_read_buf(
-                    cl_args_ptr as *const u8,
-                    &mut core::slice::from_raw_parts_mut(
-                        &mut cl_args as *mut CloneArgs as *mut u8,
-                        read_size,
-                    ),
-                );
+            if let Ok(status) = bpf_probe_read_user::<i32>(wstatus_ptr) {
+                data.wstatus = status;
             }
+        }
+    }
+    if return_value >= 0 && !rusage_ptr.is_null() {
+        unsafe {
+            if let Ok(usage) = bpf_probe_read_user::<Rusage>(rusage_ptr) {
+                data.rusage = usage;
+                data.has_rusage = true;
+            }
+        }
+    }
+});
 
-            // If set_tid is provided, read the PID array
-            if cl_args.set_tid != 0 && cl_args.set_tid_size > 0 {
-                let set_tid_ptr = cl_args.set_tid as *const i32;
-                let max_count = core::cmp::min(
-                    cl_args.set_tid_size as usize,
-                    pinchy_common::CLONE_SET_TID_MAX,
-                );
+syscall_handler!(getrusage, getrusage, args, data, return_value, {
+    data.who = args[0] as i32;
+    let usage_ptr = args[1] as *const Rusage;
+    data.rusage = Rusage::default();
+    if return_value >= 0 && !usage_ptr.is_null() {
+        unsafe {
+            if let Ok(usage) = bpf_probe_read_user::<Rusage>(usage_ptr) {
+                data.rusage = usage;
+            }
+        }
+    }
+});
 
-                for i in 0..max_count {
-                    if let Ok(pid) = bpf_probe_read_user::<i32>(set_tid_ptr.add(i)) {
-                        set_tid_array[i] = pid;
-                        set_tid_count += 1;
-                    } else {
-                        break;
-                    }
+syscall_handler!(clone3, args, data, {
+    let cl_args_ptr = args[0] as *const CloneArgs;
+    data.size = args[1] as u64;
+    data.cl_args = CloneArgs::default();
+
+    unsafe {
+        let read_size = core::cmp::min(data.size as usize, core::mem::size_of::<CloneArgs>());
+        if read_size > 0 {
+            let _ = bpf_probe_read_buf(
+                cl_args_ptr as *const u8,
+                &mut core::slice::from_raw_parts_mut(
+                    &mut data.cl_args as *mut CloneArgs as *mut u8,
+                    read_size,
+                ),
+            );
+        }
+        if data.cl_args.set_tid != 0 && data.cl_args.set_tid_size > 0 {
+            let set_tid_ptr = data.cl_args.set_tid as *const i32;
+            let max_count = core::cmp::min(
+                data.cl_args.set_tid_size as usize,
+                pinchy_common::CLONE_SET_TID_MAX,
+            );
+            for i in 0..max_count {
+                if let Ok(pid) = bpf_probe_read_user::<i32>(set_tid_ptr.add(i)) {
+                    data.set_tid_array[i] = pid;
+                    data.set_tid_count += 1;
+                } else {
+                    break;
                 }
             }
         }
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                clone3: pinchy_common::Clone3Data {
-                    cl_args,
-                    size,
-                    set_tid_count,
-                    set_tid_array,
-                },
-            },
-        )
     }
+});
 
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
+syscall_handler!(clone, args, data, {
+    data.flags = args[0] as u64;
+    data.stack = args[1];
+    data.tls = args[4] as u64;
 
-#[tracepoint]
-pub fn syscall_exit_clone(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let return_value = get_return_value(&ctx)?;
+    let parent_tid_ptr = args[2] as *const i32;
+    data.parent_tid = if !parent_tid_ptr.is_null() {
+        unsafe { bpf_probe_read_user(parent_tid_ptr).unwrap_or(0) }
+    } else {
+        0
+    };
 
-        // Read syscall arguments
-        let args = get_args(&ctx, SYS_clone)?;
-        let flags = args[0] as u64;
-        let stack = args[1];
-        let parent_tid_ptr = args[2] as *const i32;
-        let child_tid_ptr = args[3] as *const i32;
-        let tls = args[4] as u64;
-
-        // Dereference parent_tid and child_tid pointers
-        let parent_tid = if !parent_tid_ptr.is_null() {
-            unsafe { bpf_probe_read_user(parent_tid_ptr).unwrap_or(0) }
-        } else {
-            0
-        };
-
-        let child_tid = if !child_tid_ptr.is_null() {
-            unsafe { bpf_probe_read_user(child_tid_ptr).unwrap_or(0) }
-        } else {
-            0
-        };
-
-        output_event(
-            &ctx,
-            SYS_clone,
-            return_value,
-            pinchy_common::SyscallEventData {
-                clone: pinchy_common::CloneData {
-                    flags,
-                    stack,
-                    parent_tid,
-                    child_tid,
-                    tls,
-                },
-            },
-        )
-    }
-
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
+    let child_tid_ptr = args[3] as *const i32;
+    data.child_tid = if !child_tid_ptr.is_null() {
+        unsafe { bpf_probe_read_user(child_tid_ptr).unwrap_or(0) }
+    } else {
+        0
+    };
+});

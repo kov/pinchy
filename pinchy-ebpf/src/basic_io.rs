@@ -7,23 +7,23 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 #[cfg(x86_64)]
-use pinchy_common::{
-    kernel_types::Timeval,
-    syscalls::{SYS_poll, SYS_select},
-};
+use pinchy_common::kernel_types::Timeval;
 use pinchy_common::{
     kernel_types::{EpollEvent, FdSet, Pollfd, Timespec},
     syscalls::{
         SYS_epoll_pwait, SYS_fcntl, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv,
-        SYS_preadv2, SYS_pselect6, SYS_pwrite64, SYS_pwritev, SYS_pwritev2, SYS_read, SYS_readv,
-        SYS_write, SYS_writev,
+        SYS_preadv2, SYS_pwrite64, SYS_pwritev, SYS_pwritev2, SYS_read, SYS_readv, SYS_write,
+        SYS_writev,
     },
     DATA_READ_SIZE,
 };
 
 #[cfg(x86_64)]
 use crate::util::read_timeval;
-use crate::util::{get_args, get_return_value, output_event, read_timespec, Entry};
+use crate::{
+    syscall_handler,
+    util::{get_args, get_return_value, output_event, read_timespec, Entry},
+};
 
 #[tracepoint]
 pub fn syscall_exit_openat(ctx: TracePointContext) -> u32 {
@@ -596,156 +596,81 @@ fn read_fdset(fdset: &mut FdSet, fd_set_ptr: *const u8, nfds: i32) {
     }
 }
 
-#[tracepoint]
-pub fn syscall_exit_pselect6(ctx: TracePointContext) -> u32 {
-    let syscall_nr = SYS_pselect6;
-    aya_log_ebpf::info!(&ctx, "entered pselect6");
-    let Ok(mut entry) = Entry::new(&ctx, syscall_nr) else {
-        return 1;
+syscall_handler!(pselect6, args, data, {
+    data.nfds = args[0] as i32;
+
+    let readfds_ptr = args[1] as *const u8;
+    let writefds_ptr = args[2] as *const u8;
+    let exceptfds_ptr = args[3] as *const u8;
+    let timeout_ptr = args[4] as *const Timespec;
+    let sigmask_ptr = args[5] as *const u8;
+
+    read_fdset(&mut data.readfds, readfds_ptr, data.nfds);
+    read_fdset(&mut data.writefds, writefds_ptr, data.nfds);
+    read_fdset(&mut data.exceptfds, exceptfds_ptr, data.nfds);
+
+    data.timeout = if !timeout_ptr.is_null() {
+        read_timespec(timeout_ptr)
+    } else {
+        Timespec::default()
     };
 
-    fn inner(ctx: &TracePointContext, entry: &mut Entry) -> Result<(), u32> {
-        let args = get_args(ctx, entry.syscall_nr)?;
-
-        let data = unsafe { &mut entry.data.pselect6 };
-
-        data.nfds = args[0] as i32;
-
-        let readfds_ptr = args[1] as *const u8;
-        let writefds_ptr = args[2] as *const u8;
-        let exceptfds_ptr = args[3] as *const u8;
-        let timeout_ptr = args[4] as *const Timespec;
-        let sigmask_ptr = args[5] as *const u8;
-
-        read_fdset(&mut data.readfds, readfds_ptr, data.nfds);
-        read_fdset(&mut data.writefds, writefds_ptr, data.nfds);
-        read_fdset(&mut data.exceptfds, exceptfds_ptr, data.nfds);
-
-        data.timeout = if !timeout_ptr.is_null() {
-            read_timespec(timeout_ptr)
-        } else {
-            Timespec::default()
-        };
-
-        data.has_readfds = !readfds_ptr.is_null();
-        data.has_writefds = !writefds_ptr.is_null();
-        data.has_exceptfds = !exceptfds_ptr.is_null();
-        data.has_timeout = !timeout_ptr.is_null();
-        data.has_sigmask = !sigmask_ptr.is_null();
-
-        Ok(())
-    }
-    match inner(&ctx, &mut entry) {
-        Ok(_) => {
-            let data = unsafe { &entry.data.pselect6 };
-            aya_log_ebpf::info!(&ctx, "Submitting with nfds: {}", data.nfds);
-            entry.submit()
-        }
-        Err(ret) => {
-            aya_log_ebpf::error!(&ctx, "Something failed... discarding...");
-            entry.discard();
-            ret
-        }
-    }
-}
+    data.has_readfds = !readfds_ptr.is_null();
+    data.has_writefds = !writefds_ptr.is_null();
+    data.has_exceptfds = !exceptfds_ptr.is_null();
+    data.has_timeout = !timeout_ptr.is_null();
+    data.has_sigmask = !sigmask_ptr.is_null();
+});
 
 #[cfg(x86_64)]
-#[tracepoint]
-pub fn syscall_exit_select(ctx: TracePointContext) -> u32 {
-    fn inner(ctx: TracePointContext) -> Result<(), u32> {
-        let syscall_nr = SYS_select;
-        let args = get_args(&ctx, syscall_nr)?;
-        let return_value = get_return_value(&ctx)?;
+syscall_handler!(select, args, data, {
+    data.nfds = args[0] as i32;
 
-        let nfds = args[0] as i32;
-        let readfds_ptr = args[1] as *const u8;
-        let writefds_ptr = args[2] as *const u8;
-        let exceptfds_ptr = args[3] as *const u8;
-        let timeout_ptr = args[4] as *const Timeval;
+    let readfds_ptr = args[1] as *const u8;
+    let writefds_ptr = args[2] as *const u8;
+    let exceptfds_ptr = args[3] as *const u8;
+    let timeout_ptr = args[4] as *const Timeval;
 
-        let mut readfds = FdSet::default();
-        read_fdset(&mut readfds, readfds_ptr, nfds);
-        let mut writefds = FdSet::default();
-        read_fdset(&mut writefds, writefds_ptr, nfds);
-        let mut exceptfds = FdSet::default();
-        read_fdset(&mut exceptfds, exceptfds_ptr, nfds);
+    read_fdset(&mut data.readfds, readfds_ptr, data.nfds);
+    read_fdset(&mut data.writefds, writefds_ptr, data.nfds);
+    read_fdset(&mut data.exceptfds, exceptfds_ptr, data.nfds);
 
-        let timeout = if !timeout_ptr.is_null() {
-            read_timeval(timeout_ptr)
-        } else {
-            Timeval::default()
-        };
-
-        output_event(
-            &ctx,
-            syscall_nr,
-            return_value,
-            pinchy_common::SyscallEventData {
-                select: pinchy_common::SelectData {
-                    nfds,
-                    readfds,
-                    writefds,
-                    exceptfds,
-                    timeout,
-                    has_readfds: !readfds_ptr.is_null(),
-                    has_writefds: !writefds_ptr.is_null(),
-                    has_exceptfds: !exceptfds_ptr.is_null(),
-                    has_timeout: !timeout_ptr.is_null(),
-                },
-            },
-        )
-    }
-    match inner(ctx) {
-        Ok(_) => 0,
-        Err(ret) => ret,
-    }
-}
-
-#[cfg(x86_64)]
-//const SYS_poll: i64 = 0;
-#[tracepoint]
-pub fn syscall_exit_poll(ctx: TracePointContext) -> u32 {
-    let syscall_nr = SYS_poll;
-    let Ok(mut entry) = Entry::new(&ctx, syscall_nr) else {
-        return 1;
+    data.timeout = if !timeout_ptr.is_null() {
+        read_timeval(timeout_ptr)
+    } else {
+        Timeval::default()
     };
 
-    fn inner(ctx: TracePointContext, entry: &mut Entry) -> Result<(), u32> {
-        let args = get_args(&ctx, entry.syscall_nr)?;
+    data.has_readfds = !readfds_ptr.is_null();
+    data.has_writefds = !writefds_ptr.is_null();
+    data.has_exceptfds = !exceptfds_ptr.is_null();
+    data.has_timeout = !timeout_ptr.is_null();
+});
 
-        let data = unsafe { &mut entry.data.poll };
-        data.nfds = args[1] as u32;
-        data.timeout = args[2] as i32;
+#[cfg(x86_64)]
+syscall_handler!(poll, args, data, {
+    data.nfds = args[1] as u32;
+    data.timeout = args[2] as i32;
 
-        let mut fds_ptr = args[0] as *const Pollfd;
-        let fds = &mut data.fds;
+    let mut fds_ptr = args[0] as *const Pollfd;
+    let fds = &mut data.fds;
 
-        // Only read pollfd array if pointer is valid and we have fds
-        if !fds_ptr.is_null() && data.nfds > 0 {
-            let max_fds = core::cmp::min(data.nfds, 16) as usize;
-            for i in 0..max_fds {
-                fds_ptr = unsafe { fds_ptr.add(i) };
+    // Only read pollfd array if pointer is valid and we have fds
+    if !fds_ptr.is_null() && data.nfds > 0 {
+        let max_fds = core::cmp::min(data.nfds, 16) as usize;
+        for i in 0..max_fds {
+            fds_ptr = unsafe { fds_ptr.add(i) };
 
-                if fds_ptr.is_null() {
-                    break;
-                }
+            if fds_ptr.is_null() {
+                break;
+            }
 
-                if let Ok(pollfd) = unsafe { bpf_probe_read_user::<Pollfd>(fds_ptr) } {
-                    fds[i] = pollfd;
-                    data.actual_nfds += 1;
-                } else {
-                    break;
-                }
+            if let Ok(pollfd) = unsafe { bpf_probe_read_user::<Pollfd>(fds_ptr) } {
+                fds[i] = pollfd;
+                data.actual_nfds += 1;
+            } else {
+                break;
             }
         }
-
-        Ok(())
     }
-    match inner(ctx, &mut entry) {
-        Ok(_) => entry.submit(),
-        Err(ret) => {
-            entry.discard();
-            ret
-        }
-    }
-}
+});

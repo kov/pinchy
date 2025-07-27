@@ -41,12 +41,6 @@ syscall_handler!(read, read, args, data, return_value, {
     }
 });
 
-syscall_handler!(fcntl, fcntl, args, data, {
-    data.fd = args[0] as i32;
-    data.cmd = args[1] as i32;
-    data.arg = args[2];
-});
-
 syscall_handler!(write, write, args, data, return_value, {
     data.fd = args[0] as i32;
     data.count = args[2];

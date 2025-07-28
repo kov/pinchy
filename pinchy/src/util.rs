@@ -1909,6 +1909,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_bind
         | syscalls::SYS_listen
         | syscalls::SYS_connect
+        | syscalls::SYS_epoll_ctl
         | syscalls::SYS_shutdown => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
@@ -2111,6 +2112,15 @@ pub fn format_renameat2_flags(flags: u32) -> String {
         format!("0x{flags:x}")
     } else {
         format!("0x{:x} ({})", flags, parts.join(" | "))
+    }
+}
+
+pub fn format_epoll_ctl_op(op: i32) -> &'static str {
+    match op {
+        libc::EPOLL_CTL_ADD => "EPOLL_CTL_ADD",
+        libc::EPOLL_CTL_MOD => "EPOLL_CTL_MOD",
+        libc::EPOLL_CTL_DEL => "EPOLL_CTL_DEL",
+        _ => "UNKNOWN",
     }
 }
 

@@ -37,6 +37,7 @@ pub union SyscallEventData {
     pub futex: FutexData,
     pub sched_yield: SchedYieldData,
     pub ioctl: IoctlData,
+    pub epoll_ctl: EpollCtlData,
     pub execve: ExecveData,
     pub fstat: FstatData,
     pub newfstatat: NewfstatatData,
@@ -1131,4 +1132,13 @@ pub struct EpollPWait2Data {
     pub timeout: crate::kernel_types::Timespec,
     pub sigmask: usize,
     pub sigsetsize: usize,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+#[repr(C)]
+pub struct EpollCtlData {
+    pub epfd: i32,
+    pub op: i32,
+    pub fd: i32,
+    pub event: kernel_types::EpollEvent,
 }

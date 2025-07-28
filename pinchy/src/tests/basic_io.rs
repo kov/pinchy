@@ -708,3 +708,27 @@ syscall_test!(
     },
     "1 epoll_pwait2(epfd: 3, events: [ epoll_event { events: POLLHUP, data: 0x2 } ], max_events: 1, timeout: { secs: 5, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 1\n"
 );
+
+syscall_test!(
+    parse_epoll_ctl,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_epoll_ctl,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                epoll_ctl: pinchy_common::EpollCtlData {
+                    epfd: 5,
+                    op: libc::EPOLL_CTL_ADD,
+                    fd: 10,
+                    event: pinchy_common::kernel_types::EpollEvent {
+                        events: libc::EPOLLIN as u32 | libc::EPOLLOUT as u32,
+                        data: 0xdeadbeef,
+                    },
+                },
+            },
+        }
+    },
+    "123 epoll_ctl(epfd: 5, op: EPOLL_CTL_ADD, fd: 10, event: epoll_event { events: POLLIN|POLLOUT, data: 0xdeadbeef }) = 0 (success)\n"
+);

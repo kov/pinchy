@@ -172,7 +172,16 @@ arguments reference and whether that data needs special handling.
 
 ## Building
 When trying a build, always use `cargo check`, aya projects are not
-very friendly with `cargo build` or `cargo build --workspace`.
+very friendly with the `--workspace` argument.
+
+## Architecture-specific code
+When adding code that should only be on one of the supported architectures, keep in
+mind that the eBPF crate, `pinchy-ebpf`, is built for the eBPF target, and not to
+one of the real architectures.
+
+To deal with that, I create `x86_64` and `aarch64` features in the build scripts
+of both `pinchy-common` and `pinchy-ebpf`. Architecture-specific code in those two
+crates should use `#[cfg(x86_64)]` or `#[cfg(aarch64)]` where needed.
 
 ## Adding tests
 When adding tests for parsing syscalls, use the files in `pinchy/src/tests/`.

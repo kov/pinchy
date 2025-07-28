@@ -148,6 +148,7 @@ pub union SyscallEventData {
     pub poll: PollData,
     pub epoll_create: EpollCreateData,
     pub epoll_create1: EpollCreate1Data,
+    pub epoll_pwait2: EpollPWait2Data,
 }
 
 #[repr(C)]
@@ -1119,4 +1120,15 @@ pub struct EpollCreateData {
 #[derive(Debug, Clone, Copy, Default)]
 pub struct EpollCreate1Data {
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EpollPWait2Data {
+    pub epfd: i32,
+    pub events: [crate::kernel_types::EpollEvent; 8],
+    pub max_events: i32,
+    pub timeout: crate::kernel_types::Timespec,
+    pub sigmask: usize,
+    pub sigsetsize: usize,
 }

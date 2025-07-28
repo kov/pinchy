@@ -96,6 +96,25 @@ syscall_handler!(epoll_pwait, epoll_pwait, args, data, return_value, {
     }
 });
 
+#[cfg(x86_64)]
+syscall_handler!(epoll_wait, epoll_wait, args, data, return_value, {
+    data.epfd = args[0] as i32;
+    data.max_events = args[2] as i32;
+    data.timeout = args[3] as i32;
+
+    let events_ptr = args[1] as *const EpollEvent;
+    for (i, item) in data.events.iter_mut().enumerate() {
+        if i < return_value as usize {
+            unsafe {
+                let events_ptr = events_ptr.add(i);
+                if let Ok(evt) = bpf_probe_read_user::<EpollEvent>(events_ptr as *const _) {
+                    *item = evt;
+                }
+            }
+        }
+    }
+});
+
 syscall_handler!(ppoll, args, data, {
     data.nfds = args[1] as u32;
     data.timeout = read_timespec(args[2] as *const _);

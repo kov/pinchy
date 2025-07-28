@@ -363,3 +363,13 @@ syscall_handler!(epoll_pwait2, epoll_pwait2, args, data, {
         }
     }
 });
+
+syscall_handler!(epoll_ctl, args, data, {
+    data.epfd = args[0] as i32;
+    data.op = args[1] as i32;
+    data.fd = args[2] as i32;
+    let event_ptr = args[3] as *const EpollEvent;
+    if !event_ptr.is_null() {
+        data.event = unsafe { bpf_probe_read_user(event_ptr).unwrap_or_default() };
+    }
+});

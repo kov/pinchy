@@ -26,6 +26,7 @@ pub struct SyscallEvent {
 pub union SyscallEventData {
     pub close: CloseData,
     pub epoll_pwait: EpollPWaitData,
+    pub epoll_wait: EpollPWaitData,
     pub ppoll: PpollData,
     pub read: ReadData,
     pub write: WriteData,
@@ -263,6 +264,9 @@ pub struct EpollPWaitData {
     pub max_events: i32,
     pub timeout: i32,
 }
+
+// Alias for epoll_wait, which has the same structure as epoll_pwait but no sigmask
+pub type EpollWaitData = EpollPWaitData;
 
 #[repr(C)]
 #[derive(Clone, Copy)]

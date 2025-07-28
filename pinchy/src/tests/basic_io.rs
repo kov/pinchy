@@ -626,6 +626,32 @@ syscall_test!(
 
 #[cfg(target_arch = "x86_64")]
 syscall_test!(
+    parse_epoll_wait,
+    {
+        let mut event = SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_epoll_wait,
+            pid: 42,
+            tid: 42,
+            return_value: 1,
+            data: pinchy_common::SyscallEventData {
+                epoll_wait: EpollPWaitData {
+                    epfd: 7,
+                    events: [EpollEvent::default(); 8],
+                    max_events: 8,
+                    timeout: 1000,
+                },
+            },
+        };
+        let epoll_events = unsafe { &mut event.data.epoll_wait.events };
+        epoll_events[0].data = 0x1234;
+        epoll_events[0].events = libc::POLLIN as u32;
+        event
+    },
+    "42 epoll_wait(epfd: 7, events: [ epoll_event { events: POLLIN, data: 0x1234 } ], max_events: 8, timeout: 1000) = 1\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
     test_poll,
     {
         use pinchy_common::kernel_types::Pollfd;

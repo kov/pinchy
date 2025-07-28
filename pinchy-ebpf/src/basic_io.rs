@@ -347,3 +347,19 @@ syscall_handler!(poll, args, data, {
         }
     }
 });
+
+syscall_handler!(epoll_pwait2, epoll_pwait2, args, data, {
+    data.epfd = args[0] as i32;
+    data.max_events = args[2] as i32;
+    data.timeout = read_timespec(args[3] as *const Timespec);
+    data.sigmask = args[4];
+    data.sigsetsize = args[5];
+
+    unsafe {
+        let events_ptr = args[1] as *const EpollEvent;
+        for (i, event) in data.events.iter_mut().enumerate() {
+            let event_ptr = events_ptr.add(i);
+            *event = bpf_probe_read_user(event_ptr).unwrap_or_default();
+        }
+    }
+});

@@ -513,6 +513,35 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_epoll_pwait2 => {
+            let data = unsafe { event.data.epoll_pwait2 };
+            argf!(sf, "epfd: {}", data.epfd);
+            arg!(sf, "events:");
+            with_array!(sf, {
+                let nevents = (event.return_value as usize).min(data.events.len());
+                for i in 0..nevents {
+                    let epoll_event = data.events[i];
+                    arg!(sf, "epoll_event");
+                    with_struct!(sf, {
+                        argf!(
+                            sf,
+                            "events: {}",
+                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                        );
+                        argf!(sf, "data: {:#x}", epoll_event.data);
+                    });
+                }
+            });
+            argf!(sf, "max_events: {}", data.max_events);
+
+            arg!(sf, "timeout:");
+            format_timespec(&mut sf, data.timeout).await?;
+
+            argf!(sf, "sigmask: 0x{:x}", data.sigmask);
+            argf!(sf, "sigsetsize: {}", data.sigsetsize);
+
+            finish!(sf, event.return_value);
+        }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_wait => {
             let data = unsafe { event.data.epoll_wait };

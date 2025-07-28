@@ -8,12 +8,12 @@ use pinchy_common::{
     kernel_types::{EpollEvent, Iovec, Timespec},
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
-        SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv2,
-        SYS_pwrite64, SYS_read, SYS_readv, SYS_write, SYS_writev,
+        SYS_epoll_pwait2, SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64,
+        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_write, SYS_writev,
     },
-    CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWaitData, FcntlData,
-    LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData, SyscallEvent, VectorIOData,
-    WriteData, DATA_READ_SIZE,
+    CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
+    EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData,
+    SyscallEvent, VectorIOData, WriteData, DATA_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -682,4 +682,29 @@ syscall_test!(
         }
     },
     "1001 poll(fds: [ pollfd { fd: 0, events: POLLIN, revents: POLLIN }, pollfd { fd: 1, events: POLLOUT, revents: POLLOUT } ], nfds: 2, timeout: 1000) = 2 (ready)\n"
+);
+
+syscall_test!(
+    parse_epoll_pwait2,
+    {
+        let mut events = [EpollEvent::default(); 8];
+        events[0] = EpollEvent { events: libc::POLLHUP as u32, data: 0x2 };
+        SyscallEvent {
+            syscall_nr: SYS_epoll_pwait2,
+            pid: 1,
+            tid: 1,
+            return_value: 1,
+            data: pinchy_common::SyscallEventData {
+                epoll_pwait2: EpollPWait2Data {
+                    epfd: 3,
+                    events,
+                    max_events: 1,
+                    timeout: Timespec { seconds: 5, nanos: 0 },
+                    sigmask: 0,
+                    sigsetsize: 0,
+                },
+            },
+        }
+    },
+    "1 epoll_pwait2(epfd: 3, events: [ epoll_event { events: POLLHUP, data: 0x2 } ], max_events: 1, timeout: { secs: 5, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 1\n"
 );

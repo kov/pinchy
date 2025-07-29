@@ -19,6 +19,7 @@ use crate::util::{get_args, get_syscall_nr};
 
 mod basic_io;
 mod filesystem;
+mod ipc;
 mod memory;
 mod network;
 mod process;

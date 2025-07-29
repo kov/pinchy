@@ -1910,6 +1910,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_listen
         | syscalls::SYS_connect
         | syscalls::SYS_epoll_ctl
+        | syscalls::SYS_shmdt
         | syscalls::SYS_shutdown => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
@@ -2018,8 +2019,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             }
         }
 
-        // brk returns the new program break address
-        syscalls::SYS_brk => std::borrow::Cow::Owned(format!("0x{return_value:x}")),
+        // Syscalls that return an address
+        syscalls::SYS_brk | syscalls::SYS_shmat => {
+            std::borrow::Cow::Owned(format!("0x{return_value:x}"))
+        }
 
         // Memory/protection syscalls that return 0 on success
         syscalls::SYS_munmap
@@ -2050,6 +2053,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_exit_group => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        syscalls::SYS_shmget => match return_value {
+            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (shmid)")),
         },
 
         // Default case - just show the raw value with error indication if negative
@@ -2144,6 +2152,117 @@ pub fn format_splice_flags(flags: u32) -> String {
         format!("0x{flags:x}")
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_shmflg(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    let perms = flags & 0o777;
+
+    if perms != 0 {
+        parts.push(format!("0o{:03o}", perms));
+    }
+
+    if flags & libc::IPC_CREAT != 0 {
+        parts.push("IPC_CREAT".to_string());
+    }
+
+    if flags & libc::IPC_EXCL != 0 {
+        parts.push("IPC_EXCL".to_string());
+    }
+
+    if flags & libc::SHM_HUGETLB != 0 {
+        parts.push("SHM_HUGETLB".to_string());
+    }
+
+    if flags & libc::SHM_NORESERVE != 0 {
+        parts.push("SHM_NORESERVE".to_string());
+    }
+
+    if flags & libc::SHM_RDONLY != 0 {
+        parts.push("SHM_RDONLY".to_string());
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags)
+    } else {
+        parts.join("|")
+    }
+}
+
+pub async fn format_shmid_ds(
+    sf: &mut SyscallFormatter<'_>,
+    shmid_ds: &pinchy_common::kernel_types::ShmidDs,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        arg!(sf, "ipc_perm");
+        with_struct!(sf, {
+            argf!(sf, "key: 0x{:x}", shmid_ds.shm_perm.key);
+            argf!(sf, "uid: {}", shmid_ds.shm_perm.uid);
+            argf!(sf, "gid: {}", shmid_ds.shm_perm.gid);
+            argf!(sf, "cuid: {}", shmid_ds.shm_perm.cuid);
+            argf!(sf, "cgid: {}", shmid_ds.shm_perm.cgid);
+            argf!(sf, "mode: {}", format_ipc_perm_mode(shmid_ds.shm_perm.mode));
+            argf!(sf, "seq: {}", shmid_ds.shm_perm.seq);
+        });
+        argf!(sf, "segsz: {}", shmid_ds.shm_segsz);
+        argf!(sf, "atime: {}", shmid_ds.shm_atime);
+        argf!(sf, "dtime: {}", shmid_ds.shm_dtime);
+        argf!(sf, "ctime: {}", shmid_ds.shm_ctime);
+        argf!(sf, "cpid: {}", shmid_ds.shm_cpid);
+        argf!(sf, "lpid: {}", shmid_ds.shm_lpid);
+        argf!(sf, "nattch: {}", shmid_ds.shm_nattch);
+    });
+    Ok(())
+}
+
+fn format_ipc_perm_mode(mode: u16) -> String {
+    let perms = mode & 0o777;
+    let mut perm_str = String::new();
+
+    perm_str.push(if perms & 0o400 != 0 { 'r' } else { '-' });
+    perm_str.push(if perms & 0o200 != 0 { 'w' } else { '-' });
+    perm_str.push('-');
+    perm_str.push(if perms & 0o040 != 0 { 'r' } else { '-' });
+    perm_str.push(if perms & 0o020 != 0 { 'w' } else { '-' });
+    perm_str.push('-');
+    perm_str.push(if perms & 0o004 != 0 { 'r' } else { '-' });
+    perm_str.push(if perms & 0o002 != 0 { 'w' } else { '-' });
+    perm_str.push('-');
+
+    let mut flags = Vec::new();
+
+    if mode & 0x0200 != 0 {
+        flags.push("SHM_DEST");
+    }
+
+    if mode & 0x0400 != 0 {
+        flags.push("SHM_LOCKED");
+    }
+
+    let flags_str = if flags.is_empty() {
+        "".to_string()
+    } else {
+        format!("|{}", flags.join("|"))
+    };
+
+    format!("0o{:03o} ({perm_str}{flags_str})", perms)
+}
+
+pub fn format_shmctl_cmd(cmd: i32) -> &'static str {
+    const SHM_INFO: libc::c_int = 14;
+    const SHM_STAT: libc::c_int = 13;
+    match cmd {
+        libc::IPC_STAT => "IPC_STAT",
+        libc::IPC_SET => "IPC_SET",
+        libc::IPC_RMID => "IPC_RMID",
+        libc::IPC_INFO => "IPC_INFO",
+        SHM_INFO => "SHM_INFO",
+        SHM_STAT => "SHM_STAT",
+        libc::SHM_LOCK => "SHM_LOCK",
+        libc::SHM_UNLOCK => "SHM_UNLOCK",
+        _ => "<unknown>",
     }
 }
 

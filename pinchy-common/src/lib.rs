@@ -158,6 +158,10 @@ pub union SyscallEventData {
     pub unlinkat: UnlinkatData,
     pub symlink: SymlinkData,
     pub symlinkat: SymlinkatData,
+    pub shmat: ShmatData,
+    pub shmdt: ShmdtData,
+    pub shmget: ShmgetData,
+    pub shmctl: ShmctlData,
 }
 
 #[repr(C)]
@@ -1222,4 +1226,35 @@ pub struct SymlinkatData {
     pub target: [u8; DATA_READ_SIZE],
     pub newdirfd: i32,
     pub linkpath: [u8; DATA_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ShmatData {
+    pub shmid: i32,
+    pub shmaddr: usize,
+    pub shmflg: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ShmdtData {
+    pub shmaddr: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ShmgetData {
+    pub key: i32,
+    pub size: usize,
+    pub shmflg: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ShmctlData {
+    pub shmid: i32,
+    pub cmd: i32,
+    pub buf: crate::kernel_types::ShmidDs,
+    pub has_buf: bool,
 }

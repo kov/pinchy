@@ -483,6 +483,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_rename", syscalls::SYS_rename),
         ("syscall_exit_renameat", syscalls::SYS_renameat),
         ("syscall_exit_renameat2", syscalls::SYS_renameat2),
+        ("syscall_exit_splice", syscalls::SYS_splice),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

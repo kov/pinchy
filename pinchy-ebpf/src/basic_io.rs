@@ -373,3 +373,12 @@ syscall_handler!(epoll_ctl, args, data, {
         data.event = unsafe { bpf_probe_read_user(event_ptr).unwrap_or_default() };
     }
 });
+
+syscall_handler!(splice, args, data, {
+    data.fd_in = args[0] as i32;
+    data.off_in = args[1] as u64;
+    data.fd_out = args[2] as i32;
+    data.off_out = args[3] as u64;
+    data.len = args[4] as usize;
+    data.flags = args[5] as u32;
+});

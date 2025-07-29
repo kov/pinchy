@@ -1567,6 +1567,18 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "flags: {}", format_epoll_create1_flags(data.flags));
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_splice => {
+            let data = unsafe { event.data.splice };
+
+            argf!(sf, "fd_in: {}", data.fd_in);
+            argf!(sf, "off_in: 0x{:x}", data.off_in);
+            argf!(sf, "fd_out: {}", data.fd_out);
+            argf!(sf, "off_out: 0x{:x}", data.off_out);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "flags: {}", format_splice_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

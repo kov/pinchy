@@ -118,6 +118,7 @@ pub union SyscallEventData {
     pub exit: ExitData,
     pub sched_getscheduler: SchedGetschedulerData,
     pub sched_setscheduler: SchedSetschedulerData,
+    pub splice: SpliceData,
     pub setfsuid: SetfsuidData,
     pub setfsgid: SetfsgidData,
     pub sched_get_priority_max: SchedGetPriorityMaxData,
@@ -1141,4 +1142,15 @@ pub struct EpollCtlData {
     pub op: i32,
     pub fd: i32,
     pub event: kernel_types::EpollEvent,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct SpliceData {
+    pub fd_in: i32,
+    pub off_in: u64,
+    pub fd_out: i32,
+    pub off_out: u64,
+    pub len: usize,
+    pub flags: u32,
 }

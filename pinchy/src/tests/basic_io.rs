@@ -9,11 +9,11 @@ use pinchy_common::{
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
         SYS_epoll_pwait2, SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64,
-        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_write, SYS_writev,
+        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
     EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData,
-    SpliceData, SyscallEvent, VectorIOData, WriteData, DATA_READ_SIZE,
+    SpliceData, SyscallEvent, TeeData, VectorIOData, WriteData, DATA_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -754,4 +754,25 @@ syscall_test!(
         }
     },
     "10 splice(fd_in: 3, off_in: 0x1000, fd_out: 4, off_out: 0x2000, len: 4096, flags: 0x1 (SPLICE_F_MOVE)) = 42 (bytes)\n"
+);
+
+syscall_test!(
+    parse_tee,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_tee,
+            pid: 20,
+            tid: 20,
+            return_value: 128,
+            data: pinchy_common::SyscallEventData {
+                tee: TeeData {
+                    fd_in: 5,
+                    fd_out: 6,
+                    len: 128,
+                    flags: libc::SPLICE_F_NONBLOCK,
+                },
+            },
+        }
+    },
+    "20 tee(fd_in: 5, fd_out: 6, len: 128, flags: 0x2 (SPLICE_F_NONBLOCK)) = 128 (bytes)\n"
 );

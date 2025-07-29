@@ -151,6 +151,7 @@ pub union SyscallEventData {
     pub epoll_create: EpollCreateData,
     pub epoll_create1: EpollCreate1Data,
     pub epoll_pwait2: EpollPWait2Data,
+    pub tee: TeeData,
 }
 
 #[repr(C)]
@@ -1151,6 +1152,15 @@ pub struct SpliceData {
     pub off_in: u64,
     pub fd_out: i32,
     pub off_out: u64,
+    pub len: usize,
+    pub flags: u32,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+#[repr(C)]
+pub struct TeeData {
+    pub fd_in: i32,
+    pub fd_out: i32,
     pub len: usize,
     pub flags: u32,
 }

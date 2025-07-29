@@ -1579,6 +1579,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_tee => {
+            let data = unsafe { event.data.tee };
+
+            argf!(sf, "fd_in: {}", data.fd_in);
+            argf!(sf, "fd_out: {}", data.fd_out);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "flags: {}", format_splice_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

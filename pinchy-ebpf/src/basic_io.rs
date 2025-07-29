@@ -382,3 +382,10 @@ syscall_handler!(splice, args, data, {
     data.len = args[4] as usize;
     data.flags = args[5] as u32;
 });
+
+syscall_handler!(tee, args, data, {
+    data.fd_in = args[0] as i32;
+    data.fd_out = args[1] as i32;
+    data.len = args[2] as usize;
+    data.flags = args[3] as u32;
+});

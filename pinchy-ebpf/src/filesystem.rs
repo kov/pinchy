@@ -298,3 +298,24 @@ syscall_handler!(unlinkat, args, data, {
         let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
     }
 });
+
+#[cfg(x86_64)]
+syscall_handler!(symlink, args, data, {
+    let target_ptr = args[0] as *const u8;
+    let linkpath_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
+        let _ = bpf_probe_read_buf(linkpath_ptr, &mut data.linkpath);
+    }
+});
+
+syscall_handler!(symlinkat, args, data, {
+    data.newdirfd = args[1] as i32;
+
+    let target_ptr = args[0] as *const u8;
+    let linkpath_ptr = args[2] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
+        let _ = bpf_probe_read_buf(linkpath_ptr, &mut data.linkpath);
+    }
+});

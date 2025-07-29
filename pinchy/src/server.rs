@@ -491,6 +491,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_unlink", syscalls::SYS_unlink),
         ("syscall_exit_unlinkat", syscalls::SYS_unlinkat),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_symlink", syscalls::SYS_symlink),
+        ("syscall_exit_symlinkat", syscalls::SYS_symlinkat),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

@@ -156,6 +156,8 @@ pub union SyscallEventData {
     pub rmdir: RmdirData,
     pub unlink: UnlinkData,
     pub unlinkat: UnlinkatData,
+    pub symlink: SymlinkData,
+    pub symlinkat: SymlinkatData,
 }
 
 #[repr(C)]
@@ -1205,4 +1207,19 @@ pub struct UnlinkatData {
     pub dirfd: i32,
     pub pathname: [u8; DATA_READ_SIZE],
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SymlinkData {
+    pub target: [u8; DATA_READ_SIZE],
+    pub linkpath: [u8; DATA_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SymlinkatData {
+    pub target: [u8; DATA_READ_SIZE],
+    pub newdirfd: i32,
+    pub linkpath: [u8; DATA_READ_SIZE],
 }

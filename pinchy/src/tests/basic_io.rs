@@ -9,11 +9,13 @@ use pinchy_common::{
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
         SYS_epoll_pwait2, SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64,
-        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee, SYS_write, SYS_writev,
+        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee, SYS_vmsplice,
+        SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
     EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData,
-    SpliceData, SyscallEvent, TeeData, VectorIOData, WriteData, DATA_READ_SIZE,
+    SpliceData, SyscallEvent, TeeData, VectorIOData, VmspliceData, WriteData, DATA_READ_SIZE,
+    IOV_COUNT, MEDIUM_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -775,4 +777,31 @@ syscall_test!(
         }
     },
     "20 tee(fd_in: 5, fd_out: 6, len: 128, flags: 0x2 (SPLICE_F_NONBLOCK)) = 128 (bytes)\n"
+);
+
+syscall_test!(
+    parse_vmsplice,
+    {
+        let mut iov_bufs = [[0u8; MEDIUM_READ_SIZE]; IOV_COUNT];
+        iov_bufs[0][..4].copy_from_slice(b"test");
+        iov_bufs[1][..4].copy_from_slice(b"data");
+        SyscallEvent {
+            syscall_nr: SYS_vmsplice,
+            pid: 1,
+            tid: 1,
+            return_value: 8,
+            data: pinchy_common::SyscallEventData {
+                vmsplice: VmspliceData {
+                    fd: 3,
+                    iovecs: [Iovec { iov_base: 0x1000, iov_len: 4 }, Iovec { iov_base: 0x2000, iov_len: 4 }],
+                    iov_lens: [4, 4],
+                    iov_bufs,
+                    iovcnt: 2,
+                    flags: libc::SPLICE_F_GIFT,
+                    read_count: 2,
+                },
+            },
+        }
+    },
+    "1 vmsplice(fd: 3, iov: [ iovec { base: \"test\", len: 4 }, iovec { base: \"data\", len: 4 } ], iovcnt: 2, flags: 0x8 (SPLICE_F_GIFT)) = 8 (bytes)\n"
 );

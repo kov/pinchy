@@ -9,11 +9,11 @@ use pinchy_common::{
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
         SYS_epoll_pwait2, SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64,
-        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_write, SYS_writev,
+        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
     EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData,
-    SyscallEvent, VectorIOData, WriteData, DATA_READ_SIZE,
+    SpliceData, SyscallEvent, VectorIOData, WriteData, DATA_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -731,4 +731,27 @@ syscall_test!(
         }
     },
     "123 epoll_ctl(epfd: 5, op: EPOLL_CTL_ADD, fd: 10, event: epoll_event { events: POLLIN|POLLOUT, data: 0xdeadbeef }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_splice,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_splice,
+            pid: 10,
+            tid: 10,
+            return_value: 42,
+            data: pinchy_common::SyscallEventData {
+                splice: SpliceData {
+                    fd_in: 3,
+                    off_in: 0x1000,
+                    fd_out: 4,
+                    off_out: 0x2000,
+                    len: 4096,
+                    flags: libc::SPLICE_F_MOVE,
+                },
+            },
+        }
+    },
+    "10 splice(fd_in: 3, off_in: 0x1000, fd_out: 4, off_out: 0x2000, len: 4096, flags: 0x1 (SPLICE_F_MOVE)) = 42 (bytes)\n"
 );

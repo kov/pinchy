@@ -2124,6 +2124,29 @@ pub fn format_epoll_ctl_op(op: i32) -> &'static str {
     }
 }
 
+pub fn format_splice_flags(flags: u32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::SPLICE_F_MOVE != 0 {
+        parts.push("SPLICE_F_MOVE");
+    }
+    if flags & libc::SPLICE_F_NONBLOCK != 0 {
+        parts.push("SPLICE_F_NONBLOCK");
+    }
+    if flags & libc::SPLICE_F_MORE != 0 {
+        parts.push("SPLICE_F_MORE");
+    }
+    if flags & libc::SPLICE_F_GIFT != 0 {
+        parts.push("SPLICE_F_GIFT");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

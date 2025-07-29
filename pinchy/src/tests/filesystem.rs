@@ -1002,3 +1002,23 @@ syscall_test!(
     },
     "1001 renameat2(olddirfd: AT_FDCWD, oldpath: \"/old/path\", newdirfd: AT_FDCWD, newpath: \"/new/path\", flags: 0x1 (RENAME_NOREPLACE)) = 0 (success)\n"
 );
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_rmdir,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/testdir\0";
+        pathname[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_rmdir,
+            pid: 1,
+            tid: 1,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                rmdir: pinchy_common::RmdirData { pathname },
+            },
+        }
+    },
+    "1 rmdir(pathname: \"/tmp/testdir\") = 0 (success)\n"
+);

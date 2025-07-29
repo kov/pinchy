@@ -1612,6 +1612,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "flags: {}", format_splice_flags(data.flags));
             finish!(sf, event.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_rmdir => {
+            let data = unsafe { event.data.rmdir };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

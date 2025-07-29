@@ -153,6 +153,7 @@ pub union SyscallEventData {
     pub epoll_pwait2: EpollPWait2Data,
     pub tee: TeeData,
     pub vmsplice: VmspliceData,
+    pub rmdir: RmdirData,
 }
 
 #[repr(C)]
@@ -1176,4 +1177,17 @@ pub struct VmspliceData {
     pub iovcnt: usize,
     pub flags: u32,
     pub read_count: usize,
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct RmdirData {
+    pub pathname: [u8; DATA_READ_SIZE],
+}
+
+impl Default for RmdirData {
+    fn default() -> Self {
+        RmdirData {
+            pathname: [0u8; DATA_READ_SIZE],
+        }
+    }
 }

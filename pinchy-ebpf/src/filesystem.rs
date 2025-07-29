@@ -272,3 +272,11 @@ syscall_handler!(fchownat, fchownat, args, data, {
         let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
     }
 });
+
+#[cfg(x86_64)]
+syscall_handler!(rmdir, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});

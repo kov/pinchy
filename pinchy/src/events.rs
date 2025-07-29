@@ -1650,6 +1650,49 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_shmat => {
+            let data = unsafe { event.data.shmat };
+
+            argf!(sf, "shmid: {}", data.shmid);
+            argf!(sf, "shmaddr: 0x{:x}", data.shmaddr);
+            argf!(sf, "shmflg: {}", format_shmflg(data.shmflg));
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_shmdt => {
+            let data = unsafe { event.data.shmdt };
+
+            argf!(sf, "shmaddr: 0x{:x}", data.shmaddr);
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_shmget => {
+            let data = unsafe { event.data.shmget };
+
+            argf!(sf, "key: 0x{:x}", data.key);
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "shmflg: {}", format_shmflg(data.shmflg));
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_shmctl => {
+            let data = unsafe { event.data.shmctl };
+
+            argf!(sf, "shmid: {}", data.shmid);
+            argf!(sf, "cmd: {}", format_shmctl_cmd(data.cmd));
+
+            arg!(sf, "buf:");
+            if data.has_buf {
+                format_shmid_ds(&mut sf, &data.buf).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

@@ -313,3 +313,32 @@ pub struct FdSet {
     /// Number of bytes that are valid/meaningful
     pub len: u32,
 }
+
+/// System V shared memory segment data structure, matching the kernel's struct shmid_ds.
+/// See: https://man7.org/linux/man-pages/man2/shmctl.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct ShmidDs {
+    pub shm_perm: IpcPerm, // Operation permissions
+    pub shm_segsz: usize,  // Size of segment (bytes)
+    pub shm_atime: i64,    // Last attach time
+    pub shm_dtime: i64,    // Last detach time
+    pub shm_ctime: i64,    // Last change time
+    pub shm_cpid: i32,     // PID of creator
+    pub shm_lpid: i32,     // PID of last shmat/shmdt
+    pub shm_nattch: usize, // Number of current attaches
+}
+
+/// System V IPC permissions structure, matching the kernel's struct ipc_perm.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct IpcPerm {
+    pub key: u32,    // IPC key
+    pub uid: u32,    // Owner's user ID
+    pub gid: u32,    // Owner's group ID
+    pub cuid: u32,   // Creator's user ID
+    pub cgid: u32,   // Creator's group ID
+    pub mode: u16,   // Read/write permission
+    pub __pad1: u16, // Padding
+    pub seq: u16,    // Sequence number
+}

@@ -1108,3 +1108,101 @@ syscall_test!(
     },
     "501 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/nonexistent\", flags: 0) = -1 (error)\n"
 );
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_symlink,
+    {
+        let mut target = [0u8; DATA_READ_SIZE];
+        let mut linkpath = [0u8; DATA_READ_SIZE];
+        let target_bytes = b"/target\0";
+        let linkpath_bytes = b"/link\0";
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_symlink,
+            pid: 600,
+            tid: 601,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                symlink: pinchy_common::SymlinkData { target, linkpath },
+            },
+        }
+    },
+    "601 symlink(target: \"/target\", linkpath: \"/link\") = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_symlink_error,
+    {
+        let mut target = [0u8; DATA_READ_SIZE];
+        let mut linkpath = [0u8; DATA_READ_SIZE];
+        let target_bytes = b"/target\0";
+        let linkpath_bytes = b"/link\0";
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_symlink,
+            pid: 600,
+            tid: 601,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                symlink: pinchy_common::SymlinkData { target, linkpath },
+            },
+        }
+    },
+    "601 symlink(target: \"/target\", linkpath: \"/link\") = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_symlinkat,
+    {
+        let mut target = [0u8; DATA_READ_SIZE];
+        let mut linkpath = [0u8; DATA_READ_SIZE];
+        let target_bytes = b"/target\0";
+        let linkpath_bytes = b"/link\0";
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_symlinkat,
+            pid: 700,
+            tid: 701,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                symlinkat: pinchy_common::SymlinkatData {
+                    target,
+                    newdirfd: libc::AT_FDCWD,
+                    linkpath,
+                },
+            },
+        }
+    },
+    "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_symlinkat_error,
+    {
+        let mut target = [0u8; DATA_READ_SIZE];
+        let mut linkpath = [0u8; DATA_READ_SIZE];
+        let target_bytes = b"/target\0";
+        let linkpath_bytes = b"/link\0";
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_symlinkat,
+            pid: 700,
+            tid: 701,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                symlinkat: pinchy_common::SymlinkatData {
+                    target,
+                    newdirfd: libc::AT_FDCWD,
+                    linkpath,
+                },
+            },
+        }
+    },
+    "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = -1 (error)\n"
+);

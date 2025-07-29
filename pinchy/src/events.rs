@@ -1636,6 +1636,20 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "flags: {}", format_at_flags(data.flags));
             finish!(sf, event.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_symlink => {
+            let data = unsafe { event.data.symlink };
+            argf!(sf, "target: {}", format_path(&data.target, false));
+            argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_symlinkat => {
+            let data = unsafe { event.data.symlinkat };
+            argf!(sf, "target: {}", format_path(&data.target, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

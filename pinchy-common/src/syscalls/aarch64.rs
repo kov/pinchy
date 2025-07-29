@@ -309,4 +309,5 @@ declare_syscalls! {
     SYS_futex_waitv = 449,
     SYS_set_mempolicy_home_node = 450,
     SYS_mseal = 462,
+    SYS_symlink = 512
 }

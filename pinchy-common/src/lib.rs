@@ -152,6 +152,7 @@ pub union SyscallEventData {
     pub epoll_create1: EpollCreate1Data,
     pub epoll_pwait2: EpollPWait2Data,
     pub tee: TeeData,
+    pub vmsplice: VmspliceData,
 }
 
 #[repr(C)]
@@ -1163,4 +1164,16 @@ pub struct TeeData {
     pub fd_out: i32,
     pub len: usize,
     pub flags: u32,
+}
+
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+pub struct VmspliceData {
+    pub fd: i32,
+    pub iovecs: [kernel_types::Iovec; IOV_COUNT],
+    pub iov_lens: [usize; IOV_COUNT],
+    pub iov_bufs: [[u8; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+    pub iovcnt: usize,
+    pub flags: u32,
+    pub read_count: usize,
 }

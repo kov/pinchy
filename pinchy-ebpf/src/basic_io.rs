@@ -389,3 +389,21 @@ syscall_handler!(tee, args, data, {
     data.len = args[2] as usize;
     data.flags = args[3] as u32;
 });
+
+syscall_handler!(vmsplice, vmsplice, args, data, return_value, {
+    data.fd = args[0] as i32;
+    data.iovcnt = args[2] as usize;
+    data.flags = args[3] as u32;
+
+    let iov_addr = args[1] as u64;
+    read_iovec_array(
+        iov_addr,
+        data.iovcnt,
+        IovecOp::Write,
+        &mut data.iovecs,
+        &mut data.iov_lens,
+        &mut data.iov_bufs,
+        &mut data.read_count,
+        return_value,
+    );
+});

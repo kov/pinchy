@@ -1589,6 +1589,29 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_vmsplice => {
+            let data = unsafe { event.data.vmsplice };
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "iov:");
+            with_array!(sf, {
+                for i in 0..data.iovcnt {
+                    arg!(sf, "iovec");
+                    with_struct!(sf, {
+                        let buf = &data.iov_bufs[i];
+                        let len = data.iov_lens[i].min(buf.len());
+                        if len > 0 {
+                            argf!(sf, "base: {}", format_bytes(&buf[..len]));
+                        } else {
+                            arg!(sf, "base: NULL");
+                        }
+                        argf!(sf, "len: {}", data.iov_lens[i]);
+                    });
+                }
+            });
+            argf!(sf, "iovcnt: {}", data.iovcnt);
+            argf!(sf, "flags: {}", format_splice_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

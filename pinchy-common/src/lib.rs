@@ -154,6 +154,8 @@ pub union SyscallEventData {
     pub tee: TeeData,
     pub vmsplice: VmspliceData,
     pub rmdir: RmdirData,
+    pub unlink: UnlinkData,
+    pub unlinkat: UnlinkatData,
 }
 
 #[repr(C)]
@@ -1190,4 +1192,17 @@ impl Default for RmdirData {
             pathname: [0u8; DATA_READ_SIZE],
         }
     }
+}
+
+#[derive(Debug, Copy, Clone)]
+pub struct UnlinkData {
+    pub pathname: [u8; DATA_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UnlinkatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub flags: i32,
 }

@@ -1022,3 +1022,89 @@ syscall_test!(
     },
     "1 rmdir(pathname: \"/tmp/testdir\") = 0 (success)\n"
 );
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_unlink,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/testfile\0";
+        pathname[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_unlink,
+            pid: 200,
+            tid: 201,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                unlink: pinchy_common::UnlinkData { pathname },
+            },
+        }
+    },
+    "201 unlink(pathname: \"/tmp/testfile\") = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_unlink_error,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/nonexistent\0";
+        pathname[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_unlink,
+            pid: 300,
+            tid: 301,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                unlink: pinchy_common::UnlinkData { pathname },
+            },
+        }
+    },
+    "301 unlink(pathname: \"/tmp/nonexistent\") = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_unlinkat,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/testdir\0";
+        pathname[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_unlinkat,
+            pid: 400,
+            tid: 401,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                unlinkat: pinchy_common::UnlinkatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    flags: libc::AT_REMOVEDIR,
+                },
+            },
+        }
+    },
+    "401 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/testdir\", flags: AT_EACCESS|AT_REMOVEDIR (0x200)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_unlinkat_error,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/nonexistent\0";
+        pathname[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_unlinkat,
+            pid: 500,
+            tid: 501,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                unlinkat: pinchy_common::UnlinkatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "501 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/nonexistent\", flags: 0) = -1 (error)\n"
+);

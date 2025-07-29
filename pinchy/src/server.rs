@@ -488,6 +488,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_vmsplice", syscalls::SYS_vmsplice),
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_rmdir", syscalls::SYS_rmdir),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_unlink", syscalls::SYS_unlink),
+        ("syscall_exit_unlinkat", syscalls::SYS_unlinkat),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

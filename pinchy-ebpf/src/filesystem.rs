@@ -280,3 +280,21 @@ syscall_handler!(rmdir, args, data, {
         let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
     }
 });
+
+#[cfg(x86_64)]
+syscall_handler!(unlink, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});
+
+syscall_handler!(unlinkat, args, data, {
+    data.dirfd = args[0] as i32;
+    data.flags = args[2] as i32;
+
+    let pathname_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});

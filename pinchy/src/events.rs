@@ -1620,6 +1620,22 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_unlink => {
+            let data = unsafe { event.data.unlink };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_unlinkat => {
+            let data = unsafe { event.data.unlinkat };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

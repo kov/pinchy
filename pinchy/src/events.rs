@@ -1693,6 +1693,116 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_msgget => {
+            let data = unsafe { event.data.msgget };
+
+            argf!(sf, "key: 0x{:x}", data.key);
+            argf!(sf, "msgflg: {}", format_msgflg(data.msgflg));
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_msgsnd => {
+            let data = unsafe { event.data.msgsnd };
+
+            argf!(sf, "msqid: {}", data.msqid);
+            argf!(sf, "msgp: 0x{:x}", data.msgp);
+            argf!(sf, "msgsz: {}", data.msgsz);
+            argf!(sf, "msgflg: {}", format_msgflg(data.msgflg));
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_msgrcv => {
+            let data = unsafe { event.data.msgrcv };
+
+            argf!(sf, "msqid: {}", data.msqid);
+            argf!(sf, "msgp: 0x{:x}", data.msgp);
+            argf!(sf, "msgsz: {}", data.msgsz);
+            argf!(sf, "msgtyp: {}", data.msgtyp);
+            argf!(sf, "msgflg: {}", format_msgflg(data.msgflg));
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_msgctl => {
+            let data = unsafe { event.data.msgctl };
+
+            argf!(sf, "msqid: {}", data.msqid);
+            argf!(sf, "cmd: {}", format_msgctl_cmd(data.op));
+
+            arg!(sf, "buf:");
+            if data.has_buf {
+                format_msqid_ds(&mut sf, &data.buf).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_semget => {
+            let data = unsafe { event.data.semget };
+
+            argf!(sf, "key: 0x{:x}", data.key);
+            argf!(sf, "nsems: {}", data.nsems);
+            argf!(sf, "semflg: {}", format_semflg(data.semflg));
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_semop => {
+            let data = unsafe { event.data.semop };
+
+            argf!(sf, "semid: {}", data.semid);
+            argf!(sf, "sops: 0x{:x}", data.sops);
+            argf!(sf, "nsops: {}", data.nsops);
+
+            finish!(sf, event.return_value);
+        }
+
+        syscalls::SYS_semctl => {
+            let data = unsafe { event.data.semctl };
+
+            argf!(sf, "semid: {}", data.semid);
+            argf!(sf, "semnum: {}", data.semnum);
+            argf!(sf, "op: {}", format_semctl_cmd(data.op));
+
+            match data.op {
+                // SETVAL expects .val
+                libc::SETVAL => {
+                    argf!(sf, "val: {}", unsafe { data.arg.val });
+                }
+
+                // SETALL and GETALL expect .array
+                // FIXME: we need to look at the actual array in data.array, but we need to keep track
+                // of the semget call ot know how many values are valid...
+                libc::SETALL | libc::GETALL => {
+                    argf!(sf, "array: 0x{:x}", unsafe { data.arg.array });
+                }
+
+                // IPC_STAT and IPC_SET expect .buf (struct semid_ds)
+                libc::IPC_STAT | libc::IPC_SET => {
+                    arg!(sf, "buf:");
+                    format_semid_ds(&mut sf, unsafe { &data.arg.buf }).await?;
+                }
+
+                // IPC_INFO and SEM_INFO expect .info (struct seminfo)
+                libc::IPC_INFO | libc::SEM_INFO => {
+                    arg!(sf, "info:");
+                    format_seminfo(&mut sf, unsafe { &data.arg.info }).await?;
+                }
+
+                // GETPID, GETVAL, GETNCNT, GETZCNT expect no union argument
+                libc::GETPID | libc::GETVAL | libc::GETNCNT | libc::GETZCNT => {}
+
+                // For unknown/unsupported ops, just show the raw union pointer
+                _ => {
+                    argf!(sf, "arg: 0x{:x} (unknown)", unsafe { data.arg.array });
+                }
+            }
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

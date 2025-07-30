@@ -162,6 +162,13 @@ pub union SyscallEventData {
     pub shmdt: ShmdtData,
     pub shmget: ShmgetData,
     pub shmctl: ShmctlData,
+    pub msgget: MsggetData,
+    pub msgsnd: MsgsndData,
+    pub msgrcv: MsgrcvData,
+    pub msgctl: MsgctlData,
+    pub semget: SemgetData,
+    pub semop: SemopData,
+    pub semctl: SemctlData,
 }
 
 #[repr(C)]
@@ -1234,6 +1241,68 @@ pub struct ShmatData {
     pub shmid: i32,
     pub shmaddr: usize,
     pub shmflg: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MsggetData {
+    pub key: i32,
+    pub msgflg: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MsgsndData {
+    pub msqid: i32,
+    pub msgp: usize,
+    pub msgsz: usize,
+    pub msgflg: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MsgrcvData {
+    pub msqid: i32,
+    pub msgp: usize,
+    pub msgsz: usize,
+    pub msgtyp: i64,
+    pub msgflg: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MsgctlData {
+    pub msqid: i32,
+    pub op: i32,
+    pub buf: crate::kernel_types::MsqidDs,
+    pub has_buf: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SemgetData {
+    pub key: i32,
+    pub nsems: i32,
+    pub semflg: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SemopData {
+    pub semid: i32,
+    pub sops: usize,
+    pub nsops: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SemctlData {
+    pub semid: i32,
+    pub semnum: i32,
+    pub op: i32,
+    pub has_arg: bool,
+    pub arg: kernel_types::Semun,
+    pub array: [u16; 16],
 }
 
 #[repr(C)]

@@ -498,6 +498,13 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_shmat", syscalls::SYS_shmat),
         ("syscall_exit_shmdt", syscalls::SYS_shmdt),
         ("syscall_exit_shmctl", syscalls::SYS_shmctl),
+        ("syscall_exit_msgget", syscalls::SYS_msgget),
+        ("syscall_exit_msgsnd", syscalls::SYS_msgsnd),
+        ("syscall_exit_msgrcv", syscalls::SYS_msgrcv),
+        ("syscall_exit_msgctl", syscalls::SYS_msgctl),
+        ("syscall_exit_semget", syscalls::SYS_semget),
+        ("syscall_exit_semop", syscalls::SYS_semop),
+        ("syscall_exit_semctl", syscalls::SYS_semctl),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

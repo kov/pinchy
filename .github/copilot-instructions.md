@@ -215,3 +215,9 @@ Helper functions for parsing specific arguments should go under
 If you notice these instructions are missing a step or are unclear,
 please propose an update to this file. Try to keep it under 80 columns
 while doing so for better readability on wide terminals / editors.
+
+# Additional Rule: Avoid Duplicate Handling of Syscalls
+
+- When adding support for a syscall, **never add both a match branch in the trivial handler and a dedicated syscall_handler! macro for the same syscall.**
+  - If the syscall is trivial, only add it to the trivial handler and TRIVIAL_SYSCALLS.
+  - If the syscall is complex, only add a dedicated handler and register it in the appropriate tailcall array.

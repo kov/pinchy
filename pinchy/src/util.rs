@@ -1811,6 +1811,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_epoll_create1
         | syscalls::SYS_signalfd4
         | syscalls::SYS_eventfd2
+        | syscalls::SYS_pidfd_open
+        | syscalls::SYS_pidfd_getfd
         | syscalls::SYS_timerfd_create
         | syscalls::SYS_memfd_create
         | syscalls::SYS_userfaultfd => {
@@ -2053,6 +2055,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_kill
         | syscalls::SYS_tkill
         | syscalls::SYS_tgkill
+        | syscalls::SYS_pidfd_send_signal
         | syscalls::SYS_exit
         | syscalls::SYS_exit_group => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
@@ -2410,6 +2413,57 @@ pub async fn format_seminfo(
         argf!(sf, "semmni: {}", seminfo.semmni);
         argf!(sf, "semmns: {}", seminfo.semmns);
         argf!(sf, "semmnu: {}", seminfo.semmnu);
+    });
+    Ok(())
+}
+
+pub fn format_pidfd_open_flags(flags: u32) -> Cow<'static, str> {
+    let mut parts = Vec::new();
+
+    if flags == 0 {
+        return Cow::Borrowed("0x0");
+    }
+
+    if (flags & libc::PIDFD_NONBLOCK) != 0 {
+        parts.push("PIDFD_NONBLOCK");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub async fn format_siginfo(
+    sf: &mut crate::formatting::SyscallFormatter<'_>,
+    info: &pinchy_common::kernel_types::Siginfo,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        argf!(sf, "signo: {}", info.si_signo);
+        argf!(sf, "errno: {}", info.si_errno);
+        argf!(sf, "code: {}", info.si_code);
+        argf!(sf, "trapno: {}", info.si_trapno);
+        argf!(sf, "pid: {}", info.si_pid);
+        argf!(sf, "uid: {}", info.si_uid);
+        argf!(sf, "status: {}", info.si_status);
+        argf!(sf, "utime: {}", info.si_utime);
+        argf!(sf, "stime: {}", info.si_stime);
+        argf!(sf, "value: 0x{:x}", info.si_value);
+        argf!(sf, "int: {}", info.si_int);
+        argf!(sf, "ptr: 0x{:x}", info.si_ptr);
+        argf!(sf, "overrun: {}", info.si_overrun);
+        argf!(sf, "timerid: {}", info.si_timerid);
+        argf!(sf, "addr: 0x{:x}", info.si_addr);
+        argf!(sf, "band: {}", info.si_band);
+        argf!(sf, "fd: {}", info.si_fd);
+        argf!(sf, "addr_lsb: {}", info.si_addr_lsb);
+        argf!(sf, "lower: 0x{:x}", info.si_lower);
+        argf!(sf, "upper: 0x{:x}", info.si_upper);
+        argf!(sf, "pkey: {}", info.si_pkey);
+        argf!(sf, "call_addr: 0x{:x}", info.si_call_addr);
+        argf!(sf, "syscall: {}", info.si_syscall);
+        argf!(sf, "arch: {}", info.si_arch);
     });
     Ok(())
 }

@@ -299,6 +299,13 @@ syscall_handler!(unlinkat, args, data, {
     }
 });
 
+syscall_handler!(acct, args, data, {
+    let filename_ptr = args[0] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
+    }
+});
+
 #[cfg(x86_64)]
 syscall_handler!(symlink, args, data, {
     let target_ptr = args[0] as *const u8;

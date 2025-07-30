@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
+use std::borrow::Cow;
+
 use log::{error, trace};
 use pinchy_common::{syscalls, SyscallEvent};
 
@@ -1806,6 +1808,23 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_acct => {
             let data = unsafe { event.data.acct };
             argf!(sf, "filename: {}", format_path(&data.filename, false));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getcpu => {
+            let data = unsafe { event.data.getcpu };
+            let cpu_val = if data.has_cpu {
+                Cow::Owned(data.cpu.to_string())
+            } else {
+                Cow::Borrowed("NULL")
+            };
+            let node_val = if data.has_node {
+                Cow::Owned(data.node.to_string())
+            } else {
+                Cow::Borrowed("NULL")
+            };
+            argf!(sf, "cpu: {}", cpu_val);
+            argf!(sf, "node: {}", node_val);
+            argf!(sf, "tcache: 0x{:x}", data.tcache);
             finish!(sf, event.return_value);
         }
         _ => {

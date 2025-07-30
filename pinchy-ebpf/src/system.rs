@@ -146,3 +146,23 @@ syscall_handler!(clock_nanosleep, args, data, {
         data.has_rem = true;
     }
 });
+
+syscall_handler!(getcpu, args, data, {
+    let cpu_ptr = args[0] as *const u32;
+    let node_ptr = args[1] as *const u32;
+    data.tcache = args[2];
+
+    if !cpu_ptr.is_null() {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<u32>(cpu_ptr) } {
+            data.cpu = val;
+            data.has_cpu = true;
+        }
+    }
+
+    if !node_ptr.is_null() {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<u32>(node_ptr) } {
+            data.node = val;
+            data.has_node = true;
+        }
+    }
+});

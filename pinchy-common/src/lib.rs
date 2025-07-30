@@ -170,6 +170,7 @@ pub union SyscallEventData {
     pub semop: SemopData,
     pub semctl: SemctlData,
     pub acct: AcctData,
+    pub getcpu: GetcpuData,
 }
 
 #[repr(C)]
@@ -1333,4 +1334,14 @@ pub struct ShmctlData {
     pub cmd: i32,
     pub buf: crate::kernel_types::ShmidDs,
     pub has_buf: bool,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct GetcpuData {
+    pub cpu: u32,
+    pub has_cpu: bool,
+    pub node: u32,
+    pub has_node: bool,
+    pub tcache: usize, // address as in syscall argument
 }

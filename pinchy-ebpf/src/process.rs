@@ -303,3 +303,19 @@ syscall_handler!(clone, args, data, {
         0
     };
 });
+
+syscall_handler!(pidfd_send_signal, args, data, {
+    data.pidfd = args[0] as i32;
+    data.sig = args[1] as i32;
+    data.info_ptr = args[2];
+    data.flags = args[3] as u32;
+    let info_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
+    if !info_ptr.is_null() {
+        unsafe {
+            if let Ok(info) = bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(info_ptr)
+            {
+                data.info = info;
+            }
+        }
+    }
+});

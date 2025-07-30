@@ -7,14 +7,14 @@ use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
         SYS_clone3, SYS_execve, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpgid, SYS_getpid,
-        SYS_getppid, SYS_getsid, SYS_gettid, SYS_getuid, SYS_prctl, SYS_set_tid_address,
-        SYS_setgid, SYS_setpgid, SYS_setregid, SYS_setresgid, SYS_setresuid, SYS_setreuid,
-        SYS_setsid, SYS_setuid,
+        SYS_getppid, SYS_getsid, SYS_gettid, SYS_getuid, SYS_pidfd_getfd, SYS_pidfd_open,
+        SYS_prctl, SYS_set_tid_address, SYS_setgid, SYS_setpgid, SYS_setregid, SYS_setresgid,
+        SYS_setresuid, SYS_setreuid, SYS_setsid, SYS_setuid,
     },
     Clone3Data, ExecveData, GenericSyscallData, GetegidData, GeteuidData, GetgidData, GetpgidData,
-    GetpidData, GetppidData, GetsidData, GettidData, GetuidData, SetTidAddressData, SetgidData,
-    SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData, SetsidData, SetuidData,
-    SyscallEvent, SMALL_READ_SIZE,
+    GetpidData, GetppidData, GetsidData, GettidData, GetuidData, PidfdOpenData, SetTidAddressData,
+    SetgidData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData, SetsidData,
+    SetuidData, SyscallEvent, SMALL_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{AlarmData, GetpgrpData, PauseData};
@@ -778,6 +778,72 @@ syscall_test!(
     "1001 setresgid(rgid: 1001, egid: 1002, sgid: 1003) = 0 (success)\n"
 );
 
+syscall_test!(
+    parse_pidfd_open,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_pidfd_open,
+            pid: 123,
+            tid: 123,
+            return_value: 5,
+            data: pinchy_common::SyscallEventData {
+                pidfd_open: PidfdOpenData {
+                    pid: 12345,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "123 pidfd_open(pid: 12345, flags: 0x0) = 5 (fd)\n"
+);
+
+syscall_test!(
+    test_pidfd_send_signal,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_pidfd_send_signal,
+            pid: 42,
+            tid: 42,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                pidfd_send_signal: pinchy_common::PidfdSendSignalData {
+                    pidfd: 5,
+                    sig: libc::SIGKILL,
+                    info: pinchy_common::kernel_types::Siginfo {
+                        si_signo: 0,
+                        si_errno: 0,
+                        si_code: 0,
+                        si_trapno: 0,
+                        si_pid: 0,
+                        si_uid: 0,
+                        si_status: 0,
+                        si_utime: 0,
+                        si_stime: 0,
+                        si_value: 0,
+                        si_int: 0,
+                        si_ptr: 0,
+                        si_overrun: 0,
+                        si_timerid: 0,
+                        si_addr: 0,
+                        si_band: 0,
+                        si_fd: 0,
+                        si_addr_lsb: 0,
+                        si_lower: 0,
+                        si_upper: 0,
+                        si_pkey: 0,
+                        si_call_addr: 0,
+                        si_syscall: 0,
+                        si_arch: 0,
+                    },
+                    info_ptr: 0x7fffdeadbeef,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "42 pidfd_send_signal(pidfd: 5, sig: SIGKILL, siginfo: { signo: 0, errno: 0, code: 0, trapno: 0, pid: 0, uid: 0, status: 0, utime: 0, stime: 0, value: 0x0, int: 0, ptr: 0x0, overrun: 0, timerid: 0, addr: 0x0, band: 0, fd: 0, addr_lsb: 0, lower: 0x0, upper: 0x0, pkey: 0, call_addr: 0x0, syscall: 0, arch: 0 }, flags: 0x0) = 0 (success)\n"
+);
+
 #[cfg(target_arch = "x86_64")]
 syscall_test!(
     test_alarm,
@@ -844,4 +910,24 @@ syscall_test!(
         }
     },
     "9999 exit(status: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_pidfd_getfd,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_pidfd_getfd,
+            pid: 42,
+            tid: 42,
+            return_value: 7,
+            data: pinchy_common::SyscallEventData {
+                pidfd_getfd: pinchy_common::PidfdGetfdData {
+                    pidfd: 5,
+                    targetfd: 3,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "42 pidfd_getfd(pidfd: 5, targetfd: 3, flags: 0x0) = 7 (fd)\n"
 );

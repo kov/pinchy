@@ -171,6 +171,9 @@ pub union SyscallEventData {
     pub semctl: SemctlData,
     pub acct: AcctData,
     pub getcpu: GetcpuData,
+    pub pidfd_open: PidfdOpenData,
+    pub pidfd_send_signal: PidfdSendSignalData,
+    pub pidfd_getfd: PidfdGetfdData,
 }
 
 #[repr(C)]
@@ -418,6 +421,21 @@ pub struct FcntlData {
     pub fd: i32,
     pub cmd: i32,
     pub arg: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PidfdOpenData {
+    pub pid: i32,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct PidfdGetfdData {
+    pub pidfd: i32,
+    pub targetfd: i32,
+    pub flags: u32,
 }
 
 #[repr(C)]
@@ -968,6 +986,16 @@ pub struct TgkillData {
 pub struct KillData {
     pub pid: i32,
     pub signal: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PidfdSendSignalData {
+    pub pidfd: i32,
+    pub sig: i32,
+    pub info: crate::kernel_types::Siginfo,
+    pub info_ptr: usize,
+    pub flags: u32,
 }
 
 #[repr(C)]

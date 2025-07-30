@@ -404,6 +404,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "sig: {}", format_signal_number(data.signal));
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_pidfd_send_signal => {
+            let data = unsafe { event.data.pidfd_send_signal };
+
+            argf!(sf, "pidfd: {}", data.pidfd);
+            argf!(sf, "sig: {}", format_signal_number(data.sig));
+
+            arg!(sf, "siginfo:");
+            format_siginfo(&mut sf, &data.info).await?;
+
+            argf!(sf, "flags: 0x{:x}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_exit => {
             let data = unsafe { event.data.exit };
 
@@ -1825,6 +1838,20 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "cpu: {}", cpu_val);
             argf!(sf, "node: {}", node_val);
             argf!(sf, "tcache: 0x{:x}", data.tcache);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_pidfd_open => {
+            let data = unsafe { event.data.pidfd_open };
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "flags: {}", format_pidfd_open_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_pidfd_getfd => {
+            let data = unsafe { event.data.pidfd_getfd };
+            argf!(sf, "pidfd: {}", data.pidfd);
+            argf!(sf, "targetfd: {}", data.targetfd);
+            argf!(sf, "flags: 0x{:x}", data.flags);
             finish!(sf, event.return_value);
         }
         _ => {

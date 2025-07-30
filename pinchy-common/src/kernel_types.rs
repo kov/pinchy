@@ -398,3 +398,32 @@ pub struct IpcPerm {
     pub __pad1: u16, // Padding
     pub seq: u16,    // Sequence number
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Siginfo {
+    pub si_signo: i32,       // Signal number
+    pub si_errno: i32,       // An errno value
+    pub si_code: i32,        // Signal code
+    pub si_trapno: i32,      // Trap number (unused on most archs)
+    pub si_pid: i32,         // Sending process ID
+    pub si_uid: u32,         // Real user ID of sending process
+    pub si_status: i32,      // Exit value or signal
+    pub si_utime: i64,       // User time consumed
+    pub si_stime: i64,       // System time consumed
+    pub si_value: usize,     // Signal value (union sigval)
+    pub si_int: i32,         // POSIX.1b signal
+    pub si_ptr: usize,       // POSIX.1b signal (pointer)
+    pub si_overrun: i32,     // Timer overrun count
+    pub si_timerid: i32,     // Timer ID
+    pub si_addr: usize,      // Memory location which caused fault
+    pub si_band: i64,        // Band event
+    pub si_fd: i32,          // File descriptor
+    pub si_addr_lsb: i16,    // Least significant bit of address
+    pub si_lower: usize,     // Lower bound when address violation occurred
+    pub si_upper: usize,     // Upper bound when address violation occurred
+    pub si_pkey: i32,        // Protection key on PTE that caused fault
+    pub si_call_addr: usize, // Address of system call instruction
+    pub si_syscall: i32,     // Number of attempted system call
+    pub si_arch: u32,        // Architecture of attempted system call
+}

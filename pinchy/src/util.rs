@@ -1911,6 +1911,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_connect
         | syscalls::SYS_epoll_ctl
         | syscalls::SYS_shmdt
+        | syscalls::SYS_msgsnd
+        | syscalls::SYS_semop
         | syscalls::SYS_shutdown => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
@@ -2060,6 +2062,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             _ => std::borrow::Cow::Owned(format!("{return_value} (shmid)")),
         },
 
+        syscalls::SYS_msgget => match return_value {
+            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (msqid)")),
+        },
+
         // Default case - just show the raw value with error indication if negative
         _ => {
             if return_value < 0 {
@@ -2161,7 +2168,7 @@ pub fn format_shmflg(flags: i32) -> String {
     let perms = flags & 0o777;
 
     if perms != 0 {
-        parts.push(format!("0o{:03o}", perms));
+        parts.push(format!("0o{perms:03o}"));
     }
 
     if flags & libc::IPC_CREAT != 0 {
@@ -2185,7 +2192,7 @@ pub fn format_shmflg(flags: i32) -> String {
     }
 
     if parts.is_empty() {
-        format!("0x{:x}", flags)
+        format!("0x{flags:x}")
     } else {
         parts.join("|")
     }
@@ -2196,16 +2203,7 @@ pub async fn format_shmid_ds(
     shmid_ds: &pinchy_common::kernel_types::ShmidDs,
 ) -> anyhow::Result<()> {
     with_struct!(sf, {
-        arg!(sf, "ipc_perm");
-        with_struct!(sf, {
-            argf!(sf, "key: 0x{:x}", shmid_ds.shm_perm.key);
-            argf!(sf, "uid: {}", shmid_ds.shm_perm.uid);
-            argf!(sf, "gid: {}", shmid_ds.shm_perm.gid);
-            argf!(sf, "cuid: {}", shmid_ds.shm_perm.cuid);
-            argf!(sf, "cgid: {}", shmid_ds.shm_perm.cgid);
-            argf!(sf, "mode: {}", format_ipc_perm_mode(shmid_ds.shm_perm.mode));
-            argf!(sf, "seq: {}", shmid_ds.shm_perm.seq);
-        });
+        format_ipc_perm(sf, &shmid_ds.shm_perm).await?;
         argf!(sf, "segsz: {}", shmid_ds.shm_segsz);
         argf!(sf, "atime: {}", shmid_ds.shm_atime);
         argf!(sf, "dtime: {}", shmid_ds.shm_dtime);
@@ -2213,6 +2211,23 @@ pub async fn format_shmid_ds(
         argf!(sf, "cpid: {}", shmid_ds.shm_cpid);
         argf!(sf, "lpid: {}", shmid_ds.shm_lpid);
         argf!(sf, "nattch: {}", shmid_ds.shm_nattch);
+    });
+    Ok(())
+}
+
+pub async fn format_ipc_perm(
+    sf: &mut SyscallFormatter<'_>,
+    ipc_perm: &pinchy_common::kernel_types::IpcPerm,
+) -> anyhow::Result<()> {
+    arg!(sf, "ipc_perm");
+    with_struct!(sf, {
+        argf!(sf, "key: 0x{:x}", ipc_perm.key);
+        argf!(sf, "uid: {}", ipc_perm.uid);
+        argf!(sf, "gid: {}", ipc_perm.gid);
+        argf!(sf, "cuid: {}", ipc_perm.cuid);
+        argf!(sf, "cgid: {}", ipc_perm.cgid);
+        argf!(sf, "mode: {}", format_ipc_perm_mode(ipc_perm.mode));
+        argf!(sf, "seq: {}", ipc_perm.seq);
     });
     Ok(())
 }
@@ -2247,7 +2262,7 @@ fn format_ipc_perm_mode(mode: u16) -> String {
         format!("|{}", flags.join("|"))
     };
 
-    format!("0o{:03o} ({perm_str}{flags_str})", perms)
+    format!("0o{perms:03o} ({perm_str}{flags_str})")
 }
 
 pub fn format_shmctl_cmd(cmd: i32) -> &'static str {
@@ -2264,6 +2279,137 @@ pub fn format_shmctl_cmd(cmd: i32) -> &'static str {
         libc::SHM_UNLOCK => "SHM_UNLOCK",
         _ => "<unknown>",
     }
+}
+
+pub fn format_msgflg(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::IPC_CREAT != 0 {
+        parts.push("IPC_CREAT");
+    }
+
+    if flags & libc::IPC_EXCL != 0 {
+        parts.push("IPC_EXCL");
+    }
+
+    if flags & libc::IPC_NOWAIT != 0 {
+        parts.push("IPC_NOWAIT");
+    }
+
+    if flags & libc::MSG_NOERROR != 0 {
+        parts.push("MSG_NOERROR");
+    }
+
+    if flags & libc::MSG_EXCEPT != 0 {
+        parts.push("MSG_EXCEPT");
+    }
+
+    if flags & libc::MSG_COPY != 0 {
+        parts.push("MSG_COPY");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        parts.join("|")
+    }
+}
+
+pub fn format_msgctl_cmd(cmd: i32) -> &'static str {
+    match cmd {
+        libc::IPC_STAT => "IPC_STAT",
+        libc::IPC_SET => "IPC_SET",
+        libc::IPC_RMID => "IPC_RMID",
+        libc::IPC_INFO => "IPC_INFO",
+        libc::MSG_STAT => "MSG_STAT",
+        libc::MSG_INFO => "MSG_INFO",
+        _ => "<unknown>",
+    }
+}
+
+pub async fn format_msqid_ds(
+    sf: &mut SyscallFormatter<'_>,
+    msqid_ds: &pinchy_common::kernel_types::MsqidDs,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        format_ipc_perm(sf, &msqid_ds.msg_perm).await?;
+        argf!(sf, "stime: {}", msqid_ds.msg_stime);
+        argf!(sf, "rtime: {}", msqid_ds.msg_rtime);
+        argf!(sf, "ctime: {}", msqid_ds.msg_ctime);
+        argf!(sf, "cbytes: {}", msqid_ds.msg_cbytes);
+        argf!(sf, "qnum: {}", msqid_ds.msg_qnum);
+        argf!(sf, "qbytes: {}", msqid_ds.msg_qbytes);
+        argf!(sf, "lspid: {}", msqid_ds.msg_lspid);
+        argf!(sf, "lrpid: {}", msqid_ds.msg_lrpid);
+    });
+    Ok(())
+}
+
+pub fn format_semflg(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::IPC_CREAT != 0 {
+        parts.push("IPC_CREAT");
+    }
+
+    if flags & libc::IPC_EXCL != 0 {
+        parts.push("IPC_EXCL");
+    }
+
+    if flags & libc::SEM_UNDO != 0 {
+        parts.push("SEM_UNDO");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        parts.join("|")
+    }
+}
+
+pub fn format_semctl_cmd(cmd: i32) -> &'static str {
+    match cmd {
+        libc::IPC_STAT => "IPC_STAT",
+        libc::IPC_SET => "IPC_SET",
+        libc::IPC_RMID => "IPC_RMID",
+        libc::IPC_INFO => "IPC_INFO",
+        libc::SEM_STAT => "SEM_STAT",
+        libc::SEM_INFO => "SEM_INFO",
+        libc::GETPID => "GETPID",
+        libc::GETVAL => "GETVAL",
+        libc::GETALL => "GETALL",
+        libc::GETNCNT => "GETNCNT",
+        libc::GETZCNT => "GETZCNT",
+        libc::SETVAL => "SETVAL",
+        libc::SETALL => "SETALL",
+        _ => "<unknown>",
+    }
+}
+
+pub async fn format_semid_ds(
+    sf: &mut SyscallFormatter<'_>,
+    semid_ds: &pinchy_common::kernel_types::SemidDs,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        format_ipc_perm(sf, &semid_ds.sem_perm).await?;
+        argf!(sf, "otime: {}", semid_ds.sem_otime);
+        argf!(sf, "ctime: {}", semid_ds.sem_ctime);
+        argf!(sf, "nsems: {}", semid_ds.sem_nsems);
+    });
+    Ok(())
+}
+
+pub async fn format_seminfo(
+    sf: &mut SyscallFormatter<'_>,
+    seminfo: &pinchy_common::kernel_types::Seminfo,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        argf!(sf, "semmap: {}", seminfo.semmap);
+        argf!(sf, "semmni: {}", seminfo.semmni);
+        argf!(sf, "semmns: {}", seminfo.semmns);
+        argf!(sf, "semmnu: {}", seminfo.semmnu);
+    });
+    Ok(())
 }
 
 #[cfg(test)]

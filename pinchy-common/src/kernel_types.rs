@@ -329,6 +329,62 @@ pub struct ShmidDs {
     pub shm_nattch: usize, // Number of current attaches
 }
 
+/// System V message queue data structure, matching the kernel's struct msqid_ds.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct MsqidDs {
+    pub msg_perm: IpcPerm, // Operation permissions
+    pub msg_stime: i64,    // Last msgsnd time
+    pub msg_rtime: i64,    // Last msgrcv time
+    pub msg_ctime: i64,    // Last change time
+    pub msg_cbytes: usize, // Current number of bytes on queue
+    pub msg_qnum: usize,   // Number of messages in queue
+    pub msg_qbytes: usize, // Max number of bytes allowed on queue
+    pub msg_lspid: i32,    // PID of last msgsnd
+    pub msg_lrpid: i32,    // PID of last msgrcv
+}
+
+/// System V semaphore data structure, matching the kernel's struct semid_ds.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct SemidDs {
+    pub sem_perm: IpcPerm, // Operation permissions
+    pub sem_otime: i64,    // Last semop time
+    pub sem_ctime: i64,    // Last change time
+    pub sem_nsems: usize,  // Number of semaphores in set
+}
+
+/// System V semaphore info structure, matching the kernel's struct seminfo.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Seminfo {
+    pub semmap: i32,
+    pub semmni: i32,
+    pub semmns: i32,
+    pub semmnu: i32,
+    pub semmsl: i32,
+    pub semopm: i32,
+    pub semume: i32,
+    pub semusz: i32,
+    pub semvmx: i32,
+    pub semaem: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub union Semun {
+    pub val: i32,
+    pub array: usize,
+    pub buf: SemidDs,
+    pub info: Seminfo,
+}
+
+impl Default for Semun {
+    fn default() -> Self {
+        Semun { val: 0 }
+    }
+}
+
 /// System V IPC permissions structure, matching the kernel's struct ipc_perm.
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]

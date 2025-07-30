@@ -4,13 +4,14 @@
 use pinchy_common::{
     kernel_types::Utsname,
     syscalls::{
-        SYS_clock_nanosleep, SYS_getrandom, SYS_gettimeofday, SYS_ioctl, SYS_ioprio_get,
-        SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_settimeofday, SYS_sync, SYS_sysinfo,
-        SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
+        SYS_clock_nanosleep, SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_ioctl,
+        SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_settimeofday, SYS_sync,
+        SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
     },
-    ClockNanosleepData, ExitGroupData, GetrandomData, GettimeofdayData, IoctlData, IoprioGetData,
-    IoprioSetData, NanosleepData, PersonalityData, RtSigreturnData, SettimeofdayData, SyncData,
-    SyscallEvent, SysinfoData, TimesData, UmaskData, UnameData, VhangupData,
+    ClockNanosleepData, ExitGroupData, GetcpuData, GetrandomData, GettimeofdayData, IoctlData,
+    IoprioGetData, IoprioSetData, NanosleepData, PersonalityData, RtSigreturnData,
+    SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData, TimesData, UmaskData,
+    UnameData, VhangupData,
 };
 
 use crate::syscall_test;
@@ -668,4 +669,48 @@ syscall_test!(
         }
     },
     "9999 clock_nanosleep(clockid: CLOCK_REALTIME, flags: TIMER_ABSTIME, req: { secs: 1700000000, nanos: 123456789 }, rem: NULL) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getcpu_all,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getcpu,
+            pid: 1000,
+            tid: 1001,
+            return_value: 0,
+            data: SyscallEventData {
+                getcpu: GetcpuData {
+                    cpu: 11,
+                    has_cpu: true,
+                    node: 5,
+                    has_node: true,
+                    tcache: 0xdeadbeef,
+                },
+            },
+        }
+    },
+    "1001 getcpu(cpu: 11, node: 5, tcache: 0xdeadbeef) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getcpu_null,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getcpu,
+            pid: 1002,
+            tid: 1002,
+            return_value: 0,
+            data: SyscallEventData {
+                getcpu: GetcpuData {
+                    cpu: 0,
+                    has_cpu: false,
+                    node: 0,
+                    has_node: false,
+                    tcache: 0x1f1b2e,
+                },
+            },
+        }
+    },
+    "1002 getcpu(cpu: NULL, node: NULL, tcache: 0x1f1b2e) = 0 (success)\n"
 );

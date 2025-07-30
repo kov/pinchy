@@ -505,6 +505,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_semget", syscalls::SYS_semget),
         ("syscall_exit_semop", syscalls::SYS_semop),
         ("syscall_exit_semctl", syscalls::SYS_semctl),
+        ("syscall_exit_getcpu", syscalls::SYS_getcpu),
         ("syscall_exit_acct", syscalls::SYS_acct),
     ] {
         let prog: &mut TracePoint = ebpf

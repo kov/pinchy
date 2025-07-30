@@ -169,6 +169,7 @@ pub union SyscallEventData {
     pub semget: SemgetData,
     pub semop: SemopData,
     pub semctl: SemctlData,
+    pub acct: AcctData,
 }
 
 #[repr(C)]
@@ -1218,6 +1219,12 @@ pub struct UnlinkatData {
     pub dirfd: i32,
     pub pathname: [u8; DATA_READ_SIZE],
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AcctData {
+    pub filename: [u8; DATA_READ_SIZE],
 }
 
 #[repr(C)]

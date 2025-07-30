@@ -1803,6 +1803,11 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_acct => {
+            let data = unsafe { event.data.acct };
+            argf!(sf, "filename: {}", format_path(&data.filename, false));
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

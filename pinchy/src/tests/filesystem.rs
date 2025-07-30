@@ -3,14 +3,14 @@
 
 use pinchy_common::{
     syscalls::{
-        SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
+        SYS_acct, SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
         SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
         SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
         SYS_truncate,
     },
-    FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData,
-    FtruncateData, MkdiratData, Renameat2Data, RenameatData, SyscallEvent, DATA_READ_SIZE,
-    MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData,
+    FsyncData, FtruncateData, MkdiratData, Renameat2Data, RenameatData, SyscallEvent,
+    DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
 use crate::syscall_test;
@@ -1205,4 +1205,42 @@ syscall_test!(
         }
     },
     "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_acct,
+    {
+        let mut filename = [0u8; DATA_READ_SIZE];
+        let path = b"/var/log/account\0";
+        filename[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: SYS_acct,
+            pid: 800,
+            tid: 801,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                acct: AcctData { filename },
+            },
+        }
+    },
+    "801 acct(filename: \"/var/log/account\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_acct_error,
+    {
+        let mut filename = [0u8; DATA_READ_SIZE];
+        let path = b"/var/log/account\0";
+        filename[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: SYS_acct,
+            pid: 900,
+            tid: 901,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                acct: AcctData { filename },
+            },
+        }
+    },
+    "901 acct(filename: \"/var/log/account\") = -1 (error)\n"
 );

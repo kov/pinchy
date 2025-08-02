@@ -4,7 +4,7 @@
 use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_madvise, SYS_membarrier, SYS_memfd_secret, SYS_mlock, SYS_mlock2,
-        SYS_mlockall, SYS_mmap, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munmap,
+        SYS_mlockall, SYS_mmap, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munlockall, SYS_munmap,
         SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_readahead, SYS_userfaultfd,
     },
     SyscallEvent,
@@ -387,6 +387,40 @@ syscall_test!(
         }
     },
     "123 munlock(addr: 0x7f1234567000, len: 4096) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_munlockall_success,
+    {
+        use pinchy_common::MunlockallData;
+        SyscallEvent {
+            syscall_nr: SYS_munlockall,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                munlockall: MunlockallData,
+            },
+        }
+    },
+    "123 munlockall() = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_munlockall_error,
+    {
+        use pinchy_common::MunlockallData;
+        SyscallEvent {
+            syscall_nr: SYS_munlockall,
+            pid: 456,
+            tid: 456,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                munlockall: MunlockallData,
+            },
+        }
+    },
+    "456 munlockall() = -1 (error)\n"
 );
 
 syscall_test!(

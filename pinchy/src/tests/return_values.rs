@@ -5,7 +5,7 @@
 
 use pinchy_common::syscalls;
 
-use crate::util::format_return_value;
+use crate::format_helpers::format_return_value;
 
 #[test]
 fn test_error_return_values() {

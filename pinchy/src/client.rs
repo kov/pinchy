@@ -13,9 +13,9 @@ use zbus::proxy;
 use crate::formatting::{Formatter, FormattingStyle};
 
 mod events;
+mod format_helpers;
 mod formatting;
 mod ioctls;
-mod util;
 
 #[cfg(test)]
 mod tests;

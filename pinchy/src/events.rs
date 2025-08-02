@@ -7,7 +7,7 @@ use log::{error, trace};
 use pinchy_common::{syscalls, SyscallEvent};
 
 use crate::{
-    arg, argf, finish, formatting::Formatter, ioctls::format_ioctl_request, raw, util::*,
+    arg, argf, finish, format_helpers::*, formatting::Formatter, ioctls::format_ioctl_request, raw,
     with_array, with_struct,
 };
 
@@ -1253,14 +1253,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(
                 sf,
                 "resource: {}",
-                crate::util::format_resource_type(data.resource)
+                crate::format_helpers::format_resource_type(data.resource)
             );
 
             // Handle new_limit
             if data.has_new {
                 arg!(sf, "new_limit:");
                 with_struct!(sf, {
-                    crate::util::format_rlimit(&mut sf, &data.new_limit).await?;
+                    crate::format_helpers::format_rlimit(&mut sf, &data.new_limit).await?;
                 });
             } else {
                 arg!(sf, "new_limit: NULL");
@@ -1270,7 +1270,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             arg!(sf, "old_limit:");
             if data.has_old && event.return_value == 0 {
                 with_struct!(sf, {
-                    crate::util::format_rlimit(&mut sf, &data.old_limit).await?;
+                    crate::format_helpers::format_rlimit(&mut sf, &data.old_limit).await?;
                 });
             } else if data.has_old {
                 raw!(sf, " (content unavailable)");
@@ -1682,12 +1682,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                         argf!(
                             sf,
                             "events: {}",
-                            crate::util::format_poll_events(data.fds[i].events)
+                            crate::format_helpers::format_poll_events(data.fds[i].events)
                         );
                         argf!(
                             sf,
                             "revents: {}",
-                            crate::util::format_poll_events(data.fds[i].revents)
+                            crate::format_helpers::format_poll_events(data.fds[i].revents)
                         );
                     });
                 }

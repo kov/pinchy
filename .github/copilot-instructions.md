@@ -155,7 +155,7 @@ arguments reference and whether that data needs special handling.
    - If it's a struct, use the existing ones in `pinchy_common/src/kernel_types.rs`
    as examples and add it there, use for both eBPF and server sides.
    - If a simpler type with defined interpretation for the values, add a format_*()
-   helper similar to the ones that already exist in `pinchy_common/src/util.rs`,
+   helper similar to the ones that already exist in `pinchy/src/format_helpers.rs`,
    if it doesn't exist yet, so it can be used by the event parsing code.
    - When adding or modifying formatting helpers, use `libc::` constants whenever
    possible for mapping numeric values to strings; when they are not available,
@@ -165,7 +165,7 @@ arguments reference and whether that data needs special handling.
    reasonably done in a short amount of time, use existing helpers when they exist,
    improve them if necessary. If the function takes no arguments, add it to the match
    arm that only calls finish!().
-5. **Return pretty printing:** Ensure the syscall is present in `format_return_value` in `pinchy/src/util.rs`, as this function is called by the `finish!` macro to handle return value pretty printing. Do not attempt to manually format return values elsewhere in the code. Always verify that `format_return_value` covers the syscall's return value formatting requirements.
+5. **Return pretty printing:** Ensure the syscall is present in `format_return_value` in `pinchy/src/format_helpers.rs`, as this function is called by the `finish!` macro to handle return value pretty printing. Do not attempt to manually format return values elsewhere in the code. Always verify that `format_return_value` covers the syscall's return value formatting requirements.
 6. **Test:** Ensure the new syscall is being traced and parsed
    correctly by adding a test (see Adding tests below).
 
@@ -202,7 +202,7 @@ the eBPF programs into the kernel. To run them you need to use the following com
 
 ## Helper functions
 Helper functions for parsing specific arguments should go under
-`pinchy/src/util.rs`.
+`pinchy/src/format_helpers.rs`.
 
 ## Troubleshooting
 - If you encounter a build error or ICE (internal compiler error), try

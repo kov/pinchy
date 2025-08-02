@@ -209,7 +209,7 @@ impl<'f> SyscallFormatter<'f> {
     ) -> Result<Formatter<'f>> {
         assert_eq!(self.get_depth(), 1);
 
-        let formatted = crate::util::format_return_value(self.syscall_nr, return_value);
+        let formatted = crate::format_helpers::format_return_value(self.syscall_nr, return_value);
 
         let output = &mut self.formatter.output;
 

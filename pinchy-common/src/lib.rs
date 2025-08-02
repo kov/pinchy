@@ -177,6 +177,20 @@ pub union SyscallEventData {
     pub pidfd_getfd: PidfdGetfdData,
     pub process_mrelease: ProcessMreleaseData,
     pub process_madvise: ProcessMadviseData,
+    pub mlock: MlockData,
+    pub mlock2: Mlock2Data,
+    pub mlockall: MlockallData,
+    pub membarrier: MembarrierData,
+    pub mremap: MremapData,
+    pub msync: MsyncData,
+    pub munlock: MunlockData,
+    pub readahead: ReadaheadData,
+    pub setns: SetnsData,
+    pub unshare: UnshareData,
+    pub memfd_secret: MemfdSecretData,
+    pub userfaultfd: UserfaultfdData,
+    pub pkey_alloc: PkeyAllocData,
+    pub pkey_free: PkeyFreeData,
 }
 
 #[repr(C)]
@@ -1410,4 +1424,102 @@ impl Default for ProcessMadviseData {
             read_count: 0,
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MlockData {
+    pub addr: usize,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Mlock2Data {
+    pub addr: usize,
+    pub len: usize,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MlockallData {
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MembarrierData {
+    pub cmd: i32,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MremapData {
+    pub old_address: usize,
+    pub old_size: usize,
+    pub new_size: usize,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MsyncData {
+    pub addr: usize,
+    pub length: usize,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MunlockData {
+    pub addr: usize,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ReadaheadData {
+    pub fd: i32,
+    pub offset: usize,
+    pub count: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetnsData {
+    pub fd: i32,
+    pub nstype: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UnshareData {
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MemfdSecretData {
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UserfaultfdData {
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PkeyAllocData {
+    pub flags: u32,
+    pub access_rights: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PkeyFreeData {
+    pub pkey: i32,
 }

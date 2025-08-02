@@ -8,13 +8,13 @@ use pinchy_common::{
     syscalls::{
         SYS_clone3, SYS_execve, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpgid, SYS_getpid,
         SYS_getppid, SYS_getsid, SYS_gettid, SYS_getuid, SYS_pidfd_getfd, SYS_pidfd_open,
-        SYS_prctl, SYS_set_tid_address, SYS_setgid, SYS_setpgid, SYS_setregid, SYS_setresgid,
-        SYS_setresuid, SYS_setreuid, SYS_setsid, SYS_setuid,
+        SYS_prctl, SYS_set_tid_address, SYS_setgid, SYS_setns, SYS_setpgid, SYS_setregid,
+        SYS_setresgid, SYS_setresuid, SYS_setreuid, SYS_setsid, SYS_setuid, SYS_unshare,
     },
     Clone3Data, ExecveData, GenericSyscallData, GetegidData, GeteuidData, GetgidData, GetpgidData,
     GetpidData, GetppidData, GetsidData, GettidData, GetuidData, PidfdOpenData, SetTidAddressData,
-    SetgidData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData, SetsidData,
-    SetuidData, SyscallEvent, SMALL_READ_SIZE,
+    SetgidData, SetnsData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData,
+    SetsidData, SetuidData, SyscallEvent, UnshareData, SMALL_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{AlarmData, GetpgrpData, PauseData};
@@ -946,4 +946,78 @@ syscall_test!(
         }
     },
     "4321 process_mrelease(pidfd: 5, flags: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_setns_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_setns,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                setns: SetnsData {
+                    fd: 5,
+                    nstype: libc::CLONE_NEWNET | libc::CLONE_NEWPID,
+                },
+            },
+        }
+    },
+    "123 setns(fd: 5, nstype: 0x60000000 (CLONE_NEWPID|CLONE_NEWNET)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_setns_all_namespaces,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_setns,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                setns: SetnsData {
+                    fd: 6,
+                    nstype: 0, // Join all namespaces
+                },
+            },
+        }
+    },
+    "123 setns(fd: 6, nstype: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_unshare_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_unshare,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                unshare: UnshareData {
+                    flags: libc::CLONE_NEWNS | libc::CLONE_NEWPID | libc::CLONE_NEWNET,
+                },
+            },
+        }
+    },
+    "123 unshare(flags: 0x60020000 (CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWNET)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_unshare_fs_and_files,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_unshare,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                unshare: UnshareData {
+                    flags: libc::CLONE_FS | libc::CLONE_FILES,
+                },
+            },
+        }
+    },
+    "123 unshare(flags: 0x600 (CLONE_FS|CLONE_FILES)) = 0 (success)\n"
 );

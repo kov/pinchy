@@ -192,6 +192,8 @@ pub union SyscallEventData {
     pub userfaultfd: UserfaultfdData,
     pub pkey_alloc: PkeyAllocData,
     pub pkey_free: PkeyFreeData,
+    pub eventfd: EventfdData,
+    pub eventfd2: Eventfd2Data,
 }
 
 #[repr(C)]
@@ -1527,4 +1529,18 @@ pub struct PkeyAllocData {
 #[derive(Clone, Copy)]
 pub struct PkeyFreeData {
     pub pkey: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct EventfdData {
+    pub initval: u32,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Eventfd2Data {
+    pub initval: u32,
+    pub flags: i32,
 }

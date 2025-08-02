@@ -488,3 +488,101 @@ syscall_test!(
     },
     "20008 semctl(semid: 88, semnum: 2, op: SETVAL, val: 0) = -1 (error)\n"
 );
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_eventfd_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_eventfd,
+            pid: 5555,
+            tid: 5555,
+            return_value: 7,
+            data: SyscallEventData {
+                eventfd: pinchy_common::EventfdData {
+                    initval: 0,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "5555 eventfd(initval: 0, flags: 0) = 7 (fd)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_eventfd_with_flags,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_eventfd,
+            pid: 6666,
+            tid: 6666,
+            return_value: 8,
+            data: SyscallEventData {
+                eventfd: pinchy_common::EventfdData {
+                    initval: 5,
+                    flags: libc::O_CLOEXEC, // EFD_CLOEXEC
+                },
+            },
+        }
+    },
+    "6666 eventfd(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = 8 (fd)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_eventfd_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_eventfd,
+            pid: 7777,
+            tid: 7777,
+            return_value: -1,
+            data: SyscallEventData {
+                eventfd: pinchy_common::EventfdData {
+                    initval: 100,
+                    flags: -1, // invalid flags
+                },
+            },
+        }
+    },
+    "7777 eventfd(initval: 100, flags: 0xffffffff (EFD_CLOEXEC|EFD_NONBLOCK|UNKNOWN)) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_eventfd2_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_eventfd2,
+            pid: 8888,
+            tid: 8888,
+            return_value: 9,
+            data: SyscallEventData {
+                eventfd2: pinchy_common::Eventfd2Data {
+                    initval: 0,
+                    flags: libc::O_NONBLOCK, // EFD_NONBLOCK
+                },
+            },
+        }
+    },
+    "8888 eventfd2(initval: 0, flags: 0x800 (EFD_NONBLOCK)) = 9 (fd)\n"
+);
+
+syscall_test!(
+    parse_eventfd2_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_eventfd2,
+            pid: 9999,
+            tid: 9999,
+            return_value: -1,
+            data: SyscallEventData {
+                eventfd2: pinchy_common::Eventfd2Data {
+                    initval: 42,
+                    flags: 999999, // invalid flags
+                },
+            },
+        }
+    },
+    "9999 eventfd2(initval: 42, flags: 0xf423f (EFD_CLOEXEC|UNKNOWN)) = -1 (error)\n"
+);

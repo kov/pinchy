@@ -2708,6 +2708,14 @@ pub fn format_pkey_access_rights(access_rights: u32) -> Cow<'static, str> {
     format_fd_flags(access_rights, PKEY_ACCESS_FLAGS)
 }
 
+pub fn format_eventfd_flags(flags: i32) -> Cow<'static, str> {
+    const EVENTFD_FLAGS: &[(u32, &str)] = &[
+        (libc::O_CLOEXEC as u32, "EFD_CLOEXEC"),
+        (libc::O_NONBLOCK as u32, "EFD_NONBLOCK"),
+    ];
+    format_fd_flags(flags as u32, EVENTFD_FLAGS)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

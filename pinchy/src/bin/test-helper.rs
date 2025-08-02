@@ -71,6 +71,7 @@ fn main() -> anyhow::Result<()> {
             "pselect6_test" => pselect6_test(),
             "filesystem_sync_test" => filesystem_sync_test(),
             "filesystem_syscalls_test" => filesystem_syscalls_test(),
+            "eventfd_test" => eventfd_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1214,6 +1215,53 @@ fn filesystem_sync_test() -> anyhow::Result<()> {
     // Clean up - the file will be closed when it goes out of scope
     drop(file);
     let _ = std::fs::remove_file("test_sync_file.tmp");
+
+    Ok(())
+}
+
+fn eventfd_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test eventfd2 syscall with no flags (available on both x86_64 and aarch64)
+        let efd = libc::syscall(libc::SYS_eventfd2, 0, 0);
+        if efd < 0 {
+            bail!("eventfd2 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test eventfd2 with EFD_CLOEXEC flag
+        let efd_cloexec = libc::syscall(libc::SYS_eventfd2, 5, libc::O_CLOEXEC);
+        if efd_cloexec < 0 {
+            bail!(
+                "eventfd2 with EFD_CLOEXEC failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test eventfd2 with EFD_NONBLOCK flag
+        let efd_nonblock = libc::syscall(libc::SYS_eventfd2, 10, libc::O_NONBLOCK);
+        if efd_nonblock < 0 {
+            bail!(
+                "eventfd2 with EFD_NONBLOCK failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // On x86_64, also test the original eventfd syscall
+        #[cfg(target_arch = "x86_64")]
+        {
+            let efd_old = libc::syscall(libc::SYS_eventfd, 42, 0);
+            if efd_old < 0 {
+                bail!("eventfd failed: {}", std::io::Error::last_os_error());
+            }
+
+            // Close the old eventfd
+            libc::close(efd_old as i32);
+        }
+
+        // Close all the eventfds
+        libc::close(efd as i32);
+        libc::close(efd_cloexec as i32);
+        libc::close(efd_nonblock as i32);
+    }
 
     Ok(())
 }

@@ -403,6 +403,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_epoll_create1,
         syscalls::SYS_pidfd_open,
         syscalls::SYS_pidfd_getfd,
+        syscalls::SYS_process_mrelease,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

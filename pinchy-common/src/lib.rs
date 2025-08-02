@@ -174,6 +174,7 @@ pub union SyscallEventData {
     pub pidfd_open: PidfdOpenData,
     pub pidfd_send_signal: PidfdSendSignalData,
     pub pidfd_getfd: PidfdGetfdData,
+    pub process_mrelease: ProcessMreleaseData,
 }
 
 #[repr(C)]
@@ -1372,4 +1373,11 @@ pub struct GetcpuData {
     pub node: u32,
     pub has_node: bool,
     pub tcache: usize, // address as in syscall argument
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct ProcessMreleaseData {
+    pub pidfd: i32,
+    pub flags: u32,
 }

@@ -184,6 +184,7 @@ pub union SyscallEventData {
     pub mremap: MremapData,
     pub msync: MsyncData,
     pub munlock: MunlockData,
+    pub munlockall: MunlockallData,
     pub readahead: ReadaheadData,
     pub setns: SetnsData,
     pub unshare: UnshareData,
@@ -1477,6 +1478,10 @@ pub struct MunlockData {
     pub addr: usize,
     pub len: usize,
 }
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MunlockallData;
 
 #[repr(C)]
 #[derive(Clone, Copy)]

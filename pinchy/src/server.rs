@@ -411,6 +411,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_mremap,
         syscalls::SYS_msync,
         syscalls::SYS_munlock,
+        syscalls::SYS_munlockall,
         syscalls::SYS_readahead,
         syscalls::SYS_setns,
         syscalls::SYS_unshare,

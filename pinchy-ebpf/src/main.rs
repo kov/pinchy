@@ -457,6 +457,76 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let data = unsafe { &mut entry.data.epoll_create1 };
                 data.flags = args[0] as i32;
             }
+            syscalls::SYS_memfd_secret => {
+                let data = unsafe { &mut entry.data.memfd_secret };
+                data.flags = args[0] as u32;
+            }
+            syscalls::SYS_userfaultfd => {
+                let data = unsafe { &mut entry.data.userfaultfd };
+                data.flags = args[0] as u32;
+            }
+            syscalls::SYS_pkey_alloc => {
+                let data = unsafe { &mut entry.data.pkey_alloc };
+                data.flags = args[0] as u32;
+                data.access_rights = args[1] as u32;
+            }
+            syscalls::SYS_pkey_free => {
+                let data = unsafe { &mut entry.data.pkey_free };
+                data.pkey = args[0] as i32;
+            }
+            syscalls::SYS_mlock => {
+                let data = unsafe { &mut entry.data.mlock };
+                data.addr = args[0];
+                data.len = args[1];
+            }
+            syscalls::SYS_mlock2 => {
+                let data = unsafe { &mut entry.data.mlock2 };
+                data.addr = args[0];
+                data.len = args[1];
+                data.flags = args[2] as i32;
+            }
+            syscalls::SYS_mlockall => {
+                let data = unsafe { &mut entry.data.mlockall };
+                data.flags = args[0] as i32;
+            }
+            syscalls::SYS_membarrier => {
+                let data = unsafe { &mut entry.data.membarrier };
+                data.cmd = args[0] as i32;
+                data.flags = args[1] as i32;
+            }
+            syscalls::SYS_mremap => {
+                let data = unsafe { &mut entry.data.mremap };
+                data.old_address = args[0];
+                data.old_size = args[1];
+                data.new_size = args[2];
+                data.flags = args[3] as i32;
+            }
+            syscalls::SYS_msync => {
+                let data = unsafe { &mut entry.data.msync };
+                data.addr = args[0];
+                data.length = args[1];
+                data.flags = args[2] as i32;
+            }
+            syscalls::SYS_munlock => {
+                let data = unsafe { &mut entry.data.munlock };
+                data.addr = args[0];
+                data.len = args[1];
+            }
+            syscalls::SYS_readahead => {
+                let data = unsafe { &mut entry.data.readahead };
+                data.fd = args[0] as i32;
+                data.offset = args[1];
+                data.count = args[2];
+            }
+            syscalls::SYS_setns => {
+                let data = unsafe { &mut entry.data.setns };
+                data.fd = args[0] as i32;
+                data.nstype = args[1] as i32;
+            }
+            syscalls::SYS_unshare => {
+                let data = unsafe { &mut entry.data.unshare };
+                data.flags = args[0] as i32;
+            }
             #[cfg(x86_64)]
             syscalls::SYS_pause | syscalls::SYS_getpgrp => {}
             syscalls::SYS_sched_yield
@@ -470,6 +540,7 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
             | syscalls::SYS_rt_sigreturn
             | syscalls::SYS_sync
             | syscalls::SYS_setsid
+            | syscalls::SYS_munlockall
             | syscalls::SYS_vhangup => {}
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);

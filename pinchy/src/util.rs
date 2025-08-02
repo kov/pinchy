@@ -1816,6 +1816,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_pidfd_getfd
         | syscalls::SYS_timerfd_create
         | syscalls::SYS_memfd_create
+        | syscalls::SYS_memfd_secret
         | syscalls::SYS_userfaultfd => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
@@ -1920,7 +1921,16 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_acct
         | syscalls::SYS_getcpu
         | syscalls::SYS_shutdown
-        | syscalls::SYS_process_mrelease => match return_value {
+        | syscalls::SYS_process_mrelease
+        | syscalls::SYS_mlock
+        | syscalls::SYS_mlock2
+        | syscalls::SYS_mlockall
+        | syscalls::SYS_munlock
+        | syscalls::SYS_msync
+        | syscalls::SYS_readahead
+        | syscalls::SYS_setns
+        | syscalls::SYS_unshare
+        | syscalls::SYS_pkey_free => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -2073,6 +2083,18 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_msgget => match return_value {
             -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (msqid)")),
+        },
+
+        // Special syscalls with unique return value semantics
+        syscalls::SYS_membarrier => match return_value {
+            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (bitmask)")),
+        },
+
+        syscalls::SYS_pkey_alloc => match return_value {
+            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (pkey)")),
         },
 
         // Default case - just show the raw value with error indication if negative
@@ -2469,6 +2491,220 @@ pub async fn format_siginfo(
         argf!(sf, "arch: {}", info.si_arch);
     });
     Ok(())
+}
+
+pub fn format_mlock2_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::MLOCK_ONFAULT != 0 {
+        parts.push("MLOCK_ONFAULT");
+    }
+
+    let known_flags = libc::MLOCK_ONFAULT;
+    let unknown_flags = flags & !known_flags;
+    if unknown_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_mlockall_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::MCL_CURRENT != 0 {
+        parts.push("MCL_CURRENT");
+    }
+
+    if flags & libc::MCL_FUTURE != 0 {
+        parts.push("MCL_FUTURE");
+    }
+
+    if flags & libc::MCL_ONFAULT != 0 {
+        parts.push("MCL_ONFAULT");
+    }
+
+    let known_flags = libc::MCL_CURRENT | libc::MCL_FUTURE | libc::MCL_ONFAULT;
+    let unknown_flags = flags & !known_flags;
+    if unknown_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_membarrier_cmd(cmd: i32) -> Cow<'static, str> {
+    match cmd {
+        libc::MEMBARRIER_CMD_QUERY => Cow::Borrowed("MEMBARRIER_CMD_QUERY"),
+        libc::MEMBARRIER_CMD_GLOBAL => Cow::Borrowed("MEMBARRIER_CMD_GLOBAL"), // alias for MEMBARRIER_CMD_SHARED
+        libc::MEMBARRIER_CMD_GLOBAL_EXPEDITED => Cow::Borrowed("MEMBARRIER_CMD_GLOBAL_EXPEDITED"),
+        libc::MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED => {
+            Cow::Borrowed("MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED")
+        }
+        libc::MEMBARRIER_CMD_PRIVATE_EXPEDITED => Cow::Borrowed("MEMBARRIER_CMD_PRIVATE_EXPEDITED"),
+        libc::MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED => {
+            Cow::Borrowed("MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED")
+        }
+        libc::MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE => {
+            Cow::Borrowed("MEMBARRIER_CMD_PRIVATE_EXPEDITED_SYNC_CORE")
+        }
+        libc::MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE => {
+            Cow::Borrowed("MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_SYNC_CORE")
+        }
+        libc::MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ => {
+            Cow::Borrowed("MEMBARRIER_CMD_PRIVATE_EXPEDITED_RSEQ")
+        }
+        libc::MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_RSEQ => {
+            Cow::Borrowed("MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED_RSEQ")
+        }
+        _ => Cow::Owned(format!("{cmd} (unknown)")),
+    }
+}
+
+pub fn format_msync_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::MS_ASYNC != 0 {
+        parts.push("MS_ASYNC");
+    }
+
+    if flags & libc::MS_SYNC != 0 {
+        parts.push("MS_SYNC");
+    }
+
+    if flags & libc::MS_INVALIDATE != 0 {
+        parts.push("MS_INVALIDATE");
+    }
+
+    // Check for unknown flags
+    let known_flags = libc::MS_ASYNC | libc::MS_SYNC | libc::MS_INVALIDATE;
+    let unknown_flags = flags & !known_flags;
+    if unknown_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_mremap_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::MREMAP_MAYMOVE != 0 {
+        parts.push("MREMAP_MAYMOVE");
+    }
+
+    if flags & libc::MREMAP_FIXED != 0 {
+        parts.push("MREMAP_FIXED");
+    }
+
+    if flags & libc::MREMAP_DONTUNMAP != 0 {
+        parts.push("MREMAP_DONTUNMAP");
+    }
+
+    let known_flags = libc::MREMAP_MAYMOVE | libc::MREMAP_FIXED | libc::MREMAP_DONTUNMAP;
+    let unknown_flags = flags & !known_flags;
+    if unknown_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_membarrier_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    // As of current kernels, membarrier flags are mostly reserved for future use
+    // Most current calls use flags=0
+    Cow::Owned(format!("0x{flags:x}"))
+}
+
+/// Generic function for formatting file descriptor creation flags
+pub fn format_fd_flags(flags: u32, valid_flags: &[(u32, &'static str)]) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+    let mut remaining_flags = flags;
+
+    for (flag, name) in valid_flags.iter() {
+        if (flags & flag) != 0 {
+            parts.push(*name);
+            remaining_flags &= !flag;
+        }
+    }
+
+    if remaining_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_memfd_secret_flags(flags: u32) -> Cow<'static, str> {
+    const MEMFD_SECRET_FLAGS: &[(u32, &str)] = &[(libc::FD_CLOEXEC as u32, "FD_CLOEXEC")];
+    format_fd_flags(flags, MEMFD_SECRET_FLAGS)
+}
+
+pub fn format_userfaultfd_flags(flags: u32) -> Cow<'static, str> {
+    const USERFAULTFD_FLAGS: &[(u32, &str)] = &[
+        (libc::O_CLOEXEC as u32, "O_CLOEXEC"),
+        (libc::O_NONBLOCK as u32, "O_NONBLOCK"),
+    ];
+    format_fd_flags(flags, USERFAULTFD_FLAGS)
+}
+
+pub fn format_pkey_alloc_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    // Currently no flags are defined for pkey_alloc, must be 0
+    Cow::Owned(format!("0x{flags:x}"))
+}
+
+pub fn format_pkey_access_rights(access_rights: u32) -> Cow<'static, str> {
+    const PKEY_ACCESS_FLAGS: &[(u32, &str)] =
+        &[(0x1, "PKEY_DISABLE_ACCESS"), (0x2, "PKEY_DISABLE_WRITE")];
+    format_fd_flags(access_rights, PKEY_ACCESS_FLAGS)
 }
 
 #[cfg(test)]

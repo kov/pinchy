@@ -404,6 +404,20 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_pidfd_open,
         syscalls::SYS_pidfd_getfd,
         syscalls::SYS_process_mrelease,
+        syscalls::SYS_mlock,
+        syscalls::SYS_mlock2,
+        syscalls::SYS_mlockall,
+        syscalls::SYS_membarrier,
+        syscalls::SYS_mremap,
+        syscalls::SYS_msync,
+        syscalls::SYS_munlock,
+        syscalls::SYS_readahead,
+        syscalls::SYS_setns,
+        syscalls::SYS_unshare,
+        syscalls::SYS_memfd_secret,
+        syscalls::SYS_userfaultfd,
+        syscalls::SYS_pkey_alloc,
+        syscalls::SYS_pkey_free,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

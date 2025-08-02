@@ -68,6 +68,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_getgid
         | syscalls::SYS_getegid
         | syscalls::SYS_getppid
+        | syscalls::SYS_munlockall
         | syscalls::SYS_sync
         | syscalls::SYS_setsid
         | syscalls::SYS_vhangup => {
@@ -79,6 +80,94 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_getpgrp => {
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mlock => {
+            let data = unsafe { event.data.mlock };
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "len: {}", data.len);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mlock2 => {
+            let data = unsafe { event.data.mlock2 };
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "flags: {}", format_mlock2_flags(data.flags as u32));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mlockall => {
+            let data = unsafe { event.data.mlockall };
+            argf!(sf, "flags: {}", format_mlockall_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_membarrier => {
+            let data = unsafe { event.data.membarrier };
+            argf!(sf, "cmd: {}", format_membarrier_cmd(data.cmd));
+            argf!(sf, "flags: {}", format_membarrier_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mremap => {
+            let data = unsafe { event.data.mremap };
+            argf!(sf, "old_address: 0x{:x}", data.old_address);
+            argf!(sf, "old_size: {}", data.old_size);
+            argf!(sf, "new_size: {}", data.new_size);
+            argf!(sf, "flags: {}", format_mremap_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_msync => {
+            let data = unsafe { event.data.msync };
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "length: {}", data.length);
+            argf!(sf, "flags: {}", format_msync_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_munlock => {
+            let data = unsafe { event.data.munlock };
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "len: {}", data.len);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_readahead => {
+            let data = unsafe { event.data.readahead };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "offset: {}", data.offset);
+            argf!(sf, "count: {}", data.count);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setns => {
+            let data = unsafe { event.data.setns };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "nstype: {}", format_clone_flags(data.nstype as u64));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_unshare => {
+            let data = unsafe { event.data.unshare };
+            argf!(sf, "flags: {}", format_clone_flags(data.flags as u64));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_memfd_secret => {
+            let data = unsafe { event.data.memfd_secret };
+            argf!(sf, "flags: {}", format_memfd_secret_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_userfaultfd => {
+            let data = unsafe { event.data.userfaultfd };
+            argf!(sf, "flags: {}", format_userfaultfd_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_pkey_alloc => {
+            let data = unsafe { event.data.pkey_alloc };
+            argf!(sf, "flags: {}", format_pkey_alloc_flags(data.flags));
+            argf!(
+                sf,
+                "access_rights: {}",
+                format_pkey_access_rights(data.access_rights)
+            );
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_pkey_free => {
+            let data = unsafe { event.data.pkey_free };
+            argf!(sf, "pkey: {}", data.pkey);
             finish!(sf, event.return_value);
         }
         syscalls::SYS_flistxattr => {

@@ -2,11 +2,19 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    syscalls::{SYS_brk, SYS_madvise, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_process_madvise},
+    syscalls::{
+        SYS_brk, SYS_madvise, SYS_membarrier, SYS_memfd_secret, SYS_mlock, SYS_mlock2,
+        SYS_mlockall, SYS_mmap, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munmap,
+        SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_readahead, SYS_userfaultfd,
+    },
     SyscallEvent,
 };
 
 use crate::syscall_test;
+
+// PKEY constants not available in libc crate
+const PKEY_DISABLE_ACCESS: u32 = 0x1;
+const PKEY_DISABLE_WRITE: u32 = 0x2;
 
 syscall_test!(
     parse_mmap_success,
@@ -187,7 +195,7 @@ syscall_test!(
                 madvise: MadviseData {
                     addr: 0x7f1234567000,
                     length: 4096,
-                    advice: 4,
+                    advice: libc::MADV_DONTNEED,
                 },
             },
         }
@@ -208,7 +216,7 @@ syscall_test!(
                 madvise: MadviseData {
                     addr: 0x0,
                     length: 4096,
-                    advice: 3,
+                    advice: libc::MADV_WILLNEED,
                 },
             },
         }
@@ -299,4 +307,243 @@ syscall_test!(
         }
     },
     "456 process_madvise(pidfd: 9, iov: [ iovec { base: 0x7f9876543000, len: 8192 } ], iovcnt: 1, advice: MADV_WILLNEED (3), flags: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_mlock_success,
+    {
+        use pinchy_common::MlockData;
+        SyscallEvent {
+            syscall_nr: SYS_mlock,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mlock: MlockData {
+                    addr: 0x7f1234567000,
+                    len: 4096,
+                },
+            },
+        }
+    },
+    "123 mlock(addr: 0x7f1234567000, len: 4096) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mlock2_success,
+    {
+        use pinchy_common::Mlock2Data;
+        SyscallEvent {
+            syscall_nr: SYS_mlock2,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mlock2: Mlock2Data {
+                    addr: 0x7f1234567000,
+                    len: 8192,
+                    flags: libc::MLOCK_ONFAULT as i32,
+                },
+            },
+        }
+    },
+    "123 mlock2(addr: 0x7f1234567000, len: 8192, flags: 0x1 (MLOCK_ONFAULT)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mlockall_success,
+    {
+        use pinchy_common::MlockallData;
+        SyscallEvent {
+            syscall_nr: SYS_mlockall,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mlockall: MlockallData {
+                    flags: libc::MCL_CURRENT | libc::MCL_FUTURE,
+                },
+            },
+        }
+    },
+    "123 mlockall(flags: 0x3 (MCL_CURRENT|MCL_FUTURE)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_munlock_success,
+    {
+        use pinchy_common::MunlockData;
+        SyscallEvent {
+            syscall_nr: SYS_munlock,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                munlock: MunlockData {
+                    addr: 0x7f1234567000,
+                    len: 4096,
+                },
+            },
+        }
+    },
+    "123 munlock(addr: 0x7f1234567000, len: 4096) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mremap_success,
+    {
+        use pinchy_common::MremapData;
+        SyscallEvent {
+            syscall_nr: SYS_mremap,
+            pid: 123,
+            tid: 123,
+            return_value: 0x7f9876543000,
+            data: pinchy_common::SyscallEventData {
+                mremap: MremapData {
+                    old_address: 0x7f1234567000,
+                    old_size: 4096,
+                    new_size: 8192,
+                    flags: libc::MREMAP_MAYMOVE,
+                },
+            },
+        }
+    },
+    "123 mremap(old_address: 0x7f1234567000, old_size: 4096, new_size: 8192, flags: 0x1 (MREMAP_MAYMOVE)) = 0x7f9876543000 (addr)\n"
+);
+
+syscall_test!(
+    parse_msync_success,
+    {
+        use pinchy_common::MsyncData;
+        SyscallEvent {
+            syscall_nr: SYS_msync,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                msync: MsyncData {
+                    addr: 0x7f1234567000,
+                    length: 4096,
+                    flags: libc::MS_SYNC,
+                },
+            },
+        }
+    },
+    "123 msync(addr: 0x7f1234567000, length: 4096, flags: 0x4 (MS_SYNC)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_membarrier_success,
+    {
+        use pinchy_common::MembarrierData;
+        SyscallEvent {
+            syscall_nr: SYS_membarrier,
+            pid: 123,
+            tid: 123,
+            return_value: 127, // Supported commands bitmask
+            data: pinchy_common::SyscallEventData {
+                membarrier: MembarrierData {
+                    cmd: libc::MEMBARRIER_CMD_QUERY,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "123 membarrier(cmd: MEMBARRIER_CMD_QUERY, flags: 0) = 127 (bitmask)\n"
+);
+
+syscall_test!(
+    parse_readahead_success,
+    {
+        use pinchy_common::ReadaheadData;
+        SyscallEvent {
+            syscall_nr: SYS_readahead,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                readahead: ReadaheadData {
+                    fd: 5,
+                    offset: 1024,
+                    count: 4096,
+                },
+            },
+        }
+    },
+    "123 readahead(fd: 5, offset: 1024, count: 4096) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_memfd_secret_success,
+    {
+        use pinchy_common::MemfdSecretData;
+        SyscallEvent {
+            syscall_nr: SYS_memfd_secret,
+            pid: 123,
+            tid: 123,
+            return_value: 8,
+            data: pinchy_common::SyscallEventData {
+                memfd_secret: MemfdSecretData {
+                    flags: libc::FD_CLOEXEC as u32,
+                },
+            },
+        }
+    },
+    "123 memfd_secret(flags: 0x1 (FD_CLOEXEC)) = 8 (fd)\n"
+);
+
+syscall_test!(
+    parse_userfaultfd_success,
+    {
+        use pinchy_common::UserfaultfdData;
+        SyscallEvent {
+            syscall_nr: SYS_userfaultfd,
+            pid: 123,
+            tid: 123,
+            return_value: 9,
+            data: pinchy_common::SyscallEventData {
+                userfaultfd: UserfaultfdData {
+                    flags: (libc::O_CLOEXEC | libc::O_NONBLOCK) as u32,
+                },
+            },
+        }
+    },
+    "123 userfaultfd(flags: 0x80800 (O_CLOEXEC|O_NONBLOCK)) = 9 (fd)\n"
+);
+
+syscall_test!(
+    parse_pkey_alloc_success,
+    {
+        use pinchy_common::PkeyAllocData;
+        SyscallEvent {
+            syscall_nr: SYS_pkey_alloc,
+            pid: 123,
+            tid: 123,
+            return_value: 1,
+            data: pinchy_common::SyscallEventData {
+                pkey_alloc: PkeyAllocData {
+                    flags: 0,
+                    access_rights: PKEY_DISABLE_ACCESS | PKEY_DISABLE_WRITE,
+                },
+            },
+        }
+    },
+    "123 pkey_alloc(flags: 0, access_rights: 0x3 (PKEY_DISABLE_ACCESS|PKEY_DISABLE_WRITE)) = 1 (pkey)\n"
+);
+
+syscall_test!(
+    parse_pkey_free_success,
+    {
+        use pinchy_common::PkeyFreeData;
+        SyscallEvent {
+            syscall_nr: SYS_pkey_free,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                pkey_free: PkeyFreeData { pkey: 1 },
+            },
+        }
+    },
+    "123 pkey_free(pkey: 1) = 0 (success)\n"
 );

@@ -8,9 +8,9 @@ use pinchy_common::{
     kernel_types::{EpollEvent, Iovec, Timespec},
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
-        SYS_epoll_pwait2, SYS_fcntl, SYS_lseek, SYS_openat, SYS_pipe2, SYS_ppoll, SYS_pread64,
-        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee, SYS_vmsplice,
-        SYS_write, SYS_writev,
+        SYS_epoll_pwait2, SYS_fcntl, SYS_lseek, SYS_openat, SYS_openat2, SYS_pipe2, SYS_ppoll,
+        SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee,
+        SYS_vmsplice, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
     EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData,
@@ -313,6 +313,31 @@ syscall_test!(
         event
     },
     "22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_openat2,
+    {
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_openat2,
+            pid: 22,
+            tid: 22,
+            return_value: 3,
+            data: pinchy_common::SyscallEventData {
+                openat2: OpenAtData {
+                    dfd: libc::AT_FDCWD,
+                    pathname: [0u8; DATA_READ_SIZE],
+                    flags: libc::O_RDONLY | libc::O_CLOEXEC,
+                    mode: 0o666,
+                },
+            },
+        };
+        let openat2_data = unsafe { &mut event.data.openat2 };
+        let path = c"/etc/passwd".to_bytes_with_nul();
+        openat2_data.pathname[..path.len()].copy_from_slice(path);
+        event
+    },
+    "22 openat2(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3 (fd)\n"
 );
 
 syscall_test!(

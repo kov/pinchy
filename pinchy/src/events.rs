@@ -838,6 +838,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_openat2 => {
+            let data = unsafe { event.data.openat2 };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: {}", format_flags(data.flags));
+            argf!(sf, "mode: {}", format_mode(data.mode));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_futex => {
             let data = unsafe { event.data.futex };
 

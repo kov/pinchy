@@ -34,6 +34,7 @@ pub union SyscallEventData {
     pub pwrite: PwriteData,
     pub lseek: LseekData,
     pub openat: OpenAtData,
+    pub openat2: OpenAtData,
     pub futex: FutexData,
     pub sched_yield: SchedYieldData,
     pub ioctl: IoctlData,

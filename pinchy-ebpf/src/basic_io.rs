@@ -24,6 +24,17 @@ syscall_handler!(openat, openat, args, data, {
     }
 });
 
+syscall_handler!(openat2, openat2, args, data, {
+    data.dfd = args[0] as i32;
+    data.flags = args[2] as i32;
+    data.mode = args[3] as u32;
+
+    let pathname_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut data.pathname);
+    }
+});
+
 syscall_handler!(read, read, args, data, return_value, {
     data.fd = args[0] as i32;
     data.count = args[2];

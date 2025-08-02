@@ -1803,6 +1803,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
     match syscall_nr {
         // File descriptor returning syscalls - show success with fd number
         syscalls::SYS_openat
+        | syscalls::SYS_openat2
         | syscalls::SYS_dup
         | syscalls::SYS_dup3
         | syscalls::SYS_socket

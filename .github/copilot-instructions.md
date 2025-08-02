@@ -165,8 +165,7 @@ arguments reference and whether that data needs special handling.
    reasonably done in a short amount of time, use existing helpers when they exist,
    improve them if necessary. If the function takes no arguments, add it to the match
    arm that only calls finish!().
-5. **Return pretty printing:** Ensure the syscall is present in `format_return_value`
-   in `pinchy/src/util.rs`, so that the return value is printed as expected.
+5. **Return pretty printing:** Ensure the syscall is present in `format_return_value` in `pinchy/src/util.rs`, as this function is called by the `finish!` macro to handle return value pretty printing. Do not attempt to manually format return values elsewhere in the code. Always verify that `format_return_value` covers the syscall's return value formatting requirements.
 6. **Test:** Ensure the new syscall is being traced and parsed
    correctly by adding a test (see Adding tests below).
 

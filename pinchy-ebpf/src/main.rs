@@ -474,6 +474,17 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let data = unsafe { &mut entry.data.pkey_free };
                 data.pkey = args[0] as i32;
             }
+            #[cfg(x86_64)]
+            syscalls::SYS_eventfd => {
+                let data = unsafe { &mut entry.data.eventfd };
+                data.initval = args[0] as u32;
+                data.flags = args[1] as i32;
+            }
+            syscalls::SYS_eventfd2 => {
+                let data = unsafe { &mut entry.data.eventfd2 };
+                data.initval = args[0] as u32;
+                data.flags = args[1] as i32;
+            }
             syscalls::SYS_mlock => {
                 let data = unsafe { &mut entry.data.mlock };
                 data.addr = args[0];

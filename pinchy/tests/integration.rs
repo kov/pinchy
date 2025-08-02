@@ -863,3 +863,57 @@ fn pselect6_syscall() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn eventfd_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises eventfd syscalls
+    // FIXME: in the future we should alias eventfd to eventfd2, I suppose.
+    #[cfg(target_arch = "x86_64")]
+    let handle = run_workload(&["eventfd", "eventfd2", "close"], "eventfd_test");
+
+    #[cfg(target_arch = "aarch64")]
+    let handle = run_workload(&["eventfd2", "close"], "eventfd_test");
+
+    // Expected output - we should see eventfd2 calls with different flags and closes
+    // eventfd() syscall (x86_64 only) and eventfd2() are both tested
+    #[cfg(target_arch = "x86_64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID eventfd2(initval: 0, flags: 0) = NUMBER (fd)
+        PID eventfd2(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = NUMBER (fd)
+        PID eventfd2(initval: 10, flags: 0x800 (EFD_NONBLOCK)) = NUMBER (fd)
+        PID eventfd(initval: 42, flags: 0) = NUMBER (fd)
+        PID close(fd: NUMBER) = 0 (success)
+        PID close(fd: NUMBER) = 0 (success)
+        PID close(fd: NUMBER) = 0 (success)
+        PID close(fd: NUMBER) = 0 (success)
+    "#});
+
+    #[cfg(target_arch = "aarch64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID eventfd2(initval: 0, flags: 0) = NUMBER (fd)
+        PID eventfd2(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = NUMBER (fd)
+        PID eventfd2(initval: 10, flags: 0x800 (EFD_NONBLOCK)) = NUMBER (fd)
+        PID close(fd: NUMBER) = 0 (success)
+        PID close(fd: NUMBER) = 0 (success)
+        PID close(fd: NUMBER) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

@@ -461,6 +461,37 @@ fn madvise_syscall() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn mlock_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises memory locking syscalls
+    let handle = run_workload(&["mlock", "munlockall"], "mlock_test");
+
+    // Expected output - we should see mlock and munlockall calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID mlock(addr: ADDR, len: 4096) = 0 (success)
+        PID munlockall() = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn file_descriptor_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 

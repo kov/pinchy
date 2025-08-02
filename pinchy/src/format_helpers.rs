@@ -1926,6 +1926,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_mlock2
         | syscalls::SYS_mlockall
         | syscalls::SYS_munlock
+        | syscalls::SYS_munlockall
         | syscalls::SYS_msync
         | syscalls::SYS_readahead
         | syscalls::SYS_setns

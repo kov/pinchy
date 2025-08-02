@@ -59,6 +59,7 @@ fn main() -> anyhow::Result<()> {
             "recvfrom_test" => recvfrom_test(),
             "identity_syscalls" => identity_syscalls(),
             "madvise_test" => madvise_test(),
+            "mlock_test" => mlock_test(),
             "file_descriptor_test" => file_descriptor_test(),
             "session_process_test" => session_process_test(),
             "uid_gid_test" => uid_gid_test(),
@@ -616,6 +617,45 @@ fn madvise_test() -> anyhow::Result<()> {
         // Test with an invalid address (should fail)
         let result = libc::madvise(std::ptr::null_mut(), page_size, libc::MADV_WILLNEED);
         assert_eq!(result, -1, "madvise with NULL address should fail");
+
+        // Clean up
+        let result = libc::munmap(addr, page_size);
+        if result != 0 {
+            bail!("munmap failed: {}", std::io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+
+fn mlock_test() -> anyhow::Result<()> {
+    unsafe {
+        // Allocate a page of memory using mmap
+        let page_size = 4096;
+        let addr = libc::mmap(
+            std::ptr::null_mut(),
+            page_size,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+
+        if addr == libc::MAP_FAILED {
+            bail!("mmap failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Lock the memory page
+        let result = libc::mlock(addr, page_size);
+        if result != 0 {
+            bail!("mlock failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Unlock all locked memory using munlockall
+        let result = libc::munlockall();
+        if result != 0 {
+            bail!("munlockall failed: {}", std::io::Error::last_os_error());
+        }
 
         // Clean up
         let result = libc::munmap(addr, page_size);

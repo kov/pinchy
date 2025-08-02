@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    syscalls::{SYS_brk, SYS_madvise, SYS_mmap, SYS_mprotect, SYS_munmap},
+    syscalls::{SYS_brk, SYS_madvise, SYS_mmap, SYS_mprotect, SYS_munmap, SYS_process_madvise},
     SyscallEvent,
 };
 
@@ -235,4 +235,68 @@ syscall_test!(
         }
     },
     "789 madvise(addr: 0x7f1234567000, length: 8192, advice: UNKNOWN (999)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_process_madvise_success,
+    {
+        use pinchy_common::ProcessMadviseData;
+        SyscallEvent {
+            syscall_nr: SYS_process_madvise,
+            pid: 123,
+            tid: 123,
+            return_value: 4096,
+            data: pinchy_common::SyscallEventData {
+                process_madvise: ProcessMadviseData {
+                    pidfd: 5,
+                    iovecs: [
+                        pinchy_common::kernel_types::Iovec {
+                            iov_base: 0x7f1234567000,
+                            iov_len: 4096,
+                        },
+                        pinchy_common::kernel_types::Iovec::default(),
+                    ],
+                    iov_lens: [4096, 0],
+                    iov_bufs: [[0; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+                    iovcnt: 1,
+                    advice: libc::MADV_DONTNEED,
+                    flags: 0,
+                    read_count: 1,
+                },
+            },
+        }
+    },
+    "123 process_madvise(pidfd: 5, iov: [ iovec { base: 0x7f1234567000, len: 4096 } ], iovcnt: 1, advice: MADV_DONTNEED (4), flags: 0) = 4096 (bytes)\n"
+);
+
+syscall_test!(
+    parse_process_madvise_error,
+    {
+        use pinchy_common::ProcessMadviseData;
+        SyscallEvent {
+            syscall_nr: SYS_process_madvise,
+            pid: 456,
+            tid: 456,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                process_madvise: ProcessMadviseData {
+                    pidfd: 9,
+                    iovecs: [
+                        pinchy_common::kernel_types::Iovec {
+                            iov_base: 0x7f9876543000,
+                            iov_len: 8192,
+                        },
+                        pinchy_common::kernel_types::Iovec::default(),
+                    ],
+                    iov_lens: [8192, 0],
+                    iov_bufs: [[0; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+                    iovcnt: 1,
+                    advice: libc::MADV_WILLNEED,
+                    flags: 0,
+                    read_count: 1,
+                },
+            },
+        }
+    },
+    "456 process_madvise(pidfd: 9, iov: [ iovec { base: 0x7f9876543000, len: 8192 } ], iovcnt: 1, advice: MADV_WILLNEED (3), flags: 0) = -1 (error)\n"
 );

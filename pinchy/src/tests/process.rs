@@ -931,3 +931,19 @@ syscall_test!(
     },
     "42 pidfd_getfd(pidfd: 5, targetfd: 3, flags: 0x0) = 7 (fd)\n"
 );
+
+syscall_test!(
+    test_process_mrelease,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_process_mrelease,
+            pid: 4321,
+            tid: 4321,
+            return_value: 0, // Success
+            data: pinchy_common::SyscallEventData {
+                process_mrelease: pinchy_common::ProcessMreleaseData { pidfd: 5, flags: 0 },
+            },
+        }
+    },
+    "4321 process_mrelease(pidfd: 5, flags: 0x0) = 0 (success)\n"
+);

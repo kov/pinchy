@@ -417,6 +417,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_process_mrelease => {
+            let data = unsafe { event.data.process_mrelease };
+            argf!(sf, "pidfd: {}", data.pidfd);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_exit => {
             let data = unsafe { event.data.exit };
 

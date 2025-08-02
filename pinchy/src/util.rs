@@ -1917,7 +1917,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_semop
         | syscalls::SYS_acct
         | syscalls::SYS_getcpu
-        | syscalls::SYS_shutdown => match return_value {
+        | syscalls::SYS_shutdown
+        | syscalls::SYS_process_mrelease => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },

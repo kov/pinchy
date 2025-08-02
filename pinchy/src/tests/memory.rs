@@ -4,8 +4,9 @@
 use pinchy_common::{
     syscalls::{
         SYS_brk, SYS_madvise, SYS_membarrier, SYS_memfd_secret, SYS_mlock, SYS_mlock2,
-        SYS_mlockall, SYS_mmap, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munlockall, SYS_munmap,
-        SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_readahead, SYS_userfaultfd,
+        SYS_mlockall, SYS_mmap, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munlockall,
+        SYS_munmap, SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_readahead,
+        SYS_userfaultfd,
     },
     SyscallEvent,
 };

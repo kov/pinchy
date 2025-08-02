@@ -170,6 +170,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "pkey: {}", data.pkey);
             finish!(sf, event.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_eventfd => {
+            let data = unsafe { event.data.eventfd };
+            argf!(sf, "initval: {}", data.initval);
+            argf!(sf, "flags: {}", format_eventfd_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_eventfd2 => {
+            let data = unsafe { event.data.eventfd2 };
+            argf!(sf, "initval: {}", data.initval);
+            argf!(sf, "flags: {}", format_eventfd_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_flistxattr => {
             let data = unsafe { event.data.flistxattr };
             argf!(sf, "fd: {}", data.fd);

@@ -419,6 +419,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_userfaultfd,
         syscalls::SYS_pkey_alloc,
         syscalls::SYS_pkey_free,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_eventfd,
+        syscalls::SYS_eventfd2,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;

@@ -421,6 +421,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_pread64", syscalls::SYS_pread64),
         ("syscall_exit_pwrite64", syscalls::SYS_pwrite64),
         ("syscall_exit_openat", syscalls::SYS_openat),
+        ("syscall_exit_openat2", syscalls::SYS_openat2),
         ("syscall_exit_fstat", syscalls::SYS_fstat),
         ("syscall_exit_newfstatat", syscalls::SYS_newfstatat),
         ("syscall_exit_getdents64", syscalls::SYS_getdents64),

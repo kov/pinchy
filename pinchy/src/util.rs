@@ -1854,7 +1854,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_recvmsg
         | syscalls::SYS_sendmsg
         | syscalls::SYS_recvfrom
-        | syscalls::SYS_sendto => {
+        | syscalls::SYS_sendto
+        | syscalls::SYS_process_madvise => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
             } else {

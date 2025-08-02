@@ -1029,6 +1029,26 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_process_madvise => {
+            let data = unsafe { event.data.process_madvise };
+
+            argf!(sf, "pidfd: {}", data.pidfd);
+            arg!(sf, "iov:");
+            with_array!(sf, {
+                for i in 0..data.iovcnt {
+                    arg!(sf, "iovec");
+                    with_struct!(sf, {
+                        argf!(sf, "base: 0x{:x}", data.iovecs[i].iov_base);
+                        argf!(sf, "len: {}", data.iovecs[i].iov_len);
+                    });
+                }
+            });
+            argf!(sf, "iovcnt: {}", data.iovcnt);
+            argf!(sf, "advice: {}", format_madvise_advice(data.advice));
+            argf!(sf, "flags: {}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getrandom => {
             let data = unsafe { event.data.getrandom };
 

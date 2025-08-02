@@ -175,6 +175,7 @@ pub union SyscallEventData {
     pub pidfd_send_signal: PidfdSendSignalData,
     pub pidfd_getfd: PidfdGetfdData,
     pub process_mrelease: ProcessMreleaseData,
+    pub process_madvise: ProcessMadviseData,
 }
 
 #[repr(C)]
@@ -1380,4 +1381,32 @@ pub struct GetcpuData {
 pub struct ProcessMreleaseData {
     pub pidfd: i32,
     pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct ProcessMadviseData {
+    pub pidfd: i32,
+    pub iovecs: [crate::kernel_types::Iovec; IOV_COUNT],
+    pub iov_lens: [usize; IOV_COUNT],
+    pub iov_bufs: [[u8; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+    pub iovcnt: usize,
+    pub advice: i32,
+    pub flags: u32,
+    pub read_count: usize,
+}
+
+impl Default for ProcessMadviseData {
+    fn default() -> Self {
+        Self {
+            pidfd: 0,
+            iovecs: [crate::kernel_types::Iovec::default(); IOV_COUNT],
+            iov_lens: [0; IOV_COUNT],
+            iov_bufs: [[0; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+            iovcnt: 0,
+            advice: 0,
+            flags: 0,
+            read_count: 0,
+        }
+    }
 }

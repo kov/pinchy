@@ -1687,6 +1687,30 @@ pub async fn format_timeval(
     Ok(())
 }
 
+/// Format timex structure for display
+pub async fn format_timex(
+    sf: &mut SyscallFormatter<'_>,
+    timex: &pinchy_common::kernel_types::Timex,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        argf!(sf, "modes: {}", format_adjtime_modes(timex.modes));
+        argf!(sf, "offset: {}", timex.offset);
+        argf!(sf, "freq: {}", timex.freq);
+        argf!(sf, "maxerror: {}", timex.maxerror);
+        argf!(sf, "esterror: {}", timex.esterror);
+        argf!(sf, "status: {}", format_adjtime_status(timex.status));
+        argf!(sf, "constant: {}", timex.constant);
+        argf!(sf, "precision: {}", timex.precision);
+        argf!(sf, "tolerance: {}", timex.tolerance);
+        arg!(sf, "time:");
+        with_struct!(sf, {
+            format_timeval(sf, &timex.time).await?;
+        });
+        argf!(sf, "tick: {}", timex.tick);
+    });
+    Ok(())
+}
+
 /// Format fd_set structure for display
 pub async fn format_fdset(
     sf: &mut SyscallFormatter<'_>,
@@ -2054,6 +2078,19 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
 
+        // Time adjustment syscalls - return clock state
+        syscalls::SYS_adjtimex | syscalls::SYS_clock_adjtime => {
+            if return_value < 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            } else {
+                std::borrow::Cow::Owned(format!(
+                    "{} ({})",
+                    return_value,
+                    format_adjtime_state(return_value as i32)
+                ))
+            }
+        }
+
         // Syscalls that always succeed or have no meaningful return interpretation
         syscalls::SYS_rt_sigreturn
         | syscalls::SYS_sched_yield
@@ -2139,6 +2176,155 @@ pub fn format_clock_nanosleep_flags(flags: i32) -> &'static str {
     }
 }
 
+pub fn format_adjtime_modes(modes: u32) -> String {
+    let mut parts = Vec::new();
+
+    if modes & libc::ADJ_OFFSET != 0 {
+        parts.push("ADJ_OFFSET");
+    }
+
+    if modes & libc::ADJ_FREQUENCY != 0 {
+        parts.push("ADJ_FREQUENCY");
+    }
+
+    if modes & libc::ADJ_MAXERROR != 0 {
+        parts.push("ADJ_MAXERROR");
+    }
+
+    if modes & libc::ADJ_ESTERROR != 0 {
+        parts.push("ADJ_ESTERROR");
+    }
+
+    if modes & libc::ADJ_STATUS != 0 {
+        parts.push("ADJ_STATUS");
+    }
+
+    if modes & libc::ADJ_TIMECONST != 0 {
+        parts.push("ADJ_TIMECONST");
+    }
+
+    if modes & libc::ADJ_TAI != 0 {
+        parts.push("ADJ_TAI");
+    }
+
+    if modes & libc::ADJ_SETOFFSET != 0 {
+        parts.push("ADJ_SETOFFSET");
+    }
+
+    if modes & libc::ADJ_MICRO != 0 {
+        parts.push("ADJ_MICRO");
+    }
+
+    if modes & libc::ADJ_NANO != 0 {
+        parts.push("ADJ_NANO");
+    }
+
+    if modes & libc::ADJ_TICK != 0 {
+        parts.push("ADJ_TICK");
+    }
+
+    if modes == libc::ADJ_OFFSET_SINGLESHOT {
+        return "ADJ_OFFSET_SINGLESHOT".to_string();
+    }
+
+    if modes == libc::ADJ_OFFSET_SS_READ {
+        return "ADJ_OFFSET_SS_READ".to_string();
+    }
+
+    if parts.is_empty() {
+        format!("0x{modes:x}")
+    } else {
+        format!("0x{:x} ({})", modes, parts.join("|"))
+    }
+}
+
+pub fn format_adjtime_status(status: i32) -> String {
+    // These are status flags, not individual bit flags like modes
+    let mut parts = Vec::new();
+
+    if status & libc::STA_PLL != 0 {
+        parts.push("STA_PLL");
+    }
+
+    if status & libc::STA_PPSFREQ != 0 {
+        parts.push("STA_PPSFREQ");
+    }
+
+    if status & libc::STA_PPSTIME != 0 {
+        parts.push("STA_PPSTIME");
+    }
+
+    if status & libc::STA_FLL != 0 {
+        parts.push("STA_FLL");
+    }
+
+    if status & libc::STA_INS != 0 {
+        parts.push("STA_INS");
+    }
+
+    if status & libc::STA_DEL != 0 {
+        parts.push("STA_DEL");
+    }
+
+    if status & libc::STA_UNSYNC != 0 {
+        parts.push("STA_UNSYNC");
+    }
+
+    if status & libc::STA_FREQHOLD != 0 {
+        parts.push("STA_FREQHOLD");
+    }
+
+    if status & libc::STA_PPSSIGNAL != 0 {
+        parts.push("STA_PPSSIGNAL");
+    }
+
+    if status & libc::STA_PPSJITTER != 0 {
+        parts.push("STA_PPSJITTER");
+    }
+
+    if status & libc::STA_PPSWANDER != 0 {
+        parts.push("STA_PPSWANDER");
+    }
+
+    if status & libc::STA_PPSERROR != 0 {
+        parts.push("STA_PPSERROR");
+    }
+
+    if status & libc::STA_CLOCKERR != 0 {
+        parts.push("STA_CLOCKERR");
+    }
+
+    if status & libc::STA_NANO != 0 {
+        parts.push("STA_NANO");
+    }
+
+    if status & libc::STA_MODE != 0 {
+        parts.push("STA_MODE");
+    }
+
+    if status & libc::STA_CLK != 0 {
+        parts.push("STA_CLK");
+    }
+
+    if parts.is_empty() {
+        format!("0x{status:x}")
+    } else {
+        format!("0x{:x} ({})", status, parts.join("|"))
+    }
+}
+
+pub fn format_adjtime_state(state: i32) -> Cow<'static, str> {
+    match state {
+        libc::TIME_OK => Cow::Borrowed("TIME_OK"),
+        libc::TIME_INS => Cow::Borrowed("TIME_INS"),
+        libc::TIME_DEL => Cow::Borrowed("TIME_DEL"),
+        libc::TIME_OOP => Cow::Borrowed("TIME_OOP"),
+        libc::TIME_WAIT => Cow::Borrowed("TIME_WAIT"),
+        libc::TIME_ERROR => Cow::Borrowed("TIME_ERROR"),
+        _ => Cow::Owned(format!("{state}")),
+    }
+}
+
 pub fn format_renameat2_flags(flags: u32) -> String {
     let mut parts = Vec::new();
 
@@ -2157,7 +2343,7 @@ pub fn format_renameat2_flags(flags: u32) -> String {
     if parts.is_empty() {
         format!("0x{flags:x}")
     } else {
-        format!("0x{:x} ({})", flags, parts.join(" | "))
+        format!("0x{:x} ({})", flags, parts.join("|"))
     }
 }
 

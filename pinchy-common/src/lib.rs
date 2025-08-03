@@ -136,6 +136,8 @@ pub union SyscallEventData {
     pub mkdirat: MkdiratData,
     pub nanosleep: NanosleepData,
     pub clock_nanosleep: ClockNanosleepData,
+    pub adjtimex: AdjtimexData,
+    pub clock_adjtime: ClockAdjtimeData,
     pub fsync: FsyncData,
     pub fdatasync: FdatasyncData,
     pub ftruncate: FtruncateData,
@@ -1101,6 +1103,19 @@ pub struct ClockNanosleepData {
     pub req: Timespec,
     pub rem: Timespec,
     pub has_rem: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AdjtimexData {
+    pub timex: crate::kernel_types::Timex,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ClockAdjtimeData {
+    pub clockid: i32,
+    pub timex: crate::kernel_types::Timex,
 }
 
 #[repr(C)]

@@ -162,3 +162,57 @@ fn test_default_syscall_handling() {
         "-5 (error)"
     );
 }
+
+#[test]
+fn test_adjtimex_return_values() {
+    // Test adjtimex return values - should show time state
+    assert_eq!(
+        format_return_value(syscalls::SYS_adjtimex, 0).as_ref(),
+        "0 (TIME_OK)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_adjtimex, 1).as_ref(),
+        "1 (TIME_INS)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_adjtimex, 2).as_ref(),
+        "2 (TIME_DEL)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_adjtimex, 3).as_ref(),
+        "3 (TIME_OOP)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_adjtimex, 4).as_ref(),
+        "4 (TIME_WAIT)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_adjtimex, 5).as_ref(),
+        "5 (TIME_ERROR)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_adjtimex, -22).as_ref(),
+        "-22 (error)"
+    );
+}
+
+#[test]
+fn test_clock_adjtime_return_values() {
+    // Test clock_adjtime return values - should show time state
+    assert_eq!(
+        format_return_value(syscalls::SYS_clock_adjtime, 0).as_ref(),
+        "0 (TIME_OK)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_clock_adjtime, 1).as_ref(),
+        "1 (TIME_INS)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_clock_adjtime, 5).as_ref(),
+        "5 (TIME_ERROR)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_clock_adjtime, -95).as_ref(),
+        "-95 (error)"
+    );
+}

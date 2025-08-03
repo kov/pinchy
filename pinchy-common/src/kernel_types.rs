@@ -102,6 +102,33 @@ pub struct Timezone {
     pub tz_dsttime: i32,     // type of DST correction
 }
 
+/// Timex structure for adjtimex/clock_adjtime syscalls
+/// Note: we capture the main fields, padding is omitted for eBPF compatibility
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Timex {
+    pub modes: u32,     // mode selector
+    pub offset: i64,    // time offset (usec)
+    pub freq: i64,      // frequency offset (scaled ppm)
+    pub maxerror: i64,  // maximum error (usec)
+    pub esterror: i64,  // estimated error (usec)
+    pub status: i32,    // clock command/status
+    pub constant: i64,  // pll time constant
+    pub precision: i64, // clock precision (usec) (read only)
+    pub tolerance: i64, // clock frequency tolerance (ppm) (read only)
+    pub time: Timeval,  // current time (read only, except for ADJ_SETOFFSET)
+    pub tick: i64,      // (modified) usecs between clock ticks
+    pub ppsfreq: i64,   // pps frequency (scaled ppm) (ro)
+    pub jitter: i64,    // pps jitter (us) (ro)
+    pub shift: i32,     // interval duration (s) (shift) (ro)
+    pub stabil: i64,    // pps stability (scaled ppm) (ro)
+    pub jitcnt: i64,    // jitter limit exceeded (ro)
+    pub calcnt: i64,    // calibration intervals (ro)
+    pub errcnt: i64,    // calibration errors (ro)
+    pub stbcnt: i64,    // stability limit exceeded (ro)
+    pub tai: i32,       // TAI offset (ro)
+}
+
 /// System information structure for sysinfo syscall
 /// Note: we ignore old kernel version differences and padding
 #[repr(C)]

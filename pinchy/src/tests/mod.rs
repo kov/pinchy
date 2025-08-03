@@ -12,6 +12,7 @@ mod scheduling;
 mod signal;
 mod sync;
 mod system;
+mod time;
 
 #[macro_export]
 macro_rules! syscall_test {

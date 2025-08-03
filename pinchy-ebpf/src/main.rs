@@ -26,6 +26,7 @@ mod process;
 mod scheduling;
 mod sync;
 mod system;
+mod time;
 mod util;
 
 #[map]

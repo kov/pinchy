@@ -144,7 +144,7 @@ syscall_test!(
                 getrandom: GetrandomData {
                     buf: 0x7f5678901000,
                     buflen: 32,
-                    flags: libc::GRND_RANDOM | libc::GRND_NONBLOCK,
+                    flags: libc::GRND_RANDOM|libc::GRND_NONBLOCK,
                 },
             },
         }

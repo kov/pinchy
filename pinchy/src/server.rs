@@ -485,6 +485,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             "syscall_exit_clock_nanosleep",
             syscalls::SYS_clock_nanosleep,
         ),
+        ("syscall_exit_adjtimex", syscalls::SYS_adjtimex),
+        ("syscall_exit_clock_adjtime", syscalls::SYS_clock_adjtime),
         ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
         ("syscall_exit_times", syscalls::SYS_times),
         ("syscall_exit_readv", syscalls::SYS_readv),

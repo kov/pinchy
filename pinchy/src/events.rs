@@ -82,6 +82,61 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_getpgrp => {
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_capget | syscalls::SYS_capset => {
+            let data = unsafe { event.data.capsetget };
+
+            arg!(sf, "header:");
+            with_struct!(sf, {
+                argf!(sf, "version: 0x{:x}", data.header.version);
+                argf!(sf, "pid: {}", data.header.pid);
+            });
+
+            arg!(sf, "data:");
+            with_array!(sf, {
+                for i in 0..data.data_count as usize {
+                    let cap = data.data[i];
+                    arg!(sf, "cap_data");
+                    with_struct!(sf, {
+                        argf!(sf, "effective: 0x{:x}", cap.effective,);
+                        argf!(sf, "permitted: 0x{:x}", cap.permitted,);
+                        argf!(sf, "inheritable: 0x{:x}", cap.inheritable,);
+                    });
+                }
+            });
+
+            raw!(
+                sf,
+                format!(
+                    " (effective: {}, permitted: {}, inheritable: {}",
+                    format_capabilities(
+                        &data
+                            .data
+                            .iter()
+                            .take(data.data_count as usize)
+                            .map(|cap| cap.effective)
+                            .collect::<Vec<_>>()
+                    ),
+                    format_capabilities(
+                        &data
+                            .data
+                            .iter()
+                            .take(data.data_count as usize)
+                            .map(|cap| cap.permitted)
+                            .collect::<Vec<_>>()
+                    ),
+                    format_capabilities(
+                        &data
+                            .data
+                            .iter()
+                            .take(data.data_count as usize)
+                            .map(|cap| cap.inheritable)
+                            .collect::<Vec<_>>()
+                    ),
+                )
+            );
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_mlock => {
             let data = unsafe { event.data.mlock };
             argf!(sf, "addr: 0x{:x}", data.addr);

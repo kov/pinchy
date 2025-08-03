@@ -484,3 +484,23 @@ pub struct Statx {
     pub stx_dev_minor: u32,
     pub __spare2: [u64; 14],
 }
+
+/// Linux capability version constants for capget/capset
+pub const LINUX_CAPABILITY_VERSION_1: u32 = 0x19980330;
+pub const LINUX_CAPABILITY_VERSION_2: u32 = 0x20071026;
+pub const LINUX_CAPABILITY_VERSION_3: u32 = 0x20080522;
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct CapUserHeader {
+    pub version: u32,
+    pub pid: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct CapUserData {
+    pub effective: u32,
+    pub permitted: u32,
+    pub inheritable: u32,
+}

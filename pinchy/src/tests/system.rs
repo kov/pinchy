@@ -2,14 +2,14 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::Utsname,
+    kernel_types::{CapUserData, CapUserHeader, Utsname},
     syscalls::{
-        SYS_clock_nanosleep, SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_ioctl,
-        SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_settimeofday, SYS_sync,
-        SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
+        SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_getcpu, SYS_getrandom, SYS_gettimeofday,
+        SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep, SYS_personality,
+        SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
     },
-    ClockNanosleepData, ExitGroupData, GetcpuData, GetrandomData, GettimeofdayData, IoctlData,
-    IoprioGetData, IoprioSetData, NanosleepData, PersonalityData, RtSigreturnData,
+    CapsetgetData, ClockNanosleepData, ExitGroupData, GetcpuData, GetrandomData, GettimeofdayData,
+    IoctlData, IoprioGetData, IoprioSetData, NanosleepData, PersonalityData, RtSigreturnData,
     SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData, TimesData, UmaskData,
     UnameData, VhangupData,
 };
@@ -713,4 +713,101 @@ syscall_test!(
         }
     },
     "1002 getcpu(cpu: NULL, node: NULL, tcache: 0x1f1b2e) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_capget_v3_all_caps,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_capget,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                capsetget: CapsetgetData {
+                    header: CapUserHeader {
+                        version: pinchy_common::kernel_types::LINUX_CAPABILITY_VERSION_3,
+                        pid: 0,
+                    },
+                    data_count: 3,
+                    data: [
+                        CapUserData {
+                            effective: 0xFFFFFFFF,
+                            permitted: 0xFFFFFFFF,
+                            inheritable: 0xFFFFFFFF,
+                        },
+                        CapUserData {
+                            effective: 0x0,
+                            permitted: 0x0,
+                            inheritable: 0x0,
+                        },
+                        CapUserData {
+                            effective: 0x1,
+                            permitted: 0x2,
+                            inheritable: 0x4,
+                        },
+                    ],
+                },
+            },
+        }
+    },
+    "1234 capget(header: { version: 0x20080522, pid: 0 }, data: [ cap_data { effective: 0xffffffff, permitted: 0xffffffff, inheritable: 0xffffffff }, cap_data { effective: 0x0, permitted: 0x0, inheritable: 0x0 }, cap_data { effective: 0x1, permitted: 0x2, inheritable: 0x4 } ] (effective: CAP_CHOWN|CAP_DAC_OVERRIDE|CAP_DAC_READ_SEARCH|CAP_FOWNER|CAP_FSETID|CAP_KILL|CAP_SETGID|CAP_SETUID|CAP_SETPCAP|CAP_LINUX_IMMUTABLE|CAP_NET_BIND_SERVICE|CAP_NET_BROADCAST|CAP_NET_ADMIN|CAP_NET_RAW|CAP_IPC_LOCK|CAP_IPC_OWNER|CAP_SYS_MODULE|CAP_SYS_RAWIO|CAP_SYS_CHROOT|CAP_SYS_PTRACE|CAP_SYS_PACCT|CAP_SYS_ADMIN|CAP_SYS_BOOT|CAP_SYS_NICE|CAP_SYS_RESOURCE|CAP_SYS_TIME|CAP_SYS_TTY_CONFIG|CAP_MKNOD|CAP_LEASE|CAP_AUDIT_WRITE|CAP_AUDIT_CONTROL|CAP_SETFCAP, permitted: CAP_CHOWN|CAP_DAC_OVERRIDE|CAP_DAC_READ_SEARCH|CAP_FOWNER|CAP_FSETID|CAP_KILL|CAP_SETGID|CAP_SETUID|CAP_SETPCAP|CAP_LINUX_IMMUTABLE|CAP_NET_BIND_SERVICE|CAP_NET_BROADCAST|CAP_NET_ADMIN|CAP_NET_RAW|CAP_IPC_LOCK|CAP_IPC_OWNER|CAP_SYS_MODULE|CAP_SYS_RAWIO|CAP_SYS_CHROOT|CAP_SYS_PTRACE|CAP_SYS_PACCT|CAP_SYS_ADMIN|CAP_SYS_BOOT|CAP_SYS_NICE|CAP_SYS_RESOURCE|CAP_SYS_TIME|CAP_SYS_TTY_CONFIG|CAP_MKNOD|CAP_LEASE|CAP_AUDIT_WRITE|CAP_AUDIT_CONTROL|CAP_SETFCAP, inheritable: CAP_CHOWN|CAP_DAC_OVERRIDE|CAP_DAC_READ_SEARCH|CAP_FOWNER|CAP_FSETID|CAP_KILL|CAP_SETGID|CAP_SETUID|CAP_SETPCAP|CAP_LINUX_IMMUTABLE|CAP_NET_BIND_SERVICE|CAP_NET_BROADCAST|CAP_NET_ADMIN|CAP_NET_RAW|CAP_IPC_LOCK|CAP_IPC_OWNER|CAP_SYS_MODULE|CAP_SYS_RAWIO|CAP_SYS_CHROOT|CAP_SYS_PTRACE|CAP_SYS_PACCT|CAP_SYS_ADMIN|CAP_SYS_BOOT|CAP_SYS_NICE|CAP_SYS_RESOURCE|CAP_SYS_TIME|CAP_SYS_TTY_CONFIG|CAP_MKNOD|CAP_LEASE|CAP_AUDIT_WRITE|CAP_AUDIT_CONTROL|CAP_SETFCAP) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_capset_v1_some_caps,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_capset,
+            pid: 4321,
+            tid: 4321,
+            return_value: 0,
+            data: SyscallEventData {
+                capsetget: CapsetgetData {
+                    header: CapUserHeader {
+                        version: pinchy_common::kernel_types::LINUX_CAPABILITY_VERSION_1,
+                        pid: 4321,
+                    },
+                    data_count: 1,
+                    data: [
+                        CapUserData {
+                            effective: 0x5,
+                            permitted: 0xA,
+                            inheritable: 0x0,
+                        },
+                        CapUserData::default(),
+                        CapUserData::default(),
+                    ],
+                },
+            },
+        }
+    },
+    "4321 capset(header: { version: 0x19980330, pid: 4321 }, data: [ cap_data { effective: 0x5, permitted: 0xa, inheritable: 0x0 } ] (effective: CAP_CHOWN|CAP_DAC_READ_SEARCH, permitted: CAP_DAC_OVERRIDE|CAP_FOWNER, inheritable: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_capget_v2_none,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_capget,
+            pid: 111,
+            tid: 111,
+            return_value: 0,
+            data: SyscallEventData {
+                capsetget: CapsetgetData {
+                    header: CapUserHeader {
+                        version: pinchy_common::kernel_types::LINUX_CAPABILITY_VERSION_2,
+                        pid: 111,
+                    },
+                    data_count: 2,
+                    data: [
+                        CapUserData::default(),
+                        CapUserData::default(),
+                        CapUserData::default(),
+                    ],
+                },
+            },
+        }
+    },
+    "111 capget(header: { version: 0x20071026, pid: 111 }, data: [ cap_data { effective: 0x0, permitted: 0x0, inheritable: 0x0 }, cap_data { effective: 0x0, permitted: 0x0, inheritable: 0x0 } ] (effective: 0, permitted: 0, inheritable: 0) = 0 (success)\n"
 );

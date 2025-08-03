@@ -2,7 +2,12 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::helpers::{bpf_probe_read_buf, bpf_probe_read_user};
-use pinchy_common::kernel_types::{Sysinfo, Timespec, Timeval, Timezone, Tms, Utsname};
+use pinchy_common::{
+    kernel_types::{
+        self, CapUserData, CapUserHeader, Sysinfo, Timespec, Timeval, Timezone, Tms, Utsname,
+    },
+    CapsetgetData,
+};
 
 use crate::syscall_handler;
 
@@ -166,3 +171,45 @@ syscall_handler!(getcpu, args, data, {
         }
     }
 });
+
+syscall_handler!(capget, capsetget, args, data, {
+    read_cap_header_and_data(&args, data)
+});
+
+syscall_handler!(capset, capsetget, args, data, {
+    read_cap_header_and_data(&args, data)
+});
+
+fn read_cap_header_and_data(args: &[usize; 6], data: &mut CapsetgetData) {
+    let header_ptr = args[0] as *const CapUserHeader;
+    let data_ptr = args[1] as *const CapUserData;
+
+    data.header = CapUserHeader::default();
+    data.data_count = 0;
+    data.data = [CapUserData::default(); 3];
+
+    if let Ok(header) = unsafe { bpf_probe_read_user::<CapUserHeader>(header_ptr) } {
+        data.header = header;
+
+        let count = match header.version {
+            kernel_types::LINUX_CAPABILITY_VERSION_1 => 1,
+            kernel_types::LINUX_CAPABILITY_VERSION_2 => 2,
+            kernel_types::LINUX_CAPABILITY_VERSION_3 => 3,
+            _ => 0,
+        };
+
+        data.data_count = count;
+
+        let mut i = 0;
+
+        while i < count {
+            let ptr = unsafe { data_ptr.add(i as usize) };
+
+            if let Ok(val) = unsafe { bpf_probe_read_user::<CapUserData>(ptr) } {
+                data.data[i as usize] = val;
+            }
+
+            i += 1;
+        }
+    }
+}

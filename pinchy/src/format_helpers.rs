@@ -2006,6 +2006,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_unshare
         | syscalls::SYS_pkey_free
         | syscalls::SYS_statx
+        | syscalls::SYS_capset
+        | syscalls::SYS_capget
         | syscalls::SYS_clock_getres
         | syscalls::SYS_clock_gettime
         | syscalls::SYS_clock_settime => match return_value {
@@ -2953,6 +2955,69 @@ pub fn format_eventfd_flags(flags: i32) -> Cow<'static, str> {
         (libc::O_NONBLOCK as u32, "EFD_NONBLOCK"),
     ];
     format_fd_flags(flags as u32, EVENTFD_FLAGS)
+}
+
+pub fn format_capabilities(words: &[u32]) -> String {
+    // List of capabilities, see /usr/include/linux/capability.h
+    const CAP_NAMES: [&str; 40] = [
+        "CAP_CHOWN",
+        "CAP_DAC_OVERRIDE",
+        "CAP_DAC_READ_SEARCH",
+        "CAP_FOWNER",
+        "CAP_FSETID",
+        "CAP_KILL",
+        "CAP_SETGID",
+        "CAP_SETUID",
+        "CAP_SETPCAP",
+        "CAP_LINUX_IMMUTABLE",
+        "CAP_NET_BIND_SERVICE",
+        "CAP_NET_BROADCAST",
+        "CAP_NET_ADMIN",
+        "CAP_NET_RAW",
+        "CAP_IPC_LOCK",
+        "CAP_IPC_OWNER",
+        "CAP_SYS_MODULE",
+        "CAP_SYS_RAWIO",
+        "CAP_SYS_CHROOT",
+        "CAP_SYS_PTRACE",
+        "CAP_SYS_PACCT",
+        "CAP_SYS_ADMIN",
+        "CAP_SYS_BOOT",
+        "CAP_SYS_NICE",
+        "CAP_SYS_RESOURCE",
+        "CAP_SYS_TIME",
+        "CAP_SYS_TTY_CONFIG",
+        "CAP_MKNOD",
+        "CAP_LEASE",
+        "CAP_AUDIT_WRITE",
+        "CAP_AUDIT_CONTROL",
+        "CAP_SETFCAP",
+        "CAP_MAC_OVERRIDE",
+        "CAP_MAC_ADMIN",
+        "CAP_SYSLOG",
+        "CAP_WAKE_ALARM",
+        "CAP_BLOCK_SUSPEND",
+        "CAP_AUDIT_READ",
+        "CAP_PERFMON",
+        "CAP_BPF",
+    ];
+
+    let mut caps = Vec::new();
+
+    for (bit, name) in CAP_NAMES.iter().enumerate() {
+        let word = bit / 32;
+        let bit_in_word = bit % 32;
+
+        if word < words.len() && (words[word] & (1u32 << bit_in_word)) != 0 {
+            caps.push(*name);
+        }
+    }
+
+    if caps.is_empty() {
+        "0".to_string()
+    } else {
+        caps.join("|")
+    }
 }
 
 #[cfg(test)]

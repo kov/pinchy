@@ -543,6 +543,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             "syscall_exit_pidfd_send_signal",
             syscalls::SYS_pidfd_send_signal,
         ),
+        ("syscall_exit_capset", syscalls::SYS_capset),
+        ("syscall_exit_capget", syscalls::SYS_capget),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

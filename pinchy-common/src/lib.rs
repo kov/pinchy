@@ -198,6 +198,7 @@ pub union SyscallEventData {
     pub eventfd2: Eventfd2Data,
     pub clock_time: ClockTimeData,
     pub statx: StatxData,
+    pub capsetget: CapsetgetData,
 }
 
 #[repr(C)]
@@ -1590,6 +1591,28 @@ impl Default for StatxData {
             mask: 0,
             statxbuf: 0,
             statx: crate::kernel_types::Statx::default(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct CapsetgetData {
+    pub header: crate::kernel_types::CapUserHeader,
+
+    // The number of valid elements in the data array (1 for V1, 2 for V2, 3 for V3)
+    pub data_count: u8,
+
+    // The actual capability data structs (up to 3 for version 3)
+    pub data: [crate::kernel_types::CapUserData; 3],
+}
+
+impl Default for CapsetgetData {
+    fn default() -> Self {
+        Self {
+            header: crate::kernel_types::CapUserHeader::default(),
+            data_count: 0,
+            data: [crate::kernel_types::CapUserData::default(); 3],
         }
     }
 }

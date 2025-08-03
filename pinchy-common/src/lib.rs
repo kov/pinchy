@@ -196,6 +196,7 @@ pub union SyscallEventData {
     pub pkey_free: PkeyFreeData,
     pub eventfd: EventfdData,
     pub eventfd2: Eventfd2Data,
+    pub clock_time: ClockTimeData,
 }
 
 #[repr(C)]
@@ -1558,4 +1559,12 @@ pub struct EventfdData {
 pub struct Eventfd2Data {
     pub initval: u32,
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ClockTimeData {
+    pub clockid: i32,
+    pub tp: crate::kernel_types::Timespec,
+    pub has_tp: bool,
 }

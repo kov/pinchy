@@ -1955,7 +1955,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_readahead
         | syscalls::SYS_setns
         | syscalls::SYS_unshare
-        | syscalls::SYS_pkey_free => match return_value {
+        | syscalls::SYS_pkey_free
+        | syscalls::SYS_clock_getres
+        | syscalls::SYS_clock_gettime
+        | syscalls::SYS_clock_settime => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },

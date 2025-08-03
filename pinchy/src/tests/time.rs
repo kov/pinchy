@@ -2,9 +2,11 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::{Timeval, Timex},
-    syscalls::{SYS_adjtimex, SYS_clock_adjtime},
-    AdjtimexData, ClockAdjtimeData, SyscallEvent, SyscallEventData,
+    kernel_types::{Timespec, Timeval, Timex},
+    syscalls::{
+        SYS_adjtimex, SYS_clock_adjtime, SYS_clock_getres, SYS_clock_gettime, SYS_clock_settime,
+    },
+    AdjtimexData, ClockAdjtimeData, ClockTimeData, SyscallEvent, SyscallEventData,
 };
 
 use crate::syscall_test;
@@ -115,4 +117,73 @@ syscall_test!(
         }
     },
     "9999 clock_adjtime(clockid: CLOCK_MONOTONIC, timex: { modes: 0x1 (ADJ_OFFSET), offset: 500, freq: 0, maxerror: 0, esterror: 0, status: 0x0, constant: 0, precision: 0, tolerance: 0, time: { tv_sec: 0, tv_usec: 0 }, tick: 0 }) = 95 (95)\n"
+);
+
+syscall_test!(
+    test_clock_getres,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_clock_getres,
+            pid: 42,
+            tid: 42,
+            return_value: 0,
+            data: SyscallEventData {
+                clock_time: ClockTimeData {
+                    clockid: libc::CLOCK_REALTIME,
+                    tp: Timespec {
+                        seconds: 1,
+                        nanos: 234_567_890,
+                    },
+                    has_tp: true,
+                },
+            },
+        }
+    },
+    "42 clock_getres(clockid: CLOCK_REALTIME, res: { secs: 1, nanos: 234567890 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_clock_gettime,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_clock_gettime,
+            pid: 43,
+            tid: 43,
+            return_value: 0,
+            data: SyscallEventData {
+                clock_time: ClockTimeData {
+                    clockid: libc::CLOCK_MONOTONIC,
+                    tp: Timespec {
+                        seconds: 123,
+                        nanos: 456_789,
+                    },
+                    has_tp: true,
+                },
+            },
+        }
+    },
+    "43 clock_gettime(clockid: CLOCK_MONOTONIC, tp: { secs: 123, nanos: 456789 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_clock_settime,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_clock_settime,
+            pid: 44,
+            tid: 44,
+            return_value: 0,
+            data: SyscallEventData {
+                clock_time: ClockTimeData {
+                    clockid: libc::CLOCK_REALTIME,
+                    tp: Timespec {
+                        seconds: 5,
+                        nanos: 0,
+                    },
+                    has_tp: true,
+                },
+            },
+        }
+    },
+    "44 clock_settime(clockid: CLOCK_REALTIME, tp: { secs: 5, nanos: 0 }) = 0 (success)\n"
 );

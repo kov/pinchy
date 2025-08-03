@@ -454,3 +454,33 @@ pub struct Siginfo {
     pub si_syscall: i32,     // Number of attempted system call
     pub si_arch: u32,        // Architecture of attempted system call
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Statx {
+    pub stx_mask: u32,
+    pub stx_blksize: u32,
+    pub stx_attributes: u64,
+    pub stx_nlink: u32,
+    pub stx_uid: u32,
+    pub stx_gid: u32,
+    pub stx_mode: u16,
+    pub __spare0: u16,
+    pub stx_ino: u64,
+    pub stx_size: u64,
+    pub stx_blocks: u64,
+    pub stx_attributes_mask: u64,
+    pub stx_atime_sec: i64,
+    pub stx_atime_nsec: u32,
+    pub stx_btime_sec: i64,
+    pub stx_btime_nsec: u32,
+    pub stx_ctime_sec: i64,
+    pub stx_ctime_nsec: u32,
+    pub stx_mtime_sec: i64,
+    pub stx_mtime_nsec: u32,
+    pub stx_rdev_major: u32,
+    pub stx_rdev_minor: u32,
+    pub stx_dev_major: u32,
+    pub stx_dev_minor: u32,
+    pub __spare2: [u64; 14],
+}

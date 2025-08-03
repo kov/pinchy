@@ -1244,3 +1244,42 @@ syscall_test!(
     },
     "901 acct(filename: \"/var/log/account\") = -1 (error)\n"
 );
+
+syscall_test!(
+    parse_statx_success,
+    {
+        use pinchy_common::{kernel_types::Statx, StatxData};
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_statx,
+            pid: 42,
+            tid: 42,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                statx: StatxData {
+                    dirfd: 3,
+                    pathname: {
+                        let mut arr = [0u8; DATA_READ_SIZE];
+                        let s = b"/tmp/testfile\0";
+                        arr[..s.len()].copy_from_slice(s);
+                        arr
+                    },
+                    flags: 0,
+                    mask: 0xFFF,
+                    statxbuf: 0x12345678,
+                    statx: {
+                        let mut s = Statx::default();
+                        s.stx_mask = 0xFFF;
+                        s.stx_mode = libc::S_IFREG as u16 | 0o644;
+                        s.stx_size = 98765;
+                        s.stx_uid = 1000;
+                        s.stx_gid = 1000;
+                        s.stx_blocks = 20;
+                        s.stx_blksize = 4096;
+                        s
+                    },
+                },
+            },
+        }
+    },
+    "42 statx(dirfd: 3, pathname: \"/tmp/testfile\", flags: 0x0, mask: 0xfff, statxbuf: 0x12345678, struct statx: { mask: 0xfff, blksize: 4096, attributes: 0x0, nlink: 0, uid: 1000, gid: 1000, mode: 0100644, ino: 0, size: 98765, blocks: 20, attributes_mask: 0x0, atime: 0.0, btime: 0.0, ctime: 0.0, mtime: 0.0, rdev: 0:0, dev: 0:0 }) = 0 (success)\n"
+);

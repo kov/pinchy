@@ -101,6 +101,55 @@ pub async fn format_stat(sf: &mut SyscallFormatter<'_>, stat: &Stat) -> anyhow::
     Ok(())
 }
 
+pub async fn format_statx(
+    sf: &mut SyscallFormatter<'_>,
+    statx: &pinchy_common::kernel_types::Statx,
+) -> anyhow::Result<()> {
+    argf!(sf, "mask: 0x{:x}", statx.stx_mask);
+    argf!(sf, "blksize: {}", statx.stx_blksize);
+    argf!(sf, "attributes: 0x{:x}", statx.stx_attributes);
+    argf!(sf, "nlink: {}", statx.stx_nlink);
+    argf!(sf, "uid: {}", statx.stx_uid);
+    argf!(sf, "gid: {}", statx.stx_gid);
+    argf!(sf, "mode: 0{:o}", statx.stx_mode);
+    argf!(sf, "ino: {}", statx.stx_ino);
+    argf!(sf, "size: {}", statx.stx_size);
+    argf!(sf, "blocks: {}", statx.stx_blocks);
+    argf!(sf, "attributes_mask: 0x{:x}", statx.stx_attributes_mask);
+    argf!(
+        sf,
+        "atime: {}.{}",
+        statx.stx_atime_sec,
+        statx.stx_atime_nsec
+    );
+    argf!(
+        sf,
+        "btime: {}.{}",
+        statx.stx_btime_sec,
+        statx.stx_btime_nsec
+    );
+    argf!(
+        sf,
+        "ctime: {}.{}",
+        statx.stx_ctime_sec,
+        statx.stx_ctime_nsec
+    );
+    argf!(
+        sf,
+        "mtime: {}.{}",
+        statx.stx_mtime_sec,
+        statx.stx_mtime_nsec
+    );
+    argf!(
+        sf,
+        "rdev: {}:{}",
+        statx.stx_rdev_major,
+        statx.stx_rdev_minor
+    );
+    argf!(sf, "dev: {}:{}", statx.stx_dev_major, statx.stx_dev_minor);
+    Ok(())
+}
+
 pub async fn format_timespec(
     sf: &mut SyscallFormatter<'_>,
     timespec: Timespec,
@@ -1956,6 +2005,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_setns
         | syscalls::SYS_unshare
         | syscalls::SYS_pkey_free
+        | syscalls::SYS_statx
         | syscalls::SYS_clock_getres
         | syscalls::SYS_clock_gettime
         | syscalls::SYS_clock_settime => match return_value {

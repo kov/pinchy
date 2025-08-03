@@ -454,6 +454,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             syscalls::SYS_process_madvise,
         ),
         ("syscall_exit_statfs", syscalls::SYS_statfs),
+        ("syscall_exit_statx", syscalls::SYS_statx),
         ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),
         (

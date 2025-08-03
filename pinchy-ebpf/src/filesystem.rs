@@ -326,3 +326,25 @@ syscall_handler!(symlinkat, args, data, {
         let _ = bpf_probe_read_buf(linkpath_ptr, &mut data.linkpath);
     }
 });
+
+syscall_handler!(statx, statx, args, data, return_value, {
+    data.dirfd = args[0] as i32;
+    let pathname_ptr = args[1] as *const u8;
+    data.flags = args[2] as i32;
+    data.mask = args[3] as u32;
+    let statxbuf_ptr = args[4] as *const pinchy_common::kernel_types::Statx;
+    data.statxbuf = statxbuf_ptr as u64;
+
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+        if return_value == 0 {
+            let _ = bpf_probe_read_buf(
+                statxbuf_ptr as *const u8,
+                core::slice::from_raw_parts_mut(
+                    &mut data.statx as *mut _ as *mut u8,
+                    core::mem::size_of::<pinchy_common::kernel_types::Statx>(),
+                ),
+            );
+        }
+    }
+});

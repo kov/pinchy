@@ -197,6 +197,7 @@ pub union SyscallEventData {
     pub eventfd: EventfdData,
     pub eventfd2: Eventfd2Data,
     pub clock_time: ClockTimeData,
+    pub statx: StatxData,
 }
 
 #[repr(C)]
@@ -1567,4 +1568,28 @@ pub struct ClockTimeData {
     pub clockid: i32,
     pub tp: crate::kernel_types::Timespec,
     pub has_tp: bool,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct StatxData {
+    pub dirfd: i32,
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub flags: i32,
+    pub mask: u32,
+    pub statxbuf: u64, // user pointer
+    pub statx: crate::kernel_types::Statx,
+}
+
+impl Default for StatxData {
+    fn default() -> Self {
+        Self {
+            dirfd: 0,
+            pathname: [0; crate::DATA_READ_SIZE],
+            flags: 0,
+            mask: 0,
+            statxbuf: 0,
+            statx: crate::kernel_types::Statx::default(),
+        }
+    }
 }

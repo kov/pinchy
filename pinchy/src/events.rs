@@ -1228,6 +1228,23 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_statx => {
+            let data = unsafe { event.data.statx };
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            argf!(sf, "mask: 0x{:x}", data.mask);
+            argf!(sf, "statxbuf: 0x{:x}", data.statxbuf);
+            arg!(sf, "struct statx:");
+            if event.return_value == 0 {
+                with_struct!(sf, {
+                    format_statx(&mut sf, &data.statx).await?;
+                });
+            } else {
+                raw!(sf, " <unavailable>");
+            }
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_prctl => {
             let data = unsafe { event.data.generic };
             let op_code = data.args[0] as i32;

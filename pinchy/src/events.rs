@@ -469,7 +469,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-
         syscalls::SYS_adjtimex => {
             let data = unsafe { event.data.adjtimex };
 
@@ -478,13 +477,31 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-
         syscalls::SYS_clock_adjtime => {
             let data = unsafe { event.data.clock_adjtime };
 
             argf!(sf, "clockid: {}", format_clockid(data.clockid));
             arg!(sf, "timex:");
             format_timex(&mut sf, &data.timex).await?;
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_clock_getres | syscalls::SYS_clock_gettime | syscalls::SYS_clock_settime => {
+            let data = unsafe { event.data.clock_time };
+
+            argf!(sf, "clockid: {}", format_clockid(data.clockid));
+
+            if event.syscall_nr == syscalls::SYS_clock_getres {
+                arg!(sf, "res:");
+            } else {
+                arg!(sf, "tp:");
+            }
+
+            if data.has_tp {
+                format_timespec(&mut sf, data.tp).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
 
             finish!(sf, event.return_value);
         }

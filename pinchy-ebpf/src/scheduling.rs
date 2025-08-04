@@ -4,7 +4,7 @@
 use aya_ebpf::helpers::bpf_probe_read_user;
 use pinchy_common::kernel_types::{Rseq, RseqCs, SchedParam};
 
-use crate::syscall_handler;
+use crate::{syscall_handler, util::read_timespec};
 
 syscall_handler!(rseq, args, data, {
     let rseq_ptr = args[0] as *const Rseq;
@@ -41,4 +41,45 @@ syscall_handler!(sched_setscheduler, args, data, {
             data.param = val;
         }
     }
+});
+
+syscall_handler!(sched_getaffinity, args, data, {
+    data.pid = args[0] as i32;
+    data.cpusetsize = args[1];
+    data.mask = args[2];
+});
+
+syscall_handler!(sched_setaffinity, args, data, {
+    data.pid = args[0] as i32;
+    data.cpusetsize = args[1];
+    data.mask = args[2];
+});
+
+syscall_handler!(sched_getparam, args, data, {
+    data.pid = args[0] as i32;
+
+    let param_ptr = args[1] as *const SchedParam;
+    data.has_param = !param_ptr.is_null();
+    if data.has_param {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<SchedParam>(param_ptr) } {
+            data.param = val;
+        }
+    }
+});
+
+syscall_handler!(sched_setparam, args, data, {
+    data.pid = args[0] as i32;
+
+    let param_ptr = args[1] as *const SchedParam;
+    data.has_param = !param_ptr.is_null();
+    if data.has_param {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<SchedParam>(param_ptr) } {
+            data.param = val;
+        }
+    }
+});
+
+syscall_handler!(sched_rr_get_interval, args, data, {
+    data.pid = args[0] as i32;
+    data.interval = read_timespec(args[1] as *const _);
 });

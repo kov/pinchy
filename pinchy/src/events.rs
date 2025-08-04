@@ -658,6 +658,53 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_sched_getaffinity => {
+            let data = unsafe { event.data.sched_getaffinity };
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "cpusetsize: {}", data.cpusetsize);
+            argf!(sf, "mask: 0x{:x}", data.mask);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_setaffinity => {
+            let data = unsafe { event.data.sched_setaffinity };
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "cpusetsize: {}", data.cpusetsize);
+            argf!(sf, "mask: 0x{:x}", data.mask);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_getparam => {
+            let data = unsafe { event.data.sched_getparam };
+            argf!(sf, "pid: {}", data.pid);
+            if data.has_param {
+                arg!(sf, "param:");
+                with_struct!(sf, {
+                    argf!(sf, "sched_priority: {}", data.param.sched_priority);
+                });
+            } else {
+                argf!(sf, "param: NULL");
+            }
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_setparam => {
+            let data = unsafe { event.data.sched_setparam };
+            argf!(sf, "pid: {}", data.pid);
+            if data.has_param {
+                arg!(sf, "param:");
+                with_struct!(sf, {
+                    argf!(sf, "sched_priority: {}", data.param.sched_priority);
+                });
+            } else {
+                argf!(sf, "param: NULL");
+            }
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_rr_get_interval => {
+            let data = unsafe { event.data.sched_rr_get_interval };
+            argf!(sf, "pid: {}", data.pid);
+            arg!(sf, "interval:");
+            format_timespec(&mut sf, data.interval).await?;
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_setfsuid => {
             let data = unsafe { event.data.setfsuid };
 

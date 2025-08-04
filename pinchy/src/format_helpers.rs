@@ -1930,7 +1930,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_sendmsg
         | syscalls::SYS_recvfrom
         | syscalls::SYS_sendto
-        | syscalls::SYS_process_madvise => {
+        | syscalls::SYS_process_madvise
+        | syscalls::SYS_sched_getaffinity => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
             } else {
@@ -1984,6 +1985,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_settimeofday
         | syscalls::SYS_setpriority
         | syscalls::SYS_sched_setscheduler
+        | syscalls::SYS_sched_setaffinity
+        | syscalls::SYS_sched_getparam
+        | syscalls::SYS_sched_setparam
+        | syscalls::SYS_sched_rr_get_interval
         | syscalls::SYS_bind
         | syscalls::SYS_listen
         | syscalls::SYS_connect

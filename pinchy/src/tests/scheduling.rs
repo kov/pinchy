@@ -2,9 +2,14 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::{Rseq, RseqCs},
-    syscalls::{SYS_getpriority, SYS_rseq, SYS_sched_yield, SYS_setpriority},
-    GetpriorityData, SchedYieldData, SetpriorityData, SyscallEvent,
+    kernel_types::{Rseq, RseqCs, SchedParam, Timespec},
+    syscalls::{
+        SYS_getpriority, SYS_rseq, SYS_sched_getaffinity, SYS_sched_getparam,
+        SYS_sched_rr_get_interval, SYS_sched_setaffinity, SYS_sched_setparam, SYS_sched_yield,
+        SYS_setpriority,
+    },
+    GetpriorityData, SchedGetaffinityData, SchedGetparamData, SchedRrGetIntervalData,
+    SchedSetaffinityData, SchedSetparamData, SchedYieldData, SetpriorityData, SyscallEvent,
 };
 
 use crate::syscall_test;
@@ -309,4 +314,106 @@ syscall_test!(
         }
     },
     "9999 sched_setscheduler(pid: 1234, policy: SCHED_OTHER, param: NULL) = -22 (error)\n"
+);
+
+syscall_test!(
+    parse_sched_getaffinity,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sched_getaffinity,
+            pid: 42,
+            tid: 42,
+            return_value: 8,
+            data: pinchy_common::SyscallEventData {
+                sched_getaffinity: SchedGetaffinityData {
+                    pid: 42,
+                    cpusetsize: 8,
+                    mask: 0x7fffdeadbeef,
+                },
+            },
+        }
+    },
+    "42 sched_getaffinity(pid: 42, cpusetsize: 8, mask: 0x7fffdeadbeef) = 8 (bytes)\n"
+);
+
+syscall_test!(
+    parse_sched_setaffinity,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sched_setaffinity,
+            pid: 43,
+            tid: 43,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                sched_setaffinity: SchedSetaffinityData {
+                    pid: 43,
+                    cpusetsize: 8,
+                    mask: 0x7fffbeadbeef,
+                },
+            },
+        }
+    },
+    "43 sched_setaffinity(pid: 43, cpusetsize: 8, mask: 0x7fffbeadbeef) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sched_getparam,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sched_getparam,
+            pid: 44,
+            tid: 44,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                sched_getparam: SchedGetparamData {
+                    pid: 44,
+                    param: SchedParam { sched_priority: 10 },
+                    has_param: true,
+                },
+            },
+        }
+    },
+    "44 sched_getparam(pid: 44, param: { sched_priority: 10 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sched_setparam,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sched_setparam,
+            pid: 45,
+            tid: 45,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                sched_setparam: SchedSetparamData {
+                    pid: 45,
+                    param: SchedParam { sched_priority: 20 },
+                    has_param: true,
+                },
+            },
+        }
+    },
+    "45 sched_setparam(pid: 45, param: { sched_priority: 20 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sched_rr_get_interval,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sched_rr_get_interval,
+            pid: 46,
+            tid: 46,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                sched_rr_get_interval: SchedRrGetIntervalData {
+                    pid: 46,
+                    interval: Timespec {
+                        seconds: 1,
+                        nanos: 5000000,
+                    },
+                },
+            },
+        }
+    },
+    "46 sched_rr_get_interval(pid: 46, interval: { secs: 1, nanos: 5000000 }) = 0 (success)\n"
 );

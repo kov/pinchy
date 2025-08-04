@@ -94,6 +94,11 @@ pub union SyscallEventData {
     pub close_range: CloseRangeData,
     pub getpgid: GetpgidData,
     pub getsid: GetsidData,
+    pub sched_getaffinity: SchedGetaffinityData,
+    pub sched_setaffinity: SchedSetaffinityData,
+    pub sched_getparam: SchedGetparamData,
+    pub sched_setparam: SchedSetparamData,
+    pub sched_rr_get_interval: SchedRrGetIntervalData,
     pub setpgid: SetpgidData,
     pub umask: UmaskData,
     pub vhangup: VhangupData,
@@ -1615,4 +1620,43 @@ impl Default for CapsetgetData {
             data: [crate::kernel_types::CapUserData::default(); 3],
         }
     }
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SchedGetaffinityData {
+    pub pid: i32,
+    pub cpusetsize: usize,
+    pub mask: usize, // pointer value only
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SchedSetaffinityData {
+    pub pid: i32,
+    pub cpusetsize: usize,
+    pub mask: usize, // pointer value only
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SchedGetparamData {
+    pub pid: i32,
+    pub param: crate::kernel_types::SchedParam,
+    pub has_param: bool,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SchedSetparamData {
+    pub pid: i32,
+    pub param: crate::kernel_types::SchedParam,
+    pub has_param: bool,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SchedRrGetIntervalData {
+    pub pid: i32,
+    pub interval: Timespec,
 }

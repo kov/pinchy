@@ -264,7 +264,7 @@ syscall_test!(
             },
         }
     },
-    "9876 prlimit64(pid: 1234, resource: RLIMIT_NOFILE, new_limit: { rlim_cur: 2048, rlim_max: 4096 }, old_limit: { rlim_cur: 1024, rlim_max: 4096 }) = 0\n"
+    "9876 prlimit64(pid: 1234, resource: RLIMIT_NOFILE, new_limit: { rlim_cur: 2048, rlim_max: 4096 }, old_limit: { rlim_cur: 1024, rlim_max: 4096 }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -294,7 +294,7 @@ syscall_test!(
             },
         }
     },
-    "9876 prlimit64(pid: 0, resource: RLIMIT_STACK, new_limit: NULL, old_limit: { rlim_cur: 8388608, rlim_max: RLIM_INFINITY }) = 0\n"
+    "9876 prlimit64(pid: 0, resource: RLIMIT_STACK, new_limit: NULL, old_limit: { rlim_cur: 8388608, rlim_max: RLIM_INFINITY }) = 0 (success)\n"
 );
 
 syscall_test!(

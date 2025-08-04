@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::{CapUserData, CapUserHeader, Utsname},
+    kernel_types::{CapUserData, CapUserHeader, Rlimit, Utsname},
     syscalls::{
         SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_getcpu, SYS_getrandom, SYS_gettimeofday,
         SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep, SYS_personality,
@@ -810,4 +810,113 @@ syscall_test!(
         }
     },
     "111 capget(header: { version: 0x20071026, pid: 111 }, data: [ cap_data { effective: 0x0, permitted: 0x0, inheritable: 0x0 }, cap_data { effective: 0x0, permitted: 0x0, inheritable: 0x0 } ] (effective: 0, permitted: 0, inheritable: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_setrlimit_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_setrlimit,
+            pid: 100,
+            tid: 100,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                rlimit: pinchy_common::RlimitData {
+                    resource: libc::RLIMIT_NOFILE as i32,
+                    has_limit: true,
+                    limit: Rlimit {
+                        rlim_cur: 1024,
+                        rlim_max: 4096,
+                    },
+                },
+            },
+        }
+    },
+    "100 setrlimit(resource: RLIMIT_NOFILE, limit: { rlim_cur: 1024, rlim_max: 4096 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_setrlimit_null,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_setrlimit,
+            pid: 101,
+            tid: 101,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                rlimit: pinchy_common::RlimitData {
+                    resource: libc::RLIMIT_NOFILE as i32,
+                    has_limit: false,
+                    limit: pinchy_common::kernel_types::Rlimit::default(),
+                },
+            },
+        }
+    },
+    "101 setrlimit(resource: RLIMIT_NOFILE, limit: NULL) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_getrlimit_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_getrlimit,
+            pid: 200,
+            tid: 200,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                rlimit: pinchy_common::RlimitData {
+                    resource: libc::RLIMIT_STACK as i32,
+                    has_limit: true,
+                    limit: Rlimit {
+                        rlim_cur: 8192,
+                        rlim_max: 16384,
+                    },
+                },
+            },
+        }
+    },
+    "200 getrlimit(resource: RLIMIT_STACK, limit: { rlim_cur: 8192, rlim_max: 16384 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getrlimit_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_getrlimit,
+            pid: 201,
+            tid: 201,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                rlimit: pinchy_common::RlimitData {
+                    resource: libc::RLIMIT_STACK as i32,
+                    has_limit: true,
+                    limit: pinchy_common::kernel_types::Rlimit {
+                        rlim_cur: 0,
+                        rlim_max: 0,
+                    },
+                },
+            },
+        }
+    },
+    "201 getrlimit(resource: RLIMIT_STACK, limit: (content unavailable)) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_getrlimit_null,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_getrlimit,
+            pid: 202,
+            tid: 202,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                rlimit: pinchy_common::RlimitData {
+                    resource: libc::RLIMIT_STACK as i32,
+                    has_limit: false,
+                    limit: pinchy_common::kernel_types::Rlimit::default(),
+                },
+            },
+        }
+    },
+    "202 getrlimit(resource: RLIMIT_STACK, limit: NULL) = -1 (error)\n"
 );

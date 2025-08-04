@@ -2015,6 +2015,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_statx
         | syscalls::SYS_capset
         | syscalls::SYS_capget
+        | syscalls::SYS_prlimit64
+        | syscalls::SYS_setrlimit
+        | syscalls::SYS_getrlimit
         | syscalls::SYS_clock_getres
         | syscalls::SYS_clock_gettime
         | syscalls::SYS_clock_settime => match return_value {

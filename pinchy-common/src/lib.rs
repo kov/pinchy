@@ -57,6 +57,7 @@ pub union SyscallEventData {
     pub rt_sigprocmask: RtSigprocmaskData,
     pub rt_sigaction: RtSigactionData,
     pub prlimit: PrlimitData,
+    pub rlimit: RlimitData,
     pub rseq: RseqData,
     pub uname: UnameData,
     pub generic: GenericSyscallData,
@@ -610,6 +611,14 @@ pub struct PrlimitData {
     pub has_new: bool,
     pub old_limit: kernel_types::Rlimit,
     pub new_limit: kernel_types::Rlimit,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RlimitData {
+    pub resource: i32,
+    pub has_limit: bool,
+    pub limit: kernel_types::Rlimit,
 }
 
 #[repr(C)]

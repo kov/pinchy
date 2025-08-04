@@ -1439,6 +1439,40 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_setrlimit => {
+            let data = unsafe { event.data.rlimit };
+
+            argf!(sf, "resource: {}", format_resource_type(data.resource));
+
+            if data.has_limit {
+                arg!(sf, "limit:");
+                with_struct!(sf, {
+                    format_rlimit(&mut sf, &data.limit).await?;
+                });
+            } else {
+                arg!(sf, "limit: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getrlimit => {
+            let data = unsafe { event.data.rlimit };
+
+            argf!(sf, "resource: {}", format_resource_type(data.resource));
+
+            arg!(sf, "limit:");
+            if data.has_limit && event.return_value == 0 {
+                with_struct!(sf, {
+                    format_rlimit(&mut sf, &data.limit).await?;
+                });
+            } else if data.has_limit {
+                raw!(sf, " (content unavailable)");
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_prlimit64 => {
             let data = unsafe { event.data.prlimit };
 

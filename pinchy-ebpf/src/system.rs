@@ -4,7 +4,8 @@
 use aya_ebpf::helpers::{bpf_probe_read_buf, bpf_probe_read_user};
 use pinchy_common::{
     kernel_types::{
-        self, CapUserData, CapUserHeader, Sysinfo, Timespec, Timeval, Timezone, Tms, Utsname,
+        self, CapUserData, CapUserHeader, Rlimit, Sysinfo, Timespec, Timeval, Timezone, Tms,
+        Utsname,
     },
     CapsetgetData,
 };
@@ -213,3 +214,29 @@ fn read_cap_header_and_data(args: &[usize; 6], data: &mut CapsetgetData) {
         }
     }
 }
+
+syscall_handler!(setrlimit, rlimit, args, data, {
+    data.resource = args[0] as i32;
+
+    let rlim_ptr = args[1] as *const Rlimit;
+    data.has_limit = false;
+    if !rlim_ptr.is_null() {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<Rlimit>(rlim_ptr) } {
+            data.limit = val;
+            data.has_limit = true;
+        }
+    }
+});
+
+syscall_handler!(getrlimit, rlimit, args, data, {
+    data.resource = args[0] as i32;
+
+    let rlim_ptr = args[1] as *const Rlimit;
+    data.has_limit = false;
+    if !rlim_ptr.is_null() {
+        if let Ok(val) = unsafe { bpf_probe_read_user::<Rlimit>(rlim_ptr) } {
+            data.limit = val;
+            data.has_limit = true;
+        }
+    }
+});

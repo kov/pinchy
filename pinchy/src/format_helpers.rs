@@ -1988,6 +1988,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_sched_setaffinity
         | syscalls::SYS_sched_getparam
         | syscalls::SYS_sched_setparam
+        | syscalls::SYS_sched_getattr
+        | syscalls::SYS_sched_setattr
         | syscalls::SYS_sched_rr_get_interval
         | syscalls::SYS_bind
         | syscalls::SYS_listen
@@ -3022,6 +3024,77 @@ pub fn format_capabilities(words: &[u32]) -> String {
         "0".to_string()
     } else {
         caps.join("|")
+    }
+}
+
+pub async fn format_sched_attr(
+    sf: &mut crate::formatting::SyscallFormatter<'_>,
+    attr: &pinchy_common::kernel_types::SchedAttr,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        argf!(sf, "size: {}", attr.size);
+        argf!(
+            sf,
+            "sched_policy: {}",
+            format_sched_policy(attr.sched_policy as i32)
+        );
+        argf!(
+            sf,
+            "sched_flags: {}",
+            format_sched_attr_flags(attr.sched_flags as i32)
+        );
+        argf!(sf, "sched_nice: {}", attr.sched_nice);
+        argf!(sf, "sched_priority: {}", attr.sched_priority);
+        argf!(sf, "sched_runtime: {}", attr.sched_runtime);
+        argf!(sf, "sched_deadline: {}", attr.sched_deadline);
+        argf!(sf, "sched_period: {}", attr.sched_period);
+        argf!(sf, "sched_util_min: {}", attr.sched_util_min);
+        argf!(sf, "sched_util_max: {}", attr.sched_util_max);
+    });
+    Ok(())
+}
+
+pub fn format_sched_attr_flags(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::SCHED_FLAG_RESET_ON_FORK != 0 {
+        parts.push(Cow::Borrowed("RESET_ON_FORK"));
+    }
+    if flags & libc::SCHED_FLAG_RECLAIM != 0 {
+        parts.push(Cow::Borrowed("RECLAIM"));
+    }
+    if flags & libc::SCHED_FLAG_DL_OVERRUN != 0 {
+        parts.push(Cow::Borrowed("DL_OVERRUN"));
+    }
+    if flags & libc::SCHED_FLAG_KEEP_POLICY != 0 {
+        parts.push(Cow::Borrowed("KEEP_POLICY"));
+    }
+    if flags & libc::SCHED_FLAG_KEEP_PARAMS != 0 {
+        parts.push(Cow::Borrowed("KEEP_PARAMS"));
+    }
+    if flags & libc::SCHED_FLAG_UTIL_CLAMP_MIN != 0 {
+        parts.push(Cow::Borrowed("UTIL_CLAMP_MIN"));
+    }
+    if flags & libc::SCHED_FLAG_UTIL_CLAMP_MAX != 0 {
+        parts.push(Cow::Borrowed("UTIL_CLAMP_MAX"));
+    }
+
+    let unknown = flags
+        & !(libc::SCHED_FLAG_RESET_ON_FORK
+            | libc::SCHED_FLAG_RECLAIM
+            | libc::SCHED_FLAG_DL_OVERRUN
+            | libc::SCHED_FLAG_KEEP_POLICY
+            | libc::SCHED_FLAG_KEEP_PARAMS
+            | libc::SCHED_FLAG_UTIL_CLAMP_MIN
+            | libc::SCHED_FLAG_UTIL_CLAMP_MAX);
+    if unknown != 0 {
+        parts.push(Cow::Owned(format!("0x{unknown:x}")));
+    }
+
+    if parts.is_empty() {
+        "0".to_string()
+    } else {
+        parts.join("|")
     }
 }
 

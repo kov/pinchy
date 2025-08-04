@@ -504,3 +504,18 @@ pub struct CapUserData {
     pub permitted: u32,
     pub inheritable: u32,
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct SchedAttr {
+    pub size: u32,
+    pub sched_policy: u32,
+    pub sched_flags: u64,
+    pub sched_nice: i32,
+    pub sched_priority: u32,
+    pub sched_runtime: u64,
+    pub sched_deadline: u64,
+    pub sched_period: u64,
+    pub sched_util_min: u32, // since Linux 6.2
+    pub sched_util_max: u32, // since Linux 6.2
+}

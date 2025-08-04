@@ -38,6 +38,8 @@ pub union SyscallEventData {
     pub futex: FutexData,
     pub sched_yield: SchedYieldData,
     pub ioctl: IoctlData,
+    pub sched_getattr: SchedGetattrData,
+    pub sched_setattr: SchedSetattrData,
     pub epoll_ctl: EpollCtlData,
     pub execve: ExecveData,
     pub fstat: FstatData,
@@ -1601,7 +1603,7 @@ impl Default for StatxData {
 }
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Default)]
 pub struct CapsetgetData {
     pub header: crate::kernel_types::CapUserHeader,
 
@@ -1612,22 +1614,29 @@ pub struct CapsetgetData {
     pub data: [crate::kernel_types::CapUserData; 3],
 }
 
-impl Default for CapsetgetData {
-    fn default() -> Self {
-        Self {
-            header: crate::kernel_types::CapUserHeader::default(),
-            data_count: 0,
-            data: [crate::kernel_types::CapUserData::default(); 3],
-        }
-    }
-}
-
 #[repr(C)]
 #[derive(Debug, Clone, Copy, Default)]
 pub struct SchedGetaffinityData {
     pub pid: i32,
     pub cpusetsize: usize,
     pub mask: usize, // pointer value only
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SchedGetattrData {
+    pub pid: u32,
+    pub attr: crate::kernel_types::SchedAttr,
+    pub size: u32,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Debug, Clone, Copy, Default)]
+pub struct SchedSetattrData {
+    pub pid: u32,
+    pub attr: crate::kernel_types::SchedAttr,
+    pub flags: u32,
 }
 
 #[repr(C)]

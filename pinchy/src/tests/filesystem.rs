@@ -1266,17 +1266,16 @@ syscall_test!(
                     flags: 0,
                     mask: 0xFFF,
                     statxbuf: 0x12345678,
-                    statx: {
-                        let mut s = Statx::default();
-                        s.stx_mask = 0xFFF;
-                        s.stx_mode = libc::S_IFREG as u16 | 0o644;
-                        s.stx_size = 98765;
-                        s.stx_uid = 1000;
-                        s.stx_gid = 1000;
-                        s.stx_blocks = 20;
-                        s.stx_blksize = 4096;
-                        s
-                    },
+                    statx: Statx {
+                        stx_mask: 0xFFF,
+                        stx_mode: libc::S_IFREG as u16 | 0o644,
+                        stx_size: 98765,
+                        stx_uid: 1000,
+                        stx_gid: 1000,
+                        stx_blocks: 20,
+                        stx_blksize: 4096,
+                        ..Default::default()
+                    }
                 },
             },
         }

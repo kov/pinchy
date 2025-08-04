@@ -545,11 +545,22 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ),
         ("syscall_exit_capset", syscalls::SYS_capset),
         ("syscall_exit_capget", syscalls::SYS_capget),
-        ("syscall_exit_sched_getaffinity", syscalls::SYS_sched_getaffinity),
-        ("syscall_exit_sched_setaffinity", syscalls::SYS_sched_setaffinity),
+        (
+            "syscall_exit_sched_getaffinity",
+            syscalls::SYS_sched_getaffinity,
+        ),
+        (
+            "syscall_exit_sched_setaffinity",
+            syscalls::SYS_sched_setaffinity,
+        ),
         ("syscall_exit_sched_getparam", syscalls::SYS_sched_getparam),
         ("syscall_exit_sched_setparam", syscalls::SYS_sched_setparam),
-        ("syscall_exit_sched_rr_get_interval", syscalls::SYS_sched_rr_get_interval),
+        (
+            "syscall_exit_sched_rr_get_interval",
+            syscalls::SYS_sched_rr_get_interval,
+        ),
+        ("syscall_exit_sched_getattr", syscalls::SYS_sched_getattr),
+        ("syscall_exit_sched_setattr", syscalls::SYS_sched_setattr),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

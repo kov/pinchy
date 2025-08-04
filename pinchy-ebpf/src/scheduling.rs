@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::helpers::bpf_probe_read_user;
-use pinchy_common::kernel_types::{Rseq, RseqCs, SchedParam};
+use pinchy_common::kernel_types::{Rseq, RseqCs, SchedAttr, SchedParam};
 
 use crate::{syscall_handler, util::read_timespec};
 
@@ -82,4 +82,21 @@ syscall_handler!(sched_setparam, args, data, {
 syscall_handler!(sched_rr_get_interval, args, data, {
     data.pid = args[0] as i32;
     data.interval = read_timespec(args[1] as *const _);
+});
+
+syscall_handler!(sched_getattr, args, data, {
+    data.pid = args[0] as u32;
+    let attr_ptr = args[1] as *const SchedAttr;
+    data.size = args[2] as u32;
+    data.flags = args[3] as u32;
+
+    data.attr = unsafe { bpf_probe_read_user::<SchedAttr>(attr_ptr).unwrap_or_default() };
+});
+
+syscall_handler!(sched_setattr, args, data, {
+    data.pid = args[0] as u32;
+    let attr_ptr = args[1] as *const SchedAttr;
+    data.flags = args[2] as u32;
+
+    data.attr = unsafe { bpf_probe_read_user::<SchedAttr>(attr_ptr).unwrap_or_default() };
 });

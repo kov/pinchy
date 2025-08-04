@@ -685,6 +685,31 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_sched_getattr => {
+            let data = unsafe { event.data.sched_getattr };
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "size: {}", data.size);
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_sched_attr_flags(data.flags as i32)
+            );
+            arg!(sf, "attr:");
+            format_sched_attr(&mut sf, &data.attr).await?;
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sched_setattr => {
+            let data = unsafe { event.data.sched_setattr };
+            argf!(sf, "pid: {}", data.pid);
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_sched_attr_flags(data.flags as i32)
+            );
+            arg!(sf, "attr:");
+            format_sched_attr(&mut sf, &data.attr).await?;
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_sched_setparam => {
             let data = unsafe { event.data.sched_setparam };
             argf!(sf, "pid: {}", data.pid);

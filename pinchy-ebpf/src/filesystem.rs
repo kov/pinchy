@@ -348,3 +348,25 @@ syscall_handler!(statx, statx, args, data, return_value, {
         }
     }
 });
+
+#[cfg(x86_64)]
+syscall_handler!(mknod, mknod, args, data, {
+    data.mode = args[1] as u32;
+    data.dev = args[2] as u64;
+
+    let pathname_ptr = args[0] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});
+
+syscall_handler!(mknodat, mknodat, args, data, {
+    data.dirfd = args[0] as i32;
+    data.mode = args[2] as u32;
+    data.dev = args[3] as u64;
+
+    let pathname_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});

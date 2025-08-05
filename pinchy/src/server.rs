@@ -562,6 +562,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ),
         ("syscall_exit_sched_getattr", syscalls::SYS_sched_getattr),
         ("syscall_exit_sched_setattr", syscalls::SYS_sched_setattr),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_mknod", syscalls::SYS_mknod),
+        ("syscall_exit_mknodat", syscalls::SYS_mknodat),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

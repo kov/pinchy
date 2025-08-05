@@ -2019,6 +2019,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_prlimit64
         | syscalls::SYS_setrlimit
         | syscalls::SYS_getrlimit
+        | syscalls::SYS_mknodat
         | syscalls::SYS_clock_getres
         | syscalls::SYS_clock_gettime
         | syscalls::SYS_clock_settime => match return_value {
@@ -2043,10 +2044,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_link
         | syscalls::SYS_symlink
         | syscalls::SYS_rename
+        | syscalls::SYS_mknod
         | syscalls::SYS_stat
         | syscalls::SYS_lstat => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{} (error)", return_value)),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
 
         // Count returning syscalls - special handling for poll/select family
@@ -3120,6 +3122,27 @@ pub fn format_flock_operation(op: i32) -> String {
         format!("0x{:x}", op)
     } else {
         format!("0x{:x} ({})", op, parts.join("|"))
+    }
+}
+
+pub fn format_dev(dev: u64) -> String {
+    if dev == 0 {
+        return "0".to_string();
+    }
+    // Extract major and minor numbers using Linux conventions
+    let major = (dev >> 8) & 0xfff | ((dev >> 32) & !0xfff);
+    let minor = (dev & 0xff) | ((dev >> 12) & !0xff);
+    format!("{}:{}", major, minor)
+}
+
+pub fn format_file_type_from_mode(mode: u32) -> &'static str {
+    match mode & libc::S_IFMT {
+        libc::S_IFREG => "S_IFREG",
+        libc::S_IFCHR => "S_IFCHR",
+        libc::S_IFBLK => "S_IFBLK",
+        libc::S_IFIFO => "S_IFIFO",
+        libc::S_IFSOCK => "S_IFSOCK",
+        _ => "unknown",
     }
 }
 

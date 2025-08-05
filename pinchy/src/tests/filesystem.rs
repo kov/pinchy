@@ -3,14 +3,14 @@
 
 use pinchy_common::{
     syscalls::{
-        SYS_acct, SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
-        SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
-        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
-        SYS_truncate,
+        self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown,
+        SYS_fchownat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
+        SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2,
+        SYS_statfs, SYS_truncate,
     },
     AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData,
-    FsyncData, FtruncateData, MkdiratData, Renameat2Data, RenameatData, SyscallEvent,
-    DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    FsyncData, FtruncateData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
+    SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
 use crate::syscall_test;
@@ -1281,4 +1281,128 @@ syscall_test!(
         }
     },
     "42 statx(dirfd: 3, pathname: \"/tmp/testfile\", flags: 0x0, mask: 0xfff, statxbuf: 0x12345678, struct statx: { mask: 0xfff, blksize: 4096, attributes: 0x0, nlink: 0, uid: 1000, gid: 1000, mode: 0100644, ino: 0, size: 98765, blocks: 20, attributes_mask: 0x0, atime: 0.0, btime: 0.0, ctime: 0.0, mtime: 0.0, rdev: 0:0, dev: 0:0 }) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_mknod_regular_file,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/testfile\0";
+        pathname[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_mknod,
+            pid: 100,
+            tid: 100,
+            return_value: 0,
+            data: SyscallEventData {
+                mknod: pinchy_common::MknodData {
+                    pathname,
+                    mode: libc::S_IFREG | 0o644,
+                    dev: 0,
+                },
+            },
+        }
+    },
+    "100 mknod(pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mknodat_regular_file,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/testfile\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_mknodat,
+            pid: 200,
+            tid: 200,
+            return_value: 0,
+            data: SyscallEventData {
+                mknodat: MknodatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    mode: libc::S_IFREG | 0o644,
+                    dev: 0,
+                },
+            },
+        }
+    },
+    "200 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mknodat_device_file,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/dev/mydevice\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_mknodat,
+            pid: 201,
+            tid: 201,
+            return_value: 0,
+            data: SyscallEventData {
+                mknodat: MknodatData {
+                    dirfd: 5,
+                    pathname,
+                    mode: libc::S_IFCHR | 0o666,
+                    dev: (1 << 8) | 5, // major=1, minor=5
+                },
+            },
+        }
+    },
+    "201 mknodat(dirfd: 5, pathname: \"/dev/mydevice\", mode: 0o666 (rw-rw-rw-) (S_IFCHR), dev: 1:5) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mknodat_fifo,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/myfifo\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_mknodat,
+            pid: 202,
+            tid: 202,
+            return_value: 0,
+            data: SyscallEventData {
+                mknodat: MknodatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    mode: libc::S_IFIFO | 0o600,
+                    dev: 0,
+                },
+            },
+        }
+    },
+    "202 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/myfifo\", mode: 0o600 (rw-------) (S_IFIFO), dev: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mknodat_error,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/testfile\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_mknodat,
+            pid: 203,
+            tid: 203,
+            return_value: -1,
+            data: SyscallEventData {
+                mknodat: MknodatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    mode: libc::S_IFREG | 0o644,
+                    dev: 0,
+                },
+            },
+        }
+    },
+    "203 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = -1 (error)\n"
 );

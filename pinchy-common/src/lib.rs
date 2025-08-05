@@ -208,6 +208,8 @@ pub union SyscallEventData {
     pub statx: StatxData,
     pub capsetget: CapsetgetData,
     pub flock: FlockData,
+    pub mknod: MknodData,
+    pub mknodat: MknodatData,
 }
 
 #[repr(C)]
@@ -1685,4 +1687,21 @@ pub struct SchedRrGetIntervalData {
 pub struct FlockData {
     pub fd: i32,
     pub operation: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MknodData {
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub mode: u32,
+    pub dev: u64, // dev_t, using u64 to cover both architectures
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MknodatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub mode: u32,
+    pub dev: u64, // dev_t, using u64 to cover both architectures
 }

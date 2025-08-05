@@ -74,6 +74,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_vhangup => {
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_flock => {
+            let data = unsafe { event.data.flock };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "operation: {}", format_flock_operation(data.operation));
+            finish!(sf, event.return_value);
+        }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_pause => {
             finish!(sf, event.return_value);

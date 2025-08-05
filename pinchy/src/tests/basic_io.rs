@@ -8,14 +8,14 @@ use pinchy_common::{
     kernel_types::{EpollEvent, Iovec, Timespec},
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
-        SYS_epoll_pwait2, SYS_fcntl, SYS_lseek, SYS_openat, SYS_openat2, SYS_pipe2, SYS_ppoll,
-        SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee,
-        SYS_vmsplice, SYS_write, SYS_writev,
+        SYS_epoll_pwait2, SYS_fcntl, SYS_flock, SYS_lseek, SYS_openat, SYS_openat2, SYS_pipe2,
+        SYS_ppoll, SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice,
+        SYS_tee, SYS_vmsplice, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
-    EpollPWaitData, FcntlData, LseekData, OpenAtData, PpollData, PreadData, PwriteData, ReadData,
-    SpliceData, SyscallEvent, TeeData, VectorIOData, VmspliceData, WriteData, DATA_READ_SIZE,
-    IOV_COUNT, MEDIUM_READ_SIZE,
+    EpollPWaitData, FcntlData, FlockData, LseekData, OpenAtData, PpollData, PreadData, PwriteData,
+    ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData, VectorIOData, VmspliceData,
+    WriteData, DATA_READ_SIZE, IOV_COUNT, MEDIUM_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -829,4 +829,42 @@ syscall_test!(
         }
     },
     "1 vmsplice(fd: 3, iov: [ iovec { base: \"test\", len: 4 }, iovec { base: \"data\", len: 4 } ], iovcnt: 2, flags: 0x8 (SPLICE_F_GIFT)) = 8 (bytes)\n"
+);
+
+syscall_test!(
+    parse_flock,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_flock,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                flock: FlockData {
+                    fd: 4,
+                    operation: libc::LOCK_EX | libc::LOCK_NB,
+                },
+            },
+        }
+    },
+    "123 flock(fd: 4, operation: 0x6 (LOCK_EX|LOCK_NB)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_flock_unlock,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_flock,
+            pid: 456,
+            tid: 456,
+            return_value: 0,
+            data: SyscallEventData {
+                flock: FlockData {
+                    fd: 7,
+                    operation: libc::LOCK_UN,
+                },
+            },
+        }
+    },
+    "456 flock(fd: 7, operation: 0x8 (LOCK_UN)) = 0 (success)\n"
 );

@@ -207,6 +207,7 @@ pub union SyscallEventData {
     pub clock_time: ClockTimeData,
     pub statx: StatxData,
     pub capsetget: CapsetgetData,
+    pub flock: FlockData,
 }
 
 #[repr(C)]
@@ -1677,4 +1678,11 @@ pub struct SchedSetparamData {
 pub struct SchedRrGetIntervalData {
     pub pid: i32,
     pub interval: Timespec,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct FlockData {
+    pub fd: i32,
+    pub operation: i32,
 }

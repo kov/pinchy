@@ -1954,6 +1954,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_fchmodat
         | syscalls::SYS_fchown
         | syscalls::SYS_fchownat
+        | syscalls::SYS_flock
         | syscalls::SYS_close
         | syscalls::SYS_fsync
         | syscalls::SYS_fdatasync
@@ -3098,6 +3099,27 @@ pub fn format_sched_attr_flags(flags: i32) -> String {
         "0".to_string()
     } else {
         parts.join("|")
+    }
+}
+
+pub fn format_flock_operation(op: i32) -> String {
+    let mut parts = Vec::new();
+    if op & libc::LOCK_EX != 0 {
+        parts.push("LOCK_EX")
+    }
+    if op & libc::LOCK_SH != 0 {
+        parts.push("LOCK_SH")
+    }
+    if op & libc::LOCK_UN != 0 {
+        parts.push("LOCK_UN")
+    }
+    if op & libc::LOCK_NB != 0 {
+        parts.push("LOCK_NB");
+    }
+    if parts.is_empty() {
+        format!("0x{:x}", op)
+    } else {
+        format!("0x{:x} ({})", op, parts.join("|"))
     }
 }
 

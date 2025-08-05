@@ -190,6 +190,11 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
         let mut entry = util::Entry::new(&ctx, syscall_nr)?;
 
         match syscall_nr {
+            syscalls::SYS_flock => {
+                let data = unsafe { &mut entry.data.flock };
+                data.fd = args[0] as i32;
+                data.operation = args[1] as i32;
+            }
             syscalls::SYS_process_mrelease => {
                 let data = unsafe { &mut entry.data.process_mrelease };
                 data.pidfd = args[0] as i32;

@@ -8,8 +8,8 @@ use pinchy_common::{
         SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2,
         SYS_statfs, SYS_truncate,
     },
-    AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData,
-    FsyncData, FtruncateData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
+    AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData,
+    FdatasyncData, FsyncData, FtruncateData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
     SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
@@ -1405,4 +1405,347 @@ syscall_test!(
         }
     },
     "203 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = -1 (error)\n"
+);
+
+// Mount management syscalls tests
+
+syscall_test!(
+    parse_pivot_root,
+    {
+        use pinchy_common::PivotRootData;
+        let mut new_root = [0u8; DATA_READ_SIZE];
+        let mut put_old = [0u8; DATA_READ_SIZE];
+        let new_root_bytes = b"/mnt/root\0";
+        let put_old_bytes = b"/mnt/old\0";
+        new_root[..new_root_bytes.len()].copy_from_slice(new_root_bytes);
+        put_old[..put_old_bytes.len()].copy_from_slice(put_old_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_pivot_root,
+            pid: 1000,
+            tid: 1000,
+            return_value: 0,
+            data: SyscallEventData {
+                pivot_root: PivotRootData { new_root, put_old },
+            },
+        }
+    },
+    "1000 pivot_root(new_root: \"/mnt/root\", put_old: \"/mnt/old\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_pivot_root_error,
+    {
+        use pinchy_common::PivotRootData;
+        let mut new_root = [0u8; DATA_READ_SIZE];
+        let mut put_old = [0u8; DATA_READ_SIZE];
+        let new_root_bytes = b"/mnt/root\0";
+        let put_old_bytes = b"/mnt/old\0";
+        new_root[..new_root_bytes.len()].copy_from_slice(new_root_bytes);
+        put_old[..put_old_bytes.len()].copy_from_slice(put_old_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_pivot_root,
+            pid: 1001,
+            tid: 1001,
+            return_value: -1,
+            data: SyscallEventData {
+                pivot_root: PivotRootData { new_root, put_old },
+            },
+        }
+    },
+    "1001 pivot_root(new_root: \"/mnt/root\", put_old: \"/mnt/old\") = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_chroot,
+    {
+        use pinchy_common::ChrootData;
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/new/root\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_chroot,
+            pid: 1002,
+            tid: 1002,
+            return_value: 0,
+            data: SyscallEventData {
+                chroot: ChrootData { path },
+            },
+        }
+    },
+    "1002 chroot(path: \"/new/root\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_chroot_error,
+    {
+        use pinchy_common::ChrootData;
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/bad/path\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_chroot,
+            pid: 1003,
+            tid: 1003,
+            return_value: -1,
+            data: SyscallEventData {
+                chroot: ChrootData { path },
+            },
+        }
+    },
+    "1003 chroot(path: \"/bad/path\") = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_open_tree,
+    {
+        use pinchy_common::OpenTreeData;
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let pathname_bytes = b"/mnt/source\0";
+        pathname[..pathname_bytes.len()].copy_from_slice(pathname_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_open_tree,
+            pid: 1004,
+            tid: 1004,
+            return_value: 5,
+            data: SyscallEventData {
+                open_tree: OpenTreeData {
+                    dfd: libc::AT_FDCWD,
+                    pathname,
+                    flags: 1, // OPEN_TREE_CLONE
+                },
+            },
+        }
+    },
+    "1004 open_tree(dfd: AT_FDCWD, pathname: \"/mnt/source\", flags: 0x1 (OPEN_TREE_CLONE)) = 5 (fd)\n"
+);
+
+syscall_test!(
+    parse_mount,
+    {
+        use pinchy_common::MountData;
+        let mut source = [0u8; DATA_READ_SIZE];
+        let mut target = [0u8; DATA_READ_SIZE];
+        let mut filesystemtype = [0u8; pinchy_common::SMALL_READ_SIZE];
+        let source_bytes = b"/dev/sda1\0";
+        let target_bytes = b"/mnt/disk\0";
+        let fs_bytes = b"ext4\0";
+        source[..source_bytes.len()].copy_from_slice(source_bytes);
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        filesystemtype[..fs_bytes.len()].copy_from_slice(fs_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mount,
+            pid: 1005,
+            tid: 1005,
+            return_value: 0,
+            data: SyscallEventData {
+                mount: MountData {
+                    source,
+                    target,
+                    filesystemtype,
+                    mountflags: libc::MS_RDONLY,
+                    data: 0,
+                },
+            },
+        }
+    },
+    "1005 mount(source: \"/dev/sda1\", target: \"/mnt/disk\", filesystemtype: \"ext4\", mountflags: 0x1 (ST_RDONLY), data: NULL) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mount_with_data,
+    {
+        use pinchy_common::MountData;
+        let mut source = [0u8; DATA_READ_SIZE];
+        let mut target = [0u8; DATA_READ_SIZE];
+        let mut filesystemtype = [0u8; pinchy_common::SMALL_READ_SIZE];
+        let source_bytes = b"/dev/sdb2\0";
+        let target_bytes = b"/mnt/test\0";
+        let fs_bytes = b"ext4\0";
+        source[..source_bytes.len()].copy_from_slice(source_bytes);
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        filesystemtype[..fs_bytes.len()].copy_from_slice(fs_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mount,
+            pid: 1006,
+            tid: 1006,
+            return_value: 0,
+            data: SyscallEventData {
+                mount: MountData {
+                    source,
+                    target,
+                    filesystemtype,
+                    mountflags: libc::MS_NOSUID | libc::MS_NODEV,
+                    data: 0x12345678,
+                },
+            },
+        }
+    },
+    "1006 mount(source: \"/dev/sdb2\", target: \"/mnt/test\", filesystemtype: \"ext4\", mountflags: 0x6 (ST_NOSUID|ST_NODEV), data: 0x12345678) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mount_null_source,
+    {
+        use pinchy_common::MountData;
+        let source = [0u8; DATA_READ_SIZE];
+        let mut target = [0u8; DATA_READ_SIZE];
+        let mut filesystemtype = [0u8; pinchy_common::SMALL_READ_SIZE];
+        // source is NULL (first byte is 0)
+        let target_bytes = b"/proc\0";
+        let fs_bytes = b"proc\0";
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        filesystemtype[..fs_bytes.len()].copy_from_slice(fs_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mount,
+            pid: 1007,
+            tid: 1007,
+            return_value: 0,
+            data: SyscallEventData {
+                mount: MountData {
+                    source,
+                    target,
+                    filesystemtype,
+                    mountflags: 0,
+                    data: 0,
+                },
+            },
+        }
+    },
+    "1007 mount(source: NULL, target: \"/proc\", filesystemtype: \"proc\", mountflags: 0x0, data: NULL) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_umount2,
+    {
+        use pinchy_common::Umount2Data;
+        let mut target = [0u8; DATA_READ_SIZE];
+        let target_bytes = b"/mnt/disk\0";
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_umount2,
+            pid: 1008,
+            tid: 1008,
+            return_value: 0,
+            data: SyscallEventData {
+                umount2: Umount2Data {
+                    target,
+                    flags: libc::MNT_FORCE,
+                },
+            },
+        }
+    },
+    "1008 umount2(target: \"/mnt/disk\", flags: 0x1 (MNT_FORCE)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_umount2_detach,
+    {
+        use pinchy_common::Umount2Data;
+        let mut target = [0u8; DATA_READ_SIZE];
+        let target_bytes = b"/mnt/test\0";
+        target[..target_bytes.len()].copy_from_slice(target_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_umount2,
+            pid: 1009,
+            tid: 1009,
+            return_value: 0,
+            data: SyscallEventData {
+                umount2: Umount2Data {
+                    target,
+                    flags: libc::MNT_DETACH,
+                },
+            },
+        }
+    },
+    "1009 umount2(target: \"/mnt/test\", flags: 0x2 (MNT_DETACH)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mount_setattr,
+    {
+        use pinchy_common::{MountSetattrData, kernel_types::MountAttr};
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/mnt/test\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mount_setattr,
+            pid: 1010,
+            tid: 1010,
+            return_value: 0,
+            data: SyscallEventData {
+                mount_setattr: MountSetattrData {
+                    dfd: libc::AT_FDCWD,
+                    path,
+                    flags: 0x8000, // AT_RECURSIVE
+                    size: std::mem::size_of::<MountAttr>(),
+                    has_attr: true,
+                    attr: MountAttr {
+                        attr_set: 0x1 | 0x2, // RDONLY|NOSUID
+                        attr_clr: 0x4,       // NODEV
+                        propagation: libc::MS_SHARED as u64,
+                        userns_fd: 42,
+                    },
+                },
+            },
+        }
+    },
+    "1010 mount_setattr(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0x8000 (AT_RECURSIVE), mount_attr: { attr_set: 0x3 (RDONLY|NOSUID), attr_clr: 0x4 (NODEV), propagation: MS_SHARED, userns_fd: 42 }, size: 32) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_move_mount,
+    {
+        use pinchy_common::MoveMountData;
+        let mut from_pathname = [0u8; DATA_READ_SIZE];
+        let mut to_pathname = [0u8; DATA_READ_SIZE];
+        let from_bytes = b"/mnt/source\0";
+        let to_bytes = b"/mnt/target\0";
+        from_pathname[..from_bytes.len()].copy_from_slice(from_bytes);
+        to_pathname[..to_bytes.len()].copy_from_slice(to_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_move_mount,
+            pid: 1011,
+            tid: 1011,
+            return_value: 0,
+            data: SyscallEventData {
+                move_mount: MoveMountData {
+                    from_dfd: libc::AT_FDCWD,
+                    from_pathname,
+                    to_dfd: libc::AT_FDCWD,
+                    to_pathname,
+                    flags: 0x00000001, // MOVE_MOUNT_F_SYMLINKS
+                },
+            },
+        }
+    },
+    "1011 move_mount(from_dfd: AT_FDCWD, from_pathname: \"/mnt/source\", to_dfd: AT_FDCWD, to_pathname: \"/mnt/target\", flags: 0x1 (MOVE_MOUNT_F_SYMLINKS)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_move_mount_error,
+    {
+        use pinchy_common::MoveMountData;
+        let mut from_pathname = [0u8; DATA_READ_SIZE];
+        let mut to_pathname = [0u8; DATA_READ_SIZE];
+        let from_bytes = b"/mnt/source\0";
+        let to_bytes = b"/mnt/target\0";
+        from_pathname[..from_bytes.len()].copy_from_slice(from_bytes);
+        to_pathname[..to_bytes.len()].copy_from_slice(to_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_move_mount,
+            pid: 1012,
+            tid: 1012,
+            return_value: -1,
+            data: SyscallEventData {
+                move_mount: MoveMountData {
+                    from_dfd: 5,
+                    from_pathname,
+                    to_dfd: 7,
+                    to_pathname,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "1012 move_mount(from_dfd: 5, from_pathname: \"/mnt/source\", to_dfd: 7, to_pathname: \"/mnt/target\", flags: 0x0) = -1 (error)\n"
 );

@@ -370,3 +370,83 @@ syscall_handler!(mknodat, mknodat, args, data, {
         let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
     }
 });
+
+syscall_handler!(pivot_root, args, data, {
+    let new_root_ptr = args[0] as *const u8;
+    let put_old_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(new_root_ptr, &mut data.new_root);
+        let _ = bpf_probe_read_buf(put_old_ptr, &mut data.put_old);
+    }
+});
+
+syscall_handler!(chroot, args, data, {
+    let path_ptr = args[0] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
+    }
+});
+
+syscall_handler!(open_tree, args, data, {
+    data.dfd = args[0] as i32;
+    let pathname_ptr = args[1] as *const u8;
+    data.flags = args[2] as u32;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});
+
+syscall_handler!(mount, args, data, {
+    let source_ptr = args[0] as *const u8;
+    let target_ptr = args[1] as *const u8;
+    let filesystemtype_ptr = args[2] as *const u8;
+    data.mountflags = args[3] as u64;
+    data.data = args[4] as u64;
+    unsafe {
+        let _ = bpf_probe_read_buf(source_ptr, &mut data.source);
+        let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
+        let _ = bpf_probe_read_buf(filesystemtype_ptr, &mut data.filesystemtype);
+    }
+});
+
+syscall_handler!(umount2, args, data, {
+    let target_ptr = args[0] as *const u8;
+    data.flags = args[1] as i32;
+    unsafe {
+        let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
+    }
+});
+
+syscall_handler!(mount_setattr, args, data, {
+    data.dfd = args[0] as i32;
+    let path_ptr = args[1] as *const u8;
+    data.flags = args[2] as u32;
+    data.size = args[4] as usize;
+
+    let attr_ptr = args[3] as *const u8;
+    if !attr_ptr.is_null() {
+        data.has_attr = true;
+        unsafe {
+            let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
+            let read_size = core::cmp::min(data.size, core::mem::size_of::<pinchy_common::kernel_types::MountAttr>());
+            let _ = bpf_probe_read_buf(attr_ptr,
+                core::slice::from_raw_parts_mut(
+                    &mut data.attr as *mut _ as *mut u8,
+                    read_size,
+                )
+            );
+        }
+    }
+});
+
+syscall_handler!(move_mount, args, data, {
+    data.from_dfd = args[0] as i32;
+    let from_pathname_ptr = args[1] as *const u8;
+    data.to_dfd = args[2] as i32;
+    let to_pathname_ptr = args[3] as *const u8;
+    data.flags = args[4] as u32;
+    unsafe {
+        let _ = bpf_probe_read_buf(from_pathname_ptr, &mut data.from_pathname);
+        let _ = bpf_probe_read_buf(to_pathname_ptr, &mut data.to_pathname);
+    }
+});

@@ -210,6 +210,13 @@ pub union SyscallEventData {
     pub flock: FlockData,
     pub mknod: MknodData,
     pub mknodat: MknodatData,
+    pub pivot_root: PivotRootData,
+    pub chroot: ChrootData,
+    pub open_tree: OpenTreeData,
+    pub mount: MountData,
+    pub umount2: Umount2Data,
+    pub mount_setattr: MountSetattrData,
+    pub move_mount: MoveMountData,
 }
 
 #[repr(C)]
@@ -1704,4 +1711,136 @@ pub struct MknodatData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub mode: u32,
     pub dev: u64, // dev_t, using u64 to cover both architectures
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct PivotRootData {
+    pub new_root: [u8; DATA_READ_SIZE],
+    pub put_old: [u8; DATA_READ_SIZE],
+}
+
+impl Default for PivotRootData {
+    fn default() -> Self {
+        Self {
+            new_root: [0; DATA_READ_SIZE],
+            put_old: [0; DATA_READ_SIZE],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ChrootData {
+    pub path: [u8; DATA_READ_SIZE],
+}
+
+impl Default for ChrootData {
+    fn default() -> Self {
+        Self {
+            path: [0; DATA_READ_SIZE],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OpenTreeData {
+    pub dfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub flags: u32,
+}
+
+impl Default for OpenTreeData {
+    fn default() -> Self {
+        Self {
+            dfd: 0,
+            pathname: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MountData {
+    pub source: [u8; DATA_READ_SIZE],
+    pub target: [u8; DATA_READ_SIZE],
+    pub filesystemtype: [u8; SMALL_READ_SIZE],
+    pub mountflags: u64,
+    pub data: u64, // void* pointer address
+}
+
+impl Default for MountData {
+    fn default() -> Self {
+        Self {
+            source: [0; DATA_READ_SIZE],
+            target: [0; DATA_READ_SIZE],
+            filesystemtype: [0; SMALL_READ_SIZE],
+            mountflags: 0,
+            data: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Umount2Data {
+    pub target: [u8; DATA_READ_SIZE],
+    pub flags: i32,
+}
+
+impl Default for Umount2Data {
+    fn default() -> Self {
+        Self {
+            target: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MountSetattrData {
+    pub dfd: i32,
+    pub path: [u8; DATA_READ_SIZE],
+    pub flags: u32,
+    pub size: usize,
+    pub attr: kernel_types::MountAttr,
+    pub has_attr: bool,
+}
+
+impl Default for MountSetattrData {
+    fn default() -> Self {
+        Self {
+            dfd: 0,
+            path: [0; DATA_READ_SIZE],
+            flags: 0,
+            size: 0,
+            attr: kernel_types::MountAttr::default(),
+            has_attr: false,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MoveMountData {
+    pub from_dfd: i32,
+    pub from_pathname: [u8; DATA_READ_SIZE],
+    pub to_dfd: i32,
+    pub to_pathname: [u8; DATA_READ_SIZE],
+    pub flags: u32,
+}
+
+impl Default for MoveMountData {
+    fn default() -> Self {
+        Self {
+            from_dfd: 0,
+            from_pathname: [0; DATA_READ_SIZE],
+            to_dfd: 0,
+            to_pathname: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
 }

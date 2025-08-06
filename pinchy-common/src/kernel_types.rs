@@ -519,3 +519,14 @@ pub struct SchedAttr {
     pub sched_util_min: u32, // since Linux 6.2
     pub sched_util_max: u32, // since Linux 6.2
 }
+
+/// Mount attribute structure for mount_setattr syscall
+/// See: https://man7.org/linux/man-pages/man2/mount_setattr.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct MountAttr {
+    pub attr_set: u64,
+    pub attr_clr: u64,
+    pub propagation: u64,
+    pub userns_fd: u64,
+}

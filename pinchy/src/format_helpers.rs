@@ -1890,7 +1890,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_timerfd_create
         | syscalls::SYS_memfd_create
         | syscalls::SYS_memfd_secret
-        | syscalls::SYS_userfaultfd => {
+        | syscalls::SYS_userfaultfd
+        | syscalls::SYS_open_tree => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
             } else {
@@ -2022,7 +2023,13 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_mknodat
         | syscalls::SYS_clock_getres
         | syscalls::SYS_clock_gettime
-        | syscalls::SYS_clock_settime => match return_value {
+        | syscalls::SYS_clock_settime
+        | syscalls::SYS_pivot_root
+        | syscalls::SYS_chroot
+        | syscalls::SYS_mount
+        | syscalls::SYS_umount2
+        | syscalls::SYS_mount_setattr
+        | syscalls::SYS_move_mount => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -3119,7 +3126,7 @@ pub fn format_flock_operation(op: i32) -> String {
         parts.push("LOCK_NB");
     }
     if parts.is_empty() {
-        format!("0x{:x}", op)
+        format!("0x{op:x}")
     } else {
         format!("0x{:x} ({})", op, parts.join("|"))
     }
@@ -3132,7 +3139,7 @@ pub fn format_dev(dev: u64) -> String {
     // Extract major and minor numbers using Linux conventions
     let major = (dev >> 8) & 0xfff | ((dev >> 32) & !0xfff);
     let minor = (dev & 0xff) | ((dev >> 12) & !0xff);
-    format!("{}:{}", major, minor)
+    format!("{major}:{minor}")
 }
 
 pub fn format_file_type_from_mode(mode: u32) -> &'static str {
@@ -3143,6 +3150,179 @@ pub fn format_file_type_from_mode(mode: u32) -> &'static str {
         libc::S_IFIFO => "S_IFIFO",
         libc::S_IFSOCK => "S_IFSOCK",
         _ => "unknown",
+    }
+}
+
+pub fn format_open_tree_flags(flags: u32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & (libc::AT_EMPTY_PATH as u32) != 0 {
+        parts.push("AT_EMPTY_PATH");
+    }
+
+    if flags & (libc::AT_NO_AUTOMOUNT as u32) != 0 {
+        parts.push("AT_NO_AUTOMOUNT");
+    }
+
+    if flags & (libc::AT_SYMLINK_NOFOLLOW as u32) != 0 {
+        parts.push("AT_SYMLINK_NOFOLLOW");
+    }
+
+    if flags & libc::OPEN_TREE_CLONE != 0 {
+        parts.push("OPEN_TREE_CLONE");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_umount_flags(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::MNT_FORCE != 0 {
+        parts.push("MNT_FORCE");
+    }
+
+    if flags & libc::MNT_DETACH != 0 {
+        parts.push("MNT_DETACH");
+    }
+
+    if flags & libc::MNT_EXPIRE != 0 {
+        parts.push("MNT_EXPIRE");
+    }
+
+    const UMOUNT_NOFOLLOW: i32 = 0x00000008;
+    if flags & UMOUNT_NOFOLLOW != 0 {
+        parts.push("UMOUNT_NOFOLLOW");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_mount_setattr_flags(flags: u32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & (libc::AT_EMPTY_PATH as u32) != 0 {
+        parts.push("AT_EMPTY_PATH");
+    }
+
+    if flags & (libc::AT_NO_AUTOMOUNT as u32) != 0 {
+        parts.push("AT_NO_AUTOMOUNT");
+    }
+
+    if flags & (libc::AT_SYMLINK_NOFOLLOW as u32) != 0 {
+        parts.push("AT_SYMLINK_NOFOLLOW");
+    }
+
+    const AT_RECURSIVE: u32 = 0x8000;
+    if flags & AT_RECURSIVE != 0 {
+        parts.push("AT_RECURSIVE");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_move_mount_flags(flags: u32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & (libc::AT_EMPTY_PATH as u32) != 0 {
+        parts.push("AT_EMPTY_PATH");
+    }
+
+    if flags & (libc::AT_NO_AUTOMOUNT as u32) != 0 {
+        parts.push("AT_NO_AUTOMOUNT");
+    }
+
+    if flags & (libc::AT_SYMLINK_NOFOLLOW as u32) != 0 {
+        parts.push("AT_SYMLINK_NOFOLLOW");
+    }
+
+    if flags & libc::MOVE_MOUNT_F_SYMLINKS != 0 {
+        parts.push("MOVE_MOUNT_F_SYMLINKS");
+    }
+
+    if flags & libc::MOVE_MOUNT_F_AUTOMOUNTS != 0 {
+        parts.push("MOVE_MOUNT_F_AUTOMOUNTS");
+    }
+
+    if flags & libc::MOVE_MOUNT_F_EMPTY_PATH != 0 {
+        parts.push("MOVE_MOUNT_F_EMPTY_PATH");
+    }
+
+    if flags & libc::MOVE_MOUNT_T_SYMLINKS != 0 {
+        parts.push("MOVE_MOUNT_T_SYMLINKS");
+    }
+
+    if flags & libc::MOVE_MOUNT_T_AUTOMOUNTS != 0 {
+        parts.push("MOVE_MOUNT_T_AUTOMOUNTS");
+    }
+
+    if flags & libc::MOVE_MOUNT_T_EMPTY_PATH != 0 {
+        parts.push("MOVE_MOUNT_T_EMPTY_PATH");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_mount_attr_flags(flags: u64) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::MOUNT_ATTR_RDONLY != 0 {
+        parts.push("RDONLY");
+    }
+    if flags & libc::MOUNT_ATTR_NOSUID != 0 {
+        parts.push("NOSUID");
+    }
+    if flags & libc::MOUNT_ATTR_NODEV != 0 {
+        parts.push("NODEV");
+    }
+    if flags & libc::MOUNT_ATTR_NOEXEC != 0 {
+        parts.push("NOEXEC");
+    }
+    if flags & libc::MOUNT_ATTR_NOATIME != 0 {
+        parts.push("NOATIME");
+    }
+    if flags & libc::MOUNT_ATTR_STRICTATIME != 0 {
+        parts.push("STRICTATIME");
+    }
+    if flags & libc::MOUNT_ATTR_NODIRATIME != 0 {
+        parts.push("NODIRATIME");
+    }
+    if flags & libc::MOUNT_ATTR_IDMAP != 0 {
+        parts.push("IDMAP");
+    }
+    if flags & libc::MOUNT_ATTR_NOSYMFOLLOW != 0 {
+        parts.push("NOSYMFOLLOW");
+    }
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_mount_attr_propagation(propagation: u64) -> &'static str {
+    match propagation {
+        x if x == libc::MS_PRIVATE as u64 => "MS_PRIVATE",
+        x if x == libc::MS_SHARED as u64 => "MS_SHARED",
+        x if x == libc::MS_SLAVE as u64 => "MS_SLAVE",
+        x if x == libc::MS_UNBINDABLE as u64 => "MS_UNBINDABLE",
+        _ => "UNKNOWN",
     }
 }
 

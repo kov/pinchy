@@ -1659,6 +1659,102 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_pivot_root => {
+            let data = unsafe { event.data.pivot_root };
+
+            argf!(sf, "new_root: {}", format_path(&data.new_root, false));
+            argf!(sf, "put_old: {}", format_path(&data.put_old, false));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_chroot => {
+            let data = unsafe { event.data.chroot };
+
+            argf!(sf, "path: {}", format_path(&data.path, false));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_open_tree => {
+            let data = unsafe { event.data.open_tree };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: {}", format_open_tree_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mount => {
+            let data = unsafe { event.data.mount };
+
+            if data.source[0] != 0 {
+                argf!(sf, "source: {}", format_path(&data.source, false));
+            } else {
+                arg!(sf, "source: NULL");
+            }
+            argf!(sf, "target: {}", format_path(&data.target, false));
+            if data.filesystemtype[0] != 0 {
+                argf!(
+                    sf,
+                    "filesystemtype: \"{}\"",
+                    extract_cstring_with_truncation(&data.filesystemtype)
+                );
+            } else {
+                arg!(sf, "filesystemtype: NULL");
+            }
+            argf!(sf, "mountflags: {}", format_mount_flags(data.mountflags));
+            if data.data != 0 {
+                argf!(sf, "data: 0x{:x}", data.data);
+            } else {
+                arg!(sf, "data: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_umount2 => {
+            let data = unsafe { event.data.umount2 };
+
+            argf!(sf, "target: {}", format_path(&data.target, false));
+            argf!(sf, "flags: {}", format_umount_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mount_setattr => {
+            let data = unsafe { event.data.mount_setattr };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "path: {}", format_path(&data.path, false));
+            argf!(sf, "flags: {}", format_mount_setattr_flags(data.flags));
+
+            if data.has_attr {
+                arg!(sf, "mount_attr:");
+                with_struct!(sf, {
+                    argf!(sf, "attr_set: {}", crate::format_helpers::format_mount_attr_flags(data.attr.attr_set));
+                    argf!(sf, "attr_clr: {}", crate::format_helpers::format_mount_attr_flags(data.attr.attr_clr));
+                    argf!(sf, "propagation: {}", crate::format_helpers::format_mount_attr_propagation(data.attr.propagation));
+                    argf!(sf, "userns_fd: {}", data.attr.userns_fd);
+                });
+            } else {
+                arg!(sf, "mount_attr: <unavailable>");
+            }
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_move_mount => {
+            let data = unsafe { event.data.move_mount };
+
+            argf!(sf, "from_dfd: {}", format_dirfd(data.from_dfd));
+            argf!(
+                sf,
+                "from_pathname: {}",
+                format_path(&data.from_pathname, false)
+            );
+            argf!(sf, "to_dfd: {}", format_dirfd(data.to_dfd));
+            argf!(sf, "to_pathname: {}", format_path(&data.to_pathname, false));
+            argf!(sf, "flags: {}", format_move_mount_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_recvmsg => {
             let data = unsafe { event.data.recvmsg };
 

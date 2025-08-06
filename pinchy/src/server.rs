@@ -565,6 +565,13 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_mknod", syscalls::SYS_mknod),
         ("syscall_exit_mknodat", syscalls::SYS_mknodat),
+        ("syscall_exit_pivot_root", syscalls::SYS_pivot_root),
+        ("syscall_exit_chroot", syscalls::SYS_chroot),
+        ("syscall_exit_open_tree", syscalls::SYS_open_tree),
+        ("syscall_exit_mount", syscalls::SYS_mount),
+        ("syscall_exit_umount2", syscalls::SYS_umount2),
+        ("syscall_exit_mount_setattr", syscalls::SYS_mount_setattr),
+        ("syscall_exit_move_mount", syscalls::SYS_move_mount),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

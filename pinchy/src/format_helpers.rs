@@ -2182,6 +2182,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_tkill
         | syscalls::SYS_tgkill
         | syscalls::SYS_pidfd_send_signal
+        | syscalls::SYS_rt_sigpending
+        | syscalls::SYS_rt_sigqueueinfo
+        | syscalls::SYS_rt_sigsuspend
+        | syscalls::SYS_rt_tgsigqueueinfo
         | syscalls::SYS_exit
         | syscalls::SYS_exit_group => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
@@ -2208,6 +2212,12 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_pkey_alloc => match return_value {
             -1 => std::borrow::Cow::Borrowed("-1 (error)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (pkey)")),
+        },
+
+        // Signal-related syscalls with special return semantics
+        syscalls::SYS_rt_sigtimedwait => match return_value {
+            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (signal)")),
         },
 
         // Default case - just show the raw value with error indication if negative
@@ -3318,10 +3328,10 @@ pub fn format_mount_attr_flags(flags: u64) -> String {
 
 pub fn format_mount_attr_propagation(propagation: u64) -> &'static str {
     match propagation {
-        x if x == libc::MS_PRIVATE as u64 => "MS_PRIVATE",
-        x if x == libc::MS_SHARED as u64 => "MS_SHARED",
-        x if x == libc::MS_SLAVE as u64 => "MS_SLAVE",
-        x if x == libc::MS_UNBINDABLE as u64 => "MS_UNBINDABLE",
+        x if x == libc::MS_PRIVATE => "MS_PRIVATE",
+        x if x == libc::MS_SHARED => "MS_SHARED",
+        x if x == libc::MS_SLAVE => "MS_SLAVE",
+        x if x == libc::MS_UNBINDABLE => "MS_UNBINDABLE",
         _ => "UNKNOWN",
     }
 }

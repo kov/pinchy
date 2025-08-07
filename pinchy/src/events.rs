@@ -1445,6 +1445,51 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_rt_sigpending => {
+            let data = unsafe { event.data.rt_sigpending };
+
+            argf!(sf, "set: 0x{:x}", data.set);
+            argf!(sf, "sigsetsize: {}", data.sigsetsize);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_rt_sigqueueinfo => {
+            let data = unsafe { event.data.rt_sigqueueinfo };
+
+            argf!(sf, "tgid: {}", data.tgid);
+            argf!(sf, "sig: {}", format_signal_number(data.sig));
+            argf!(sf, "uinfo: 0x{:x}", data.uinfo);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_rt_sigsuspend => {
+            let data = unsafe { event.data.rt_sigsuspend };
+
+            argf!(sf, "mask: 0x{:x}", data.mask);
+            argf!(sf, "sigsetsize: {}", data.sigsetsize);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_rt_sigtimedwait => {
+            let data = unsafe { event.data.rt_sigtimedwait };
+
+            argf!(sf, "set: 0x{:x}", data.set);
+            argf!(sf, "info: 0x{:x}", data.info);
+            argf!(sf, "timeout: 0x{:x}", data.timeout);
+            argf!(sf, "sigsetsize: {}", data.sigsetsize);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_rt_tgsigqueueinfo => {
+            let data = unsafe { event.data.rt_tgsigqueueinfo };
+
+            argf!(sf, "tgid: {}", data.tgid);
+            argf!(sf, "tid: {}", data.tid);
+            argf!(sf, "sig: {}", format_signal_number(data.sig));
+            argf!(sf, "uinfo: 0x{:x}", data.uinfo);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_setrlimit => {
             let data = unsafe { event.data.rlimit };
 
@@ -1728,9 +1773,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             if data.has_attr {
                 arg!(sf, "mount_attr:");
                 with_struct!(sf, {
-                    argf!(sf, "attr_set: {}", crate::format_helpers::format_mount_attr_flags(data.attr.attr_set));
-                    argf!(sf, "attr_clr: {}", crate::format_helpers::format_mount_attr_flags(data.attr.attr_clr));
-                    argf!(sf, "propagation: {}", crate::format_helpers::format_mount_attr_propagation(data.attr.propagation));
+                    argf!(
+                        sf,
+                        "attr_set: {}",
+                        crate::format_helpers::format_mount_attr_flags(data.attr.attr_set)
+                    );
+                    argf!(
+                        sf,
+                        "attr_clr: {}",
+                        crate::format_helpers::format_mount_attr_flags(data.attr.attr_clr)
+                    );
+                    argf!(
+                        sf,
+                        "propagation: {}",
+                        crate::format_helpers::format_mount_attr_propagation(data.attr.propagation)
+                    );
                     argf!(sf, "userns_fd: {}", data.attr.userns_fd);
                 });
             } else {

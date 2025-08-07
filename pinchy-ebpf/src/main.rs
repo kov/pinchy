@@ -249,6 +249,36 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.oldact = args[2];
                 data.sigsetsize = args[3];
             }
+            syscalls::SYS_rt_sigpending => {
+                let data = unsafe { &mut entry.data.rt_sigpending };
+                data.set = args[0];
+                data.sigsetsize = args[1];
+            }
+            syscalls::SYS_rt_sigqueueinfo => {
+                let data = unsafe { &mut entry.data.rt_sigqueueinfo };
+                data.tgid = args[0] as i32;
+                data.sig = args[1] as i32;
+                data.uinfo = args[2];
+            }
+            syscalls::SYS_rt_sigsuspend => {
+                let data = unsafe { &mut entry.data.rt_sigsuspend };
+                data.mask = args[0];
+                data.sigsetsize = args[1];
+            }
+            syscalls::SYS_rt_sigtimedwait => {
+                let data = unsafe { &mut entry.data.rt_sigtimedwait };
+                data.set = args[0];
+                data.info = args[1];
+                data.timeout = args[2];
+                data.sigsetsize = args[3];
+            }
+            syscalls::SYS_rt_tgsigqueueinfo => {
+                let data = unsafe { &mut entry.data.rt_tgsigqueueinfo };
+                data.tgid = args[0] as i32;
+                data.tid = args[1] as i32;
+                data.sig = args[2] as i32;
+                data.uinfo = args[3];
+            }
             syscalls::SYS_fchdir => {
                 let data = unsafe { &mut entry.data.fchdir };
                 data.fd = args[0] as i32;

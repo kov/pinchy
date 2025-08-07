@@ -8,8 +8,8 @@ use pinchy_common::{
         SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2,
         SYS_statfs, SYS_truncate,
     },
-    AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData,
-    FdatasyncData, FsyncData, FtruncateData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
+    AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData,
+    FsyncData, FtruncateData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
     SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
@@ -1682,7 +1682,7 @@ syscall_test!(
                     attr: MountAttr {
                         attr_set: 0x1 | 0x2, // RDONLY|NOSUID
                         attr_clr: 0x4,       // NODEV
-                        propagation: libc::MS_SHARED as u64,
+                        propagation: libc::MS_SHARED,
                         userns_fd: 42,
                     },
                 },

@@ -428,12 +428,13 @@ syscall_handler!(mount_setattr, args, data, {
         data.has_attr = true;
         unsafe {
             let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
-            let read_size = core::cmp::min(data.size, core::mem::size_of::<pinchy_common::kernel_types::MountAttr>());
-            let _ = bpf_probe_read_buf(attr_ptr,
-                core::slice::from_raw_parts_mut(
-                    &mut data.attr as *mut _ as *mut u8,
-                    read_size,
-                )
+            let read_size = core::cmp::min(
+                data.size,
+                core::mem::size_of::<pinchy_common::kernel_types::MountAttr>(),
+            );
+            let _ = bpf_probe_read_buf(
+                attr_ptr,
+                core::slice::from_raw_parts_mut(&mut data.attr as *mut _ as *mut u8, read_size),
             );
         }
     }

@@ -56,6 +56,11 @@ pub union SyscallEventData {
     pub set_tid_address: SetTidAddressData,
     pub rt_sigprocmask: RtSigprocmaskData,
     pub rt_sigaction: RtSigactionData,
+    pub rt_sigpending: RtSigpendingData,
+    pub rt_sigqueueinfo: RtSigqueueinfoData,
+    pub rt_sigsuspend: RtSigsuspendData,
+    pub rt_sigtimedwait: RtSigtimedwaitData,
+    pub rt_tgsigqueueinfo: RtTgsigqueueinfoData,
     pub prlimit: PrlimitData,
     pub rlimit: RlimitData,
     pub rseq: RseqData,
@@ -595,6 +600,46 @@ pub struct RtSigactionData {
     pub act: usize,
     pub oldact: usize,
     pub sigsetsize: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RtSigpendingData {
+    pub set: usize,
+    pub sigsetsize: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RtSigqueueinfoData {
+    pub tgid: i32,
+    pub sig: i32,
+    pub uinfo: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RtSigsuspendData {
+    pub mask: usize,
+    pub sigsetsize: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RtSigtimedwaitData {
+    pub set: usize,
+    pub info: usize,
+    pub timeout: usize,
+    pub sigsetsize: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RtTgsigqueueinfoData {
+    pub tgid: i32,
+    pub tid: i32,
+    pub sig: i32,
+    pub uinfo: usize,
 }
 
 #[repr(C)]

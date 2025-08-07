@@ -26,11 +26,77 @@ syscall_test!(
                     set: 0x7fff12345678,
                     oldset: 0x7fff87654321,
                     sigsetsize: 8,
+                    set_data: pinchy_common::kernel_types::Sigset::default(),
+                    oldset_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_set_data: false,
+                    has_oldset_data: false,
                 },
             },
         }
     },
     "1234 rt_sigprocmask(how: SIG_BLOCK, set: 0x7fff12345678, oldset: 0x7fff87654321, sigsetsize: 8) = 0\n"
+);
+
+syscall_test!(
+    parse_rt_sigprocmask_with_sigset,
+    {
+        let mut set_data = pinchy_common::kernel_types::Sigset::default();
+        let mut libc_set: libc::sigset_t = unsafe { std::mem::zeroed() };
+
+        unsafe {
+            libc::sigemptyset(&mut libc_set);
+            libc::sigaddset(&mut libc_set, libc::SIGTERM);
+            libc::sigaddset(&mut libc_set, libc::SIGUSR1);
+        }
+
+        let set_len = set_data.bytes.len();
+        set_data.bytes.copy_from_slice(
+            unsafe {
+                std::slice::from_raw_parts(
+                    &libc_set as *const _ as *const u8,
+                    set_len,
+                )
+            }
+        );
+
+        let mut oldset_data = pinchy_common::kernel_types::Sigset::default();
+        let mut libc_oldset: libc::sigset_t = unsafe { std::mem::zeroed() };
+
+        unsafe {
+            libc::sigemptyset(&mut libc_oldset);
+            libc::sigaddset(&mut libc_oldset, libc::SIGINT);
+        }
+
+        let oldset_len = oldset_data.bytes.len();
+        oldset_data.bytes.copy_from_slice(
+            unsafe {
+                std::slice::from_raw_parts(
+                    &libc_oldset as *const _ as *const u8,
+                    oldset_len,
+                )
+            }
+        );
+
+        SyscallEvent {
+            syscall_nr: SYS_rt_sigprocmask,
+            pid: 5678,
+            tid: 5678,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                rt_sigprocmask: RtSigprocmaskData {
+                    how: libc::SIG_BLOCK,
+                    set: 0x7fff12345678,
+                    oldset: 0x7fff87654321,
+                    sigsetsize: 8,
+                    set_data,
+                    oldset_data,
+                    has_set_data: true,
+                    has_oldset_data: true,
+                },
+            },
+        }
+    },
+    "5678 rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1|SIGTERM], oldset: [SIGINT], sigsetsize: 8) = 0\n"
 );
 
 syscall_test!(
@@ -47,11 +113,15 @@ syscall_test!(
                     set: 0,
                     oldset: 0x7fff11223344,
                     sigsetsize: 8,
+                    set_data: pinchy_common::kernel_types::Sigset::default(),
+                    oldset_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_set_data: false,
+                    has_oldset_data: false,
                 },
             },
         }
     },
-    "5678 rt_sigprocmask(how: SIG_SETMASK, set: 0x0, oldset: 0x7fff11223344, sigsetsize: 8) = 0\n"
+    "5678 rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: 0x7fff11223344, sigsetsize: 8) = 0\n"
 );
 
 syscall_test!(
@@ -68,11 +138,15 @@ syscall_test!(
                     set: 0x7fffaabbccdd,
                     oldset: 0,
                     sigsetsize: 8,
+                    set_data: pinchy_common::kernel_types::Sigset::default(),
+                    oldset_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_set_data: false,
+                    has_oldset_data: false,
                 },
             },
         }
     },
-    "9999 rt_sigprocmask(how: SIG_UNBLOCK, set: 0x7fffaabbccdd, oldset: 0x0, sigsetsize: 8) = 0\n"
+    "9999 rt_sigprocmask(how: SIG_UNBLOCK, set: 0x7fffaabbccdd, oldset: NULL, sigsetsize: 8) = 0\n"
 );
 
 syscall_test!(
@@ -266,6 +340,8 @@ syscall_test!(
                 rt_sigpending: RtSigpendingData {
                     set: 0x7fff12345678,
                     sigsetsize: 8,
+                    set_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_set_data: false,
                 },
             },
         }
@@ -285,11 +361,13 @@ syscall_test!(
                 rt_sigpending: RtSigpendingData {
                     set: 0,
                     sigsetsize: 8,
+                    set_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_set_data: false,
                 },
             },
         }
     },
-    "5678 rt_sigpending(set: 0x0, sigsetsize: 8) = 0 (success)\n"
+    "5678 rt_sigpending(set: NULL, sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -344,6 +422,8 @@ syscall_test!(
                 rt_sigsuspend: RtSigsuspendData {
                     mask: 0x7fff87654321,
                     sigsetsize: 8,
+                    mask_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_mask_data: false,
                 },
             },
         }
@@ -363,11 +443,13 @@ syscall_test!(
                 rt_sigsuspend: RtSigsuspendData {
                     mask: 0,
                     sigsetsize: 8,
+                    mask_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_mask_data: false,
                 },
             },
         }
     },
-    "4815 rt_sigsuspend(mask: 0x0, sigsetsize: 8) = -1 (error)\n"
+    "4815 rt_sigsuspend(mask: NULL, sigsetsize: 8) = -1 (error)\n"
 );
 
 syscall_test!(
@@ -384,6 +466,8 @@ syscall_test!(
                     info: 0x7fff22222222,
                     timeout: 0x7fff33333333,
                     sigsetsize: 8,
+                    set_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_set_data: false,
                 },
             },
         }
@@ -405,11 +489,13 @@ syscall_test!(
                     info: 0,
                     timeout: 0,
                     sigsetsize: 8,
+                    set_data: pinchy_common::kernel_types::Sigset::default(),
+                    has_set_data: false,
                 },
             },
         }
     },
-    "3745 rt_sigtimedwait(set: 0x7fff44444444, info: 0x0, timeout: 0x0, sigsetsize: 8) = 15 (signal)\n"
+    "3745 rt_sigtimedwait(set: 0x7fff44444444, info: NULL, timeout: NULL, sigsetsize: 8) = 15 (signal)\n"
 );
 
 syscall_test!(

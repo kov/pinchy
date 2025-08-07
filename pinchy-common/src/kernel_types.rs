@@ -530,3 +530,14 @@ pub struct MountAttr {
     pub propagation: u64,
     pub userns_fd: u64,
 }
+
+/// Signal set representation for signal-related syscalls.
+/// On Linux (x86_64 and aarch64), sigset_t is a bitmask covering signals 1-64,
+/// so it is always 8 bytes (64 bits).
+pub const SIGSET_SIZE: usize = 8;
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Sigset {
+    pub bytes: [u8; SIGSET_SIZE],
+}

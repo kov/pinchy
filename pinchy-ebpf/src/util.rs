@@ -17,6 +17,16 @@ pub fn read_timespec(ptr: *const Timespec) -> Timespec {
     unsafe { bpf_probe_read_user::<Timespec>(ptr) }.unwrap_or_default()
 }
 
+#[inline(always)]
+pub fn read_sigset(
+    ptr: *const pinchy_common::kernel_types::Sigset,
+) -> Option<pinchy_common::kernel_types::Sigset> {
+    if ptr.is_null() {
+        return None;
+    }
+    unsafe { bpf_probe_read_user::<pinchy_common::kernel_types::Sigset>(ptr) }.ok()
+}
+
 // Helper function to read timeval from userspace
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;

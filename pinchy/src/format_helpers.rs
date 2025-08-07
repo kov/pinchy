@@ -726,6 +726,33 @@ pub fn format_mount_flags(flags: u64) -> String {
     }
 }
 
+pub fn format_reboot_magic(magic: i32) -> String {
+    let name = match magic {
+        x if x == libc::LINUX_REBOOT_MAGIC1 => "LINUX_REBOOT_MAGIC1",
+        x if x == libc::LINUX_REBOOT_MAGIC2 => "LINUX_REBOOT_MAGIC2",
+        x if x == libc::LINUX_REBOOT_MAGIC2A => "LINUX_REBOOT_MAGIC2A",
+        x if x == libc::LINUX_REBOOT_MAGIC2B => "LINUX_REBOOT_MAGIC2B",
+        x if x == libc::LINUX_REBOOT_MAGIC2C => "LINUX_REBOOT_MAGIC2C",
+        _ => return format!("UNKNOWN (0x{:08x})", magic as u32),
+    };
+
+    format!("0x{:08x} ({name})", magic as u32)
+}
+
+pub fn format_reboot_cmd(cmd: i32) -> String {
+    let name = match cmd {
+        x if x == libc::LINUX_REBOOT_CMD_RESTART => "LINUX_REBOOT_CMD_RESTART",
+        x if x == libc::LINUX_REBOOT_CMD_RESTART2 => "LINUX_REBOOT_CMD_RESTART2",
+        x if x == libc::LINUX_REBOOT_CMD_HALT => "LINUX_REBOOT_CMD_HALT",
+        x if x == libc::LINUX_REBOOT_CMD_POWER_OFF => "LINUX_REBOOT_CMD_POWER_OFF",
+        x if x == libc::LINUX_REBOOT_CMD_SW_SUSPEND => "LINUX_REBOOT_CMD_SW_SUSPEND",
+        x if x == libc::LINUX_REBOOT_CMD_KEXEC => "LINUX_REBOOT_CMD_KEXEC",
+        _ => return format!("UNKNOWN ({cmd})"),
+    };
+
+    format!("{name} ({cmd})")
+}
+
 /// Format statfs struct for display
 pub async fn format_statfs(
     sf: &mut SyscallFormatter<'_>,
@@ -1996,6 +2023,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_syncfs
         | syscalls::SYS_truncate
         | syscalls::SYS_ftruncate
+        | syscalls::SYS_reboot
         | syscalls::SYS_mkdirat
         | syscalls::SYS_unlinkat
         | syscalls::SYS_linkat

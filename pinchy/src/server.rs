@@ -435,6 +435,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
+        ("syscall_exit_reboot", syscalls::SYS_reboot),
         ("syscall_exit_epoll_ctl", syscalls::SYS_epoll_ctl),
         ("syscall_exit_epoll_pwait", syscalls::SYS_epoll_pwait),
         ("syscall_exit_epoll_pwait2", syscalls::SYS_epoll_pwait2),

@@ -5,13 +5,13 @@ use pinchy_common::{
     kernel_types::{CapUserData, CapUserHeader, Rlimit, Utsname},
     syscalls::{
         SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_getcpu, SYS_getrandom, SYS_gettimeofday,
-        SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep, SYS_personality,
+        SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_reboot,
         SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
     },
     CapsetgetData, ClockNanosleepData, ExitGroupData, GetcpuData, GetrandomData, GettimeofdayData,
-    IoctlData, IoprioGetData, IoprioSetData, NanosleepData, PersonalityData, RtSigreturnData,
-    SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData, TimesData, UmaskData,
-    UnameData, VhangupData,
+    IoctlData, IoprioGetData, IoprioSetData, NanosleepData, PersonalityData, RebootData,
+    RtSigreturnData, SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData,
+    TimesData, UmaskData, UnameData, VhangupData,
 };
 
 use crate::syscall_test;
@@ -30,6 +30,79 @@ syscall_test!(
         }
     },
     "123 rt_sigreturn() = 0\n"
+);
+
+syscall_test!(
+    reboot_restart_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_reboot,
+            pid: 999,
+            tid: 999,
+            return_value: 0,
+            data: SyscallEventData {
+                reboot: RebootData {
+                    magic1: libc::LINUX_REBOOT_MAGIC1,
+                    magic2: libc::LINUX_REBOOT_MAGIC2,
+                    cmd: libc::LINUX_REBOOT_CMD_RESTART,
+                    arg: 0,
+                    has_restart2: false,
+                    restart2: [0; pinchy_common::DATA_READ_SIZE],
+                },
+            },
+        }
+    },
+    "999 reboot(magic1: 0xfee1dead (LINUX_REBOOT_MAGIC1), magic2: 0x28121969 (LINUX_REBOOT_MAGIC2), cmd: LINUX_REBOOT_CMD_RESTART (19088743), arg: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    reboot_restart2_with_string,
+    {
+        let mut buf = [0u8; pinchy_common::DATA_READ_SIZE];
+        let s = b"firmware";
+        buf[..s.len()].copy_from_slice(s);
+
+        SyscallEvent {
+            syscall_nr: SYS_reboot,
+            pid: 777,
+            tid: 777,
+            return_value: 0,
+            data: SyscallEventData {
+                reboot: RebootData {
+                    magic1: libc::LINUX_REBOOT_MAGIC1,
+                    magic2: libc::LINUX_REBOOT_MAGIC2,
+                    cmd: libc::LINUX_REBOOT_CMD_RESTART2,
+                    arg: 0xdeadbeef,
+                    has_restart2: true,
+                    restart2: buf,
+                },
+            },
+        }
+    },
+    "777 reboot(magic1: 0xfee1dead (LINUX_REBOOT_MAGIC1), magic2: 0x28121969 (LINUX_REBOOT_MAGIC2), cmd: LINUX_REBOOT_CMD_RESTART2 (-1582119980), arg: 0xdeadbeef, restart2: \"firmware\") = 0 (success)\n"
+);
+
+syscall_test!(
+    reboot_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_reboot,
+            pid: 42,
+            tid: 42,
+            return_value: -22,
+            data: SyscallEventData {
+                reboot: RebootData {
+                    magic1: libc::LINUX_REBOOT_MAGIC1,
+                    magic2: libc::LINUX_REBOOT_MAGIC2,
+                    cmd: libc::LINUX_REBOOT_CMD_HALT,
+                    arg: 0,
+                    has_restart2: false,
+                    restart2: [0; pinchy_common::DATA_READ_SIZE],
+                },
+            },
+        }
+    },
+    "42 reboot(magic1: 0xfee1dead (LINUX_REBOOT_MAGIC1), magic2: 0x28121969 (LINUX_REBOOT_MAGIC2), cmd: LINUX_REBOOT_CMD_HALT (-839974621), arg: 0x0) = -22 (error)\n"
 );
 
 syscall_test!(

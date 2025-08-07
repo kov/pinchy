@@ -222,6 +222,7 @@ pub union SyscallEventData {
     pub umount2: Umount2Data,
     pub mount_setattr: MountSetattrData,
     pub move_mount: MoveMountData,
+    pub reboot: RebootData,
 }
 
 #[repr(C)]
@@ -1251,6 +1252,17 @@ pub struct RenameatData {
     pub oldpath: [u8; SMALLISH_READ_SIZE],
     pub newdirfd: i32,
     pub newpath: [u8; SMALLISH_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RebootData {
+    pub magic1: i32,
+    pub magic2: i32,
+    pub cmd: i32,
+    pub arg: u64,
+    pub has_restart2: bool,
+    pub restart2: [u8; DATA_READ_SIZE],
 }
 
 #[repr(C)]

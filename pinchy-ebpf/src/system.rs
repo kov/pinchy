@@ -12,6 +12,24 @@ use pinchy_common::{
 
 use crate::syscall_handler;
 
+syscall_handler!(reboot, reboot, args, data, {
+    data.magic1 = args[0] as i32;
+    data.magic2 = args[1] as i32;
+    data.cmd = args[2] as i32;
+    data.arg = args[3] as u64;
+
+    data.has_restart2 = false;
+
+    let arg_ptr = args[3] as *const u8;
+
+    if !arg_ptr.is_null() {
+        // Best-effort read; mark present only on successful copy
+        if let Ok(()) = unsafe { bpf_probe_read_buf(arg_ptr, &mut data.restart2) } {
+            data.has_restart2 = true;
+        }
+    }
+});
+
 syscall_handler!(uname, uname, args, data, {
     let buf_ptr = args[0] as *const u8;
     data.utsname = Utsname::default();

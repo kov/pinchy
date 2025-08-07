@@ -497,6 +497,20 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_reboot => {
+            let data = unsafe { event.data.reboot };
+
+            argf!(sf, "magic1: {}", format_reboot_magic(data.magic1));
+            argf!(sf, "magic2: {}", format_reboot_magic(data.magic2));
+            argf!(sf, "cmd: {}", format_reboot_cmd(data.cmd));
+            argf!(sf, "arg: 0x{:x}", data.arg);
+
+            if data.has_restart2 {
+                argf!(sf, "restart2: {}", format_path(&data.restart2, false));
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_nanosleep => {
             let data = unsafe { event.data.nanosleep };
 

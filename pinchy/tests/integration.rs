@@ -130,12 +130,12 @@ fn rt_sig() {
     // Run a workload
     let handle = run_workload(&["rt_sigprocmask"], "rt_sig");
 
-    // Client's output - we expect multiple rt_sigprocmask calls from our test
+    // Client's output - we expect pretty-printed signal sets
     let expected_output = escaped_regex(indoc! {r#"
-        PID rt_sigprocmask(how: SIG_BLOCK, set: ADDR, oldset: ADDR, sigsetsize: 8) = 0
-        PID rt_sigprocmask(how: SIG_SETMASK, set: 0x0, oldset: ADDR, sigsetsize: 8) = 0
-        PID rt_sigprocmask(how: SIG_UNBLOCK, set: ADDR, oldset: 0x0, sigsetsize: 8) = 0
-        PID rt_sigprocmask(how: SIG_SETMASK, set: ADDR, oldset: 0x0, sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1], oldset: [], sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: [SIGUSR1], sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_UNBLOCK, set: [SIGUSR1], oldset: NULL, sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_SETMASK, set: [], oldset: NULL, sigsetsize: 8) = 0
     "#});
 
     let output = handle.join().unwrap();

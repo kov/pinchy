@@ -585,12 +585,16 @@ pub struct SetTidAddressData {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct RtSigprocmaskData {
     pub how: i32,
     pub set: usize,
     pub oldset: usize,
     pub sigsetsize: usize,
+    pub set_data: crate::kernel_types::Sigset,
+    pub oldset_data: crate::kernel_types::Sigset,
+    pub has_set_data: bool,
+    pub has_oldset_data: bool,
 }
 
 #[repr(C)]
@@ -603,10 +607,12 @@ pub struct RtSigactionData {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct RtSigpendingData {
     pub set: usize,
     pub sigsetsize: usize,
+    pub set_data: crate::kernel_types::Sigset,
+    pub has_set_data: bool,
 }
 
 #[repr(C)]
@@ -618,19 +624,23 @@ pub struct RtSigqueueinfoData {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct RtSigsuspendData {
     pub mask: usize,
     pub sigsetsize: usize,
+    pub mask_data: crate::kernel_types::Sigset,
+    pub has_mask_data: bool,
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct RtSigtimedwaitData {
     pub set: usize,
     pub info: usize,
     pub timeout: usize,
     pub sigsetsize: usize,
+    pub set_data: crate::kernel_types::Sigset,
+    pub has_set_data: bool,
 }
 
 #[repr(C)]

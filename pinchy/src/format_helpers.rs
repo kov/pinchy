@@ -1103,6 +1103,39 @@ pub fn format_signal_number(signum: i32) -> Cow<'static, str> {
     }
 }
 
+/// Format a signal set (sigset_t) into a human-readable string.
+/// The signal set is represented as an 8-byte array where each bit represents a signal.
+/// Returns a string like "SIGTERM|SIGUSR1" for set signals, or "[]" for empty set.
+pub fn format_sigset(sigset: &pinchy_common::kernel_types::Sigset, sigsetsize: usize) -> String {
+    let mut signals = Vec::new();
+
+    // Determine how many bytes to check (either the actual sigsetsize or our buffer size)
+    let bytes_to_check = sigsetsize.min(pinchy_common::kernel_types::SIGSET_SIZE);
+
+    // Check each bit in the signal set
+    for byte_idx in 0..bytes_to_check {
+        let byte = sigset.bytes[byte_idx];
+        for bit_idx in 0..8 {
+            if byte & (1 << bit_idx) != 0 {
+                // Calculate the signal number (signals are 1-based)
+                let signal_num = (byte_idx * 8 + bit_idx + 1) as i32;
+
+                // Only include valid signal numbers (1-64 on Linux)
+                if signal_num <= 64 {
+                    let signal_name = format_signal_number(signal_num);
+                    signals.push(signal_name.into_owned());
+                }
+            }
+        }
+    }
+
+    if signals.is_empty() {
+        "[]".to_string()
+    } else {
+        format!("[{}]", signals.join("|"))
+    }
+}
+
 /// Format fcntl operation command into human-readable string
 pub fn format_fcntl_cmd(cmd: i32) -> String {
     match cmd {
@@ -3349,5 +3382,32 @@ mod tests {
 
         // Test unknown policy
         assert_eq!(format_sched_policy(999), "999");
+    }
+
+    #[test]
+    fn test_format_sigset() {
+        // Test empty sigset
+        let empty_sigset = pinchy_common::kernel_types::Sigset::default();
+        assert_eq!(format_sigset(&empty_sigset, 8), "[]");
+
+        // Test sigset with SIGTERM (15) and SIGUSR1 (10)
+        let mut test_sigset = pinchy_common::kernel_types::Sigset::default();
+        // Set bit for SIGTERM (signal 15, bit 14 since signals are 1-based)
+        test_sigset.bytes[1] |= 1 << 6; // byte 1, bit 6 = signal 15
+
+        // Set bit for SIGUSR1 (signal 10, bit 9 since signals are 1-based)
+        test_sigset.bytes[1] |= 1 << 1; // byte 1, bit 1 = signal 10
+
+        assert_eq!(format_sigset(&test_sigset, 8), "[SIGUSR1|SIGTERM]");
+
+        // Test sigset with SIGINT (2)
+        let mut int_sigset = pinchy_common::kernel_types::Sigset::default();
+        // Set bit for SIGINT (signal 2, bit 1 since signals are 1-based)
+        int_sigset.bytes[0] |= 1 << 1; // byte 0, bit 1 = signal 2
+
+        assert_eq!(format_sigset(&int_sigset, 8), "[SIGINT]");
+
+        // Test with different sigsetsize
+        assert_eq!(format_sigset(&test_sigset, 2), "[SIGUSR1|SIGTERM]");
     }
 }

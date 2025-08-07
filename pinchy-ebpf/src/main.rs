@@ -15,7 +15,7 @@ use aya_ebpf::{
 use aya_log_ebpf::{error, trace};
 use pinchy_common::syscalls;
 
-use crate::util::{get_args, get_syscall_nr};
+use crate::util::{get_args, get_syscall_nr, read_sigset};
 
 mod basic_io;
 mod filesystem;
@@ -241,6 +241,17 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.set = args[1];
                 data.oldset = args[2];
                 data.sigsetsize = args[3];
+
+                // Try to read the signal sets from user memory
+                if let Some(set_data) = read_sigset(args[1] as *const _) {
+                    data.set_data = set_data;
+                    data.has_set_data = true;
+                }
+
+                if let Some(oldset_data) = read_sigset(args[2] as *const _) {
+                    data.oldset_data = oldset_data;
+                    data.has_oldset_data = true;
+                }
             }
             syscalls::SYS_rt_sigaction => {
                 let data = unsafe { &mut entry.data.rt_sigaction };
@@ -253,6 +264,12 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let data = unsafe { &mut entry.data.rt_sigpending };
                 data.set = args[0];
                 data.sigsetsize = args[1];
+
+                // Try to read the signal set from user memory
+                if let Some(set_data) = read_sigset(args[0] as *const _) {
+                    data.set_data = set_data;
+                    data.has_set_data = true;
+                }
             }
             syscalls::SYS_rt_sigqueueinfo => {
                 let data = unsafe { &mut entry.data.rt_sigqueueinfo };
@@ -264,6 +281,12 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let data = unsafe { &mut entry.data.rt_sigsuspend };
                 data.mask = args[0];
                 data.sigsetsize = args[1];
+
+                // Try to read the signal set from user memory
+                if let Some(mask_data) = read_sigset(args[0] as *const _) {
+                    data.mask_data = mask_data;
+                    data.has_mask_data = true;
+                }
             }
             syscalls::SYS_rt_sigtimedwait => {
                 let data = unsafe { &mut entry.data.rt_sigtimedwait };
@@ -271,6 +294,12 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.info = args[1];
                 data.timeout = args[2];
                 data.sigsetsize = args[3];
+
+                // Try to read the signal set from user memory
+                if let Some(set_data) = read_sigset(args[0] as *const _) {
+                    data.set_data = set_data;
+                    data.has_set_data = true;
+                }
             }
             syscalls::SYS_rt_tgsigqueueinfo => {
                 let data = unsafe { &mut entry.data.rt_tgsigqueueinfo };

@@ -1426,10 +1426,29 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "how: {}", format_sigprocmask_how(data.how));
 
-            // TODO: we can probably do better and parse the sets. It gets a bit tricky, because the
-            // sigset_t types are not necessarily the same in libc vs kernel.
-            argf!(sf, "set: 0x{:x}", data.set);
-            argf!(sf, "oldset: 0x{:x}", data.oldset);
+            if data.has_set_data {
+                argf!(
+                    sf,
+                    "set: {}",
+                    format_sigset(&data.set_data, data.sigsetsize)
+                );
+            } else if data.set != 0 {
+                argf!(sf, "set: 0x{:x}", data.set);
+            } else {
+                arg!(sf, "set: NULL");
+            }
+
+            if data.has_oldset_data {
+                argf!(
+                    sf,
+                    "oldset: {}",
+                    format_sigset(&data.oldset_data, data.sigsetsize)
+                );
+            } else if data.oldset != 0 {
+                argf!(sf, "oldset: 0x{:x}", data.oldset);
+            } else {
+                arg!(sf, "oldset: NULL");
+            }
 
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
@@ -1448,7 +1467,17 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_rt_sigpending => {
             let data = unsafe { event.data.rt_sigpending };
 
-            argf!(sf, "set: 0x{:x}", data.set);
+            if data.has_set_data {
+                argf!(
+                    sf,
+                    "set: {}",
+                    format_sigset(&data.set_data, data.sigsetsize)
+                );
+            } else if data.set != 0 {
+                argf!(sf, "set: 0x{:x}", data.set);
+            } else {
+                arg!(sf, "set: NULL");
+            }
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
             finish!(sf, event.return_value);
@@ -1465,7 +1494,17 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_rt_sigsuspend => {
             let data = unsafe { event.data.rt_sigsuspend };
 
-            argf!(sf, "mask: 0x{:x}", data.mask);
+            if data.has_mask_data {
+                argf!(
+                    sf,
+                    "mask: {}",
+                    format_sigset(&data.mask_data, data.sigsetsize)
+                );
+            } else if data.mask != 0 {
+                argf!(sf, "mask: 0x{:x}", data.mask);
+            } else {
+                arg!(sf, "mask: NULL");
+            }
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
             finish!(sf, event.return_value);
@@ -1473,9 +1512,30 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_rt_sigtimedwait => {
             let data = unsafe { event.data.rt_sigtimedwait };
 
-            argf!(sf, "set: 0x{:x}", data.set);
-            argf!(sf, "info: 0x{:x}", data.info);
-            argf!(sf, "timeout: 0x{:x}", data.timeout);
+            if data.has_set_data {
+                argf!(
+                    sf,
+                    "set: {}",
+                    format_sigset(&data.set_data, data.sigsetsize)
+                );
+            } else if data.set != 0 {
+                argf!(sf, "set: 0x{:x}", data.set);
+            } else {
+                arg!(sf, "set: NULL");
+            }
+
+            if data.info != 0 {
+                argf!(sf, "info: 0x{:x}", data.info);
+            } else {
+                arg!(sf, "info: NULL");
+            }
+
+            if data.timeout != 0 {
+                argf!(sf, "timeout: 0x{:x}", data.timeout);
+            } else {
+                arg!(sf, "timeout: NULL");
+            }
+
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
             finish!(sf, event.return_value);

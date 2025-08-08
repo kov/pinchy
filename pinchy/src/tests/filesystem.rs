@@ -5,12 +5,14 @@ use pinchy_common::{
     syscalls::{
         self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown,
         SYS_fchownat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
-        SYS_getdents64, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2,
-        SYS_statfs, SYS_truncate,
+        SYS_getdents64, SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch,
+        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
+        SYS_truncate,
     },
     AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData,
-    FsyncData, FtruncateData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
-    SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    FsyncData, FtruncateData, InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData,
+    MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent, SyscallEventData,
+    DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
 use crate::syscall_test;
@@ -42,6 +44,81 @@ syscall_test!(
         event
     },
     &"33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = 0 (success)\n".to_string()
+);
+
+syscall_test!(
+    parse_inotify_add_watch,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let p = b"/tmp/watch";
+        pathname[..p.len()].copy_from_slice(p);
+
+        SyscallEvent {
+            syscall_nr: SYS_inotify_add_watch,
+            pid: 10,
+            tid: 10,
+            return_value: 3,
+            data: SyscallEventData {
+                inotify_add_watch: InotifyAddWatchData {
+                    fd: 5,
+                    pathname,
+                    mask: (libc::IN_CREATE | libc::IN_DELETE | libc::IN_MODIFY) as u32,
+                },
+            },
+        }
+    },
+    "10 inotify_add_watch(fd: 5, pathname: \"/tmp/watch\", mask: 0x302 (IN_MODIFY|IN_CREATE|IN_DELETE)) = 3 (wd)\n"
+);
+
+syscall_test!(
+    parse_inotify_rm_watch,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_inotify_rm_watch,
+            pid: 11,
+            tid: 11,
+            return_value: 0,
+            data: SyscallEventData {
+                inotify_rm_watch: InotifyRmWatchData { fd: 5, wd: 7 },
+            },
+        }
+    },
+    "11 inotify_rm_watch(fd: 5, wd: 7) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_inotify_init,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_inotify_init,
+            pid: 12,
+            tid: 12,
+            return_value: 9,
+            data: SyscallEventData {
+                inotify_init: pinchy_common::InotifyInitData {},
+            },
+        }
+    },
+    "12 inotify_init() = 9 (fd)\n"
+);
+
+syscall_test!(
+    parse_inotify_init1,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_inotify_init1,
+            pid: 13,
+            tid: 13,
+            return_value: 10,
+            data: SyscallEventData {
+                inotify_init1: InotifyInit1Data {
+                    flags: libc::IN_NONBLOCK | libc::IN_CLOEXEC,
+                },
+            },
+        }
+    },
+    "13 inotify_init1(flags: 0x80800 (IN_NONBLOCK|IN_CLOEXEC)) = 10 (fd)\n"
 );
 
 syscall_test!(

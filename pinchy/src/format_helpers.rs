@@ -753,6 +753,73 @@ pub fn format_reboot_cmd(cmd: i32) -> String {
     format!("{name} ({cmd})")
 }
 
+pub fn format_inotify_init1_flags(flags: i32) -> String {
+    if flags == 0 {
+        return "0".to_string();
+    }
+
+    let mut parts = Vec::new();
+
+    if (flags & libc::IN_NONBLOCK) != 0 {
+        parts.push("IN_NONBLOCK");
+    }
+
+    if (flags & libc::IN_CLOEXEC) != 0 {
+        parts.push("IN_CLOEXEC");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_inotify_mask(mask: u32) -> String {
+    if mask == 0 {
+        return "0".to_string();
+    }
+
+    let defs = [
+        (libc::IN_ACCESS, Cow::Borrowed("IN_ACCESS")),
+        (libc::IN_MODIFY, Cow::Borrowed("IN_MODIFY")),
+        (libc::IN_ATTRIB, Cow::Borrowed("IN_ATTRIB")),
+        (libc::IN_CLOSE_WRITE, Cow::Borrowed("IN_CLOSE_WRITE")),
+        (libc::IN_CLOSE_NOWRITE, Cow::Borrowed("IN_CLOSE_NOWRITE")),
+        (libc::IN_OPEN, Cow::Borrowed("IN_OPEN")),
+        (libc::IN_MOVED_FROM, Cow::Borrowed("IN_MOVED_FROM")),
+        (libc::IN_MOVED_TO, Cow::Borrowed("IN_MOVED_TO")),
+        (libc::IN_CREATE, Cow::Borrowed("IN_CREATE")),
+        (libc::IN_DELETE, Cow::Borrowed("IN_DELETE")),
+        (libc::IN_DELETE_SELF, Cow::Borrowed("IN_DELETE_SELF")),
+        (libc::IN_MOVE_SELF, Cow::Borrowed("IN_MOVE_SELF")),
+        (libc::IN_UNMOUNT, Cow::Borrowed("IN_UNMOUNT")),
+        (libc::IN_Q_OVERFLOW, Cow::Borrowed("IN_Q_OVERFLOW")),
+        (libc::IN_IGNORED, Cow::Borrowed("IN_IGNORED")),
+        (libc::IN_ONLYDIR, Cow::Borrowed("IN_ONLYDIR")),
+        (libc::IN_DONT_FOLLOW, Cow::Borrowed("IN_DONT_FOLLOW")),
+        (libc::IN_EXCL_UNLINK, Cow::Borrowed("IN_EXCL_UNLINK")),
+        (libc::IN_MASK_ADD, Cow::Borrowed("IN_MASK_ADD")),
+        (libc::IN_ISDIR, Cow::Borrowed("IN_ISDIR")),
+        (libc::IN_ONESHOT, Cow::Borrowed("IN_ONESHOT")),
+    ];
+
+    let mut parts = Vec::new();
+    let mut remaining = mask;
+    for (bit, name) in defs {
+        if (remaining & bit) != 0 {
+            parts.push(name);
+            remaining &= !bit;
+        }
+    }
+
+    if remaining != 0 {
+        parts.push(Cow::Owned(format!("0x{remaining:x}")));
+    }
+
+    format!("0x{:x} ({})", mask, parts.join("|"))
+}
+
 /// Format statfs struct for display
 pub async fn format_statfs(
     sf: &mut SyscallFormatter<'_>,
@@ -1945,6 +2012,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_epoll_create1
         | syscalls::SYS_signalfd4
         | syscalls::SYS_eventfd2
+        | syscalls::SYS_inotify_init1
         | syscalls::SYS_pidfd_open
         | syscalls::SYS_pidfd_getfd
         | syscalls::SYS_timerfd_create
@@ -1965,6 +2033,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_creat
         | syscalls::SYS_dup2
         | syscalls::SYS_epoll_create
+        | syscalls::SYS_inotify_init
         | syscalls::SYS_signalfd
         | syscalls::SYS_eventfd => {
             if return_value >= 0 {
@@ -2090,7 +2159,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_mount
         | syscalls::SYS_umount2
         | syscalls::SYS_mount_setattr
-        | syscalls::SYS_move_mount => match return_value {
+        | syscalls::SYS_move_mount
+        | syscalls::SYS_inotify_rm_watch => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -2261,6 +2331,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_msgget => match return_value {
             -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (msqid)")),
+        },
+
+        syscalls::SYS_inotify_add_watch => match return_value {
+            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (wd)")),
         },
 
         // Special syscalls with unique return value semantics

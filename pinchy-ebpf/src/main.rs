@@ -456,6 +456,15 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let data = unsafe { &mut entry.data.sched_get_priority_min };
                 data.policy = args[0] as i32;
             }
+            syscalls::SYS_inotify_rm_watch => {
+                let data = unsafe { &mut entry.data.inotify_rm_watch };
+                data.fd = args[0] as i32;
+                data.wd = args[1] as i32;
+            }
+            syscalls::SYS_inotify_init1 => {
+                let data = unsafe { &mut entry.data.inotify_init1 };
+                data.flags = args[0] as i32;
+            }
             syscalls::SYS_socket => {
                 let data = unsafe { &mut entry.data.socket };
                 data.domain = args[0] as i32;
@@ -604,7 +613,7 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.flags = args[0] as i32;
             }
             #[cfg(x86_64)]
-            syscalls::SYS_pause | syscalls::SYS_getpgrp => {}
+            syscalls::SYS_pause | syscalls::SYS_getpgrp | syscalls::SYS_inotify_init => {}
             syscalls::SYS_sched_yield
             | syscalls::SYS_getpid
             | syscalls::SYS_gettid

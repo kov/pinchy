@@ -81,11 +81,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             finish!(sf, event.return_value);
         }
         #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_pause => {
-            finish!(sf, event.return_value);
-        }
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_getpgrp => {
+        syscalls::SYS_pause | syscalls::SYS_inotify_init | syscalls::SYS_getpgrp => {
             finish!(sf, event.return_value);
         }
         syscalls::SYS_capget | syscalls::SYS_capset => {
@@ -495,6 +491,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_inotify_add_watch => {
+            let data = unsafe { event.data.inotify_add_watch };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "mask: {}", format_inotify_mask(data.mask));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_inotify_rm_watch => {
+            let data = unsafe { event.data.inotify_rm_watch };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "wd: {}", data.wd);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_inotify_init1 => {
+            let data = unsafe { event.data.inotify_init1 };
+            argf!(sf, "flags: {}", format_inotify_init1_flags(data.flags));
             finish!(sf, event.return_value);
         }
         syscalls::SYS_reboot => {

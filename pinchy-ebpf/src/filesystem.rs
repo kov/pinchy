@@ -106,6 +106,16 @@ syscall_handler!(faccessat, args, data, {
     }
 });
 
+syscall_handler!(inotify_add_watch, args, data, {
+    data.fd = args[0] as i32;
+    data.mask = args[2] as u32;
+
+    let pathname_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});
+
 syscall_handler!(flistxattr, args, data, {
     data.fd = args[0] as i32;
     let list_ptr = args[1] as *const u8;

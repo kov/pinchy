@@ -439,7 +439,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
-        ("syscall_exit_inotify_add_watch", syscalls::SYS_inotify_add_watch),
+        (
+            "syscall_exit_inotify_add_watch",
+            syscalls::SYS_inotify_add_watch,
+        ),
         ("syscall_exit_reboot", syscalls::SYS_reboot),
         ("syscall_exit_epoll_ctl", syscalls::SYS_epoll_ctl),
         ("syscall_exit_epoll_pwait", syscalls::SYS_epoll_pwait),
@@ -583,6 +586,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_umount2", syscalls::SYS_umount2),
         ("syscall_exit_mount_setattr", syscalls::SYS_mount_setattr),
         ("syscall_exit_move_mount", syscalls::SYS_move_mount),
+        ("syscall_exit_sigaltstack", syscalls::SYS_sigaltstack),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_signalfd", syscalls::SYS_signalfd),
+        ("syscall_exit_signalfd4", syscalls::SYS_signalfd4),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

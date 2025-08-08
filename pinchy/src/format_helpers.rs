@@ -2160,6 +2160,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_umount2
         | syscalls::SYS_mount_setattr
         | syscalls::SYS_move_mount
+        | syscalls::SYS_sigaltstack
         | syscalls::SYS_inotify_rm_watch => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
@@ -3469,6 +3470,61 @@ pub fn format_mount_attr_propagation(propagation: u64) -> &'static str {
         x if x == libc::MS_SLAVE => "MS_SLAVE",
         x if x == libc::MS_UNBINDABLE => "MS_UNBINDABLE",
         _ => "UNKNOWN",
+    }
+}
+
+pub fn format_signalfd_flags(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    if flags & libc::SFD_CLOEXEC != 0 {
+        parts.push("SFD_CLOEXEC");
+    }
+
+    if flags & libc::SFD_NONBLOCK != 0 {
+        parts.push("SFD_NONBLOCK");
+    }
+
+    let known_flags = libc::SFD_CLOEXEC | libc::SFD_NONBLOCK;
+    let unknown_flags = flags & !known_flags;
+
+    if unknown_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub fn format_ss_flags(flags: i32) -> Cow<'static, str> {
+    const SS_AUTODISARM: i32 = (1u32 << 31) as i32;
+
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+    if flags & libc::SS_ONSTACK != 0 {
+        parts.push("SS_ONSTACK");
+    }
+    if flags & libc::SS_DISABLE != 0 {
+        parts.push("SS_DISABLE");
+    }
+    if flags & SS_AUTODISARM != 0 {
+        parts.push("SS_AUTODISARM");
+    }
+
+    let known_flags = libc::SS_ONSTACK | libc::SS_DISABLE | SS_AUTODISARM;
+    let unknown_flags = flags & !known_flags;
+    if unknown_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
     }
 }
 

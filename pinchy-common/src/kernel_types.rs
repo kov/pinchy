@@ -541,3 +541,13 @@ pub const SIGSET_SIZE: usize = 8;
 pub struct Sigset {
     pub bytes: [u8; SIGSET_SIZE],
 }
+
+/// Alternate signal stack descriptor (stack_t)
+/// Matches Linux's struct stack_t layout on 64-bit archs
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct StackT {
+    pub ss_sp: u64,    // stack base pointer (void*)
+    pub ss_flags: i32, // flags (SS_DISABLE, SS_ONSTACK, SS_AUTODISARM)
+    pub ss_size: u64,  // size of stack
+}

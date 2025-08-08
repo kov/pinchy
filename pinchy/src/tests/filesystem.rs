@@ -62,7 +62,7 @@ syscall_test!(
                 inotify_add_watch: InotifyAddWatchData {
                     fd: 5,
                     pathname,
-                    mask: (libc::IN_CREATE | libc::IN_DELETE | libc::IN_MODIFY) as u32,
+                    mask: (libc::IN_CREATE | libc::IN_DELETE | libc::IN_MODIFY),
                 },
             },
         }

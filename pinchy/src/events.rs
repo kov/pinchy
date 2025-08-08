@@ -4,7 +4,7 @@
 use std::borrow::Cow;
 
 use log::{error, trace};
-use pinchy_common::{syscalls, SyscallEvent};
+use pinchy_common::{kernel_types, syscalls, SyscallEvent};
 
 use crate::{
     arg, argf, finish, format_helpers::*, formatting::Formatter, ioctls::format_ioctl_request, raw,
@@ -641,6 +641,76 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             format_siginfo(&mut sf, &data.info).await?;
 
             argf!(sf, "flags: 0x{:x}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sigaltstack => {
+            let data = unsafe { event.data.sigaltstack };
+
+            argf!(sf, "ss_ptr: 0x{:x}", data.ss_ptr);
+
+            if data.has_ss {
+                arg!(sf, "ss:");
+                with_struct!(sf, {
+                    argf!(sf, "ss_sp: 0x{:x}", data.ss.ss_sp);
+                    argf!(sf, "ss_flags: {}", format_ss_flags(data.ss.ss_flags));
+                    argf!(sf, "ss_size: {}", data.ss.ss_size);
+                });
+            } else {
+                arg!(sf, "ss: NULL");
+            }
+
+            argf!(sf, "old_ss_ptr: 0x{:x}", data.old_ss_ptr);
+
+            if data.has_old_ss {
+                arg!(sf, "old_ss:");
+                with_struct!(sf, {
+                    argf!(sf, "ss_sp: 0x{:x}", data.old_ss.ss_sp);
+                    argf!(sf, "ss_flags: {}", format_ss_flags(data.old_ss.ss_flags));
+                    argf!(sf, "ss_size: {}", data.old_ss.ss_size);
+                });
+            } else {
+                arg!(sf, "old_ss: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_signalfd => {
+            let data = unsafe { event.data.signalfd };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if data.has_mask {
+                argf!(
+                    sf,
+                    "mask: {}",
+                    format_sigset(&data.mask, size_of::<kernel_types::Sigset>())
+                );
+            } else {
+                arg!(sf, "mask: NULL");
+            }
+
+            argf!(sf, "flags: {}", format_signalfd_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_signalfd4 => {
+            let data = unsafe { event.data.signalfd4 };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if data.has_mask {
+                argf!(
+                    sf,
+                    "mask: {}",
+                    format_sigset(&data.mask, size_of::<kernel_types::Sigset>())
+                );
+            } else {
+                arg!(sf, "mask: NULL");
+            }
+
+            argf!(sf, "flags: {}", format_signalfd_flags(data.flags));
 
             finish!(sf, event.return_value);
         }

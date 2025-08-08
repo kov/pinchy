@@ -428,6 +428,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_eventfd,
         syscalls::SYS_eventfd2,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_inotify_init,
+        syscalls::SYS_inotify_init1,
+        syscalls::SYS_inotify_rm_watch,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -435,6 +439,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
+        ("syscall_exit_inotify_add_watch", syscalls::SYS_inotify_add_watch),
         ("syscall_exit_reboot", syscalls::SYS_reboot),
         ("syscall_exit_epoll_ctl", syscalls::SYS_epoll_ctl),
         ("syscall_exit_epoll_pwait", syscalls::SYS_epoll_pwait),

@@ -223,6 +223,10 @@ pub union SyscallEventData {
     pub mount_setattr: MountSetattrData,
     pub move_mount: MoveMountData,
     pub reboot: RebootData,
+    pub inotify_add_watch: InotifyAddWatchData,
+    pub inotify_rm_watch: InotifyRmWatchData,
+    pub inotify_init1: InotifyInit1Data,
+    pub inotify_init: InotifyInitData,
 }
 
 #[repr(C)]
@@ -1264,6 +1268,31 @@ pub struct RebootData {
     pub has_restart2: bool,
     pub restart2: [u8; DATA_READ_SIZE],
 }
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct InotifyAddWatchData {
+    pub fd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub mask: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct InotifyRmWatchData {
+    pub fd: i32,
+    pub wd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct InotifyInit1Data {
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Default, Copy, Clone)]
+pub struct InotifyInitData {}
 
 #[repr(C)]
 #[derive(Clone, Copy)]

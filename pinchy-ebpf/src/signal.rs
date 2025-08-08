@@ -4,7 +4,56 @@
 use aya_ebpf::helpers::{bpf_probe_read_buf, bpf_probe_read_user};
 use pinchy_common::kernel_types::{self, StackT};
 
-use crate::syscall_handler;
+use crate::{syscall_handler, util::read_sigset};
+
+syscall_handler!(rt_sigprocmask, args, data, {
+    data.how = args[0] as i32;
+    data.set = args[1];
+    data.oldset = args[2];
+    data.sigsetsize = args[3];
+
+    if let Some(set_data) = read_sigset(args[1] as *const _) {
+        data.set_data = set_data;
+        data.has_set_data = true;
+    }
+
+    if let Some(oldset_data) = read_sigset(args[2] as *const _) {
+        data.oldset_data = oldset_data;
+        data.has_oldset_data = true;
+    }
+});
+
+syscall_handler!(rt_sigpending, args, data, {
+    data.set = args[0];
+    data.sigsetsize = args[1];
+
+    if let Some(set_data) = read_sigset(args[0] as *const _) {
+        data.set_data = set_data;
+        data.has_set_data = true;
+    }
+});
+
+syscall_handler!(rt_sigsuspend, args, data, {
+    data.mask = args[0];
+    data.sigsetsize = args[1];
+
+    if let Some(mask_data) = read_sigset(args[0] as *const _) {
+        data.mask_data = mask_data;
+        data.has_mask_data = true;
+    }
+});
+
+syscall_handler!(rt_sigtimedwait, args, data, {
+    data.set = args[0];
+    data.info = args[1];
+    data.timeout = args[2];
+    data.sigsetsize = args[3];
+
+    if let Some(set_data) = read_sigset(args[0] as *const _) {
+        data.set_data = set_data;
+        data.has_set_data = true;
+    }
+});
 
 syscall_handler!(sigaltstack, args, data, {
     data.ss_ptr = args[0];

@@ -227,6 +227,9 @@ pub union SyscallEventData {
     pub inotify_rm_watch: InotifyRmWatchData,
     pub inotify_init1: InotifyInit1Data,
     pub inotify_init: InotifyInitData,
+    pub sigaltstack: SigaltstackData,
+    pub signalfd: SignalfdData,
+    pub signalfd4: Signalfd4Data,
 }
 
 #[repr(C)]
@@ -1939,4 +1942,33 @@ impl Default for MoveMountData {
             flags: 0,
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SigaltstackData {
+    pub ss_ptr: usize,     // user pointer value
+    pub old_ss_ptr: usize, // user pointer value
+    pub ss: crate::kernel_types::StackT,
+    pub old_ss: crate::kernel_types::StackT,
+    pub has_ss: bool,
+    pub has_old_ss: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SignalfdData {
+    pub fd: i32,
+    pub flags: i32,
+    pub mask: crate::kernel_types::Sigset,
+    pub has_mask: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct Signalfd4Data {
+    pub fd: i32,
+    pub flags: i32,
+    pub mask: crate::kernel_types::Sigset,
+    pub has_mask: bool,
 }

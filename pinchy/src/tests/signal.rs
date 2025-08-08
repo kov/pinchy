@@ -2,12 +2,13 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
+    kernel_types::{Sigset, StackT},
     syscalls::{
-        SYS_rt_sigaction, SYS_rt_sigpending, SYS_rt_sigprocmask, SYS_rt_sigqueueinfo,
+        self, SYS_rt_sigaction, SYS_rt_sigpending, SYS_rt_sigprocmask, SYS_rt_sigqueueinfo,
         SYS_rt_sigsuspend, SYS_rt_sigtimedwait, SYS_rt_tgsigqueueinfo,
     },
     RtSigactionData, RtSigpendingData, RtSigprocmaskData, RtSigqueueinfoData, RtSigsuspendData,
-    RtSigtimedwaitData, RtTgsigqueueinfoData, SyscallEvent,
+    RtSigtimedwaitData, RtTgsigqueueinfoData, SyscallEvent, SyscallEventData,
 };
 
 use crate::syscall_test;
@@ -538,4 +539,134 @@ syscall_test!(
         }
     },
     "8529 rt_tgsigqueueinfo(tgid: 9876, tid: 5432, sig: SIGRT1, uinfo: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sigaltstack_null,
+    {
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_sigaltstack,
+            pid: 100,
+            tid: 100,
+            return_value: 0,
+            data: SyscallEventData {
+                sigaltstack: pinchy_common::SigaltstackData {
+                    ss_ptr: 0,
+                    old_ss_ptr: 0,
+                    has_ss: false,
+                    has_old_ss: false,
+                    ss: StackT::default(),
+                    old_ss: StackT::default(),
+                },
+            },
+        }
+    },
+    "100 sigaltstack(ss_ptr: 0x0, ss: NULL, old_ss_ptr: 0x0, old_ss: NULL) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sigaltstack_full,
+    {
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_sigaltstack,
+            pid: 101,
+            tid: 101,
+            return_value: 0,
+            data: SyscallEventData {
+                sigaltstack: pinchy_common::SigaltstackData {
+                    ss_ptr: 0x1234,
+                    old_ss_ptr: 0x5678,
+                    has_ss: true,
+                    has_old_ss: true,
+                    ss: StackT {
+                        ss_sp: 0xdeadbeef,
+                        ss_flags: libc::SS_ONSTACK | libc::SS_DISABLE,
+                        ss_size: 8192,
+                    },
+                    old_ss: StackT {
+                        ss_sp: 0xcafebabe,
+                        ss_flags: 0,
+                        ss_size: 4096,
+                    },
+                },
+            },
+        }
+    },
+    "101 sigaltstack(ss_ptr: 0x1234, ss: { ss_sp: 0xdeadbeef, ss_flags: 0x3 (SS_ONSTACK|SS_DISABLE), ss_size: 8192 }, old_ss_ptr: 0x5678, old_ss: { ss_sp: 0xcafebabe, ss_flags: 0, ss_size: 4096 }) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_signalfd,
+    {
+        let mut mask = Sigset::default();
+        let mut libc_mask: libc::sigset_t = unsafe { std::mem::zeroed() };
+
+        unsafe {
+            libc::sigemptyset(&mut libc_mask);
+            libc::sigaddset(&mut libc_mask, libc::SIGUSR1);
+            libc::sigaddset(&mut libc_mask, libc::SIGTERM);
+        }
+
+        let mask_len = mask.bytes.len();
+        mask.bytes.copy_from_slice(unsafe {
+            std::slice::from_raw_parts(&libc_mask as *const _ as *const u8, mask_len)
+        });
+
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_signalfd,
+            pid: 102,
+            tid: 102,
+            return_value: 5,
+            data: SyscallEventData {
+                signalfd: pinchy_common::SignalfdData {
+                    fd: 5,
+                    flags: libc::SFD_CLOEXEC | libc::SFD_NONBLOCK,
+                    has_mask: true,
+                    mask,
+                },
+            },
+        }
+    },
+    "102 signalfd(fd: 5, mask: [SIGUSR1|SIGTERM], flags: 0x80800 (SFD_CLOEXEC|SFD_NONBLOCK)) = 5 (fd)\n"
+);
+
+syscall_test!(
+    parse_signalfd4,
+    {
+        let mut mask = Sigset::default();
+        let mut libc_mask: libc::sigset_t = unsafe { std::mem::zeroed() };
+
+        unsafe {
+            libc::sigemptyset(&mut libc_mask);
+            libc::sigaddset(&mut libc_mask, libc::SIGINT);
+            libc::sigaddset(&mut libc_mask, libc::SIGUSR2);
+        }
+
+        let mask_len = mask.bytes.len();
+        mask.bytes.copy_from_slice(
+            unsafe {
+                std::slice::from_raw_parts(
+                    &libc_mask as *const _ as *const u8,
+                    mask_len,
+                )
+            }
+        );
+
+        SyscallEvent {
+            syscall_nr: syscalls::SYS_signalfd4,
+            pid: 103,
+            tid: 103,
+            return_value: 6,
+            data: SyscallEventData {
+                signalfd4: pinchy_common::Signalfd4Data {
+                    fd: 6,
+                    flags: libc::SFD_CLOEXEC | libc::SFD_NONBLOCK,
+                    has_mask: true,
+                    mask,
+                },
+            },
+        }
+    },
+    "103 signalfd4(fd: 6, mask: [SIGINT|SIGUSR2], flags: 0x80800 (SFD_CLOEXEC|SFD_NONBLOCK)) = 6 (fd)\n"
 );

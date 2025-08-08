@@ -99,6 +99,15 @@ its arguments:
     - `fstat` (needs to access struct stat data)
     - `getdents64` (needs to access directory entry structs)
 
+- General rule: only treat a syscall that takes pointer arguments as trivial if
+  we will not dereference those pointers and will print just the raw address.
+  If a pointer refers to a string (e.g., pathname), a simple typed value we
+  intend to show, an array/buffer, or a struct with meaningful fields, then we
+  should treat the syscall as complex and parse what we reasonably can.
+
+- Returning a file descriptor does not make a syscall trivial. Trivial vs
+  complex is decided solely by whether we parse pointed-to data.
+
 Always check the syscall's man page to understand what data its pointer
 arguments reference and whether that data needs special handling.
 
@@ -141,9 +150,10 @@ them in a file.
 ### 2. Determine Handler Type
 
 #### For Trivial Syscalls
-(No pointers, all arguments are plain integers):
+(No pointers, or pointers we will not dereference and will only print as raw
+addresses):
 
-- Add to the match in `pinchy-ebpf/src/main.rs` in `try_syscall_exit_trivial`
+- Add to the match in `pinchy-ebpf/src/main.rs` in `syscall_exit_trivial`
 - Add to the `TRIVIAL_SYSCALLS` array in `pinchy/src/server.rs` in
   `load_tailcalls()`
 

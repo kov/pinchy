@@ -2163,7 +2163,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_sigaltstack
         | syscalls::SYS_inotify_rm_watch
         | syscalls::SYS_swapon
-        | syscalls::SYS_swapoff => match return_value {
+        | syscalls::SYS_swapoff
+        | syscalls::SYS_timer_delete => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -2339,6 +2340,22 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_inotify_add_watch => match return_value {
             -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (wd)")),
+        },
+
+        syscalls::SYS_timer_create => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        syscalls::SYS_timer_getoverrun => match return_value {
+            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            n if n >= 0 => std::borrow::Cow::Owned(format!("{n} (overruns)")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        syscalls::SYS_timer_gettime | syscalls::SYS_timer_settime => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
 
         // Special syscalls with unique return value semantics
@@ -3566,6 +3583,53 @@ pub fn format_swapon_flags(flags: i32) -> String {
         format!("0x{flags:x}")
     } else {
         format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub async fn format_itimerspec(
+    sf: &mut SyscallFormatter<'_>,
+    itimerspec: pinchy_common::kernel_types::Itimerspec,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        arg!(sf, "it_interval:");
+        format_timespec(sf, itimerspec.it_interval).await?;
+        arg!(sf, "it_value:");
+        format_timespec(sf, itimerspec.it_value).await?;
+    });
+    Ok(())
+}
+
+pub fn format_sigev_notify(notify: i32) -> Cow<'static, str> {
+    match notify {
+        libc::SIGEV_NONE => Cow::Borrowed("SIGEV_NONE"),
+        libc::SIGEV_SIGNAL => Cow::Borrowed("SIGEV_SIGNAL"),
+        libc::SIGEV_THREAD => Cow::Borrowed("SIGEV_THREAD"),
+        #[cfg(target_os = "linux")]
+        libc::SIGEV_THREAD_ID => Cow::Borrowed("SIGEV_THREAD_ID"),
+        _ => Cow::Owned(format!("{notify}")),
+    }
+}
+
+pub fn format_timer_settime_flags(flags: i32) -> String {
+    if flags == 0 {
+        return "0".to_string();
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::TIMER_ABSTIME != 0 {
+        parts.push("TIMER_ABSTIME".to_string());
+    }
+
+    let remaining = flags & !libc::TIMER_ABSTIME;
+    if remaining != 0 {
+        parts.push(format!("0x{remaining:x}"));
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        parts.join("|")
     }
 }
 

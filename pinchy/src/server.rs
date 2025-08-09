@@ -428,6 +428,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_inotify_init,
         syscalls::SYS_inotify_init1,
         syscalls::SYS_inotify_rm_watch,
+        syscalls::SYS_timer_delete,
+        syscalls::SYS_timer_getoverrun,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -502,6 +504,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_clock_getres", syscalls::SYS_clock_getres),
         ("syscall_exit_clock_gettime", syscalls::SYS_clock_gettime),
         ("syscall_exit_clock_settime", syscalls::SYS_clock_settime),
+        ("syscall_exit_timer_create", syscalls::SYS_timer_create),
+        ("syscall_exit_timer_gettime", syscalls::SYS_timer_gettime),
+        ("syscall_exit_timer_settime", syscalls::SYS_timer_settime),
         ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
         ("syscall_exit_times", syscalls::SYS_times),
         ("syscall_exit_readv", syscalls::SYS_readv),

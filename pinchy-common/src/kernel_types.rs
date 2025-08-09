@@ -3,6 +3,12 @@
 
 use crate::{DATA_READ_SIZE, SMALL_READ_SIZE};
 
+// Sigevent notification method constants
+pub const SIGEV_SIGNAL: i32 = 0; // notify via signal
+pub const SIGEV_NONE: i32 = 1; // other notification: meaningless
+pub const SIGEV_THREAD: i32 = 2; // deliver via thread creation
+pub const SIGEV_THREAD_ID: i32 = 4; // deliver to thread (Linux-specific)
+
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Pollfd {
@@ -16,6 +22,70 @@ pub struct Pollfd {
 pub struct Timespec {
     pub seconds: i64,
     pub nanos: i64,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Itimerspec {
+    pub it_interval: Timespec, // Timer interval
+    pub it_value: Timespec,    // Initial expiration
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union Sigval {
+    pub sival_int: i32,
+    pub sival_ptr: u64, // void* represented as u64 for 64-bit architectures
+}
+
+impl Default for Sigval {
+    fn default() -> Self {
+        Sigval { sival_int: 0 }
+    }
+}
+
+impl core::fmt::Debug for Sigval {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // Safe to access sival_int as both variants have the same size or smaller
+        write!(f, "Sigval {{ sival_int: {} }}", unsafe { self.sival_int })
+    }
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union SigeventUn {
+    pub pad: [i32; 13],               // Padding array (largest member)
+    pub tid: i32,                     // Thread ID for SIGEV_THREAD_ID
+    pub sigev_thread: SigeventThread, // Thread function and attributes for SIGEV_THREAD
+}
+
+impl Default for SigeventUn {
+    fn default() -> Self {
+        SigeventUn { pad: [0; 13] }
+    }
+}
+
+impl core::fmt::Debug for SigeventUn {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // Safe to access tid as it's the smallest member
+        write!(f, "SigeventUn {{ tid: {} }}", unsafe { self.tid })
+    }
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct SigeventThread {
+    pub function: u64,  // void (*)(sigval_t) - function pointer
+    pub attribute: u64, // pthread_attr_t* - thread attributes pointer
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Sigevent {
+    pub sigev_value: Sigval,  // Signal value (union sigval)
+    pub sigev_signo: i32,     // Signal number
+    pub sigev_notify: i32, // Notification method (SIGEV_SIGNAL, SIGEV_NONE, SIGEV_THREAD, SIGEV_THREAD_ID)
+    pub sigev_un: SigeventUn, // Union containing different notification configurations
 }
 
 #[repr(C)]

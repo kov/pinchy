@@ -20,6 +20,23 @@ pub struct Timespec {
 
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
+pub struct Itimerspec {
+    pub it_interval: Timespec, // Timer interval
+    pub it_value: Timespec,    // Initial expiration
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Sigevent {
+    pub sigev_value: usize,   // Signal value
+    pub sigev_signo: i32,     // Signal number
+    pub sigev_notify: i32,    // Notification method
+    pub sigev_tid: i32,       // Thread ID for SIGEV_THREAD_ID
+    // Note: simplified structure - actual sigevent has union and padding
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
 pub struct EpollEvent {
     pub events: u32,
     pub data: usize,

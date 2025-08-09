@@ -2,11 +2,14 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::{Timespec, Timeval, Timex},
+    kernel_types::{Itimerspec, Sigevent, SigeventUn, Sigval, Timespec, Timeval, Timex},
     syscalls::{
         SYS_adjtimex, SYS_clock_adjtime, SYS_clock_getres, SYS_clock_gettime, SYS_clock_settime,
+        SYS_timer_create, SYS_timer_delete, SYS_timer_getoverrun, SYS_timer_gettime,
+        SYS_timer_settime,
     },
-    AdjtimexData, ClockAdjtimeData, ClockTimeData, SyscallEvent, SyscallEventData,
+    AdjtimexData, ClockAdjtimeData, ClockTimeData, SyscallEvent, SyscallEventData, TimerCreateData,
+    TimerDeleteData, TimerGetoverrunData, TimerGettimeData, TimerSettimeData,
 };
 
 use crate::syscall_test;
@@ -186,4 +189,162 @@ syscall_test!(
         }
     },
     "44 clock_settime(clockid: CLOCK_REALTIME, tp: { secs: 5, nanos: 0 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timer_create_with_sigevent,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timer_create,
+            pid: 1000,
+            tid: 1000,
+            return_value: 0,
+            data: SyscallEventData {
+                timer_create: TimerCreateData {
+                    clockid: libc::CLOCK_REALTIME,
+                    has_sevp: true,
+                    sevp: Sigevent {
+                        sigev_value: Sigval { sival_int: 0x12345678 },
+                        sigev_signo: libc::SIGUSR1,
+                        sigev_notify: libc::SIGEV_SIGNAL,
+                        sigev_un: SigeventUn::default(),
+                    },
+                },
+            },
+        }
+    },
+    "1000 timer_create(clockid: CLOCK_REALTIME, sevp: { sigev_notify: SIGEV_SIGNAL, sigev_signo: 10, sigev_value.sival_int: 305419896 }, timerid: <output>) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timer_create_no_sigevent,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timer_create,
+            pid: 1001,
+            tid: 1001,
+            return_value: 0,
+            data: SyscallEventData {
+                timer_create: TimerCreateData {
+                    clockid: libc::CLOCK_MONOTONIC,
+                    has_sevp: false,
+                    sevp: Sigevent::default(),
+                },
+            },
+        }
+    },
+    "1001 timer_create(clockid: CLOCK_MONOTONIC, sevp: NULL, timerid: <output>) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timer_delete_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timer_delete,
+            pid: 1002,
+            tid: 1002,
+            return_value: 0,
+            data: SyscallEventData {
+                timer_delete: TimerDeleteData {
+                    timerid: 0x12345678,
+                },
+            },
+        }
+    },
+    "1002 timer_delete(timerid: 0x12345678) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timer_getoverrun,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timer_getoverrun,
+            pid: 1003,
+            tid: 1003,
+            return_value: 5,
+            data: SyscallEventData {
+                timer_getoverrun: TimerGetoverrunData {
+                    timerid: 0x87654321,
+                },
+            },
+        }
+    },
+    "1003 timer_getoverrun(timerid: 0x87654321) = 5 (overruns)\n"
+);
+
+syscall_test!(
+    test_timer_gettime,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timer_gettime,
+            pid: 1004,
+            tid: 1004,
+            return_value: 0,
+            data: SyscallEventData {
+                timer_gettime: TimerGettimeData {
+                    timerid: 0xabcdef00,
+                    curr_value: Itimerspec {
+                        it_interval: Timespec { seconds: 1, nanos: 500_000_000 },
+                        it_value: Timespec { seconds: 0, nanos: 750_000_000 },
+                    },
+                },
+            },
+        }
+    },
+    "1004 timer_gettime(timerid: 0xabcdef00, curr_value: { it_interval: { secs: 1, nanos: 500000000 }, it_value: { secs: 0, nanos: 750000000 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timer_settime_absolute,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timer_settime,
+            pid: 1005,
+            tid: 1005,
+            return_value: 0,
+            data: SyscallEventData {
+                timer_settime: TimerSettimeData {
+                    timerid: 0xfedcba09,
+                    flags: 1, // TIMER_ABSTIME
+                    has_new_value: true,
+                    new_value: Itimerspec {
+                        it_interval: Timespec { seconds: 2, nanos: 0 },
+                        it_value: Timespec { seconds: 1675209600, nanos: 0 }, // Absolute time
+                    },
+                    has_old_value: true,
+                    old_value: Itimerspec {
+                        it_interval: Timespec { seconds: 1, nanos: 0 },
+                        it_value: Timespec { seconds: 0, nanos: 250_000_000 },
+                    },
+                },
+            },
+        }
+    },
+    "1005 timer_settime(timerid: 0xfedcba09, flags: TIMER_ABSTIME, new_value: { it_interval: { secs: 2, nanos: 0 }, it_value: { secs: 1675209600, nanos: 0 } }, old_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: 0, nanos: 250000000 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timer_settime_no_old_value,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timer_settime,
+            pid: 1006,
+            tid: 1006,
+            return_value: 0,
+            data: SyscallEventData {
+                timer_settime: TimerSettimeData {
+                    timerid: 0x13579bdf,
+                    flags: 0, // Relative time
+                    has_new_value: true,
+                    new_value: Itimerspec {
+                        it_interval: Timespec { seconds: 0, nanos: 100_000_000 },
+                        it_value: Timespec { seconds: 0, nanos: 50_000_000 },
+                    },
+                    has_old_value: false,
+                    old_value: Itimerspec::default(),
+                },
+            },
+        }
+    },
+    "1006 timer_settime(timerid: 0x13579bdf, flags: 0, new_value: { it_interval: { secs: 0, nanos: 100000000 }, it_value: { secs: 0, nanos: 50000000 } }, old_value: NULL) = 0 (success)\n"
 );

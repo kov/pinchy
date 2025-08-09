@@ -594,6 +594,85 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_timer_create => {
+            let data = unsafe { event.data.timer_create };
+
+            argf!(sf, "clockid: {}", format_clockid(data.clockid));
+
+            if data.has_sevp {
+                arg!(sf, "sevp:");
+                with_struct!(sf, {
+                    argf!(
+                        sf,
+                        "sigev_notify: {}",
+                        format_sigev_notify(data.sevp.sigev_notify)
+                    );
+                    argf!(sf, "sigev_signo: {}", data.sevp.sigev_signo);
+                    argf!(sf, "sigev_value.sival_int: {}", unsafe {
+                        data.sevp.sigev_value.sival_int
+                    });
+
+                    // Show thread ID only when using SIGEV_THREAD_ID.
+                    // TODO: parse the rest of the union?
+                    if data.sevp.sigev_notify == pinchy_common::kernel_types::SIGEV_THREAD_ID {
+                        argf!(sf, "sigev_notify_thread_id: {}", unsafe {
+                            data.sevp.sigev_un.tid
+                        });
+                    }
+                });
+            } else {
+                arg!(sf, "sevp: NULL");
+            }
+
+            arg!(sf, "timerid: <output>");
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_timer_delete => {
+            let data = unsafe { event.data.timer_delete };
+
+            argf!(sf, "timerid: {:#x}", data.timerid);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_timer_getoverrun => {
+            let data = unsafe { event.data.timer_getoverrun };
+
+            argf!(sf, "timerid: {:#x}", data.timerid);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_timer_gettime => {
+            let data = unsafe { event.data.timer_gettime };
+
+            argf!(sf, "timerid: {:#x}", data.timerid);
+            arg!(sf, "curr_value:");
+            format_itimerspec(&mut sf, data.curr_value).await?;
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_timer_settime => {
+            let data = unsafe { event.data.timer_settime };
+
+            argf!(sf, "timerid: {:#x}", data.timerid);
+            argf!(sf, "flags: {}", format_timer_settime_flags(data.flags));
+
+            if data.has_new_value {
+                arg!(sf, "new_value:");
+                format_itimerspec(&mut sf, data.new_value).await?;
+            } else {
+                arg!(sf, "new_value: NULL");
+            }
+
+            if data.has_old_value {
+                arg!(sf, "old_value:");
+                format_itimerspec(&mut sf, data.old_value).await?;
+            } else {
+                arg!(sf, "old_value: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getpriority => {
             let data = unsafe { event.data.getpriority };
 

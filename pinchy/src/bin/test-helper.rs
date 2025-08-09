@@ -72,6 +72,7 @@ fn main() -> anyhow::Result<()> {
             "filesystem_sync_test" => filesystem_sync_test(),
             "filesystem_syscalls_test" => filesystem_syscalls_test(),
             "eventfd_test" => eventfd_test(),
+            "timer_test" => timer_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1261,6 +1262,118 @@ fn eventfd_test() -> anyhow::Result<()> {
         libc::close(efd as i32);
         libc::close(efd_cloexec as i32);
         libc::close(efd_nonblock as i32);
+    }
+
+    Ok(())
+}
+
+fn timer_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test timer_create with different clock types and signal events
+        let mut timerid: libc::timer_t = std::ptr::null_mut();
+
+        // Test 1: timer_create with CLOCK_REALTIME and a sigevent structure
+        // We'll create the sigevent structure manually due to libc complexity
+        let mut sevp: libc::sigevent = std::mem::zeroed();
+        sevp.sigev_notify = libc::SIGEV_SIGNAL;
+        sevp.sigev_signo = libc::SIGUSR1;
+        // Set the value using raw bytes since sigval is a union
+        let value_ptr = &mut sevp.sigev_value as *mut libc::sigval as *mut i32;
+        *value_ptr = 42;
+
+        let result = libc::syscall(
+            libc::SYS_timer_create,
+            libc::CLOCK_REALTIME,
+            &sevp as *const libc::sigevent,
+            &mut timerid as *mut libc::timer_t,
+        );
+
+        if result != 0 {
+            bail!("timer_create failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: timer_settime with relative time
+        let new_value = libc::itimerspec {
+            it_interval: libc::timespec {
+                tv_sec: 1,
+                tv_nsec: 0,
+            }, // 1 second interval
+            it_value: libc::timespec {
+                tv_sec: 2,
+                tv_nsec: 500_000_000,
+            }, // 2.5 second initial
+        };
+
+        let mut old_value: libc::itimerspec = std::mem::zeroed();
+
+        let result = libc::syscall(
+            libc::SYS_timer_settime,
+            timerid,
+            0, // flags: 0 = relative time
+            &new_value as *const libc::itimerspec,
+            &mut old_value as *mut libc::itimerspec,
+        );
+
+        if result != 0 {
+            bail!("timer_settime failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 3: timer_gettime
+        let mut curr_value: libc::itimerspec = std::mem::zeroed();
+
+        let result = libc::syscall(
+            libc::SYS_timer_gettime,
+            timerid,
+            &mut curr_value as *mut libc::itimerspec,
+        );
+
+        if result != 0 {
+            bail!("timer_gettime failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 4: timer_getoverrun
+        let result = libc::syscall(libc::SYS_timer_getoverrun, timerid);
+
+        if result < 0 {
+            bail!(
+                "timer_getoverrun failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 5: timer_delete
+        let result = libc::syscall(libc::SYS_timer_delete, timerid);
+
+        if result != 0 {
+            bail!("timer_delete failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 6: timer_create with NULL sigevent (should use default SIGEV_SIGNAL/SIGALRM)
+        let mut timerid2: libc::timer_t = std::ptr::null_mut();
+
+        let result = libc::syscall(
+            libc::SYS_timer_create,
+            libc::CLOCK_MONOTONIC,
+            std::ptr::null::<libc::sigevent>(),
+            &mut timerid2 as *mut libc::timer_t,
+        );
+
+        if result != 0 {
+            bail!(
+                "timer_create with NULL sigevent failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Clean up the second timer
+        let result = libc::syscall(libc::SYS_timer_delete, timerid2);
+
+        if result != 0 {
+            bail!(
+                "timer_delete for second timer failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
     }
 
     Ok(())

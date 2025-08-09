@@ -210,6 +210,11 @@ pub union SyscallEventData {
     pub eventfd: EventfdData,
     pub eventfd2: Eventfd2Data,
     pub clock_time: ClockTimeData,
+    pub timer_create: TimerCreateData,
+    pub timer_delete: TimerDeleteData,
+    pub timer_gettime: TimerGettimeData,
+    pub timer_settime: TimerSettimeData,
+    pub timer_getoverrun: TimerGetoverrunData,
     pub statx: StatxData,
     pub capsetget: CapsetgetData,
     pub flock: FlockData,
@@ -2003,4 +2008,42 @@ impl Default for SwapoffData {
             pathname: [0; DATA_READ_SIZE],
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerCreateData {
+    pub clockid: i32,
+    pub has_sevp: bool,
+    pub sevp: crate::kernel_types::Sigevent,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerDeleteData {
+    pub timerid: usize, // timer_t is typically a pointer or handle
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerGettimeData {
+    pub timerid: usize,
+    pub curr_value: crate::kernel_types::Itimerspec,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerSettimeData {
+    pub timerid: usize,
+    pub flags: i32,
+    pub has_new_value: bool,
+    pub new_value: crate::kernel_types::Itimerspec,
+    pub has_old_value: bool,
+    pub old_value: crate::kernel_types::Itimerspec,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerGetoverrunData {
+    pub timerid: usize,
 }

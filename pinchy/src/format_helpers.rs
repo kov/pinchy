@@ -2161,7 +2161,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_mount_setattr
         | syscalls::SYS_move_mount
         | syscalls::SYS_sigaltstack
-        | syscalls::SYS_inotify_rm_watch => match return_value {
+        | syscalls::SYS_inotify_rm_watch
+        | syscalls::SYS_swapon
+        | syscalls::SYS_swapoff => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -3525,6 +3527,45 @@ pub fn format_ss_flags(flags: i32) -> Cow<'static, str> {
         Cow::Owned(format!("0x{flags:x}"))
     } else {
         Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+// Swap flags constants not available in libc, defined from uapi/linux/swap.h
+const SWAP_FLAG_PREFER: i32 = 0x8000;
+const SWAP_FLAG_PRIO_MASK: i32 = 0x7fff;
+const SWAP_FLAG_DISCARD: i32 = 0x10000;
+const SWAP_FLAG_DISCARD_ONCE: i32 = 0x20000;
+const SWAP_FLAG_DISCARD_PAGES: i32 = 0x40000;
+
+pub fn format_swapon_flags(flags: i32) -> String {
+    if flags == 0 {
+        return "0x0".to_string();
+    }
+
+    let mut parts = Vec::new();
+
+    // Check for SWAP_FLAG_PREFER and extract priority
+    if (flags & SWAP_FLAG_PREFER) != 0 {
+        let priority = flags & SWAP_FLAG_PRIO_MASK;
+        parts.push(format!("SWAP_FLAG_PREFER|PRIO={priority}"));
+    }
+
+    if (flags & SWAP_FLAG_DISCARD) != 0 {
+        parts.push("SWAP_FLAG_DISCARD".to_string());
+    }
+
+    if (flags & SWAP_FLAG_DISCARD_ONCE) != 0 {
+        parts.push("SWAP_FLAG_DISCARD_ONCE".to_string());
+    }
+
+    if (flags & SWAP_FLAG_DISCARD_PAGES) != 0 {
+        parts.push("SWAP_FLAG_DISCARD_PAGES".to_string());
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
     }
 }
 

@@ -461,3 +461,18 @@ syscall_handler!(move_mount, args, data, {
         let _ = bpf_probe_read_buf(to_pathname_ptr, &mut data.to_pathname);
     }
 });
+
+syscall_handler!(swapon, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    data.flags = args[1] as i32;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});
+
+syscall_handler!(swapoff, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+    }
+});

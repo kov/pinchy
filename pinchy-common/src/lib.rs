@@ -230,6 +230,8 @@ pub union SyscallEventData {
     pub sigaltstack: SigaltstackData,
     pub signalfd: SignalfdData,
     pub signalfd4: Signalfd4Data,
+    pub swapon: SwaponData,
+    pub swapoff: SwapoffData,
 }
 
 #[repr(C)]
@@ -1971,4 +1973,34 @@ pub struct Signalfd4Data {
     pub flags: i32,
     pub mask: crate::kernel_types::Sigset,
     pub has_mask: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SwaponData {
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub flags: i32,
+}
+
+impl Default for SwaponData {
+    fn default() -> Self {
+        Self {
+            pathname: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SwapoffData {
+    pub pathname: [u8; DATA_READ_SIZE],
+}
+
+impl Default for SwapoffData {
+    fn default() -> Self {
+        Self {
+            pathname: [0; DATA_READ_SIZE],
+        }
+    }
 }

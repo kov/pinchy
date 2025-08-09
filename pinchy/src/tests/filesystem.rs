@@ -1826,3 +1826,109 @@ syscall_test!(
     },
     "1012 move_mount(from_dfd: 5, from_pathname: \"/mnt/source\", to_dfd: 7, to_pathname: \"/mnt/target\", flags: 0x0) = -1 (error)\n"
 );
+
+syscall_test!(
+    parse_swapon_basic,
+    {
+        use pinchy_common::SwaponData;
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/tmp/swapfile\0";
+        pathname[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_swapon,
+            pid: 1013,
+            tid: 1013,
+            return_value: 0,
+            data: SyscallEventData {
+                swapon: SwaponData { pathname, flags: 0 },
+            },
+        }
+    },
+    "1013 swapon(pathname: \"/tmp/swapfile\", flags: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_swapon_with_flags,
+    {
+        use pinchy_common::SwaponData;
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/dev/sda2\0";
+        pathname[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_swapon,
+            pid: 1014,
+            tid: 1014,
+            return_value: 0,
+            data: SyscallEventData {
+                swapon: SwaponData {
+                    pathname,
+                    flags: 0x8005, // SWAP_FLAG_PREFER | priority 5
+                },
+            },
+        }
+    },
+    "1014 swapon(pathname: \"/dev/sda2\", flags: 0x8005 (SWAP_FLAG_PREFER|PRIO=5)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_swapon_error,
+    {
+        use pinchy_common::SwaponData;
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/tmp/badfile\0";
+        pathname[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_swapon,
+            pid: 1015,
+            tid: 1015,
+            return_value: -1,
+            data: SyscallEventData {
+                swapon: SwaponData {
+                    pathname,
+                    flags: 0x10000, // SWAP_FLAG_DISCARD
+                },
+            },
+        }
+    },
+    "1015 swapon(pathname: \"/tmp/badfile\", flags: 0x10000 (SWAP_FLAG_DISCARD)) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_swapoff_success,
+    {
+        use pinchy_common::SwapoffData;
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/tmp/swapfile\0";
+        pathname[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_swapoff,
+            pid: 1016,
+            tid: 1016,
+            return_value: 0,
+            data: SyscallEventData {
+                swapoff: SwapoffData { pathname },
+            },
+        }
+    },
+    "1016 swapoff(pathname: \"/tmp/swapfile\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_swapoff_error,
+    {
+        use pinchy_common::SwapoffData;
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/dev/sda2\0";
+        pathname[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_swapoff,
+            pid: 1017,
+            tid: 1017,
+            return_value: -1,
+            data: SyscallEventData {
+                swapoff: SwapoffData { pathname },
+            },
+        }
+    },
+    "1017 swapoff(pathname: \"/dev/sda2\") = -1 (error)\n"
+);

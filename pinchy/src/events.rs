@@ -2554,6 +2554,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "flags: 0x{:x}", data.flags);
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_swapon => {
+            let data = unsafe { event.data.swapon };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: {}", format_swapon_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_swapoff => {
+            let data = unsafe { event.data.swapoff };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

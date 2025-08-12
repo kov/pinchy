@@ -180,7 +180,7 @@ syscall_test!(
         statfs_data.statfs.f_flags = (libc::ST_NOEXEC | libc::ST_RDONLY) as i64;
         event
     },
-    &"44 statfs(pathname: \"/mnt/data\", buf: { type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x9 (ST_RDONLY|ST_NOEXEC) }) = 0\n".to_string()
+    &"44 statfs(pathname: \"/mnt/data\", buf: { type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x9 (ST_RDONLY|ST_NOEXEC) }) = 0 (success)\n".to_string()
 );
 
 syscall_test!(
@@ -488,7 +488,7 @@ syscall_test!(
             data: pinchy_common::SyscallEventData { readlinkat },
         }
     },
-    &"5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 0\n".to_string()
+    &"5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 0 (success)\n".to_string()
 );
 
 syscall_test!(
@@ -654,7 +654,7 @@ syscall_test!(
             },
         }
     },
-    "66 chdir(path: \"/home/user/newdir\") = 0\n"
+    "66 chdir(path: \"/home/user/newdir\") = 0 (success)\n"
 );
 syscall_test!(
     parse_chdir_error,

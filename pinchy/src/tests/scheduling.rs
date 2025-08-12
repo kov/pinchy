@@ -66,7 +66,7 @@ syscall_test!(
             },
         }
     },
-    "1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: 0, signature: 0xabcdef12, rseq content: { cpu_id_start: 0, cpu_id: -1, rseq_cs: { version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }, flags: 0, node_id: 0, mm_cid: 0 }) = 0\n"
+    "1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: 0, signature: 0xabcdef12, rseq content: { cpu_id_start: 0, cpu_id: -1, rseq_cs: { version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }, flags: 0, node_id: 0, mm_cid: 0 }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -129,7 +129,7 @@ syscall_test!(
             },
         }
     },
-    "1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: RSEQ_FLAG_UNREGISTER, signature: 0xabcdef12, rseq content: { cpu_id_start: 0, cpu_id: 2, rseq_cs: { version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }, flags: 0, node_id: 0, mm_cid: 0 }) = 0\n"
+    "1234 rseq(rseq: 0x7f1234560000, rseq_len: 32, flags: RSEQ_FLAG_UNREGISTER, signature: 0xabcdef12, rseq content: { cpu_id_start: 0, cpu_id: 2, rseq_cs: { version: 0, flags: RSEQ_CS_FLAG_NO_RESTART_ON_PREEMPT, start_ip: 0x7f1234580000, post_commit_offset: 0x100, abort_ip: 0x7f1234590000 }, flags: 0, node_id: 0, mm_cid: 0 }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -181,7 +181,7 @@ syscall_test!(
             },
         }
     },
-    "2468 sched_getscheduler(pid: 1234) = 0\n"
+    "2468 sched_getscheduler(pid: 1234) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -251,7 +251,7 @@ syscall_test!(
             },
         }
     },
-    "8642 sched_get_priority_max(policy: SCHED_OTHER) = 0\n"
+    "8642 sched_get_priority_max(policy: SCHED_OTHER) = 0 (success)\n"
 );
 
 syscall_test!(

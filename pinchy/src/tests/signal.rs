@@ -35,7 +35,7 @@ syscall_test!(
             },
         }
     },
-    "1234 rt_sigprocmask(how: SIG_BLOCK, set: 0x7fff12345678, oldset: 0x7fff87654321, sigsetsize: 8) = 0\n"
+    "1234 rt_sigprocmask(how: SIG_BLOCK, set: 0x7fff12345678, oldset: 0x7fff87654321, sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -97,7 +97,7 @@ syscall_test!(
             },
         }
     },
-    "5678 rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1|SIGTERM], oldset: [SIGINT], sigsetsize: 8) = 0\n"
+    "5678 rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1|SIGTERM], oldset: [SIGINT], sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -122,7 +122,7 @@ syscall_test!(
             },
         }
     },
-    "5678 rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: 0x7fff11223344, sigsetsize: 8) = 0\n"
+    "5678 rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: 0x7fff11223344, sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -147,7 +147,7 @@ syscall_test!(
             },
         }
     },
-    "9999 rt_sigprocmask(how: SIG_UNBLOCK, set: 0x7fffaabbccdd, oldset: NULL, sigsetsize: 8) = 0\n"
+    "9999 rt_sigprocmask(how: SIG_UNBLOCK, set: 0x7fffaabbccdd, oldset: NULL, sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -168,7 +168,7 @@ syscall_test!(
             },
         }
     },
-    "2468 rt_sigaction(signum: SIGTERM, act: 0x7fff12345678, oldact: 0x7fff87654321, sigsetsize: 8) = 0\n"
+    "2468 rt_sigaction(signum: SIGTERM, act: 0x7fff12345678, oldact: 0x7fff87654321, sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -189,7 +189,7 @@ syscall_test!(
             },
         }
     },
-    "1357 rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: 0x7fff11223344, sigsetsize: 8) = 0\n"
+    "1357 rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: 0x7fff11223344, sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -210,7 +210,7 @@ syscall_test!(
             },
         }
     },
-    "8642 rt_sigaction(signum: SIGRT1, act: 0x7fffaabbccdd, oldact: 0x0, sigsetsize: 8) = 0\n"
+    "8642 rt_sigaction(signum: SIGRT1, act: 0x7fffaabbccdd, oldact: 0x0, sigsetsize: 8) = 0 (success)\n"
 );
 
 syscall_test!(

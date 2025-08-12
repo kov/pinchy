@@ -377,7 +377,7 @@ syscall_test!(
             },
         }
     },
-    "42 fcntl(fd: 5, cmd: F_SETFL, arg: 0x800) = 0\n"
+    "42 fcntl(fd: 5, cmd: F_SETFL, arg: 0x800) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -417,7 +417,7 @@ syscall_test!(
         }
     },
     &format!(
-        "1 pipe2(pipefd: [ 3, 4 ], flags: 0x{:x}) = 0\n",
+        "1 pipe2(pipefd: [ 3, 4 ], flags: 0x{:x}) = 0 (success)\n",
         libc::O_CLOEXEC
     )
 );

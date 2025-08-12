@@ -132,10 +132,10 @@ fn rt_sig() {
 
     // Client's output - we expect pretty-printed signal sets
     let expected_output = escaped_regex(indoc! {r#"
-        PID rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1], oldset: [], sigsetsize: 8) = 0
-        PID rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: [SIGUSR1], sigsetsize: 8) = 0
-        PID rt_sigprocmask(how: SIG_UNBLOCK, set: [SIGUSR1], oldset: NULL, sigsetsize: 8) = 0
-        PID rt_sigprocmask(how: SIG_SETMASK, set: [], oldset: NULL, sigsetsize: 8) = 0
+        PID rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1], oldset: [], sigsetsize: 8) = 0 (success)
+        PID rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: [SIGUSR1], sigsetsize: 8) = 0 (success)
+        PID rt_sigprocmask(how: SIG_UNBLOCK, set: [SIGUSR1], oldset: NULL, sigsetsize: 8) = 0 (success)
+        PID rt_sigprocmask(how: SIG_SETMASK, set: [], oldset: NULL, sigsetsize: 8) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -161,9 +161,9 @@ fn rt_sigaction_realtime() {
 
     // Client's output - we expect rt_sigaction calls with SIGRT1
     let expected_output = escaped_regex(indoc! {r#"
-        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0
-        PID rt_sigaction(signum: SIGRT1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0
-        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0
+        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0 (success)
+        PID rt_sigaction(signum: SIGRT1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0 (success)
+        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -189,9 +189,9 @@ fn rt_sigaction_standard() {
 
     // Client's output - we expect rt_sigaction calls with SIGUSR1
     let expected_output = escaped_regex(indoc! {r#"
-        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0
-        PID rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0
-        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0
+        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0 (success)
+        PID rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0 (success)
+        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -218,8 +218,8 @@ fn fcntl_syscalls() {
     // Client's output - we expect several fcntl calls
     let expected_output = escaped_regex(indoc! {r#"
         PID fcntl(fd: 3, cmd: F_GETFL, arg: 0x0) = NUMBER
-        PID fcntl(fd: 3, cmd: F_GETFD, arg: 0x0) = 0
-        PID fcntl(fd: 3, cmd: F_SETFD, arg: 0x1) = 0
+        PID fcntl(fd: 3, cmd: F_GETFD, arg: 0x0) = 0 (success)
+        PID fcntl(fd: 3, cmd: F_SETFD, arg: 0x1) = 0 (success)
         PID fcntl(fd: 3, cmd: F_DUPFD, arg: 0xa) = 10
         PID fcntl(fd: 3, cmd: F_DUPFD_CLOEXEC, arg: 0x14) = 20
     "#});
@@ -275,7 +275,7 @@ fn fchdir_syscall() {
     let handle = run_workload(&["fchdir"], "fchdir_test");
 
     let expected_output = escaped_regex(indoc! {r#"
-        PID fchdir(fd: 3) = 0
+        PID fchdir(fd: 3) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -678,7 +678,7 @@ fn scheduler_syscalls() {
 
     // Expected output - sched_getscheduler and sched_setscheduler calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID sched_getscheduler(pid: 0) = 0
+        PID sched_getscheduler(pid: 0) = 0 (success)
         PID sched_setscheduler(pid: 0, policy: SCHED_OTHER, param: { sched_priority: 0 }) = 0 (success)
     "#});
 

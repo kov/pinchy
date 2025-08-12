@@ -154,7 +154,7 @@ syscall_test!(
             },
         }
     },
-    "7777 shmctl(shmid: 55, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345678, uid: 1000, gid: 1000, cuid: 1000, cgid: 1000, mode: 0o666 (rw-rw-rw-), seq: 42 }, segsz: 4096, atime: 1620000000, dtime: 1620001000, ctime: 1620002000, cpid: 1234, lpid: 5678, nattch: 2 }) = 0\n"
+    "7777 shmctl(shmid: 55, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345678, uid: 1000, gid: 1000, cuid: 1000, cgid: 1000, mode: 0o666 (rw-rw-rw-), seq: 42 }, segsz: 4096, atime: 1620000000, dtime: 1620001000, ctime: 1620002000, cpid: 1234, lpid: 5678, nattch: 2 }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -277,7 +277,7 @@ syscall_test!(
             },
         }
     },
-    "10404 msgctl(msqid: 555, cmd: IPC_STAT, buf: { ipc_perm { key: 0x123456, uid: 1001, gid: 1002, cuid: 1003, cgid: 1004, mode: 0o600 (rw-------), seq: 99 }, stime: 1620000000, rtime: 1620001000, ctime: 1620002000, cbytes: 256, qnum: 3, qbytes: 8192, lspid: 4321, lrpid: 8765 }) = 0\n"
+    "10404 msgctl(msqid: 555, cmd: IPC_STAT, buf: { ipc_perm { key: 0x123456, uid: 1001, gid: 1002, cuid: 1003, cgid: 1004, mode: 0o600 (rw-------), seq: 99 }, stime: 1620000000, rtime: 1620001000, ctime: 1620002000, cbytes: 256, qnum: 3, qbytes: 8192, lspid: 4321, lrpid: 8765 }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -401,7 +401,7 @@ syscall_test!(
             },
         }
     },
-    "20005 semctl(semid: 42, semnum: 1, op: SETVAL, val: 123) = 0\n"
+    "20005 semctl(semid: 42, semnum: 1, op: SETVAL, val: 123) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -424,7 +424,7 @@ syscall_test!(
             },
         }
     },
-    "20006 semctl(semid: 99, semnum: 0, op: SETALL, array: 0x7fff4000) = 0\n"
+    "20006 semctl(semid: 99, semnum: 0, op: SETALL, array: 0x7fff4000) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -463,7 +463,7 @@ syscall_test!(
             },
         }
     },
-    "20007 semctl(semid: 77, semnum: 0, op: IPC_STAT, buf: { ipc_perm { key: 0xabcdef, uid: 1000, gid: 1000, cuid: 1000, cgid: 1000, mode: 0o600 (rw-------), seq: 7 }, otime: 1620000000, ctime: 1620001000, nsems: 4 }) = 0\n"
+    "20007 semctl(semid: 77, semnum: 0, op: IPC_STAT, buf: { ipc_perm { key: 0xabcdef, uid: 1000, gid: 1000, cuid: 1000, cgid: 1000, mode: 0o600 (rw-------), seq: 7 }, otime: 1620000000, ctime: 1620001000, nsems: 4 }) = 0 (success)\n"
 );
 
 syscall_test!(

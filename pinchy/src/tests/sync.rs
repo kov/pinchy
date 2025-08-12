@@ -32,7 +32,7 @@ syscall_test!(
             },
         }
     },
-    "22 futex(uaddr: 0xbeef, op: 10, val: 11, uaddr2: 0xbeef2, val3: 12, timeout: { secs: 13, nanos: 14 }) = 0\n"
+    "22 futex(uaddr: 0xbeef, op: 10, val: 11, uaddr2: 0xbeef2, val3: 12, timeout: { secs: 13, nanos: 14 }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -51,7 +51,7 @@ syscall_test!(
             },
         }
     },
-    "1234 set_robust_list(head: 0x7f1234560000, len: 24) = 0\n"
+    "1234 set_robust_list(head: 0x7f1234560000, len: 24) = 0 (success)\n"
 );
 
 syscall_test!(

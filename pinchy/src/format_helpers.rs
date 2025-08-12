@@ -2380,6 +2380,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         _ => {
             if return_value < 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            } else if return_value == 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (success)"))
             } else {
                 std::borrow::Cow::Owned(return_value.to_string())
             }

@@ -7,6 +7,32 @@ use pinchy_common::kernel_types::{Stat, Timespec};
 
 use crate::{arg, argf, formatting::SyscallFormatter, raw, with_array, with_struct};
 
+// FS syscall constants - these are not available in libc, defined from uapi/linux/mount.h
+pub mod fs_constants {
+    // fsopen() flags
+    pub const FSOPEN_CLOEXEC: u32 = 0x00000001;
+
+    // fsconfig commands
+    pub const FSCONFIG_SET_FLAG: u32 = 0;
+    pub const FSCONFIG_SET_STRING: u32 = 1;
+    pub const FSCONFIG_SET_BINARY: u32 = 2;
+    pub const FSCONFIG_SET_PATH: u32 = 3;
+    pub const FSCONFIG_SET_PATH_EMPTY: u32 = 4;
+    pub const FSCONFIG_SET_FD: u32 = 5;
+    pub const FSCONFIG_CMD_CREATE: u32 = 6;
+    pub const FSCONFIG_CMD_RECONFIGURE: u32 = 7;
+    pub const FSCONFIG_CMD_CREATE_EXCL: u32 = 8;
+
+    // fsmount() flags
+    pub const FSMOUNT_CLOEXEC: u32 = 0x00000001;
+
+    // fspick() flags
+    pub const FSPICK_CLOEXEC: u32 = 0x00000001;
+    pub const FSPICK_SYMLINK_NOFOLLOW: u32 = 0x00000002;
+    pub const FSPICK_NO_AUTOMOUNT: u32 = 0x00000004;
+    pub const FSPICK_EMPTY_PATH: u32 = 0x00000008;
+}
+
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     let mut strs = vec![];
 
@@ -2019,7 +2045,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_memfd_create
         | syscalls::SYS_memfd_secret
         | syscalls::SYS_userfaultfd
-        | syscalls::SYS_open_tree => {
+        | syscalls::SYS_open_tree
+        | syscalls::SYS_fsopen
+        | syscalls::SYS_fsmount
+        | syscalls::SYS_fspick => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
             } else {
@@ -3632,6 +3661,156 @@ pub fn format_timer_settime_flags(flags: i32) -> String {
         format!("0x{flags:x}")
     } else {
         parts.join("|")
+    }
+}
+
+pub fn format_fsopen_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & fs_constants::FSOPEN_CLOEXEC != 0 {
+        parts.push("FSOPEN_CLOEXEC");
+    }
+
+    let remaining = flags & !fs_constants::FSOPEN_CLOEXEC;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_fsconfig_cmd(cmd: u32) -> Cow<'static, str> {
+    match cmd {
+        fs_constants::FSCONFIG_SET_FLAG => Cow::Borrowed("FSCONFIG_SET_FLAG"),
+        fs_constants::FSCONFIG_SET_STRING => Cow::Borrowed("FSCONFIG_SET_STRING"),
+        fs_constants::FSCONFIG_SET_BINARY => Cow::Borrowed("FSCONFIG_SET_BINARY"),
+        fs_constants::FSCONFIG_SET_PATH => Cow::Borrowed("FSCONFIG_SET_PATH"),
+        fs_constants::FSCONFIG_SET_PATH_EMPTY => Cow::Borrowed("FSCONFIG_SET_PATH_EMPTY"),
+        fs_constants::FSCONFIG_SET_FD => Cow::Borrowed("FSCONFIG_SET_FD"),
+        fs_constants::FSCONFIG_CMD_CREATE => Cow::Borrowed("FSCONFIG_CMD_CREATE"),
+        fs_constants::FSCONFIG_CMD_RECONFIGURE => Cow::Borrowed("FSCONFIG_CMD_RECONFIGURE"),
+        fs_constants::FSCONFIG_CMD_CREATE_EXCL => Cow::Borrowed("FSCONFIG_CMD_CREATE_EXCL"),
+        _ => Cow::Owned(format!("{cmd} (unknown)")),
+    }
+}
+
+pub fn format_fsmount_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & fs_constants::FSMOUNT_CLOEXEC != 0 {
+        parts.push("FSMOUNT_CLOEXEC");
+    }
+
+    let remaining = flags & !fs_constants::FSMOUNT_CLOEXEC;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_fsmount_attr_flags(attr_flags: u32) -> Cow<'static, str> {
+    if attr_flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if attr_flags & libc::MOUNT_ATTR_RDONLY as u32 != 0 {
+        parts.push("MOUNT_ATTR_RDONLY");
+    }
+    if attr_flags & libc::MOUNT_ATTR_NOSUID as u32 != 0 {
+        parts.push("MOUNT_ATTR_NOSUID");
+    }
+    if attr_flags & libc::MOUNT_ATTR_NODEV as u32 != 0 {
+        parts.push("MOUNT_ATTR_NODEV");
+    }
+    if attr_flags & libc::MOUNT_ATTR_NOEXEC as u32 != 0 {
+        parts.push("MOUNT_ATTR_NOEXEC");
+    }
+    if attr_flags & libc::MOUNT_ATTR_NOATIME as u32 != 0 {
+        parts.push("MOUNT_ATTR_NOATIME");
+    }
+    if attr_flags & libc::MOUNT_ATTR_STRICTATIME as u32 != 0 {
+        parts.push("MOUNT_ATTR_STRICTATIME");
+    }
+    if attr_flags & libc::MOUNT_ATTR_NODIRATIME as u32 != 0 {
+        parts.push("MOUNT_ATTR_NODIRATIME");
+    }
+    if attr_flags & libc::MOUNT_ATTR_IDMAP as u32 != 0 {
+        parts.push("MOUNT_ATTR_IDMAP");
+    }
+    if attr_flags & libc::MOUNT_ATTR_NOSYMFOLLOW as u32 != 0 {
+        parts.push("MOUNT_ATTR_NOSYMFOLLOW");
+    }
+
+    let known_flags = libc::MOUNT_ATTR_RDONLY as u32
+        | libc::MOUNT_ATTR_NOSUID as u32
+        | libc::MOUNT_ATTR_NODEV as u32
+        | libc::MOUNT_ATTR_NOEXEC as u32
+        | libc::MOUNT_ATTR_NOATIME as u32
+        | libc::MOUNT_ATTR_STRICTATIME as u32
+        | libc::MOUNT_ATTR_NODIRATIME as u32
+        | libc::MOUNT_ATTR_IDMAP as u32
+        | libc::MOUNT_ATTR_NOSYMFOLLOW as u32;
+    let remaining = attr_flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{attr_flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", attr_flags, parts.join("|")))
+    }
+}
+
+pub fn format_fspick_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & fs_constants::FSPICK_CLOEXEC != 0 {
+        parts.push("FSPICK_CLOEXEC");
+    }
+    if flags & fs_constants::FSPICK_SYMLINK_NOFOLLOW != 0 {
+        parts.push("FSPICK_SYMLINK_NOFOLLOW");
+    }
+    if flags & fs_constants::FSPICK_NO_AUTOMOUNT != 0 {
+        parts.push("FSPICK_NO_AUTOMOUNT");
+    }
+    if flags & fs_constants::FSPICK_EMPTY_PATH != 0 {
+        parts.push("FSPICK_EMPTY_PATH");
+    }
+
+    let known_flags = fs_constants::FSPICK_CLOEXEC | fs_constants::FSPICK_SYMLINK_NOFOLLOW | fs_constants::FSPICK_NO_AUTOMOUNT | fs_constants::FSPICK_EMPTY_PATH;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
     }
 }
 

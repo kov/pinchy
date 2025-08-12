@@ -2648,6 +2648,58 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_fstatfs => {
+            let data = unsafe { event.data.fstatfs };
+
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "buf:");
+            if event.return_value == 0 {
+                with_struct!(sf, {
+                    format_statfs(&mut sf, &data.statfs).await?;
+                });
+            } else {
+                raw!(sf, " <unavailable>");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fsopen => {
+            let data = unsafe { event.data.fsopen };
+
+            argf!(sf, "fsname: {}", format_path(&data.fsname, false));
+            argf!(sf, "flags: {}", format_fsopen_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fsconfig => {
+            let data = unsafe { event.data.fsconfig };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "cmd: {}", format_fsconfig_cmd(data.cmd));
+            argf!(sf, "key: {}", format_path(&data.key, false));
+            argf!(sf, "value: {}", format_path(&data.value, false));
+            argf!(sf, "aux: {}", data.aux);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fsmount => {
+            let data = unsafe { event.data.fsmount };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "flags: {}", format_fsmount_flags(data.flags));
+            argf!(sf, "attr_flags: {}", format_fsmount_attr_flags(data.attr_flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fspick => {
+            let data = unsafe { event.data.fspick };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "path: {}", format_path(&data.path, false));
+            argf!(sf, "flags: {}", format_fspick_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

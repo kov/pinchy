@@ -1932,3 +1932,228 @@ syscall_test!(
     },
     "1017 swapoff(pathname: \"/dev/sda2\") = -1 (error)\n"
 );
+
+syscall_test!(
+    parse_fstatfs_success,
+    {
+        use pinchy_common::{kernel_types::Statfs, FstatfsData};
+        let mut event = SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fstatfs,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                fstatfs: FstatfsData {
+                    fd: 5,
+                    statfs: Statfs::default(),
+                },
+            },
+        };
+        let statfs_data = unsafe { &mut event.data.fstatfs.statfs };
+        statfs_data.f_type = 0xef53; // ext2/ext3/ext4
+        statfs_data.f_bsize = 4096;
+        statfs_data.f_blocks = 1048576;
+        statfs_data.f_bfree = 524288;
+        statfs_data.f_bavail = 524288;
+        event
+    },
+    "123 fstatfs(fd: 5, buf: { type: EXT4_SUPER_MAGIC (0xef53), block_size: 4096, blocks: 1048576, blocks_free: 524288, blocks_available: 524288, files: 0, files_free: 0, fsid: [0, 0], name_max: 0, fragment_size: 0, mount_flags: 0x0 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fsopen_success,
+    {
+        use pinchy_common::FsopenData;
+        let mut fsname = [0u8; DATA_READ_SIZE];
+        let name_bytes = b"ext4\0";
+        fsname[..name_bytes.len()].copy_from_slice(name_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fsopen,
+            pid: 456,
+            tid: 456,
+            return_value: 7,
+            data: SyscallEventData {
+                fsopen: FsopenData {
+                    fsname,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "456 fsopen(fsname: \"ext4\", flags: 0) = 7 (fd)\n"
+);
+
+syscall_test!(
+    parse_fsconfig_success,
+    {
+        use pinchy_common::FsconfigData;
+        let mut key = [0u8; MEDIUM_READ_SIZE];
+        let mut value = [0u8; DATA_READ_SIZE];
+        let key_bytes = b"source\0";
+        let value_bytes = b"/dev/sda1\0";
+        key[..key_bytes.len()].copy_from_slice(key_bytes);
+        value[..value_bytes.len()].copy_from_slice(value_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fsconfig,
+            pid: 789,
+            tid: 789,
+            return_value: 0,
+            data: SyscallEventData {
+                fsconfig: FsconfigData {
+                    fd: 7,
+                    cmd: 0,
+                    key,
+                    value,
+                    aux: 0,
+                },
+            },
+        }
+    },
+    "789 fsconfig(fd: 7, cmd: FSCONFIG_SET_FLAG, key: \"source\", value: \"/dev/sda1\", aux: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fsmount_success,
+    {
+        use pinchy_common::FsmountData;
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fsmount,
+            pid: 101,
+            tid: 101,
+            return_value: 8,
+            data: SyscallEventData {
+                fsmount: FsmountData {
+                    fd: 7,
+                    flags: 0,
+                    attr_flags: 0,
+                },
+            },
+        }
+    },
+    "101 fsmount(fd: 7, flags: 0, attr_flags: 0) = 8 (fd)\n"
+);
+
+syscall_test!(
+    parse_fspick_success,
+    {
+        use pinchy_common::FspickData;
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/mnt/test\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fspick,
+            pid: 202,
+            tid: 202,
+            return_value: 9,
+            data: SyscallEventData {
+                fspick: FspickData {
+                    dfd: -100, // AT_FDCWD
+                    path,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "202 fspick(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0) = 9 (fd)\n"
+);
+
+syscall_test!(
+    parse_fsopen_with_flags,
+    {
+        use pinchy_common::FsopenData;
+        use crate::format_helpers::fs_constants;
+        let mut fsname = [0u8; DATA_READ_SIZE];
+        let name_bytes = b"ext4\0";
+        fsname[..name_bytes.len()].copy_from_slice(name_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fsopen,
+            pid: 456,
+            tid: 456,
+            return_value: 7,
+            data: SyscallEventData {
+                fsopen: FsopenData {
+                    fsname,
+                    flags: fs_constants::FSOPEN_CLOEXEC,
+                },
+            },
+        }
+    },
+    "456 fsopen(fsname: \"ext4\", flags: 0x1 (FSOPEN_CLOEXEC)) = 7 (fd)\n"
+);
+
+syscall_test!(
+    parse_fsconfig_with_string_cmd,
+    {
+        use pinchy_common::FsconfigData;
+        use crate::format_helpers::fs_constants;
+        let mut key = [0u8; MEDIUM_READ_SIZE];
+        let mut value = [0u8; DATA_READ_SIZE];
+        let key_bytes = b"source\0";
+        let value_bytes = b"/dev/sda1\0";
+        key[..key_bytes.len()].copy_from_slice(key_bytes);
+        value[..value_bytes.len()].copy_from_slice(value_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fsconfig,
+            pid: 789,
+            tid: 789,
+            return_value: 0,
+            data: SyscallEventData {
+                fsconfig: FsconfigData {
+                    fd: 7,
+                    cmd: fs_constants::FSCONFIG_SET_STRING,
+                    key,
+                    value,
+                    aux: 0,
+                },
+            },
+        }
+    },
+    "789 fsconfig(fd: 7, cmd: FSCONFIG_SET_STRING, key: \"source\", value: \"/dev/sda1\", aux: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fsmount_with_flags,
+    {
+        use pinchy_common::FsmountData;
+        use crate::format_helpers::fs_constants;
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fsmount,
+            pid: 101,
+            tid: 101,
+            return_value: 8,
+            data: SyscallEventData {
+                fsmount: FsmountData {
+                    fd: 7,
+                    flags: fs_constants::FSMOUNT_CLOEXEC,
+                    attr_flags: libc::MOUNT_ATTR_RDONLY as u32 | libc::MOUNT_ATTR_NOSUID as u32,
+                },
+            },
+        }
+    },
+    "101 fsmount(fd: 7, flags: 0x1 (FSMOUNT_CLOEXEC), attr_flags: 0x3 (MOUNT_ATTR_RDONLY|MOUNT_ATTR_NOSUID)) = 8 (fd)\n"
+);
+
+syscall_test!(
+    parse_fspick_with_flags,
+    {
+        use pinchy_common::FspickData;
+        use crate::format_helpers::fs_constants;
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/mnt/test\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_fspick,
+            pid: 202,
+            tid: 202,
+            return_value: 9,
+            data: SyscallEventData {
+                fspick: FspickData {
+                    dfd: -100, // AT_FDCWD
+                    path,
+                    flags: fs_constants::FSPICK_CLOEXEC | fs_constants::FSPICK_SYMLINK_NOFOLLOW,
+                },
+            },
+        }
+    },
+    "202 fspick(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0x3 (FSPICK_CLOEXEC|FSPICK_SYMLINK_NOFOLLOW)) = 9 (fd)\n"
+);

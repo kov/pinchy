@@ -237,6 +237,11 @@ pub union SyscallEventData {
     pub signalfd4: Signalfd4Data,
     pub swapon: SwaponData,
     pub swapoff: SwapoffData,
+    pub fstatfs: FstatfsData,
+    pub fsopen: FsopenData,
+    pub fsconfig: FsconfigData,
+    pub fsmount: FsmountData,
+    pub fspick: FspickData,
 }
 
 #[repr(C)]
@@ -2046,4 +2051,94 @@ pub struct TimerSettimeData {
 #[derive(Clone, Copy, Default)]
 pub struct TimerGetoverrunData {
     pub timerid: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FstatfsData {
+    pub fd: i32,
+    pub statfs: kernel_types::Statfs,
+}
+
+impl Default for FstatfsData {
+    fn default() -> Self {
+        Self {
+            fd: 0,
+            statfs: kernel_types::Statfs::default(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FsopenData {
+    pub fsname: [u8; DATA_READ_SIZE],
+    pub flags: u32,
+}
+
+impl Default for FsopenData {
+    fn default() -> Self {
+        Self {
+            fsname: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FsconfigData {
+    pub fd: i32,
+    pub cmd: u32,
+    pub key: [u8; MEDIUM_READ_SIZE],
+    pub value: [u8; DATA_READ_SIZE],
+    pub aux: i32,
+}
+
+impl Default for FsconfigData {
+    fn default() -> Self {
+        Self {
+            fd: 0,
+            cmd: 0,
+            key: [0; MEDIUM_READ_SIZE],
+            value: [0; DATA_READ_SIZE],
+            aux: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FsmountData {
+    pub fd: i32,
+    pub flags: u32,
+    pub attr_flags: u32,
+}
+
+impl Default for FsmountData {
+    fn default() -> Self {
+        Self {
+            fd: 0,
+            flags: 0,
+            attr_flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FspickData {
+    pub dfd: i32,
+    pub path: [u8; DATA_READ_SIZE],
+    pub flags: u32,
+}
+
+impl Default for FspickData {
+    fn default() -> Self {
+        Self {
+            dfd: 0,
+            path: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
 }

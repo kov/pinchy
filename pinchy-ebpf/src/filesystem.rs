@@ -476,3 +476,48 @@ syscall_handler!(swapoff, args, data, {
         let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
     }
 });
+
+syscall_handler!(fstatfs, fstatfs, args, data, return_value, {
+    data.fd = args[0] as i32;
+    let buf_ptr = args[1] as *const pinchy_common::kernel_types::Statfs;
+    unsafe {
+        if return_value == 0 {
+            if let Ok(val) = bpf_probe_read_user(buf_ptr as *const _) {
+                data.statfs = val;
+            }
+        }
+    }
+});
+
+syscall_handler!(fsopen, args, data, {
+    let fsname_ptr = args[0] as *const u8;
+    data.flags = args[1] as u32;
+    unsafe {
+        let _ = bpf_probe_read_buf(fsname_ptr, &mut data.fsname);
+    }
+});
+
+syscall_handler!(fsconfig, args, data, {
+    data.fd = args[0] as i32;
+    data.cmd = args[1] as u32;
+    let key_ptr = args[2] as *const u8;
+    let value_ptr = args[3] as *const u8;
+    data.aux = args[4] as i32;
+    unsafe {
+        if !key_ptr.is_null() {
+            let _ = bpf_probe_read_buf(key_ptr, &mut data.key);
+        }
+        if !value_ptr.is_null() {
+            let _ = bpf_probe_read_buf(value_ptr, &mut data.value);
+        }
+    }
+});
+
+syscall_handler!(fspick, args, data, {
+    data.dfd = args[0] as i32;
+    let path_ptr = args[1] as *const u8;
+    data.flags = args[2] as u32;
+    unsafe {
+        let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
+    }
+});

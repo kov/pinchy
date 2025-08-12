@@ -444,6 +444,12 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let data = unsafe { &mut entry.data.fsync };
                 data.fd = args[0] as i32;
             }
+            syscalls::SYS_fsmount => {
+                let data = unsafe { &mut entry.data.fsmount };
+                data.fd = args[0] as i32;
+                data.flags = args[1] as u32;
+                data.attr_flags = args[2] as u32;
+            }
             syscalls::SYS_pidfd_open => {
                 let data = unsafe { &mut entry.data.pidfd_open };
                 data.pid = args[0] as i32;

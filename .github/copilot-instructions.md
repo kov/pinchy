@@ -203,13 +203,125 @@ addresses):
   possible for mapping numeric values to strings; when they are not available,
   declare constants outside of the function and use those.
 
+### 3.1. Critical: Format Helpers and Constants Usage
+
+**NEVER use magic values (0x1, 0x2, etc.) in format helpers or tests.** This
+is a critical requirement for maintainability.
+
+#### Identifying and Using Existing Format Helpers
+
+Before implementing argument parsing, **always check** for existing format
+helpers in `pinchy/src/format_helpers.rs`:
+
+- **Directory file descriptors**: Use `format_dirfd()` for any `dfd`, `dirfd`,
+  `olddirfd`, `newdirfd`, `from_dfd`, `to_dfd` arguments. These represent
+  directory file descriptors and should display `AT_FDCWD` instead of `-100`.
+
+- **File modes**: Use `format_mode()` for `mode` arguments in file operations.
+
+- **Mount attributes**: Use `format_mount_attr_flags()` for mount attribute
+  flags like `MOUNT_ATTR_RDONLY`, `MOUNT_ATTR_NOSUID`, etc.
+
+- **Other common patterns**: Search for `format_*` functions that might handle
+  your syscall's arguments (e.g., `format_open_flags`, `format_at_flags`,
+  `format_socket_domain`, etc.).
+
+#### Constants Declaration Strategy
+
+When creating format helpers:
+
+1. **First, check the `libc` crate documentation** at https://docs.rs/libc/
+   for relevant constants. Use them whenever available:
+   ```rust
+   libc::MOUNT_ATTR_RDONLY
+   ```
+
+2. **For missing constants**, declare them in a dedicated constants module
+   within the format helper file:
+   ```rust
+   mod fs_constants {
+       /// File system open flags
+       pub const FSOPEN_CLOEXEC: u32 = 0x1;
+       /// File system configuration commands
+       pub const FSCONFIG_SET_FLAG: u32 = 0x0;
+       pub const FSCONFIG_SET_STRING: u32 = 0x1;
+       // ... etc
+   }
+   ```
+
+3. **Use constants in both format helpers AND tests**:
+   ```rust
+   // In format helper:
+   if flags & fs_constants::FSOPEN_CLOEXEC != 0 {
+       parts.push("FSOPEN_CLOEXEC");
+   }
+
+   if flags & libc::MOUNT_ATTR_RDONLY != 0 {
+      parts.push("RDONLY");
+   }
+
+   // In test:
+   flags: fs_constants::FSOPEN_CLOEXEC,
+
+   flags: libc::MOUNT_ATTR_RDONLY | MOUNT_ATTR_NOSUID,
+   ```
+
+#### Common Flag Formatting Pattern
+
+Most flag format helpers should follow this pattern:
+```rust
+fn format_some_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+    // Check each flag bit using constants, never magic values
+    if flags & libc::LIBC_FLAG_ONE != 0 {
+        parts.push("LIBC_FLAG_ONE");
+    }
+    if flags & constants::FLAG_ONE != 0 {
+        parts.push("FLAG_ONE");
+    }
+    // ... more flags
+
+    format!("0x{:x} ({})", flags, parts.join("|")).into()
+}
+```
+
 ### 4. Implement Event Parsing
 
-Add to the event parsing code in `pinchy/src/events.rs`. For structs and other
-types with further parsing, try to do any parsing that can be reasonably done
-in a short amount of time, use existing helpers when they exist, improve them
-if necessary. If the function takes no arguments, add it to the match arm that
-only calls `finish!()`.
+Add to the event parsing code in `pinchy/src/events.rs`. **Before writing any
+argument formatting**, thoroughly check for existing format helpers that can
+handle the syscall's arguments:
+
+#### Critical Argument Analysis Checklist
+
+1. **Directory file descriptors**: Any argument named `dfd`, `dirfd`,
+   `olddirfd`, `newdirfd`, `from_dfd`, `to_dfd` should use `format_dirfd()`.
+
+2. **Flag arguments**: Any argument containing flags should be parsed with an
+   appropriate format helper. Search `format_helpers.rs` for existing
+   `format_*_flags()` functions before creating new ones.
+
+3. **File modes**: Arguments named `mode` should use `format_mode()`.
+
+4. **Raw addresses vs meaningful pointers**: Distinguish between pointers that
+   should be formatted as addresses (`0x{:x}`) vs those that need content
+   parsing (strings, structs).
+
+5. **Reusable argument types**: Look for arguments that might be shared across
+   multiple syscalls (like `sockaddr`, timespec structures, etc.).
+
+#### Implementation Steps
+
+- For structs and other types with further parsing, try to do any parsing that
+  can be reasonably done in a short amount of time.
+- Use existing helpers when they exist, improve them if necessary.
+- If the function takes no arguments, add it to the match arm that only calls
+  `finish!()`.
+- **Never use raw numeric values** - always use named constants and format
+  helpers.
 
 ### 5. Handle Return Value Formatting
 
@@ -265,6 +377,25 @@ consideration.
 macro defined in `pinchy/src/tests/mod.rs` and several existing tests to
 understand how everything works.
 
+### Critical Testing Requirements
+
+1. **Never use magic values in tests**: Always import and use the same
+   constants that format helpers use:
+   ```rust
+   use crate::format_helpers::fs_constants;
+
+   // In test data:
+   flags: fs_constants::FSOPEN_CLOEXEC,
+   attr_flags: libc::MOUNT_ATTR_RDONLY | libc::MOUNT_ATTR_NOSUID,
+   ```
+
+2. **Test expected output must match format helpers**: If a format helper
+   shows `AT_FDCWD` for `-100`, the test expectation should use `AT_FDCWD`,
+   not `-100`.
+
+3. **Test both zero and non-zero flag values**: Include tests with `flags: 0`
+   and tests with actual flag combinations to verify both cases work.
+
 Integration tests that run the binaries as root in a controlled environment
 are in `pinchy/tests/integration.rs`. The `test-helper` binary used for the
 tests is in `pinchy/src/bin/test-helper.rs`.
@@ -289,6 +420,25 @@ Helper functions for parsing specific arguments should go under
 
 - If a syscall is not being traced, double-check all steps above, especially
   the tailcall and event parsing registration.
+
+## Critical Best Practices Summary
+
+To avoid common issues and ensure consistency:
+
+1. **Always check for existing format helpers first** before implementing new
+   argument parsing. Search `format_helpers.rs` thoroughly.
+
+2. **Never use magic values anywhere**:
+   - Check `libc` crate docs first for existing constants
+   - Declare missing constants in dedicated modules with documentation
+   - Use constants in both format helpers and tests
+
+3. **Test expectations must match format helper output**:
+   - If helpers show `AT_FDCWD`, tests should expect `AT_FDCWD`
+   - If helpers show named flags, tests should expect those names
+
+4. **Always use the same constants in tests** that format helpers
+   use - this ensures consistency and prevents mismatches.
 
 ## Contributing to These Instructions
 

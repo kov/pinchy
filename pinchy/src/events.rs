@@ -273,6 +273,111 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_setxattr => {
+            let data = unsafe { event.data.setxattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(
+                sf,
+                "value: {}",
+                format_bytes(&data.value[..data.size.min(data.value.len())])
+            );
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_lsetxattr => {
+            let data = unsafe { event.data.lsetxattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(
+                sf,
+                "value: {}",
+                format_bytes(&data.value[..data.size.min(data.value.len())])
+            );
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fsetxattr => {
+            let data = unsafe { event.data.fsetxattr };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(
+                sf,
+                "value: {}",
+                format_bytes(&data.value[..data.size.min(data.value.len())])
+            );
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getxattr => {
+            let data = unsafe { event.data.getxattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            if event.return_value > 0 {
+                let bytes_read = event.return_value as usize;
+                let buf = &data.value[..bytes_read.min(data.value.len())];
+                argf!(sf, "value: {}", format_bytes(buf));
+            } else {
+                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
+            }
+
+            argf!(sf, "size: {}", data.size);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_lgetxattr => {
+            let data = unsafe { event.data.lgetxattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            if event.return_value > 0 {
+                let bytes_read = event.return_value as usize;
+                let buf = &data.value[..bytes_read.min(data.value.len())];
+                argf!(sf, "value: {}", format_bytes(buf));
+            } else {
+                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
+            }
+
+            argf!(sf, "size: {}", data.size);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fgetxattr => {
+            let data = unsafe { event.data.fgetxattr };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            if event.return_value > 0 {
+                let bytes_read = event.return_value as usize;
+                let buf = &data.value[..bytes_read.min(data.value.len())];
+                argf!(sf, "value: {}", format_bytes(buf));
+            } else {
+                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
+            }
+
+            argf!(sf, "size: {}", data.size);
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_removexattr => {
+            let data = unsafe { event.data.removexattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_lremovexattr => {
+            let data = unsafe { event.data.lremovexattr };
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fremovexattr => {
+            let data = unsafe { event.data.fremovexattr };
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_exit_group => {
             let data = unsafe { event.data.exit_group };
             argf!(sf, "status: {}", data.status);
@@ -2687,7 +2792,11 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "flags: {}", format_fsmount_flags(data.flags));
-            argf!(sf, "attr_flags: {}", format_fsmount_attr_flags(data.attr_flags));
+            argf!(
+                sf,
+                "attr_flags: {}",
+                format_fsmount_attr_flags(data.attr_flags)
+            );
 
             finish!(sf, event.return_value);
         }

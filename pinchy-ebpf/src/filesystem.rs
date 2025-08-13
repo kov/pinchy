@@ -167,6 +167,132 @@ syscall_handler!(llistxattr, args, data, {
     }
 });
 
+syscall_handler!(setxattr, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    let name_ptr = args[1] as *const u8;
+    let value_ptr = args[2] as *const u8;
+    data.size = args[3] as usize;
+    data.flags = args[4] as i32;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+        if !value_ptr.is_null() && data.size > 0 {
+            let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
+            let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+        }
+    }
+});
+
+syscall_handler!(lsetxattr, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    let name_ptr = args[1] as *const u8;
+    let value_ptr = args[2] as *const u8;
+    data.size = args[3] as usize;
+    data.flags = args[4] as i32;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+        if !value_ptr.is_null() && data.size > 0 {
+            let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
+            let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+        }
+    }
+});
+
+syscall_handler!(fsetxattr, args, data, {
+    data.fd = args[0] as i32;
+    let name_ptr = args[1] as *const u8;
+    let value_ptr = args[2] as *const u8;
+    data.size = args[3] as usize;
+    data.flags = args[4] as i32;
+    unsafe {
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+        if !value_ptr.is_null() && data.size > 0 {
+            let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
+            let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+        }
+    }
+});
+
+syscall_handler!(getxattr, getxattr, args, data, return_value, {
+    let pathname_ptr = args[0] as *const u8;
+    let name_ptr = args[1] as *const u8;
+    let value_ptr = args[2] as *const u8;
+    data.size = args[3] as usize;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+        if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
+            let read_size = core::cmp::min(
+                return_value as usize,
+                core::cmp::min(data.size, DATA_READ_SIZE),
+            );
+            let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+        }
+    }
+});
+
+syscall_handler!(lgetxattr, lgetxattr, args, data, return_value, {
+    let pathname_ptr = args[0] as *const u8;
+    let name_ptr = args[1] as *const u8;
+    let value_ptr = args[2] as *const u8;
+    data.size = args[3] as usize;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+        if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
+            let read_size = core::cmp::min(
+                return_value as usize,
+                core::cmp::min(data.size, DATA_READ_SIZE),
+            );
+            let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+        }
+    }
+});
+
+syscall_handler!(fgetxattr, fgetxattr, args, data, return_value, {
+    data.fd = args[0] as i32;
+    let name_ptr = args[1] as *const u8;
+    let value_ptr = args[2] as *const u8;
+    data.size = args[3] as usize;
+    unsafe {
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+        if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
+            let read_size = core::cmp::min(
+                return_value as usize,
+                core::cmp::min(data.size, DATA_READ_SIZE),
+            );
+            let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+        }
+    }
+});
+
+syscall_handler!(removexattr, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    let name_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+    }
+});
+
+syscall_handler!(lremovexattr, args, data, {
+    let pathname_ptr = args[0] as *const u8;
+    let name_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+    }
+});
+
+syscall_handler!(fremovexattr, args, data, {
+    data.fd = args[0] as i32;
+    let name_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+    }
+});
+
 syscall_handler!(getcwd, getcwd, args, data, return_value, {
     let buf_ptr = args[0] as *const u8;
     data.buf = buf_ptr as u64;

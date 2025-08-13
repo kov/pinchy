@@ -92,6 +92,15 @@ pub union SyscallEventData {
     pub flistxattr: FlistxattrData,
     pub listxattr: ListxattrData,
     pub llistxattr: LlistxattrData,
+    pub setxattr: SetxattrData,
+    pub lsetxattr: LsetxattrData,
+    pub fsetxattr: FsetxattrData,
+    pub getxattr: GetxattrData,
+    pub lgetxattr: LgetxattrData,
+    pub fgetxattr: FgetxattrData,
+    pub removexattr: RemovexattrData,
+    pub lremovexattr: LremovexattrData,
+    pub fremovexattr: FremovexattrData,
     pub madvise: MadviseData,
     pub dup: DupData,
     pub dup2: Dup2Data,
@@ -324,6 +333,84 @@ pub struct LlistxattrData {
     pub list: u64,
     pub size: usize,
     pub xattr_list: crate::kernel_types::XattrList,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct SetxattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+    pub value: [u8; crate::DATA_READ_SIZE],
+    pub size: usize,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct LsetxattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+    pub value: [u8; crate::DATA_READ_SIZE],
+    pub size: usize,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct FsetxattrData {
+    pub fd: i32,
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+    pub value: [u8; crate::DATA_READ_SIZE],
+    pub size: usize,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct GetxattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+    pub value: [u8; crate::DATA_READ_SIZE],
+    pub size: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct LgetxattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+    pub value: [u8; crate::DATA_READ_SIZE],
+    pub size: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct FgetxattrData {
+    pub fd: i32,
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+    pub value: [u8; crate::DATA_READ_SIZE],
+    pub size: usize,
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct RemovexattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct LremovexattrData {
+    pub pathname: [u8; crate::DATA_READ_SIZE],
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Debug, Copy, Clone)]
+pub struct FremovexattrData {
+    pub fd: i32,
+    pub name: [u8; crate::MEDIUM_READ_SIZE],
 }
 
 #[repr(C)]
@@ -2054,19 +2141,10 @@ pub struct TimerGetoverrunData {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct FstatfsData {
     pub fd: i32,
     pub statfs: kernel_types::Statfs,
-}
-
-impl Default for FstatfsData {
-    fn default() -> Self {
-        Self {
-            fd: 0,
-            statfs: kernel_types::Statfs::default(),
-        }
-    }
 }
 
 #[repr(C)]
@@ -2108,21 +2186,11 @@ impl Default for FsconfigData {
 }
 
 #[repr(C)]
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Default)]
 pub struct FsmountData {
     pub fd: i32,
     pub flags: u32,
     pub attr_flags: u32,
-}
-
-impl Default for FsmountData {
-    fn default() -> Self {
-        Self {
-            fd: 0,
-            flags: 0,
-            attr_flags: 0,
-        }
-    }
 }
 
 #[repr(C)]

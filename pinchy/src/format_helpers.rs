@@ -3801,7 +3801,37 @@ pub fn format_fspick_flags(flags: u32) -> Cow<'static, str> {
         parts.push("FSPICK_EMPTY_PATH");
     }
 
-    let known_flags = fs_constants::FSPICK_CLOEXEC | fs_constants::FSPICK_SYMLINK_NOFOLLOW | fs_constants::FSPICK_NO_AUTOMOUNT | fs_constants::FSPICK_EMPTY_PATH;
+    let known_flags = fs_constants::FSPICK_CLOEXEC
+        | fs_constants::FSPICK_SYMLINK_NOFOLLOW
+        | fs_constants::FSPICK_NO_AUTOMOUNT
+        | fs_constants::FSPICK_EMPTY_PATH;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_xattr_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::XATTR_CREATE != 0 {
+        parts.push("XATTR_CREATE");
+    }
+    if flags & libc::XATTR_REPLACE != 0 {
+        parts.push("XATTR_REPLACE");
+    }
+
+    let known_flags = libc::XATTR_CREATE | libc::XATTR_REPLACE;
     let remaining = flags & !known_flags;
     if remaining != 0 {
         parts.push("UNKNOWN");
@@ -3854,5 +3884,35 @@ mod tests {
 
         // Test with different sigsetsize
         assert_eq!(format_sigset(&test_sigset, 2), "[SIGUSR1|SIGTERM]");
+    }
+
+    #[test]
+    fn test_format_xattr_flags() {
+        // Test no flags
+        assert_eq!(format_xattr_flags(0), "0");
+
+        // Test XATTR_CREATE
+        assert_eq!(format_xattr_flags(libc::XATTR_CREATE), "0x1 (XATTR_CREATE)");
+
+        // Test XATTR_REPLACE
+        assert_eq!(
+            format_xattr_flags(libc::XATTR_REPLACE),
+            "0x2 (XATTR_REPLACE)"
+        );
+
+        // Test both flags (should not happen in practice but let's test)
+        assert_eq!(
+            format_xattr_flags(libc::XATTR_CREATE | libc::XATTR_REPLACE),
+            "0x3 (XATTR_CREATE|XATTR_REPLACE)"
+        );
+
+        // Test unknown flag
+        assert_eq!(format_xattr_flags(0x10), "0x10 (UNKNOWN)");
+
+        // Test known flag with unknown bits
+        assert_eq!(
+            format_xattr_flags(libc::XATTR_CREATE | 0x10),
+            "0x11 (XATTR_CREATE|UNKNOWN)"
+        );
     }
 }

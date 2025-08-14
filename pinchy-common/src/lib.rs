@@ -36,6 +36,7 @@ pub union SyscallEventData {
     pub openat: OpenAtData,
     pub openat2: OpenAtData,
     pub futex: FutexData,
+    pub futex_waitv: FutexWaitvData,
     pub sched_yield: SchedYieldData,
     pub ioctl: IoctlData,
     pub sched_getattr: SchedGetattrData,
@@ -52,6 +53,7 @@ pub union SyscallEventData {
     pub mprotect: MprotectData,
     pub getrandom: GetrandomData,
     pub statfs: StatfsData,
+    pub get_robust_list: GetRobustListData,
     pub set_robust_list: SetRobustListData,
     pub set_tid_address: SetTidAddressData,
     pub rt_sigprocmask: RtSigprocmaskData,
@@ -532,6 +534,16 @@ pub struct FutexData {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct FutexWaitvData {
+    pub waiters: usize,
+    pub nr_futexes: u32,
+    pub flags: u32,
+    pub timeout: Timespec,
+    pub clockid: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct SchedYieldData;
 
 #[repr(C)]
@@ -676,6 +688,14 @@ pub struct MunmapData {
 #[derive(Clone, Copy)]
 pub struct BrkData {
     pub addr: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetRobustListData {
+    pub pid: i32,
+    pub head_ptr: usize,
+    pub len_ptr: usize,
 }
 
 #[repr(C)]

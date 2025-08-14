@@ -15,3 +15,13 @@ syscall_handler!(futex, futex, args, data, {
     let timeout_ptr = args[3] as *const Timespec;
     data.timeout = crate::util::read_timespec(timeout_ptr);
 });
+
+syscall_handler!(futex_waitv, futex_waitv, args, data, {
+    data.waiters = args[0];
+    data.nr_futexes = args[1] as u32;
+    data.flags = args[2] as u32;
+
+    let timeout_ptr = args[3] as *const Timespec;
+    data.timeout = crate::util::read_timespec(timeout_ptr);
+    data.clockid = args[4] as i32;
+});

@@ -1415,6 +1415,20 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_futex_waitv => {
+            let data = unsafe { event.data.futex_waitv };
+
+            argf!(sf, "waiters: 0x{:x}", data.waiters);
+            argf!(sf, "nr_futexes: {}", data.nr_futexes);
+            argf!(sf, "flags: {}", data.flags);
+
+            arg!(sf, "timeout:");
+            format_timespec(&mut sf, data.timeout).await?;
+
+            argf!(sf, "clockid: {}", format_clockid(data.clockid));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_ioctl => {
             let data = unsafe { event.data.ioctl };
             let request = format_ioctl_request(data.request);
@@ -1685,6 +1699,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             // FIXME: I believe this argument is not used for faccessat, only
             // for faccessat2?
             argf!(sf, "flags: {}", format_at_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_get_robust_list => {
+            let data = unsafe { event.data.get_robust_list };
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "head_ptr: 0x{:x}", data.head_ptr);
+            argf!(sf, "len_ptr: 0x{:x}", data.len_ptr);
 
             finish!(sf, event.return_value);
         }

@@ -227,6 +227,12 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.buflen = args[1];
                 data.flags = args[2] as u32;
             }
+            syscalls::SYS_get_robust_list => {
+                let data = unsafe { &mut entry.data.get_robust_list };
+                data.pid = args[0] as i32;
+                data.head_ptr = args[1];
+                data.len_ptr = args[2];
+            }
             syscalls::SYS_set_robust_list => {
                 let data = unsafe { &mut entry.data.set_robust_list };
                 data.head = args[0];

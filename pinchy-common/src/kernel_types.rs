@@ -621,3 +621,12 @@ pub struct StackT {
     pub ss_flags: i32, // flags (SS_DISABLE, SS_ONSTACK, SS_AUTODISARM)
     pub ss_size: u64,  // size of stack
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct FutexWaitv {
+    pub val: u64,
+    pub uaddr: u64,
+    pub flags: u32,
+    pub __reserved: u32,
+}

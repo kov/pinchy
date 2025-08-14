@@ -1415,6 +1415,41 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_futex_waitv => {
+            let data = unsafe { event.data.futex_waitv };
+
+            arg!(sf, "waiters:");
+            with_array!(sf, {
+                let count = data.nr_waiters as usize;
+                for i in 0..count {
+                    let w = data.waiters[i];
+                    arg!(sf, "waiter");
+                    with_struct!(sf, {
+                        argf!(sf, "uaddr: 0x{:x}", w.uaddr);
+                        argf!(sf, "val: {}", w.val);
+                        argf!(sf, "flags: 0x{:x}", w.flags);
+                    });
+                }
+            });
+
+            argf!(sf, "nr_waiters: {}", data.nr_waiters);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+
+            arg!(sf, "timeout:");
+            if data.has_timeout {
+                format_timespec(&mut sf, data.timeout).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "clockid: {}", format_clockid(data.clockid));
+
+            if event.return_value > 0 {
+                finish!(sf, event.return_value, b" (woken)");
+            } else {
+                finish!(sf, event.return_value);
+            }
+        }
         syscalls::SYS_ioctl => {
             let data = unsafe { event.data.ioctl };
             let request = format_ioctl_request(data.request);
@@ -1693,6 +1728,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "head: 0x{:x}", data.head);
             argf!(sf, "len: {}", data.len);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_get_robust_list => {
+            let data = unsafe { event.data.get_robust_list };
+
+            argf!(sf, "pid: {}", data.pid);
+
+            if event.return_value == 0 {
+                argf!(sf, "head: 0x{:x}", data.head);
+                argf!(sf, "len: {}", data.len);
+            } else {
+                arg!(sf, "head: (content unavailable)");
+                arg!(sf, "len: (content unavailable)");
+            }
 
             finish!(sf, event.return_value);
         }

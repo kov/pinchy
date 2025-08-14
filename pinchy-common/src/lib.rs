@@ -36,6 +36,7 @@ pub union SyscallEventData {
     pub openat: OpenAtData,
     pub openat2: OpenAtData,
     pub futex: FutexData,
+    pub futex_waitv: FutexWaitvData,
     pub sched_yield: SchedYieldData,
     pub ioctl: IoctlData,
     pub sched_getattr: SchedGetattrData,
@@ -53,6 +54,7 @@ pub union SyscallEventData {
     pub getrandom: GetrandomData,
     pub statfs: StatfsData,
     pub set_robust_list: SetRobustListData,
+    pub get_robust_list: GetRobustListData,
     pub set_tid_address: SetTidAddressData,
     pub rt_sigprocmask: RtSigprocmaskData,
     pub rt_sigaction: RtSigactionData,
@@ -530,6 +532,19 @@ pub struct FutexData {
     pub timeout: Timespec,
 }
 
+pub const FUTEX_WAITV_MAX: usize = 4;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FutexWaitvData {
+    pub waiters: [crate::kernel_types::FutexWaitv; FUTEX_WAITV_MAX],
+    pub nr_waiters: u32,
+    pub flags: u32,
+    pub has_timeout: bool,
+    pub timeout: Timespec,
+    pub clockid: i32,
+}
+
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SchedYieldData;
@@ -681,6 +696,14 @@ pub struct BrkData {
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct SetRobustListData {
+    pub head: usize,
+    pub len: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct GetRobustListData {
+    pub pid: i32,
     pub head: usize,
     pub len: usize,
 }

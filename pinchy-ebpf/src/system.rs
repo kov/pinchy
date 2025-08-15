@@ -258,3 +258,32 @@ syscall_handler!(getrlimit, rlimit, args, data, {
         }
     }
 });
+
+syscall_handler!(init_module, args, data, {
+    data.module_image = args[0];
+    data.len = args[1];
+
+    let param_ptr = args[2] as *const u8;
+    if !param_ptr.is_null() {
+        let _ = unsafe { bpf_probe_read_buf(param_ptr, &mut data.param_values) };
+    }
+});
+
+syscall_handler!(finit_module, args, data, {
+    data.fd = args[0] as i32;
+    data.flags = args[2] as u32;
+
+    let param_ptr = args[1] as *const u8;
+    if !param_ptr.is_null() {
+        let _ = unsafe { bpf_probe_read_buf(param_ptr, &mut data.param_values) };
+    }
+});
+
+syscall_handler!(delete_module, args, data, {
+    data.flags = args[1] as i32;
+
+    let name_ptr = args[0] as *const u8;
+    if !name_ptr.is_null() {
+        let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
+    }
+});

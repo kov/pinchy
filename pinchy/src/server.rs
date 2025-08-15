@@ -619,6 +619,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_signalfd4", syscalls::SYS_signalfd4),
         ("syscall_exit_swapon", syscalls::SYS_swapon),
         ("syscall_exit_swapoff", syscalls::SYS_swapoff),
+        ("syscall_exit_init_module", syscalls::SYS_init_module),
+        ("syscall_exit_finit_module", syscalls::SYS_finit_module),
+        ("syscall_exit_delete_module", syscalls::SYS_delete_module),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

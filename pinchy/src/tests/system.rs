@@ -4,14 +4,16 @@
 use pinchy_common::{
     kernel_types::{CapUserData, CapUserHeader, Rlimit, Utsname},
     syscalls::{
-        SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_getcpu, SYS_getrandom, SYS_gettimeofday,
-        SYS_ioctl, SYS_ioprio_get, SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_reboot,
-        SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
+        SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module, SYS_finit_module,
+        SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_init_module, SYS_ioctl, SYS_ioprio_get,
+        SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_reboot, SYS_settimeofday, SYS_sync,
+        SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
     },
-    CapsetgetData, ClockNanosleepData, ExitGroupData, GetcpuData, GetrandomData, GettimeofdayData,
-    IoctlData, IoprioGetData, IoprioSetData, NanosleepData, PersonalityData, RebootData,
-    RtSigreturnData, SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData,
-    TimesData, UmaskData, UnameData, VhangupData,
+    CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData, FinitModuleData,
+    GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData, IoprioGetData,
+    IoprioSetData, NanosleepData, PersonalityData, RebootData, RtSigreturnData, SettimeofdayData,
+    SyncData, SyscallEvent, SyscallEventData, SysinfoData, TimesData, UmaskData, UnameData,
+    VhangupData,
 };
 
 use crate::syscall_test;
@@ -992,4 +994,184 @@ syscall_test!(
         }
     },
     "202 getrlimit(resource: RLIMIT_STACK, limit: NULL) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_init_module_success,
+    {
+        let mut param_values = [0u8; pinchy_common::DATA_READ_SIZE];
+        let params = b"param1=value1 param2=value2\0";
+        param_values[..params.len()].copy_from_slice(params);
+
+        SyscallEvent {
+            syscall_nr: SYS_init_module,
+            pid: 1000,
+            tid: 1000,
+            return_value: 0,
+            data: SyscallEventData {
+                init_module: InitModuleData {
+                    module_image: 0x7f8000001000,
+                    len: 65536,
+                    param_values,
+                },
+            },
+        }
+    },
+    "1000 init_module(module_image: 0x7f8000001000, len: 65536, param_values: \"param1=value1 param2=value2\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_init_module_error,
+    {
+        let param_values = [0u8; pinchy_common::DATA_READ_SIZE]; // empty params
+
+        SyscallEvent {
+            syscall_nr: SYS_init_module,
+            pid: 1001,
+            tid: 1001,
+            return_value: -17, // EEXIST - module already exists
+            data: SyscallEventData {
+                init_module: InitModuleData {
+                    module_image: 0x7f8000002000,
+                    len: 32768,
+                    param_values,
+                },
+            },
+        }
+    },
+    "1001 init_module(module_image: 0x7f8000002000, len: 32768, param_values: \"\") = -17 (error)\n"
+);
+
+syscall_test!(
+    parse_finit_module_success,
+    {
+        let mut param_values = [0u8; pinchy_common::DATA_READ_SIZE];
+        let params = b"debug=1\0";
+        param_values[..params.len()].copy_from_slice(params);
+
+        SyscallEvent {
+            syscall_nr: SYS_finit_module,
+            pid: 2000,
+            tid: 2000,
+            return_value: 0,
+            data: SyscallEventData {
+                finit_module: FinitModuleData {
+                    fd: 5,
+                    param_values,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "2000 finit_module(fd: 5, param_values: \"debug=1\", flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_finit_module_with_flags,
+    {
+        let mut param_values = [0u8; pinchy_common::DATA_READ_SIZE];
+        let params = b"verbose=1 force=1\0";
+        param_values[..params.len()].copy_from_slice(params);
+
+        SyscallEvent {
+            syscall_nr: SYS_finit_module,
+            pid: 2001,
+            tid: 2001,
+            return_value: 0,
+            data: SyscallEventData {
+                finit_module: FinitModuleData {
+                    fd: 8,
+                    param_values,
+                    flags: libc::MODULE_INIT_IGNORE_MODVERSIONS
+                        | libc::MODULE_INIT_IGNORE_VERMAGIC,
+                },
+            },
+        }
+    },
+    "2001 finit_module(fd: 8, param_values: \"verbose=1 force=1\", flags: 0x3 (MODULE_INIT_IGNORE_MODVERSIONS|MODULE_INIT_IGNORE_VERMAGIC)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_finit_module_error,
+    {
+        let param_values = [0u8; pinchy_common::DATA_READ_SIZE]; // empty params
+
+        SyscallEvent {
+            syscall_nr: SYS_finit_module,
+            pid: 2002,
+            tid: 2002,
+            return_value: -2, // ENOENT - no such file
+            data: SyscallEventData {
+                finit_module: FinitModuleData {
+                    fd: -1, // bad fd
+                    param_values,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "2002 finit_module(fd: -1, param_values: \"\", flags: 0) = -2 (error)\n"
+);
+
+syscall_test!(
+    parse_delete_module_success,
+    {
+        let mut name = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        let module_name = b"test_module\0";
+        name[..module_name.len()].copy_from_slice(module_name);
+
+        SyscallEvent {
+            syscall_nr: SYS_delete_module,
+            pid: 3000,
+            tid: 3000,
+            return_value: 0,
+            data: SyscallEventData {
+                delete_module: DeleteModuleData { name, flags: 0 },
+            },
+        }
+    },
+    "3000 delete_module(name: \"test_module\", flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_delete_module_force,
+    {
+        let mut name = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        let module_name = b"problematic_module\0";
+        name[..module_name.len()].copy_from_slice(module_name);
+
+        SyscallEvent {
+            syscall_nr: SYS_delete_module,
+            pid: 3001,
+            tid: 3001,
+            return_value: 0,
+            data: SyscallEventData {
+                delete_module: DeleteModuleData {
+                    name,
+                    flags: libc::O_TRUNC | libc::O_NONBLOCK,
+                },
+            },
+        }
+    },
+    "3001 delete_module(name: \"problematic_module\", flags: 0xa00 (O_NONBLOCK|O_TRUNC)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_delete_module_error,
+    {
+        let mut name = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        let module_name = b"nonexistent_module\0";
+        name[..module_name.len()].copy_from_slice(module_name);
+
+        SyscallEvent {
+            syscall_nr: SYS_delete_module,
+            pid: 3002,
+            tid: 3002,
+            return_value: -2, // ENOENT - module not found
+            data: SyscallEventData {
+                delete_module: DeleteModuleData { name, flags: 0 },
+            },
+        }
+    },
+    "3002 delete_module(name: \"nonexistent_module\", flags: 0) = -2 (error)\n"
 );

@@ -271,3 +271,39 @@ fn parse_msghdr(msg_ptr: *const u8, msghdr: &mut kernel_types::Msghdr) {
         }
     }
 }
+
+syscall_handler!(setsockopt, setsockopt, args, data, {
+    data.sockfd = args[0] as i32;
+    data.level = args[1] as i32;
+    data.optname = args[2] as i32;
+    data.optlen = args[4] as u32;
+
+    let optval_ptr = args[3] as *const u8;
+    if !optval_ptr.is_null() && data.optlen > 0 {
+        let read_size = core::cmp::min(data.optlen as usize, pinchy_common::MEDIUM_READ_SIZE);
+        unsafe {
+            let _ = bpf_probe_read_buf(optval_ptr, &mut data.optval[..read_size]);
+        }
+    }
+});
+
+syscall_handler!(getsockopt, getsockopt, args, data, return_value, {
+    data.sockfd = args[0] as i32;
+    data.level = args[1] as i32;
+    data.optname = args[2] as i32;
+
+    let optval_ptr = args[3] as *const u8;
+    let optlen_ptr = args[4] as *const u32;
+
+    if return_value == 0 && !optlen_ptr.is_null() {
+        unsafe {
+            if let Ok(len) = bpf_probe_read_user::<u32>(optlen_ptr) {
+                data.optlen = len;
+                if !optval_ptr.is_null() && len > 0 {
+                    let read_size = core::cmp::min(len as usize, pinchy_common::MEDIUM_READ_SIZE);
+                    let _ = bpf_probe_read_buf(optval_ptr, &mut data.optval[..read_size]);
+                }
+            }
+        }
+    }
+});

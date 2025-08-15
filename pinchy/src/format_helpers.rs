@@ -1620,6 +1620,58 @@ pub async fn format_sockaddr(
     Ok(())
 }
 
+pub fn format_socket_level(level: i32) -> Cow<'static, str> {
+    match level {
+        libc::SOL_SOCKET => Cow::Borrowed("SOL_SOCKET"),
+        libc::IPPROTO_IP => Cow::Borrowed("IPPROTO_IP"),
+        libc::IPPROTO_TCP => Cow::Borrowed("IPPROTO_TCP"),
+        libc::IPPROTO_UDP => Cow::Borrowed("IPPROTO_UDP"),
+        libc::IPPROTO_IPV6 => Cow::Borrowed("IPPROTO_IPV6"),
+        _ => Cow::Owned(format!("{level}")),
+    }
+}
+
+pub fn format_socket_option(level: i32, optname: i32) -> Cow<'static, str> {
+    match level {
+        libc::SOL_SOCKET => match optname {
+            libc::SO_DEBUG => Cow::Borrowed("SO_DEBUG"),
+            libc::SO_REUSEADDR => Cow::Borrowed("SO_REUSEADDR"),
+            libc::SO_TYPE => Cow::Borrowed("SO_TYPE"),
+            libc::SO_ERROR => Cow::Borrowed("SO_ERROR"),
+            libc::SO_DONTROUTE => Cow::Borrowed("SO_DONTROUTE"),
+            libc::SO_BROADCAST => Cow::Borrowed("SO_BROADCAST"),
+            libc::SO_SNDBUF => Cow::Borrowed("SO_SNDBUF"),
+            libc::SO_RCVBUF => Cow::Borrowed("SO_RCVBUF"),
+            libc::SO_KEEPALIVE => Cow::Borrowed("SO_KEEPALIVE"),
+            libc::SO_OOBINLINE => Cow::Borrowed("SO_OOBINLINE"),
+            libc::SO_LINGER => Cow::Borrowed("SO_LINGER"),
+            libc::SO_BSDCOMPAT => Cow::Borrowed("SO_BSDCOMPAT"),
+            libc::SO_REUSEPORT => Cow::Borrowed("SO_REUSEPORT"),
+            libc::SO_RCVLOWAT => Cow::Borrowed("SO_RCVLOWAT"),
+            libc::SO_SNDLOWAT => Cow::Borrowed("SO_SNDLOWAT"),
+            libc::SO_RCVTIMEO => Cow::Borrowed("SO_RCVTIMEO"),
+            libc::SO_SNDTIMEO => Cow::Borrowed("SO_SNDTIMEO"),
+            _ => Cow::Owned(format!("{optname}")),
+        },
+        libc::IPPROTO_TCP => match optname {
+            libc::TCP_NODELAY => Cow::Borrowed("TCP_NODELAY"),
+            libc::TCP_MAXSEG => Cow::Borrowed("TCP_MAXSEG"),
+            libc::TCP_KEEPIDLE => Cow::Borrowed("TCP_KEEPIDLE"),
+            libc::TCP_KEEPINTVL => Cow::Borrowed("TCP_KEEPINTVL"),
+            libc::TCP_KEEPCNT => Cow::Borrowed("TCP_KEEPCNT"),
+            _ => Cow::Owned(format!("{optname}")),
+        },
+        libc::IPPROTO_IP => match optname {
+            libc::IP_TOS => Cow::Borrowed("IP_TOS"),
+            libc::IP_TTL => Cow::Borrowed("IP_TTL"),
+            libc::IP_HDRINCL => Cow::Borrowed("IP_HDRINCL"),
+            libc::IP_OPTIONS => Cow::Borrowed("IP_OPTIONS"),
+            _ => Cow::Owned(format!("{optname}")),
+        },
+        _ => Cow::Owned(format!("{optname}")),
+    }
+}
+
 pub async fn format_msghdr(
     sf: &mut SyscallFormatter<'_>,
     msg: &pinchy_common::kernel_types::Msghdr,
@@ -2157,6 +2209,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_connect
         | syscalls::SYS_getsockname
         | syscalls::SYS_getpeername
+        | syscalls::SYS_setsockopt
+        | syscalls::SYS_getsockopt
         | syscalls::SYS_epoll_ctl
         | syscalls::SYS_shmdt
         | syscalls::SYS_msgsnd

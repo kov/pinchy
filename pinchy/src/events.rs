@@ -2862,6 +2862,40 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_init_module => {
+            let data = unsafe { event.data.init_module };
+
+            argf!(sf, "module_image: 0x{:x}", data.module_image);
+            argf!(sf, "len: {}", data.len);
+            argf!(
+                sf,
+                "param_values: {}",
+                format_path(&data.param_values, false)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_finit_module => {
+            let data = unsafe { event.data.finit_module };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(
+                sf,
+                "param_values: {}",
+                format_path(&data.param_values, false)
+            );
+            argf!(sf, "flags: {}", format_finit_module_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_delete_module => {
+            let data = unsafe { event.data.delete_module };
+
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(sf, "flags: {}", format_delete_module_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

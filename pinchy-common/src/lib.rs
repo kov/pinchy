@@ -253,6 +253,9 @@ pub union SyscallEventData {
     pub fsconfig: FsconfigData,
     pub fsmount: FsmountData,
     pub fspick: FspickData,
+    pub init_module: InitModuleData,
+    pub finit_module: FinitModuleData,
+    pub delete_module: DeleteModuleData,
 }
 
 #[repr(C)]
@@ -2229,6 +2232,58 @@ impl Default for FspickData {
         Self {
             dfd: 0,
             path: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct InitModuleData {
+    pub module_image: usize, // pointer to module image
+    pub len: usize,
+    pub param_values: [u8; DATA_READ_SIZE], // module parameters string
+}
+
+impl Default for InitModuleData {
+    fn default() -> Self {
+        Self {
+            module_image: 0,
+            len: 0,
+            param_values: [0; DATA_READ_SIZE],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FinitModuleData {
+    pub fd: i32,
+    pub param_values: [u8; DATA_READ_SIZE], // module parameters string
+    pub flags: u32,
+}
+
+impl Default for FinitModuleData {
+    fn default() -> Self {
+        Self {
+            fd: 0,
+            param_values: [0; DATA_READ_SIZE],
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct DeleteModuleData {
+    pub name: [u8; MEDIUM_READ_SIZE], // module name
+    pub flags: i32,
+}
+
+impl Default for DeleteModuleData {
+    fn default() -> Self {
+        Self {
+            name: [0; MEDIUM_READ_SIZE],
             flags: 0,
         }
     }

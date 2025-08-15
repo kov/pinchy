@@ -3844,6 +3844,60 @@ pub fn format_xattr_flags(flags: i32) -> Cow<'static, str> {
     }
 }
 
+pub fn format_finit_module_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::MODULE_INIT_IGNORE_MODVERSIONS != 0 {
+        parts.push("MODULE_INIT_IGNORE_MODVERSIONS");
+    }
+    if flags & libc::MODULE_INIT_IGNORE_VERMAGIC != 0 {
+        parts.push("MODULE_INIT_IGNORE_VERMAGIC");
+    }
+
+    let known_flags = libc::MODULE_INIT_IGNORE_MODVERSIONS | libc::MODULE_INIT_IGNORE_VERMAGIC;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+pub fn format_delete_module_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::O_NONBLOCK != 0 {
+        parts.push("O_NONBLOCK");
+    }
+    if flags & libc::O_TRUNC != 0 {
+        parts.push("O_TRUNC");
+    }
+
+    let known_flags = libc::O_NONBLOCK | libc::O_TRUNC;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
 /// Format futex_waitv flags for display
 pub fn format_futex_waitv_flags(flags: u32) -> std::borrow::Cow<'static, str> {
     if flags == 0 {
@@ -3950,6 +4004,71 @@ mod tests {
         assert_eq!(
             format_xattr_flags(libc::XATTR_CREATE | 0x10),
             "0x11 (XATTR_CREATE|UNKNOWN)"
+        );
+    }
+
+    #[test]
+    fn test_format_finit_module_flags() {
+        // Test no flags
+        assert_eq!(format_finit_module_flags(0), "0");
+
+        // Test MODULE_INIT_IGNORE_MODVERSIONS
+        assert_eq!(
+            format_finit_module_flags(libc::MODULE_INIT_IGNORE_MODVERSIONS),
+            "0x1 (MODULE_INIT_IGNORE_MODVERSIONS)"
+        );
+
+        // Test MODULE_INIT_IGNORE_VERMAGIC
+        assert_eq!(
+            format_finit_module_flags(libc::MODULE_INIT_IGNORE_VERMAGIC),
+            "0x2 (MODULE_INIT_IGNORE_VERMAGIC)"
+        );
+
+        // Test both flags
+        assert_eq!(
+            format_finit_module_flags(
+                libc::MODULE_INIT_IGNORE_MODVERSIONS | libc::MODULE_INIT_IGNORE_VERMAGIC
+            ),
+            "0x3 (MODULE_INIT_IGNORE_MODVERSIONS|MODULE_INIT_IGNORE_VERMAGIC)"
+        );
+
+        // Test unknown flag
+        assert_eq!(format_finit_module_flags(0x10), "0x10 (UNKNOWN)");
+
+        // Test known flag with unknown bits
+        assert_eq!(
+            format_finit_module_flags(libc::MODULE_INIT_IGNORE_MODVERSIONS | 0x10),
+            "0x11 (MODULE_INIT_IGNORE_MODVERSIONS|UNKNOWN)"
+        );
+    }
+
+    #[test]
+    fn test_format_delete_module_flags() {
+        // Test no flags
+        assert_eq!(format_delete_module_flags(0), "0");
+
+        // Test O_NONBLOCK
+        assert_eq!(
+            format_delete_module_flags(libc::O_NONBLOCK),
+            "0x800 (O_NONBLOCK)"
+        );
+
+        // Test O_TRUNC
+        assert_eq!(format_delete_module_flags(libc::O_TRUNC), "0x200 (O_TRUNC)");
+
+        // Test both flags
+        assert_eq!(
+            format_delete_module_flags(libc::O_NONBLOCK | libc::O_TRUNC),
+            "0xa00 (O_NONBLOCK|O_TRUNC)"
+        );
+
+        // Test unknown flag
+        assert_eq!(format_delete_module_flags(0x1), "0x1 (UNKNOWN)");
+
+        // Test known flag with unknown bits
+        assert_eq!(
+            format_delete_module_flags(libc::O_NONBLOCK | 0x1),
+            "0x801 (O_NONBLOCK|UNKNOWN)"
         );
     }
 }

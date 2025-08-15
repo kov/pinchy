@@ -2155,6 +2155,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_bind
         | syscalls::SYS_listen
         | syscalls::SYS_connect
+        | syscalls::SYS_getsockname
+        | syscalls::SYS_getpeername
         | syscalls::SYS_epoll_ctl
         | syscalls::SYS_shmdt
         | syscalls::SYS_msgsnd

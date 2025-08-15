@@ -2357,6 +2357,42 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_getsockname => {
+            let data = unsafe { event.data.getsockname };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+
+            arg!(sf, "addr:");
+            if data.has_addr {
+                with_struct!(sf, {
+                    format_sockaddr(&mut sf, &data.addr).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "addrlen: {}", data.addrlen);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getpeername => {
+            let data = unsafe { event.data.getpeername };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+
+            arg!(sf, "addr:");
+            if data.has_addr {
+                with_struct!(sf, {
+                    format_sockaddr(&mut sf, &data.addr).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "addrlen: {}", data.addrlen);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_wait4 => {
             let data = unsafe { event.data.wait4 };
 

@@ -146,6 +146,58 @@ syscall_handler!(socketpair, socketpair, args, data, return_value, {
     }
 });
 
+syscall_handler!(getsockname, getsockname, args, data, return_value, {
+    data.sockfd = args[0] as i32;
+    data.has_addr = false;
+    data.addr = kernel_types::Sockaddr::default();
+    data.addrlen = 0;
+
+    let addr_ptr = args[1] as *const u8;
+    let addrlen_ptr = args[2] as *const u32;
+
+    unsafe {
+        if return_value == 0 && !addr_ptr.is_null() && !addrlen_ptr.is_null() {
+            if let Ok(len) = bpf_probe_read_user::<u32>(addrlen_ptr) {
+                data.addrlen = len;
+                if len > 0 && len <= core::mem::size_of::<kernel_types::Sockaddr>() as u32 {
+                    if let Ok(sockaddr) =
+                        bpf_probe_read_user::<kernel_types::Sockaddr>(addr_ptr as *const _)
+                    {
+                        data.addr = sockaddr;
+                        data.has_addr = true;
+                    }
+                }
+            }
+        }
+    }
+});
+
+syscall_handler!(getpeername, getpeername, args, data, return_value, {
+    data.sockfd = args[0] as i32;
+    data.has_addr = false;
+    data.addr = kernel_types::Sockaddr::default();
+    data.addrlen = 0;
+
+    let addr_ptr = args[1] as *const u8;
+    let addrlen_ptr = args[2] as *const u32;
+
+    unsafe {
+        if return_value == 0 && !addr_ptr.is_null() && !addrlen_ptr.is_null() {
+            if let Ok(len) = bpf_probe_read_user::<u32>(addrlen_ptr) {
+                data.addrlen = len;
+                if len > 0 && len <= core::mem::size_of::<kernel_types::Sockaddr>() as u32 {
+                    if let Ok(sockaddr) =
+                        bpf_probe_read_user::<kernel_types::Sockaddr>(addr_ptr as *const _)
+                    {
+                        data.addr = sockaddr;
+                        data.has_addr = true;
+                    }
+                }
+            }
+        }
+    }
+});
+
 #[inline(always)]
 fn parse_msghdr(msg_ptr: *const u8, msghdr: &mut kernel_types::Msghdr) {
     if msg_ptr.is_null() {

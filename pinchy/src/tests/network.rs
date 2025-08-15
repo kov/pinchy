@@ -4,11 +4,13 @@
 use pinchy_common::{
     kernel_types::{Iovec, Msghdr, Sockaddr},
     syscalls::{
-        SYS_accept, SYS_accept4, SYS_bind, SYS_connect, SYS_listen, SYS_recvfrom, SYS_recvmsg,
-        SYS_sendmsg, SYS_shutdown, SYS_socket, SYS_socketpair,
+        SYS_accept, SYS_accept4, SYS_bind, SYS_connect, SYS_getpeername, SYS_getsockname,
+        SYS_listen, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg, SYS_shutdown, SYS_socket,
+        SYS_socketpair,
     },
-    Accept4Data, AcceptData, ListenData, RecvfromData, RecvmsgData, SendmsgData, ShutdownData,
-    SockaddrData, SocketData, SocketpairData, SyscallEvent, SyscallEventData,
+    Accept4Data, AcceptData, GetSocknameData, GetpeernameData, ListenData, RecvfromData,
+    RecvmsgData, SendmsgData, ShutdownData, SockaddrData, SocketData, SocketpairData, SyscallEvent,
+    SyscallEventData,
 };
 
 use crate::syscall_test;
@@ -1080,4 +1082,210 @@ syscall_test!(
         }
     },
     "9999 socketpair(domain: AF_INET, type: SOCK_STREAM, protocol: 0, sv: [?, ?]) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_getsockname_inet_success,
+    {
+        let mut addr = Sockaddr {
+            sa_family: libc::AF_INET as u16,
+            ..Default::default()
+        };
+        addr.sa_data[0] = 0x1f;
+        addr.sa_data[1] = 0x90;
+        addr.sa_data[2] = 127;
+        addr.sa_data[3] = 0;
+        addr.sa_data[4] = 0;
+        addr.sa_data[5] = 1;
+        SyscallEvent {
+            syscall_nr: SYS_getsockname,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                getsockname: GetSocknameData {
+                    sockfd: 4,
+                    has_addr: true,
+                    addr,
+                    addrlen: 16,
+                },
+            },
+        }
+    },
+    "1234 getsockname(sockfd: 4, addr: { family: AF_INET, addr: 127.0.0.1:8080 }, addrlen: 16) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getsockname_unix_success,
+    {
+        let mut addr = Sockaddr {
+            sa_family: libc::AF_UNIX as u16,
+            ..Default::default()
+        };
+        let path = b"/tmp/test.sock";
+        addr.sa_data[..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: SYS_getsockname,
+            pid: 2345,
+            tid: 2345,
+            return_value: 0,
+            data: SyscallEventData {
+                getsockname: GetSocknameData {
+                    sockfd: 5,
+                    has_addr: true,
+                    addr,
+                    addrlen: 2 + path.len() as u32,
+                },
+            },
+        }
+    },
+    "2345 getsockname(sockfd: 5, addr: { family: AF_UNIX, path: \"/tmp/test.sock\" }, addrlen: 16) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getsockname_null_addr,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getsockname,
+            pid: 3456,
+            tid: 3456,
+            return_value: 0,
+            data: SyscallEventData {
+                getsockname: GetSocknameData {
+                    sockfd: 7,
+                    has_addr: false,
+                    addr: Sockaddr::default(),
+                    addrlen: 0,
+                },
+            },
+        }
+    },
+    "3456 getsockname(sockfd: 7, addr: NULL, addrlen: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getsockname_failed,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getsockname,
+            pid: 9999,
+            tid: 9999,
+            return_value: -1,
+            data: SyscallEventData {
+                getsockname: GetSocknameData {
+                    sockfd: 8,
+                    has_addr: false,
+                    addr: Sockaddr::default(),
+                    addrlen: 0,
+                },
+            },
+        }
+    },
+    "9999 getsockname(sockfd: 8, addr: NULL, addrlen: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_getpeername_inet_success,
+    {
+        let mut addr = Sockaddr {
+            sa_family: libc::AF_INET as u16,
+            ..Default::default()
+        };
+        addr.sa_data[0] = 0x01;
+        addr.sa_data[1] = 0xbb;
+        addr.sa_data[2] = 192;
+        addr.sa_data[3] = 168;
+        addr.sa_data[4] = 1;
+        addr.sa_data[5] = 100;
+        SyscallEvent {
+            syscall_nr: SYS_getpeername,
+            pid: 4567,
+            tid: 4567,
+            return_value: 0,
+            data: SyscallEventData {
+                getpeername: GetpeernameData {
+                    sockfd: 6,
+                    has_addr: true,
+                    addr,
+                    addrlen: 16,
+                },
+            },
+        }
+    },
+    "4567 getpeername(sockfd: 6, addr: { family: AF_INET, addr: 192.168.1.100:443 }, addrlen: 16) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getpeername_ipv6_success,
+    {
+        let mut addr = Sockaddr {
+            sa_family: libc::AF_INET6 as u16,
+            ..Default::default()
+        };
+        addr.sa_data[0] = 0x1f;
+        addr.sa_data[1] = 0x40;
+        addr.sa_data[6] = 0x20;
+        addr.sa_data[7] = 0x01;
+        addr.sa_data[8] = 0x0d;
+        addr.sa_data[9] = 0xb8;
+        addr.sa_data[20] = 0x00;
+        addr.sa_data[21] = 0x01;
+        SyscallEvent {
+            syscall_nr: SYS_getpeername,
+            pid: 5678,
+            tid: 5678,
+            return_value: 0,
+            data: SyscallEventData {
+                getpeername: GetpeernameData {
+                    sockfd: 9,
+                    has_addr: true,
+                    addr,
+                    addrlen: 28,
+                },
+            },
+        }
+    },
+    "5678 getpeername(sockfd: 9, addr: { family: AF_INET6, addr: [2001:db8:0:0:0:0:0:1]:8000 }, addrlen: 28) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getpeername_null_addr,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getpeername,
+            pid: 6789,
+            tid: 6789,
+            return_value: 0,
+            data: SyscallEventData {
+                getpeername: GetpeernameData {
+                    sockfd: 10,
+                    has_addr: false,
+                    addr: Sockaddr::default(),
+                    addrlen: 0,
+                },
+            },
+        }
+    },
+    "6789 getpeername(sockfd: 10, addr: NULL, addrlen: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getpeername_failed,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getpeername,
+            pid: 8888,
+            tid: 8888,
+            return_value: -1,
+            data: SyscallEventData {
+                getpeername: GetpeernameData {
+                    sockfd: 11,
+                    has_addr: false,
+                    addr: Sockaddr::default(),
+                    addrlen: 0,
+                },
+            },
+        }
+    },
+    "8888 getpeername(sockfd: 11, addr: NULL, addrlen: 0) = -1 (error)\n"
 );

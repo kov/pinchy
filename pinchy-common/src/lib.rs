@@ -154,6 +154,8 @@ pub union SyscallEventData {
     pub listen: ListenData,
     pub shutdown: ShutdownData,
     pub socketpair: SocketpairData,
+    pub getsockname: GetSocknameData,
+    pub getpeername: GetpeernameData,
     pub select: SelectData,
     pub pselect6: Pselect6Data,
     pub getcwd: GetcwdData,
@@ -956,6 +958,24 @@ pub struct SocketpairData {
     pub type_: i32,
     pub protocol: i32,
     pub sv: [i32; 2],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetSocknameData {
+    pub sockfd: i32,
+    pub has_addr: bool,
+    pub addr: crate::kernel_types::Sockaddr,
+    pub addrlen: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetpeernameData {
+    pub sockfd: i32,
+    pub has_addr: bool,
+    pub addr: crate::kernel_types::Sockaddr,
+    pub addrlen: u32,
 }
 
 #[repr(C)]

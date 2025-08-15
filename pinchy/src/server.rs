@@ -536,6 +536,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_pwritev2", syscalls::SYS_pwritev2),
         ("syscall_exit_bind", syscalls::SYS_bind),
         ("syscall_exit_connect", syscalls::SYS_connect),
+        ("syscall_exit_getsockname", syscalls::SYS_getsockname),
+        ("syscall_exit_getpeername", syscalls::SYS_getpeername),
         ("syscall_exit_socketpair", syscalls::SYS_socketpair),
         ("syscall_exit_pselect6", syscalls::SYS_pselect6),
         #[cfg(target_arch = "x86_64")]

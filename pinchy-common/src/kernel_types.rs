@@ -343,14 +343,13 @@ pub struct Iovec {
 /// Message header structure for socket message operations
 /// Note: we only capture essential fields and a subset of the control message data
 /// due to eBPF stack limitations
-pub const MSG_IOV_COUNT: usize = 4; // Number of iovec structures to capture
 pub const MSG_CONTROL_SIZE: usize = 64; // Size of control message data to capture
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]
 pub struct Msghdr {
     pub msg_name: u64,                        // Optional address pointer
     pub msg_namelen: u32,                     // Size of address
-    pub msg_iov: [Iovec; MSG_IOV_COUNT],      // Scatter/gather array (truncated)
+    pub msg_iov: [Iovec; crate::IOV_COUNT],   // Scatter/gather array (truncated)
     pub msg_iovlen: u32,                      // Number of elements in msg_iov
     pub msg_control: u64,                     // Ancillary data pointer
     pub msg_controllen: u32,                  // Ancillary data buffer size
@@ -375,7 +374,7 @@ impl Default for Msghdr {
         Self {
             msg_name: 0,
             msg_namelen: 0,
-            msg_iov: [Iovec::default(); MSG_IOV_COUNT],
+            msg_iov: [Iovec::default(); crate::IOV_COUNT],
             msg_iovlen: 0,
             msg_control: 0,
             msg_controllen: 0,

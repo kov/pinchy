@@ -2,13 +2,14 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
+    kernel_types::Iovec,
     syscalls::{
         SYS_brk, SYS_madvise, SYS_membarrier, SYS_memfd_secret, SYS_mlock, SYS_mlock2,
         SYS_mlockall, SYS_mmap, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munlockall,
-        SYS_munmap, SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_readahead,
-        SYS_userfaultfd,
+        SYS_munmap, SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_process_vm_readv,
+        SYS_process_vm_writev, SYS_readahead, SYS_userfaultfd,
     },
-    SyscallEvent,
+    SyscallEvent, IOV_COUNT, LARGER_READ_SIZE,
 };
 
 use crate::syscall_test;
@@ -259,14 +260,20 @@ syscall_test!(
                 process_madvise: ProcessMadviseData {
                     pidfd: 5,
                     iovecs: [
-                        pinchy_common::kernel_types::Iovec {
+                        Iovec {
                             iov_base: 0x7f1234567000,
                             iov_len: 4096,
                         },
-                        pinchy_common::kernel_types::Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
                     ],
-                    iov_lens: [4096, 0],
-                    iov_bufs: [[0; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+                    iov_lens: [4096, 0, 0, 0, 0, 0, 0, 0],
+                    iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
                     iovcnt: 1,
                     advice: libc::MADV_DONTNEED,
                     flags: 0,
@@ -291,14 +298,20 @@ syscall_test!(
                 process_madvise: ProcessMadviseData {
                     pidfd: 9,
                     iovecs: [
-                        pinchy_common::kernel_types::Iovec {
+                        Iovec {
                             iov_base: 0x7f9876543000,
                             iov_len: 8192,
                         },
-                        pinchy_common::kernel_types::Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
                     ],
-                    iov_lens: [8192, 0],
-                    iov_bufs: [[0; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+                    iov_lens: [8192, 0, 0, 0, 0, 0, 0, 0],
+                    iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
                     iovcnt: 1,
                     advice: libc::MADV_WILLNEED,
                     flags: 0,
@@ -581,4 +594,278 @@ syscall_test!(
         }
     },
     "123 pkey_free(pkey: 1) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_process_vm_readv_success,
+    {
+        use pinchy_common::ProcessVmData;
+        SyscallEvent {
+            syscall_nr: SYS_process_vm_readv,
+            pid: 123,
+            tid: 123,
+            return_value: 64,
+            data: pinchy_common::SyscallEventData {
+                process_vm: ProcessVmData {
+                    pid: 456,
+                    local_iovecs: [
+                        Iovec {
+                            iov_base: 0x7f1234567000,
+                            iov_len: 32,
+                        },
+                        Iovec {
+                            iov_base: 0x7f1234568000,
+                            iov_len: 32,
+                        },
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                    ],
+                    local_iov_lens: [32, 32, 0, 0, 0, 0, 0, 0],
+                    local_iovcnt: 2,
+                    remote_iovecs: [
+                        Iovec {
+                            iov_base: 0x7f9876543000,
+                            iov_len: 64,
+                        },
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                    ],
+                    remote_iov_lens: [64, 0, 0, 0, 0, 0, 0, 0],
+                    remote_iovcnt: 1,
+                    flags: 0,
+                    local_read_count: 2,
+                    remote_read_count: 1,
+                    local_iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
+                },
+            },
+        }
+    },
+    "123 process_vm_readv(pid: 456, local_iov: [ iovec { base: 0x7f1234567000, len: 32, buf: \"\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\" }, iovec { base: 0x7f1234568000, len: 32, buf: \"\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\" } ], liovcnt: 2, remote_iov: [ iovec { base: 0x7f9876543000, len: 64 } ], riovcnt: 1, flags: 0) = 64 (bytes)\n"
+);
+
+syscall_test!(
+    parse_process_vm_readv_with_content,
+    {
+        use pinchy_common::ProcessVmData;
+        let mut data = ProcessVmData {
+            pid: 789,
+            local_iovecs: [
+                Iovec {
+                    iov_base: 0x7f1234567000,
+                    iov_len: 16,
+                },
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+            ],
+            local_iov_lens: [16, 0, 0, 0, 0, 0, 0, 0],
+            local_iovcnt: 1,
+            remote_iovecs: [
+                Iovec {
+                    iov_base: 0x7f9876543000,
+                    iov_len: 16,
+                },
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+            ],
+            remote_iov_lens: [16, 0, 0, 0, 0, 0, 0, 0],
+            remote_iovcnt: 1,
+            flags: 0,
+            local_read_count: 1,
+            remote_read_count: 1,
+            local_iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
+        };
+
+        // Add some readable content to the first buffer
+        data.local_iov_bufs[0][..12].copy_from_slice(b"Hello World!");
+
+        SyscallEvent {
+            syscall_nr: SYS_process_vm_readv,
+            pid: 789,
+            tid: 789,
+            return_value: 16,
+            data: pinchy_common::SyscallEventData { process_vm: data },
+        }
+    },
+    "789 process_vm_readv(pid: 789, local_iov: [ iovec { base: 0x7f1234567000, len: 16, buf: \"Hello World!\\0\\0\\0\\0\" } ], liovcnt: 1, remote_iov: [ iovec { base: 0x7f9876543000, len: 16 } ], riovcnt: 1, flags: 0) = 16 (bytes)\n"
+);
+
+syscall_test!(
+    parse_process_vm_writev_success,
+    {
+        use pinchy_common::ProcessVmData;
+        SyscallEvent {
+            syscall_nr: SYS_process_vm_writev,
+            pid: 321,
+            tid: 321,
+            return_value: 32,
+            data: pinchy_common::SyscallEventData {
+                process_vm: ProcessVmData {
+                    pid: 654,
+                    local_iovecs: [
+                        Iovec {
+                            iov_base: 0x7f1111111000,
+                            iov_len: 32,
+                        },
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                    ],
+                    local_iov_lens: [32, 0, 0, 0, 0, 0, 0, 0],
+                    local_iovcnt: 1,
+                    remote_iovecs: [
+                        Iovec {
+                            iov_base: 0x7f2222222000,
+                            iov_len: 32,
+                        },
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                    ],
+                    remote_iov_lens: [32, 0, 0, 0, 0, 0, 0, 0],
+                    remote_iovcnt: 1,
+                    flags: 0,
+                    local_read_count: 1,
+                    remote_read_count: 1,
+                    local_iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
+                },
+            },
+        }
+    },
+    "321 process_vm_writev(pid: 654, local_iov: [ iovec { base: 0x7f1111111000, len: 32, buf: \"\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\" } ], liovcnt: 1, remote_iov: [ iovec { base: 0x7f2222222000, len: 32 } ], riovcnt: 1, flags: 0) = 32 (bytes)\n"
+);
+
+syscall_test!(
+    parse_process_vm_writev_with_content,
+    {
+        use pinchy_common::ProcessVmData;
+        let mut data = ProcessVmData {
+            pid: 987,
+            local_iovecs: [
+                Iovec {
+                    iov_base: 0x7f3333333000,
+                    iov_len: 8,
+                },
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+            ],
+            local_iov_lens: [8, 0, 0, 0, 0, 0, 0, 0],
+            local_iovcnt: 1,
+            remote_iovecs: [
+                Iovec {
+                    iov_base: 0x7f4444444000,
+                    iov_len: 8,
+                },
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+                Iovec::default(),
+            ],
+            remote_iov_lens: [8, 0, 0, 0, 0, 0, 0, 0],
+            remote_iovcnt: 1,
+            flags: 0,
+            local_read_count: 1,
+            remote_read_count: 1,
+            local_iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
+        };
+
+        // Add some content to be written
+        data.local_iov_bufs[0][..8].copy_from_slice(b"TestData");
+
+        SyscallEvent {
+            syscall_nr: SYS_process_vm_writev,
+            pid: 987,
+            tid: 987,
+            return_value: 8,
+            data: pinchy_common::SyscallEventData { process_vm: data },
+        }
+    },
+    "987 process_vm_writev(pid: 987, local_iov: [ iovec { base: 0x7f3333333000, len: 8, buf: \"TestData\" } ], liovcnt: 1, remote_iov: [ iovec { base: 0x7f4444444000, len: 8 } ], riovcnt: 1, flags: 0) = 8 (bytes)\n"
+);
+
+syscall_test!(
+    parse_process_vm_readv_error,
+    {
+        use pinchy_common::ProcessVmData;
+        SyscallEvent {
+            syscall_nr: SYS_process_vm_readv,
+            pid: 999,
+            tid: 999,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                process_vm: ProcessVmData {
+                    pid: 123,
+                    local_iovecs: [
+                        Iovec {
+                            iov_base: 0x7f1234567000,
+                            iov_len: 32,
+                        },
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                    ],
+                    local_iov_lens: [32, 0, 0, 0, 0, 0, 0, 0],
+                    local_iovcnt: 1,
+                    remote_iovecs: [
+                        Iovec {
+                            iov_base: 0x0,
+                            iov_len: 32,
+                        },
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                        Iovec::default(),
+                    ],
+                    remote_iov_lens: [32, 0, 0, 0, 0, 0, 0, 0],
+                    remote_iovcnt: 1,
+                    flags: 0,
+                    local_read_count: 1,
+                    remote_read_count: 1,
+                    local_iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
+                },
+            },
+        }
+    },
+    "999 process_vm_readv(pid: 123, local_iov: [ iovec { base: 0x7f1234567000, len: 32, buf: \"\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\" } ], liovcnt: 1, remote_iov: [ iovec { base: 0x0, len: 32 } ], riovcnt: 1, flags: 0) = -1 (error)\n"
 );

@@ -127,6 +127,25 @@ syscall_handler!(connect, sockaddr, args, data, {
     };
 });
 
+syscall_handler!(socketpair, socketpair, args, data, return_value, {
+    data.domain = args[0] as i32;
+    data.type_ = args[1] as i32;
+    data.protocol = args[2] as i32;
+    data.sv = [0; 2];
+
+    let sv_ptr = args[3] as *const i32;
+    unsafe {
+        if return_value == 0 && !sv_ptr.is_null() {
+            if let Ok(fd0) = bpf_probe_read_user::<i32>(sv_ptr) {
+                data.sv[0] = fd0;
+            }
+            if let Ok(fd1) = bpf_probe_read_user::<i32>(sv_ptr.add(1)) {
+                data.sv[1] = fd1;
+            }
+        }
+    }
+});
+
 #[inline(always)]
 fn parse_msghdr(msg_ptr: *const u8, msghdr: &mut kernel_types::Msghdr) {
     if msg_ptr.is_null() {

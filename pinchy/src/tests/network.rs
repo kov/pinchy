@@ -5,10 +5,10 @@ use pinchy_common::{
     kernel_types::{Iovec, Msghdr, Sockaddr},
     syscalls::{
         SYS_accept, SYS_accept4, SYS_bind, SYS_connect, SYS_listen, SYS_recvfrom, SYS_recvmsg,
-        SYS_sendmsg, SYS_shutdown, SYS_socket,
+        SYS_sendmsg, SYS_shutdown, SYS_socket, SYS_socketpair,
     },
     Accept4Data, AcceptData, ListenData, RecvfromData, RecvmsgData, SendmsgData, ShutdownData,
-    SockaddrData, SocketData, SyscallEvent, SyscallEventData,
+    SockaddrData, SocketData, SocketpairData, SyscallEvent, SyscallEventData,
 };
 
 use crate::syscall_test;
@@ -1017,4 +1017,67 @@ syscall_test!(
         }
     },
     "9999 shutdown(sockfd: 10, how: SHUT_WR) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_socketpair_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_socketpair,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                socketpair: SocketpairData {
+                    domain: libc::AF_UNIX,
+                    type_: libc::SOCK_STREAM,
+                    protocol: 0,
+                    sv: [5, 6],
+                },
+            },
+        }
+    },
+    "1234 socketpair(domain: AF_UNIX, type: SOCK_STREAM, protocol: 0, sv: [5, 6]) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_socketpair_with_flags,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_socketpair,
+            pid: 2345,
+            tid: 2345,
+            return_value: 0,
+            data: SyscallEventData {
+                socketpair: SocketpairData {
+                    domain: libc::AF_UNIX,
+                    type_: libc::SOCK_DGRAM | libc::SOCK_CLOEXEC | libc::SOCK_NONBLOCK,
+                    protocol: 0,
+                    sv: [7, 8],
+                },
+            },
+        }
+    },
+    "2345 socketpair(domain: AF_UNIX, type: SOCK_DGRAM|SOCK_NONBLOCK|SOCK_CLOEXEC, protocol: 0, sv: [7, 8]) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_socketpair_failed,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_socketpair,
+            pid: 9999,
+            tid: 9999,
+            return_value: -1,
+            data: SyscallEventData {
+                socketpair: SocketpairData {
+                    domain: libc::AF_INET,
+                    type_: libc::SOCK_STREAM,
+                    protocol: 0,
+                    sv: [0, 0],
+                },
+            },
+        }
+    },
+    "9999 socketpair(domain: AF_INET, type: SOCK_STREAM, protocol: 0, sv: [?, ?]) = -1 (error)\n"
 );

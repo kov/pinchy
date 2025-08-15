@@ -153,6 +153,7 @@ pub union SyscallEventData {
     pub socket: SocketData,
     pub listen: ListenData,
     pub shutdown: ShutdownData,
+    pub socketpair: SocketpairData,
     pub select: SelectData,
     pub pselect6: Pselect6Data,
     pub getcwd: GetcwdData,
@@ -946,6 +947,15 @@ pub struct ListenData {
 pub struct ShutdownData {
     pub sockfd: i32,
     pub how: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SocketpairData {
+    pub domain: i32,
+    pub type_: i32,
+    pub protocol: i32,
+    pub sv: [i32; 2],
 }
 
 #[repr(C)]

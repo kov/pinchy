@@ -1,4 +1,4 @@
-use core::ops::DerefMut as _;
+use core::{mem::size_of, ops::DerefMut as _};
 
 use aya_ebpf::{
     bindings::BPF_RB_FORCE_WAKEUP,
@@ -240,11 +240,13 @@ impl core::ops::DerefMut for Entry {
     }
 }
 
-use pinchy_common::{kernel_types::Iovec, IOV_COUNT, MEDIUM_READ_SIZE};
+use pinchy_common::{kernel_types::Iovec, IOV_COUNT, LARGER_READ_SIZE};
 
+#[derive(Clone, Copy)]
 pub enum IovecOp {
     Read,
     Write,
+    AddressOnly, // Only read iovec structs, no buffer contents
 }
 
 /// Reads an array of iovec structs and their pointed-to buffers from user memory.
@@ -256,7 +258,7 @@ pub fn read_iovec_array(
     op: IovecOp,
     iovecs: &mut [Iovec; IOV_COUNT],
     iov_lens: &mut [usize; IOV_COUNT],
-    iov_bufs: &mut [[u8; MEDIUM_READ_SIZE]; IOV_COUNT],
+    mut iov_bufs: Option<&mut [[u8; LARGER_READ_SIZE]; IOV_COUNT]>,
     read_count: &mut usize,
     return_value: i64,
 ) {
@@ -271,6 +273,7 @@ pub fn read_iovec_array(
             }
         }
         IovecOp::Write => usize::MAX,
+        IovecOp::AddressOnly => 0, // Don't read buffer contents
     };
 
     for i in 0..*read_count {
@@ -293,25 +296,31 @@ pub fn read_iovec_array(
         };
         iov_lens[i] = iov_len as usize;
 
-        // Only read up to MEDIUM_READ_SIZE bytes per iovec, and only up to bytes_left for read
-        let to_read = core::cmp::min(
-            MEDIUM_READ_SIZE,
-            match op {
-                IovecOp::Read => core::cmp::min(iov_len as usize, bytes_left),
-                IovecOp::Write => iov_len as usize,
-            },
-        );
+        // Only read buffer contents if not AddressOnly and we have a buffer to write to
+        if !matches!(op, IovecOp::AddressOnly) && iov_bufs.is_some() {
+            // Only read up to a specific number of bytes per iovec, and only up to bytes_left for read
+            let to_read = core::cmp::min(
+                LARGER_READ_SIZE,
+                match op {
+                    IovecOp::Read => core::cmp::min(iov_len as usize, bytes_left),
+                    IovecOp::Write => iov_len as usize,
+                    IovecOp::AddressOnly => 0, // Already handled above, but keep for completeness
+                },
+            );
 
-        if to_read > 0 {
-            unsafe {
-                let _ = bpf_probe_read_buf(iov_base as *const u8, &mut iov_bufs[i][..to_read]);
+            if to_read > 0 {
+                if let Some(ref mut bufs) = iov_bufs {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(iov_base as *const u8, &mut bufs[i][..to_read]);
+                    }
+                }
             }
-        }
 
-        if let IovecOp::Read = op {
-            bytes_left = bytes_left.saturating_sub(to_read);
-            if bytes_left == 0 {
-                break;
+            if let IovecOp::Read = op {
+                bytes_left = bytes_left.saturating_sub(to_read);
+                if bytes_left == 0 {
+                    break;
+                }
             }
         }
     }

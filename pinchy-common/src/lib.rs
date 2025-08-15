@@ -8,6 +8,7 @@ use crate::kernel_types::{EpollEvent, Timespec};
 pub mod kernel_types;
 pub mod syscalls;
 
+pub const LARGER_READ_SIZE: usize = 256;
 pub const DATA_READ_SIZE: usize = 128;
 pub const MEDIUM_READ_SIZE: usize = 64;
 pub const SMALLISH_READ_SIZE: usize = 32;
@@ -159,6 +160,7 @@ pub union SyscallEventData {
     pub getpeername: GetpeernameData,
     pub setsockopt: SetsockoptData,
     pub getsockopt: GetsockoptData,
+    pub process_vm: ProcessVmData,
     pub recvmmsg: RecvMmsgData,
     pub sendmmsg: SendMmsgData,
     pub select: SelectData,
@@ -473,14 +475,14 @@ pub struct ReadData {
 }
 
 /// Data for vector I/O syscalls (readv, writev, preadv, pwritev, preadv2, pwritev2)
-pub const IOV_COUNT: usize = 2; // Number of iovec structures to capture
+pub const IOV_COUNT: usize = 8;
 #[repr(C)]
 #[derive(Clone, Copy)]
 pub struct VectorIOData {
     pub fd: i32,
     pub iovecs: [crate::kernel_types::Iovec; IOV_COUNT],
     pub iov_lens: [usize; IOV_COUNT],
-    pub iov_bufs: [[u8; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+    pub iov_bufs: [[u8; crate::LARGER_READ_SIZE]; IOV_COUNT],
     pub iovcnt: usize,
     pub offset: i64, // Only used for preadv/pwritev variants
     pub flags: u32,  // Only used for preadv2/pwritev2
@@ -1576,7 +1578,7 @@ pub struct VmspliceData {
     pub fd: i32,
     pub iovecs: [kernel_types::Iovec; IOV_COUNT],
     pub iov_lens: [usize; IOV_COUNT],
-    pub iov_bufs: [[u8; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+    pub iov_bufs: [[u8; crate::LARGER_READ_SIZE]; IOV_COUNT],
     pub iovcnt: usize,
     pub flags: u32,
     pub read_count: usize,
@@ -1745,7 +1747,7 @@ pub struct ProcessMadviseData {
     pub pidfd: i32,
     pub iovecs: [crate::kernel_types::Iovec; IOV_COUNT],
     pub iov_lens: [usize; IOV_COUNT],
-    pub iov_bufs: [[u8; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+    pub iov_bufs: [[u8; crate::LARGER_READ_SIZE]; IOV_COUNT],
     pub iovcnt: usize,
     pub advice: i32,
     pub flags: u32,
@@ -1758,7 +1760,7 @@ impl Default for ProcessMadviseData {
             pidfd: 0,
             iovecs: [crate::kernel_types::Iovec::default(); IOV_COUNT],
             iov_lens: [0; IOV_COUNT],
-            iov_bufs: [[0; crate::MEDIUM_READ_SIZE]; IOV_COUNT],
+            iov_bufs: [[0; crate::LARGER_READ_SIZE]; IOV_COUNT],
             iovcnt: 0,
             advice: 0,
             flags: 0,
@@ -2435,6 +2437,40 @@ impl Default for SendMmsgData {
             vlen: 0,
             msgs: [crate::kernel_types::Mmsghdr::default(); crate::kernel_types::MMSGHDR_COUNT],
             msgs_count: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ProcessVmData {
+    pub pid: i32,
+    pub local_iovecs: [kernel_types::Iovec; IOV_COUNT],
+    pub local_iov_lens: [usize; IOV_COUNT],
+    pub local_iovcnt: usize,
+    pub remote_iovecs: [kernel_types::Iovec; IOV_COUNT],
+    pub remote_iov_lens: [usize; IOV_COUNT],
+    pub remote_iovcnt: usize,
+    pub flags: u64,
+    pub local_read_count: usize,
+    pub remote_read_count: usize,
+    pub local_iov_bufs: [[u8; LARGER_READ_SIZE]; IOV_COUNT],
+}
+
+impl Default for ProcessVmData {
+    fn default() -> Self {
+        Self {
+            pid: 0,
+            local_iovecs: [kernel_types::Iovec::default(); IOV_COUNT],
+            local_iov_lens: [0; IOV_COUNT],
+            local_iovcnt: 0,
+            remote_iovecs: [kernel_types::Iovec::default(); IOV_COUNT],
+            remote_iov_lens: [0; IOV_COUNT],
+            remote_iovcnt: 0,
+            flags: 0,
+            local_read_count: 0,
+            remote_read_count: 0,
+            local_iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
         }
     }
 }

@@ -6,18 +6,23 @@ use pinchy_common::kernel_types;
 
 use crate::syscall_handler;
 
-syscall_handler!(recvmsg, recvmsg, args, data, {
+syscall_handler!(recvmsg, recvmsg, args, data, return_value, {
     data.sockfd = args[0] as i32;
     data.flags = args[2] as i32;
     let msg_ptr = args[1] as *const u8;
-    parse_msghdr(msg_ptr, &mut data.msghdr);
+    parse_msghdr(
+        msg_ptr,
+        &mut data.msghdr,
+        crate::util::IovecOp::Read,
+        return_value,
+    );
 });
 
 syscall_handler!(sendmsg, sendmsg, args, data, {
     data.sockfd = args[0] as i32;
     data.flags = args[2] as i32;
     let msg_ptr = args[1] as *const u8;
-    parse_msghdr(msg_ptr, &mut data.msghdr);
+    parse_msghdr(msg_ptr, &mut data.msghdr, crate::util::IovecOp::Write, 0);
 });
 
 syscall_handler!(accept, accept, args, data, return_value, {
@@ -234,7 +239,12 @@ syscall_handler!(getpeername, getpeername, args, data, return_value, {
 });
 
 #[inline(always)]
-fn parse_msghdr(msg_ptr: *const u8, msghdr: &mut kernel_types::Msghdr) {
+fn parse_msghdr(
+    msg_ptr: *const u8,
+    msghdr: &mut kernel_types::Msghdr,
+    op: crate::util::IovecOp,
+    return_value: i64,
+) {
     if msg_ptr.is_null() {
         return;
     }
@@ -253,20 +263,21 @@ fn parse_msghdr(msg_ptr: *const u8, msghdr: &mut kernel_types::Msghdr) {
             if let Ok(msg_iovlen) = bpf_probe_read_user::<u32>(msg_ptr.add(24) as *const u32) {
                 msghdr.msg_iovlen = msg_iovlen;
 
-                // Read the iovec array (up to MSG_IOV_COUNT entries)
+                // Read the iovec array using the shared helper
                 if msg_iov_addr != 0 && msghdr.msg_iovlen > 0 {
-                    let iov_count =
-                        core::cmp::min(msghdr.msg_iovlen as usize, kernel_types::MSG_IOV_COUNT);
+                    let mut iov_lens = [0usize; pinchy_common::IOV_COUNT];
+                    let mut read_count = 0;
 
-                    for i in 0..iov_count {
-                        let iov_ptr = (msg_iov_addr as *const u8).add(i * 16);
-                        let iov_base =
-                            bpf_probe_read_user::<u64>(iov_ptr as *const u64).unwrap_or(0);
-                        let iov_len =
-                            bpf_probe_read_user::<u64>((iov_ptr as *const u64).add(1)).unwrap_or(0);
-
-                        msghdr.msg_iov[i] = kernel_types::Iovec { iov_base, iov_len };
-                    }
+                    crate::util::read_iovec_array(
+                        msg_iov_addr,
+                        msghdr.msg_iovlen as usize,
+                        op,
+                        &mut msghdr.msg_iov, // MSG_IOV_COUNT == IOV_COUNT, so this works
+                        &mut iov_lens,
+                        None, // We don't need buffer contents for msghdr
+                        &mut read_count,
+                        return_value,
+                    );
                 }
             }
         }
@@ -378,7 +389,12 @@ syscall_handler!(recvmmsg, recvmmsg, args, data, return_value, {
                 let mmsghdr_ptr = msgvec_ptr.add(i * 64);
 
                 // Parse the msghdr part first
-                parse_msghdr(mmsghdr_ptr, &mut data.msgs[i].msg_hdr);
+                parse_msghdr(
+                    mmsghdr_ptr,
+                    &mut data.msgs[i].msg_hdr,
+                    crate::util::IovecOp::Read,
+                    return_value,
+                );
 
                 // Read msg_len (offset 56 in mmsghdr)
                 if return_value > 0 {
@@ -415,7 +431,12 @@ syscall_handler!(sendmmsg, sendmmsg, args, data, {
                 let mmsghdr_ptr = msgvec_ptr.add(i * 64);
 
                 // Parse the msghdr part first
-                parse_msghdr(mmsghdr_ptr, &mut data.msgs[i].msg_hdr);
+                parse_msghdr(
+                    mmsghdr_ptr,
+                    &mut data.msgs[i].msg_hdr,
+                    crate::util::IovecOp::Write,
+                    0,
+                );
 
                 // For sendmmsg, msg_len is output-only and set by the kernel on success
                 data.msgs[i].msg_len = 0;

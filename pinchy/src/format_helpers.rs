@@ -1699,20 +1699,19 @@ pub async fn format_msghdr(
     if msg.msg_iovlen > 0 {
         arg!(sf, "iov:");
         with_array!(sf, {
-            let iov_count = std::cmp::min(
-                msg.msg_iovlen as usize,
-                pinchy_common::kernel_types::MSG_IOV_COUNT,
-            );
+            let iov_count = std::cmp::min(msg.msg_iovlen as usize, pinchy_common::IOV_COUNT);
             for i in 0..iov_count {
                 let iov = &msg.msg_iov[i];
                 if iov.iov_base != 0 || iov.iov_len != 0 {
                     with_struct!(sf, {
-                        argf!(sf, "base: 0x{:x}", iov.iov_base);
-                        argf!(sf, "len: {}", iov.iov_len);
+                        format_single_iovec(
+                            sf, iov, None, // No buffer contents in msghdr
+                        )
+                        .await?;
                     });
                 }
             }
-            if msg.msg_iovlen as usize > pinchy_common::kernel_types::MSG_IOV_COUNT {
+            if msg.msg_iovlen as usize > pinchy_common::IOV_COUNT {
                 arg!(sf, "...");
             }
         });
@@ -2142,6 +2141,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_recvfrom
         | syscalls::SYS_sendto
         | syscalls::SYS_process_madvise
+        | syscalls::SYS_process_vm_readv
+        | syscalls::SYS_process_vm_writev
         | syscalls::SYS_sched_getaffinity => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
@@ -4138,4 +4139,109 @@ mod tests {
             "0x801 (O_NONBLOCK|UNKNOWN)"
         );
     }
+}
+
+// ===== Iovec Formatting Helpers =====
+
+use pinchy_common::{kernel_types::Iovec, LARGER_READ_SIZE};
+
+/// Standard iovec array formatting options
+#[derive(Clone, Debug)]
+pub struct IovecFormatOptions {
+    pub show_buffers: bool,         // Whether to show buffer contents
+    pub max_buffer_display: usize,  // Max bytes to show per buffer
+    pub truncate_long_arrays: bool, // Whether to show "..." for long arrays
+}
+
+impl Default for IovecFormatOptions {
+    fn default() -> Self {
+        Self {
+            show_buffers: true,
+            max_buffer_display: 64,
+            truncate_long_arrays: true,
+        }
+    }
+}
+
+impl IovecFormatOptions {
+    /// For regular I/O syscalls (readv, writev, etc.)
+    pub fn for_io_syscalls() -> Self {
+        Self {
+            show_buffers: true,
+            ..Default::default()
+        }
+    }
+
+    /// For inter-process operations (process_vm_*)
+    pub fn for_process_vm() -> Self {
+        Self {
+            show_buffers: true,
+            ..Default::default()
+        }
+    }
+
+    /// For address-only operations (madvise, etc.)
+    pub fn for_address_only() -> Self {
+        Self {
+            show_buffers: false,
+            ..Default::default()
+        }
+    }
+}
+
+/// Format an array of iovecs with consistent styling
+pub async fn format_iovec_array(
+    sf: &mut SyscallFormatter<'_>,
+    iovecs: &[Iovec],
+    iov_lens: &[usize],
+    iov_bufs: &[[u8; LARGER_READ_SIZE]],
+    count: usize,
+    options: &IovecFormatOptions,
+) -> anyhow::Result<()> {
+    with_array!(sf, {
+        for i in 0..count.min(iovecs.len()) {
+            arg!(sf, "iovec");
+            with_struct!(sf, {
+                format_single_iovec(
+                    sf,
+                    &iovecs[i],
+                    if options.show_buffers && i < iov_bufs.len() && i < iov_lens.len() {
+                        let buf_len = iov_lens[i]
+                            .min(options.max_buffer_display)
+                            .min(LARGER_READ_SIZE);
+                        if buf_len > 0 {
+                            Some(&iov_bufs[i][..buf_len])
+                        } else {
+                            None
+                        }
+                    } else {
+                        None
+                    },
+                )
+                .await?;
+            });
+        }
+        if options.truncate_long_arrays && count > iovecs.len() {
+            arg!(sf, "...");
+        }
+    });
+    Ok(())
+}
+
+/// Format a single iovec consistently
+pub async fn format_single_iovec(
+    sf: &mut SyscallFormatter<'_>,
+    iovec: &Iovec,
+    buf: Option<&[u8]>,
+) -> anyhow::Result<()> {
+    argf!(sf, "base: 0x{:x}", iovec.iov_base);
+    argf!(sf, "len: {}", iovec.iov_len);
+    if let Some(buffer) = buf {
+        if !buffer.is_empty() {
+            argf!(sf, "buf: {}", format_bytes(buffer));
+        } else {
+            arg!(sf, "buf: NULL");
+        }
+    }
+    Ok(())
 }

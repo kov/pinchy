@@ -170,7 +170,7 @@ syscall_handler!(readv, vector_io, args, data, return_value, {
         IovecOp::Read,
         &mut data.iovecs,
         &mut data.iov_lens,
-        &mut data.iov_bufs,
+        Some(&mut data.iov_bufs),
         &mut data.read_count,
         return_value,
     );
@@ -187,7 +187,7 @@ syscall_handler!(writev, vector_io, args, data, return_value, {
         IovecOp::Write,
         &mut data.iovecs,
         &mut data.iov_lens,
-        &mut data.iov_bufs,
+        Some(&mut data.iov_bufs),
         &mut data.read_count,
         return_value,
     );
@@ -205,7 +205,7 @@ syscall_handler!(preadv, vector_io, args, data, return_value, {
         IovecOp::Read,
         &mut data.iovecs,
         &mut data.iov_lens,
-        &mut data.iov_bufs,
+        Some(&mut data.iov_bufs),
         &mut data.read_count,
         return_value,
     );
@@ -223,7 +223,7 @@ syscall_handler!(pwritev, vector_io, args, data, return_value, {
         IovecOp::Write,
         &mut data.iovecs,
         &mut data.iov_lens,
-        &mut data.iov_bufs,
+        Some(&mut data.iov_bufs),
         &mut data.read_count,
         return_value,
     );
@@ -242,7 +242,7 @@ syscall_handler!(preadv2, vector_io, args, data, return_value, {
         IovecOp::Read,
         &mut data.iovecs,
         &mut data.iov_lens,
-        &mut data.iov_bufs,
+        Some(&mut data.iov_bufs),
         &mut data.read_count,
         return_value,
     );
@@ -261,7 +261,7 @@ syscall_handler!(pwritev2, vector_io, args, data, return_value, {
         IovecOp::Write,
         &mut data.iovecs,
         &mut data.iov_lens,
-        &mut data.iov_bufs,
+        Some(&mut data.iov_bufs),
         &mut data.read_count,
         return_value,
     );
@@ -413,7 +413,7 @@ syscall_handler!(vmsplice, vmsplice, args, data, return_value, {
         IovecOp::Write,
         &mut data.iovecs,
         &mut data.iov_lens,
-        &mut data.iov_bufs,
+        Some(&mut data.iov_bufs),
         &mut data.read_count,
         return_value,
     );

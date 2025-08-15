@@ -472,6 +472,14 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             "syscall_exit_process_madvise",
             syscalls::SYS_process_madvise,
         ),
+        (
+            "syscall_exit_process_vm_readv",
+            syscalls::SYS_process_vm_readv,
+        ),
+        (
+            "syscall_exit_process_vm_writev",
+            syscalls::SYS_process_vm_writev,
+        ),
         ("syscall_exit_statfs", syscalls::SYS_statfs),
         ("syscall_exit_fstatfs", syscalls::SYS_fstatfs),
         ("syscall_exit_fsopen", syscalls::SYS_fsopen),

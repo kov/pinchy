@@ -741,8 +741,8 @@ fn readv_writev_syscalls() {
 
     // Expected output - readv and writev calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID writev(fd: NUMBER, iov: [ iovec { base: "Hello, ", len: 7 }, iovec { base: "world!", len: 6 } ], iovcnt: 2) = 13 (bytes)
-        PID readv(fd: NUMBER, iov: [ iovec { base: "Hello, ", len: 7 }, iovec { base: "world!", len: 6 } ], iovcnt: 2) = 13 (bytes)
+        PID writev(fd: NUMBER, iov: [ iovec { base: ADDR, len: 7, buf: "Hello, " }, iovec { base: ADDR, len: 6, buf: "world!" } ], iovcnt: 2) = 13 (bytes)
+        PID readv(fd: NUMBER, iov: [ iovec { base: ADDR, len: 7, buf: "Hello, " }, iovec { base: ADDR, len: 6, buf: "world!" } ], iovcnt: 2) = 13 (bytes)
     "#});
 
     let output = handle.join().unwrap();

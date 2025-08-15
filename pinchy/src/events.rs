@@ -7,8 +7,11 @@ use log::{error, trace};
 use pinchy_common::{kernel_types, syscalls, SyscallEvent};
 
 use crate::{
-    arg, argf, finish, format_helpers::*, formatting::Formatter, ioctls::format_ioctl_request, raw,
-    with_array, with_struct,
+    arg, argf, finish,
+    format_helpers::{format_futex_waitv_flags, *},
+    formatting::Formatter,
+    ioctls::format_ioctl_request,
+    raw, with_array, with_struct,
 };
 
 pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> anyhow::Result<()> {
@@ -1427,13 +1430,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     with_struct!(sf, {
                         argf!(sf, "uaddr: 0x{:x}", w.uaddr);
                         argf!(sf, "val: {}", w.val);
-                        argf!(sf, "flags: 0x{:x}", w.flags);
+                        argf!(sf, "flags: {}", format_futex_waitv_flags(w.flags));
                     });
                 }
             });
 
             argf!(sf, "nr_waiters: {}", data.nr_waiters);
-            argf!(sf, "flags: 0x{:x}", data.flags);
+            argf!(sf, "flags: {}", format_futex_waitv_flags(data.flags));
 
             arg!(sf, "timeout:");
             if data.has_timeout {

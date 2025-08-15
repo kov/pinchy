@@ -143,7 +143,7 @@ syscall_test!(
 
         event
     },
-    "42 futex_waitv(waiters: [ waiter { uaddr: 0xbeef, val: 1, flags: 0x0 }, waiter { uaddr: 0xbeef2, val: 2, flags: 0x0 } ], nr_waiters: 2, flags: 0x0, timeout: { secs: 5, nanos: 6 }, clockid: CLOCK_MONOTONIC) = 1 (woken)\n"
+    "42 futex_waitv(waiters: [ waiter { uaddr: 0xbeef, val: 1, flags: 0 }, waiter { uaddr: 0xbeef2, val: 2, flags: 0 } ], nr_waiters: 2, flags: 0, timeout: { secs: 5, nanos: 6 }, clockid: CLOCK_MONOTONIC) = 1 (woken)\n"
 );
 
 syscall_test!(

@@ -3844,6 +3844,43 @@ pub fn format_xattr_flags(flags: i32) -> Cow<'static, str> {
     }
 }
 
+/// Format futex_waitv flags for display
+pub fn format_futex_waitv_flags(flags: u32) -> std::borrow::Cow<'static, str> {
+    if flags == 0 {
+        return std::borrow::Cow::Borrowed("0");
+    }
+
+    const FUTEX_32: u32 = 0x1;
+    const FUTEX_WAIT_MULTIPLE: u32 = 0x10;
+
+    let mut parts = Vec::new();
+    if flags & FUTEX_32 != 0 {
+        parts.push("FUTEX_32");
+    }
+    if flags & (libc::FUTEX_PRIVATE_FLAG as u32) != 0 {
+        parts.push("FUTEX_PRIVATE_FLAG");
+    }
+    if flags & (libc::FUTEX_CLOCK_REALTIME as u32) != 0 {
+        parts.push("FUTEX_CLOCK_REALTIME");
+    }
+    if flags & FUTEX_WAIT_MULTIPLE != 0 {
+        parts.push("FUTEX_WAIT_MULTIPLE");
+    }
+    let known_flags = FUTEX_32
+        | (libc::FUTEX_PRIVATE_FLAG as u32)
+        | (libc::FUTEX_CLOCK_REALTIME as u32)
+        | FUTEX_WAIT_MULTIPLE;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+    if parts.is_empty() {
+        std::borrow::Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        std::borrow::Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -156,6 +156,8 @@ pub union SyscallEventData {
     pub socketpair: SocketpairData,
     pub getsockname: GetSocknameData,
     pub getpeername: GetpeernameData,
+    pub setsockopt: SetsockoptData,
+    pub getsockopt: GetsockoptData,
     pub select: SelectData,
     pub pselect6: Pselect6Data,
     pub getcwd: GetcwdData,
@@ -976,6 +978,26 @@ pub struct GetpeernameData {
     pub has_addr: bool,
     pub addr: crate::kernel_types::Sockaddr,
     pub addrlen: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetsockoptData {
+    pub sockfd: i32,
+    pub level: i32,
+    pub optname: i32,
+    pub optval: [u8; MEDIUM_READ_SIZE],
+    pub optlen: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetsockoptData {
+    pub sockfd: i32,
+    pub level: i32,
+    pub optname: i32,
+    pub optval: [u8; MEDIUM_READ_SIZE],
+    pub optlen: u32,
 }
 
 #[repr(C)]

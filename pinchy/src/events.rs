@@ -2393,6 +2393,52 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_setsockopt => {
+            let data = unsafe { event.data.setsockopt };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            argf!(sf, "level: {}", format_socket_level(data.level));
+            argf!(
+                sf,
+                "optname: {}",
+                format_socket_option(data.level, data.optname)
+            );
+
+            if data.optlen > 0 {
+                let actual_len =
+                    core::cmp::min(data.optlen as usize, pinchy_common::MEDIUM_READ_SIZE);
+                argf!(sf, "optval: {}", format_bytes(&data.optval[..actual_len]));
+            } else {
+                arg!(sf, "optval: NULL");
+            }
+
+            argf!(sf, "optlen: {}", data.optlen);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getsockopt => {
+            let data = unsafe { event.data.getsockopt };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            argf!(sf, "level: {}", format_socket_level(data.level));
+            argf!(
+                sf,
+                "optname: {}",
+                format_socket_option(data.level, data.optname)
+            );
+
+            if event.return_value >= 0 && data.optlen > 0 {
+                let actual_len =
+                    core::cmp::min(data.optlen as usize, pinchy_common::MEDIUM_READ_SIZE);
+                argf!(sf, "optval: {}", format_bytes(&data.optval[..actual_len]));
+            } else {
+                arg!(sf, "optval: NULL");
+            }
+
+            argf!(sf, "optlen: {}", data.optlen);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_wait4 => {
             let data = unsafe { event.data.wait4 };
 

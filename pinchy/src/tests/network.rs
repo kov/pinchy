@@ -5,12 +5,12 @@ use pinchy_common::{
     kernel_types::{Iovec, Msghdr, Sockaddr},
     syscalls::{
         SYS_accept, SYS_accept4, SYS_bind, SYS_connect, SYS_getpeername, SYS_getsockname,
-        SYS_listen, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg, SYS_shutdown, SYS_socket,
-        SYS_socketpair,
+        SYS_getsockopt, SYS_listen, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg, SYS_setsockopt,
+        SYS_shutdown, SYS_socket, SYS_socketpair,
     },
-    Accept4Data, AcceptData, GetSocknameData, GetpeernameData, ListenData, RecvfromData,
-    RecvmsgData, SendmsgData, ShutdownData, SockaddrData, SocketData, SocketpairData, SyscallEvent,
-    SyscallEventData,
+    Accept4Data, AcceptData, GetSocknameData, GetpeernameData, GetsockoptData, ListenData,
+    RecvfromData, RecvmsgData, SendmsgData, SetsockoptData, ShutdownData, SockaddrData, SocketData,
+    SocketpairData, SyscallEvent, SyscallEventData,
 };
 
 use crate::syscall_test;
@@ -1288,4 +1288,135 @@ syscall_test!(
         }
     },
     "8888 getpeername(sockfd: 11, addr: NULL, addrlen: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_setsockopt_so_reuseaddr,
+    {
+        let mut optval = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        optval[0] = 1; // Enable SO_REUSEADDR
+        optval[1] = 0;
+        optval[2] = 0;
+        optval[3] = 0;
+
+        SyscallEvent {
+            syscall_nr: SYS_setsockopt,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                setsockopt: SetsockoptData {
+                    sockfd: 5,
+                    level: libc::SOL_SOCKET,
+                    optname: libc::SO_REUSEADDR,
+                    optval,
+                    optlen: 4,
+                },
+            },
+        }
+    },
+    r#"1234 setsockopt(sockfd: 5, level: SOL_SOCKET, optname: SO_REUSEADDR, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+"#
+);
+
+syscall_test!(
+    parse_setsockopt_tcp_nodelay,
+    {
+        let mut optval = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        optval[0] = 1; // Enable TCP_NODELAY
+        optval[1] = 0;
+        optval[2] = 0;
+        optval[3] = 0;
+
+        SyscallEvent {
+            syscall_nr: SYS_setsockopt,
+            pid: 2345,
+            tid: 2345,
+            return_value: 0,
+            data: SyscallEventData {
+                setsockopt: SetsockoptData {
+                    sockfd: 8,
+                    level: libc::IPPROTO_TCP,
+                    optname: libc::TCP_NODELAY,
+                    optval,
+                    optlen: 4,
+                },
+            },
+        }
+    },
+    r#"2345 setsockopt(sockfd: 8, level: IPPROTO_TCP, optname: TCP_NODELAY, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+"#
+);
+
+syscall_test!(
+    parse_setsockopt_zero_length,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_setsockopt,
+            pid: 3456,
+            tid: 3456,
+            return_value: 0,
+            data: SyscallEventData {
+                setsockopt: SetsockoptData {
+                    sockfd: 10,
+                    level: libc::SOL_SOCKET,
+                    optname: libc::SO_KEEPALIVE,
+                    optval: [0u8; pinchy_common::MEDIUM_READ_SIZE],
+                    optlen: 0,
+                },
+            },
+        }
+    },
+    "3456 setsockopt(sockfd: 10, level: SOL_SOCKET, optname: SO_KEEPALIVE, optval: NULL, optlen: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getsockopt_so_error,
+    {
+        let mut optval = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        optval[0] = 0; // No error
+        optval[1] = 0;
+        optval[2] = 0;
+        optval[3] = 0;
+
+        SyscallEvent {
+            syscall_nr: SYS_getsockopt,
+            pid: 4567,
+            tid: 4567,
+            return_value: 0,
+            data: SyscallEventData {
+                getsockopt: GetsockoptData {
+                    sockfd: 7,
+                    level: libc::SOL_SOCKET,
+                    optname: libc::SO_ERROR,
+                    optval,
+                    optlen: 4,
+                },
+            },
+        }
+    },
+    r#"4567 getsockopt(sockfd: 7, level: SOL_SOCKET, optname: SO_ERROR, optval: "\0\0\0\0", optlen: 4) = 0 (success)
+"#
+);
+
+syscall_test!(
+    parse_getsockopt_failed,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getsockopt,
+            pid: 5678,
+            tid: 5678,
+            return_value: -1,
+            data: SyscallEventData {
+                getsockopt: GetsockoptData {
+                    sockfd: 9,
+                    level: libc::SOL_SOCKET,
+                    optname: libc::SO_TYPE,
+                    optval: [0u8; pinchy_common::MEDIUM_READ_SIZE],
+                    optlen: 0,
+                },
+            },
+        }
+    },
+    "5678 getsockopt(sockfd: 9, level: SOL_SOCKET, optname: SO_TYPE, optval: NULL, optlen: 0) = -1 (error)\n"
 );

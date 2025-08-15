@@ -2341,6 +2341,22 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_socketpair => {
+            let data = unsafe { event.data.socketpair };
+
+            argf!(sf, "domain: {}", format_socket_domain(data.domain));
+            argf!(sf, "type: {}", format_socket_type(data.type_));
+            argf!(sf, "protocol: {}", data.protocol);
+
+            // Show the resulting file descriptors only if successful
+            if event.return_value == 0 {
+                argf!(sf, "sv: [{}, {}]", data.sv[0], data.sv[1]);
+            } else {
+                arg!(sf, "sv: [?, ?]");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_wait4 => {
             let data = unsafe { event.data.wait4 };
 

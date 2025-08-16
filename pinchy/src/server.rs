@@ -541,6 +541,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_getpeername", syscalls::SYS_getpeername),
         ("syscall_exit_setsockopt", syscalls::SYS_setsockopt),
         ("syscall_exit_getsockopt", syscalls::SYS_getsockopt),
+        ("syscall_exit_recvmmsg", syscalls::SYS_recvmmsg),
+        ("syscall_exit_sendmmsg", syscalls::SYS_sendmmsg),
         ("syscall_exit_socketpair", syscalls::SYS_socketpair),
         ("syscall_exit_pselect6", syscalls::SYS_pselect6),
         #[cfg(target_arch = "x86_64")]

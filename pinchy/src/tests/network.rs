@@ -2,15 +2,15 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::{Iovec, Msghdr, Sockaddr},
+    kernel_types::{Iovec, Mmsghdr, Msghdr, Sockaddr, Timespec},
     syscalls::{
         SYS_accept, SYS_accept4, SYS_bind, SYS_connect, SYS_getpeername, SYS_getsockname,
-        SYS_getsockopt, SYS_listen, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg, SYS_sendto,
-        SYS_setsockopt, SYS_shutdown, SYS_socket, SYS_socketpair,
+        SYS_getsockopt, SYS_listen, SYS_recvfrom, SYS_recvmmsg, SYS_recvmsg, SYS_sendmmsg,
+        SYS_sendmsg, SYS_sendto, SYS_setsockopt, SYS_shutdown, SYS_socket, SYS_socketpair,
     },
     Accept4Data, AcceptData, GetSocknameData, GetpeernameData, GetsockoptData, ListenData,
-    RecvfromData, RecvmsgData, SendmsgData, SendtoData, SetsockoptData, ShutdownData, SockaddrData,
-    SocketData, SocketpairData, SyscallEvent, SyscallEventData,
+    RecvMmsgData, RecvfromData, RecvmsgData, SendMmsgData, SendmsgData, SendtoData, SetsockoptData,
+    ShutdownData, SockaddrData, SocketData, SocketpairData, SyscallEvent, SyscallEventData,
 };
 
 use crate::syscall_test;
@@ -1508,4 +1508,130 @@ syscall_test!(
         }
     },
     "5678 getsockopt(sockfd: 9, level: SOL_SOCKET, optname: SO_TYPE, optval: NULL, optlen: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_recvmmsg,
+    {
+        let mut msghdr1 = Msghdr::default();
+        let mut sockaddr1 = Sockaddr {
+            sa_family: libc::AF_INET as u16,
+            ..Default::default()
+        };
+        sockaddr1.sa_data[0] = 0x1f;
+        sockaddr1.sa_data[1] = 0x40;
+        sockaddr1.sa_data[2] = 127;
+        sockaddr1.sa_data[3] = 0;
+        sockaddr1.sa_data[4] = 0;
+        sockaddr1.sa_data[5] = 1;
+        msghdr1.name = sockaddr1;
+        msghdr1.has_name = true;
+        msghdr1.msg_name = 0x7fff12345678;
+        msghdr1.msg_namelen = 16;
+        msghdr1.msg_iov[0] = Iovec {
+            iov_base: 0x7fff87654321,
+            iov_len: 1024,
+        };
+        msghdr1.msg_iovlen = 1;
+        msghdr1.msg_flags = libc::MSG_DONTWAIT;
+
+        let mut msghdr2 = Msghdr::default();
+        msghdr2.msg_iov[0] = Iovec {
+            iov_base: 0x7fff11111111,
+            iov_len: 512,
+        };
+        msghdr2.msg_iovlen = 1;
+
+        let mut msgs = [Mmsghdr::default(); pinchy_common::kernel_types::MMSGHDR_COUNT];
+        msgs[0] = Mmsghdr {
+            msg_hdr: msghdr1,
+            msg_len: 1024,
+        };
+        msgs[1] = Mmsghdr {
+            msg_hdr: msghdr2,
+            msg_len: 512,
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_recvmmsg,
+            pid: 2345,
+            tid: 2345,
+            return_value: 2,
+            data: SyscallEventData {
+                recvmmsg: RecvMmsgData {
+                    sockfd: 6,
+                    flags: libc::MSG_DONTWAIT,
+                    vlen: 4,
+                    timeout: Timespec {
+                        seconds: 5,
+                        nanos: 500000000,
+                    },
+                    has_timeout: true,
+                    msgs,
+                    msgs_count: 2,
+                },
+            },
+        }
+    },
+    "2345 recvmmsg(sockfd: 6, msgvec: [  { msg_hdr: { name: {family: AF_INET, len: 16}, iov: [  { base: 0x7fff87654321, len: 1024 } ], iovlen: 1, control: NULL, flags: 0x40 (MSG_DONTWAIT) }, msg_len: 1024 } { msg_hdr: { name: NULL, iov: [  { base: 0x7fff11111111, len: 512 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 512 } ], vlen: 4, flags: 0x40 (MSG_DONTWAIT), timeout: { tv_sec: 5, tv_nsec: 500000000 }) = 2 (messages)\n"
+);
+
+syscall_test!(
+    parse_sendmmsg,
+    {
+        let mut msghdr1 = Msghdr::default();
+        let mut sockaddr1 = Sockaddr {
+            sa_family: libc::AF_INET as u16,
+            ..Default::default()
+        };
+        sockaddr1.sa_data[0] = 0x1f;
+        sockaddr1.sa_data[1] = 0x40;
+        sockaddr1.sa_data[2] = 127;
+        sockaddr1.sa_data[3] = 0;
+        sockaddr1.sa_data[4] = 0;
+        sockaddr1.sa_data[5] = 1;
+        msghdr1.name = sockaddr1;
+        msghdr1.has_name = true;
+        msghdr1.msg_name = 0x7fff12345678;
+        msghdr1.msg_namelen = 16;
+        msghdr1.msg_iov[0] = Iovec {
+            iov_base: 0x7fff87654321,
+            iov_len: 256,
+        };
+        msghdr1.msg_iovlen = 1;
+
+        let mut msghdr2 = Msghdr::default();
+        msghdr2.msg_iov[0] = Iovec {
+            iov_base: 0x7fff22222222,
+            iov_len: 128,
+        };
+        msghdr2.msg_iovlen = 1;
+
+        let mut msgs = [Mmsghdr::default(); pinchy_common::kernel_types::MMSGHDR_COUNT];
+        msgs[0] = Mmsghdr {
+            msg_hdr: msghdr1,
+            msg_len: 0, // sendmmsg sets this on output
+        };
+        msgs[1] = Mmsghdr {
+            msg_hdr: msghdr2,
+            msg_len: 0, // sendmmsg sets this on output
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_sendmmsg,
+            pid: 3456,
+            tid: 3456,
+            return_value: 2,
+            data: SyscallEventData {
+                sendmmsg: SendMmsgData {
+                    sockfd: 7,
+                    flags: libc::MSG_NOSIGNAL,
+                    vlen: 2,
+                    msgs,
+                    msgs_count: 2,
+                },
+            },
+        }
+    },
+    "3456 sendmmsg(sockfd: 7, msgvec: [  { msg_hdr: { name: {family: AF_INET, len: 16}, iov: [  { base: 0x7fff87654321, len: 256 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } { msg_hdr: { name: NULL, iov: [  { base: 0x7fff22222222, len: 128 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } ], vlen: 2, flags: 0x4000 (MSG_NOSIGNAL)) = 2 (messages)\n"
 );

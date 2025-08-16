@@ -159,6 +159,8 @@ pub union SyscallEventData {
     pub getpeername: GetpeernameData,
     pub setsockopt: SetsockoptData,
     pub getsockopt: GetsockoptData,
+    pub recvmmsg: RecvMmsgData,
+    pub sendmmsg: SendMmsgData,
     pub select: SelectData,
     pub pselect6: Pselect6Data,
     pub getcwd: GetcwdData,
@@ -2385,6 +2387,54 @@ impl Default for SetdomainnameData {
         Self {
             name: [0; MEDIUM_READ_SIZE],
             len: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RecvMmsgData {
+    pub sockfd: i32,
+    pub flags: i32,
+    pub vlen: u32,                              // Number of messages
+    pub timeout: crate::kernel_types::Timespec, // For recvmmsg only
+    pub has_timeout: bool,                      // Whether timeout was provided
+    pub msgs: [crate::kernel_types::Mmsghdr; crate::kernel_types::MMSGHDR_COUNT], // Array of messages
+    pub msgs_count: u32, // How many messages we captured
+}
+
+impl Default for RecvMmsgData {
+    fn default() -> Self {
+        Self {
+            sockfd: 0,
+            flags: 0,
+            vlen: 0,
+            timeout: crate::kernel_types::Timespec::default(),
+            has_timeout: false,
+            msgs: [crate::kernel_types::Mmsghdr::default(); crate::kernel_types::MMSGHDR_COUNT],
+            msgs_count: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SendMmsgData {
+    pub sockfd: i32,
+    pub flags: i32,
+    pub vlen: u32, // Number of messages
+    pub msgs: [crate::kernel_types::Mmsghdr; crate::kernel_types::MMSGHDR_COUNT], // Array of messages
+    pub msgs_count: u32, // How many messages we captured
+}
+
+impl Default for SendMmsgData {
+    fn default() -> Self {
+        Self {
+            sockfd: 0,
+            flags: 0,
+            vlen: 0,
+            msgs: [crate::kernel_types::Mmsghdr::default(); crate::kernel_types::MMSGHDR_COUNT],
+            msgs_count: 0,
         }
     }
 }

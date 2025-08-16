@@ -360,6 +360,16 @@ pub struct Msghdr {
     pub control_data: [u8; MSG_CONTROL_SIZE], // Captured control message data
 }
 
+/// Multiple message header structure for sendmmsg/recvmmsg operations
+/// Note: We capture a limited number of messages due to eBPF stack constraints
+pub const MMSGHDR_COUNT: usize = 64; // Number of mmsghdr structures to capture
+#[repr(C)]
+#[derive(Debug, Copy, Clone, Default)]
+pub struct Mmsghdr {
+    pub msg_hdr: Msghdr, // Message header
+    pub msg_len: u32,    // Number of bytes sent/received for this message
+}
+
 impl Default for Msghdr {
     fn default() -> Self {
         Self {

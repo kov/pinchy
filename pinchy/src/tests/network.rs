@@ -5,12 +5,12 @@ use pinchy_common::{
     kernel_types::{Iovec, Msghdr, Sockaddr},
     syscalls::{
         SYS_accept, SYS_accept4, SYS_bind, SYS_connect, SYS_getpeername, SYS_getsockname,
-        SYS_getsockopt, SYS_listen, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg, SYS_setsockopt,
-        SYS_shutdown, SYS_socket, SYS_socketpair,
+        SYS_getsockopt, SYS_listen, SYS_recvfrom, SYS_recvmsg, SYS_sendmsg, SYS_sendto,
+        SYS_setsockopt, SYS_shutdown, SYS_socket, SYS_socketpair,
     },
     Accept4Data, AcceptData, GetSocknameData, GetpeernameData, GetsockoptData, ListenData,
-    RecvfromData, RecvmsgData, SendmsgData, SetsockoptData, ShutdownData, SockaddrData, SocketData,
-    SocketpairData, SyscallEvent, SyscallEventData,
+    RecvfromData, RecvmsgData, SendmsgData, SendtoData, SetsockoptData, ShutdownData, SockaddrData,
+    SocketData, SocketpairData, SyscallEvent, SyscallEventData,
 };
 
 use crate::syscall_test;
@@ -744,6 +744,95 @@ syscall_test!(
         }
     },
     "9999 recvfrom(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), src_addr: NULL, addrlen: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    test_sendto_with_address,
+    {
+        let mut addr = Sockaddr {
+            sa_family: libc::AF_INET as u16,
+            ..Default::default()
+        };
+        addr.sa_data[0] = 0x1f;
+        addr.sa_data[1] = 0x90;
+        addr.sa_data[2] = 192;
+        addr.sa_data[3] = 168;
+        addr.sa_data[4] = 1;
+        addr.sa_data[5] = 100;
+        let mut sent_data = [0u8; pinchy_common::DATA_READ_SIZE];
+        sent_data[..13].copy_from_slice(b"Hello, world!");
+        SyscallEvent {
+            pid: 1234,
+            tid: 1234,
+            syscall_nr: SYS_sendto,
+            return_value: 13,
+            data: SyscallEventData {
+                sendto: SendtoData {
+                    sockfd: 8,
+                    size: 13,
+                    flags: 0,
+                    has_addr: true,
+                    addr,
+                    addrlen: 16,
+                    sent_data,
+                    sent_len: 13,
+                },
+            },
+        }
+    },
+    "1234 sendto(sockfd: 8, buf: \"Hello, world!\", size: 13, flags: 0, dest_addr: { family: AF_INET, addr: 192.168.1.100:8080 }, addrlen: 16) = 13 (bytes)\n"
+);
+
+syscall_test!(
+    test_sendto_without_address,
+    {
+        let mut sent_data = [0u8; pinchy_common::DATA_READ_SIZE];
+        sent_data[..4].copy_from_slice(b"test");
+        SyscallEvent {
+            pid: 5678,
+            tid: 5678,
+            syscall_nr: SYS_sendto,
+            return_value: 4,
+            data: SyscallEventData {
+                sendto: SendtoData {
+                    sockfd: 3,
+                    size: 4,
+                    flags: libc::MSG_DONTWAIT,
+                    has_addr: false,
+                    addr: Sockaddr::default(),
+                    addrlen: 0,
+                    sent_data,
+                    sent_len: 4,
+                },
+            },
+        }
+    },
+    "5678 sendto(sockfd: 3, buf: \"test\", size: 4, flags: 0x40 (MSG_DONTWAIT), dest_addr: NULL, addrlen: 0) = 4 (bytes)\n"
+);
+
+syscall_test!(
+    test_sendto_failed,
+    {
+        SyscallEvent {
+            pid: 9999,
+            tid: 9999,
+            syscall_nr: SYS_sendto,
+            return_value: -1,
+            data: SyscallEventData {
+                sendto: SendtoData {
+                    sockfd: 4,
+                    size: 256,
+                    flags: libc::MSG_DONTWAIT,
+                    has_addr: false,
+                    addr: Sockaddr::default(),
+                    addrlen: 0,
+                    sent_data: [0u8; pinchy_common::DATA_READ_SIZE],
+                    sent_len: 0,
+                },
+            },
+        }
+    },
+    "9999 sendto(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), dest_addr: NULL, addrlen: 0) = -1 (error)\n"
 );
 
 syscall_test!(

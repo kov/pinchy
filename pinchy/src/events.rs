@@ -2255,6 +2255,39 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_sendto => {
+            let data = unsafe { event.data.sendto };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+
+            if data.sent_len > 0 {
+                let buf = &data.sent_data[..data.sent_len];
+                let left_over = if data.size > buf.len() {
+                    format!(" ... ({} more bytes)", data.size - buf.len())
+                } else {
+                    String::new()
+                };
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: NULL");
+            }
+
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_sendmsg_flags(data.flags));
+
+            arg!(sf, "dest_addr:");
+            if data.has_addr {
+                with_struct!(sf, {
+                    format_sockaddr(&mut sf, &data.addr).await?;
+                });
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "addrlen: {}", data.addrlen);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_sendmsg => {
             let data = unsafe { event.data.sendmsg };
 

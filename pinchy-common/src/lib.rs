@@ -73,6 +73,7 @@ pub union SyscallEventData {
     pub readlinkat: ReadlinkatData,
     pub recvmsg: RecvmsgData,
     pub recvfrom: RecvfromData,
+    pub sendto: SendtoData,
     pub sendmsg: SendmsgData,
     pub accept: AcceptData,
     pub accept4: Accept4Data,
@@ -887,6 +888,19 @@ pub struct RecvfromData {
     pub addrlen: u32,
     pub received_data: [u8; crate::DATA_READ_SIZE],
     pub received_len: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SendtoData {
+    pub sockfd: i32,
+    pub size: usize,
+    pub flags: i32,
+    pub has_addr: bool,
+    pub addr: crate::kernel_types::Sockaddr,
+    pub addrlen: u32,
+    pub sent_data: [u8; crate::DATA_READ_SIZE],
+    pub sent_len: usize,
 }
 
 #[repr(C)]

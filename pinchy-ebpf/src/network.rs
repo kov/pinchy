@@ -105,6 +105,41 @@ syscall_handler!(recvfrom, recvfrom, args, data, return_value, {
     }
 });
 
+syscall_handler!(sendto, sendto, args, data, {
+    data.sockfd = args[0] as i32;
+    data.size = args[2] as usize;
+    data.flags = args[3] as i32;
+    data.has_addr = false;
+    data.addr = kernel_types::Sockaddr::default();
+    data.addrlen = 0;
+    data.sent_data = [0u8; pinchy_common::DATA_READ_SIZE];
+    data.sent_len = 0;
+    let buf_ptr = args[1] as *const u8;
+    let dest_addr_ptr = args[4] as *const u8;
+    let addrlen = args[5] as u32;
+
+    unsafe {
+        if !dest_addr_ptr.is_null() && addrlen > 0 {
+            data.addrlen = addrlen;
+            if addrlen <= core::mem::size_of::<kernel_types::Sockaddr>() as u32 {
+                if let Ok(sockaddr) =
+                    bpf_probe_read_user::<kernel_types::Sockaddr>(dest_addr_ptr as *const _)
+                {
+                    data.addr = sockaddr;
+                    data.has_addr = true;
+                }
+            }
+        }
+        if data.size > 0 && !buf_ptr.is_null() {
+            let read_size = core::cmp::min(data.size, pinchy_common::DATA_READ_SIZE);
+            if read_size > 0 {
+                let _ = bpf_probe_read_buf(buf_ptr, &mut data.sent_data[..read_size]);
+                data.sent_len = read_size;
+            }
+        }
+    }
+});
+
 syscall_handler!(bind, sockaddr, args, data, {
     data.sockfd = args[0] as i32;
     data.addrlen = args[2] as u32;

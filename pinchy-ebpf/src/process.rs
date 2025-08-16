@@ -237,6 +237,27 @@ syscall_handler!(wait4, wait4, args, data, return_value, {
     }
 });
 
+syscall_handler!(waitid, waitid, args, data, return_value, {
+    data.idtype = args[0] as u32;
+    data.id = args[1] as u32;
+    let infop_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
+    data.options = args[3] as i32;
+
+    data.infop = pinchy_common::kernel_types::Siginfo::default();
+    data.has_infop = false;
+
+    if return_value >= 0 && !infop_ptr.is_null() {
+        unsafe {
+            if let Ok(siginfo) =
+                bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(infop_ptr)
+            {
+                data.infop = siginfo;
+                data.has_infop = true;
+            }
+        }
+    }
+});
+
 syscall_handler!(getrusage, getrusage, args, data, return_value, {
     data.who = args[0] as i32;
     let usage_ptr = args[1] as *const Rusage;

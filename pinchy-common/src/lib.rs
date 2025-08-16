@@ -79,6 +79,7 @@ pub union SyscallEventData {
     pub accept: AcceptData,
     pub accept4: Accept4Data,
     pub wait4: Wait4Data,
+    pub waitid: WaitidData,
     pub getrusage: GetrusageData,
     pub clone3: Clone3Data,
     pub getpid: GetpidData,
@@ -934,6 +935,16 @@ pub struct Wait4Data {
     pub options: i32,
     pub has_rusage: bool,
     pub rusage: kernel_types::Rusage,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct WaitidData {
+    pub idtype: u32,
+    pub id: u32,
+    pub infop: kernel_types::Siginfo,
+    pub options: i32,
+    pub has_infop: bool,
 }
 
 #[repr(C)]

@@ -2603,6 +2603,31 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_waitid => {
+            let data = unsafe { event.data.waitid };
+
+            argf!(sf, "idtype: {}", format_waitid_idtype(data.idtype as u32));
+
+            // Format id based on idtype
+            match data.idtype {
+                0 => arg!(sf, "id: 0"),                   // P_ALL - id is ignored
+                1 => argf!(sf, "id: {}", data.id as i32), // P_PID - show as signed PID
+                2 => argf!(sf, "id: {}", data.id as i32), // P_PGID - show as signed PGID
+                3 => argf!(sf, "id: {}", data.id),        // P_PIDFD - show as FD
+                _ => argf!(sf, "id: {}", data.id),
+            }
+
+            arg!(sf, "infop:");
+            if data.has_infop && event.return_value >= 0 {
+                format_siginfo(&mut sf, &data.infop).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "options: {}", format_wait_options(data.options));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getrusage => {
             let data = unsafe { event.data.getrusage };
 

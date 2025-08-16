@@ -2994,6 +2994,22 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_sethostname => {
+            let data = unsafe { event.data.sethostname };
+
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(sf, "len: {}", data.len);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setdomainname => {
+            let data = unsafe { event.data.setdomainname };
+
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(sf, "len: {}", data.len);
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

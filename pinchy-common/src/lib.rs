@@ -261,6 +261,8 @@ pub union SyscallEventData {
     pub init_module: InitModuleData,
     pub finit_module: FinitModuleData,
     pub delete_module: DeleteModuleData,
+    pub sethostname: SethostnameData,
+    pub setdomainname: SetdomainnameData,
 }
 
 #[repr(C)]
@@ -2337,6 +2339,38 @@ impl Default for DeleteModuleData {
         Self {
             name: [0; MEDIUM_READ_SIZE],
             flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SethostnameData {
+    pub name: [u8; MEDIUM_READ_SIZE], // hostname (max 64 bytes according to man page)
+    pub len: usize,
+}
+
+impl Default for SethostnameData {
+    fn default() -> Self {
+        Self {
+            name: [0; MEDIUM_READ_SIZE],
+            len: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetdomainnameData {
+    pub name: [u8; MEDIUM_READ_SIZE], // domain name (max 64 bytes according to man page)
+    pub len: usize,
+}
+
+impl Default for SetdomainnameData {
+    fn default() -> Self {
+        Self {
+            name: [0; MEDIUM_READ_SIZE],
+            len: 0,
         }
     }
 }

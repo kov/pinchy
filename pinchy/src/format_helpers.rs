@@ -2249,7 +2249,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_inotify_rm_watch
         | syscalls::SYS_swapon
         | syscalls::SYS_swapoff
-        | syscalls::SYS_timer_delete => match return_value {
+        | syscalls::SYS_timer_delete
+        | syscalls::SYS_sethostname
+        | syscalls::SYS_setdomainname => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },

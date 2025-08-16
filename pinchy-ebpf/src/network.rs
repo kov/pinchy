@@ -342,3 +342,85 @@ syscall_handler!(getsockopt, getsockopt, args, data, return_value, {
         }
     }
 });
+
+syscall_handler!(recvmmsg, recvmmsg, args, data, return_value, {
+    data.sockfd = args[0] as i32;
+    data.vlen = args[2] as u32;
+    data.flags = args[3] as i32;
+
+    let msgvec_ptr = args[1] as *const u8;
+    let timeout_ptr = args[4] as *const u8;
+
+    // Read timeout if provided
+    data.has_timeout = false;
+    if !timeout_ptr.is_null() {
+        unsafe {
+            if let Ok(timeout) = bpf_probe_read_user::<pinchy_common::kernel_types::Timespec>(
+                timeout_ptr as *const _,
+            ) {
+                data.timeout = timeout;
+                data.has_timeout = true;
+            }
+        }
+    }
+
+    // Read messages array
+    data.msgs_count = 0;
+    if !msgvec_ptr.is_null() && data.vlen > 0 {
+        let msg_count = core::cmp::min(
+            data.vlen as usize,
+            pinchy_common::kernel_types::MMSGHDR_COUNT,
+        );
+
+        for i in 0..msg_count {
+            // Each mmsghdr is 64 bytes (56 bytes for msghdr + 4 bytes for msg_len + 4 bytes padding)
+            unsafe {
+                let mmsghdr_ptr = msgvec_ptr.add(i * 64);
+
+                // Parse the msghdr part first
+                parse_msghdr(mmsghdr_ptr, &mut data.msgs[i].msg_hdr);
+
+                // Read msg_len (offset 56 in mmsghdr)
+                if return_value > 0 {
+                    if let Ok(msg_len) =
+                        bpf_probe_read_user::<u32>(mmsghdr_ptr.add(56) as *const u32)
+                    {
+                        data.msgs[i].msg_len = msg_len;
+                    }
+                }
+            }
+        }
+        data.msgs_count = msg_count as u32;
+    }
+});
+
+syscall_handler!(sendmmsg, sendmmsg, args, data, {
+    data.sockfd = args[0] as i32;
+    data.vlen = args[2] as u32;
+    data.flags = args[3] as i32;
+
+    let msgvec_ptr = args[1] as *const u8;
+
+    // Read messages array
+    data.msgs_count = 0;
+    if !msgvec_ptr.is_null() && data.vlen > 0 {
+        let msg_count = core::cmp::min(
+            data.vlen as usize,
+            pinchy_common::kernel_types::MMSGHDR_COUNT,
+        );
+
+        for i in 0..msg_count {
+            // Each mmsghdr is 64 bytes (56 bytes for msghdr + 4 bytes for msg_len + 4 bytes padding)
+            unsafe {
+                let mmsghdr_ptr = msgvec_ptr.add(i * 64);
+
+                // Parse the msghdr part first
+                parse_msghdr(mmsghdr_ptr, &mut data.msgs[i].msg_hdr);
+
+                // For sendmmsg, msg_len is output-only and set by the kernel on success
+                data.msgs[i].msg_len = 0;
+            }
+        }
+        data.msgs_count = msg_count as u32;
+    }
+});

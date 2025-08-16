@@ -2150,6 +2150,15 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             }
         }
 
+        // Message count returning syscalls
+        syscalls::SYS_recvmmsg | syscalls::SYS_sendmmsg => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (messages)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_sendfile => {
             if return_value >= 0 {

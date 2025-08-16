@@ -2300,6 +2300,58 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_recvmmsg => {
+            let data = unsafe { event.data.recvmmsg };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            arg!(sf, "msgvec:");
+            with_array!(sf, {
+                for i in 0..data.msgs_count as usize {
+                    with_struct!(sf, {
+                        arg!(sf, "msg_hdr:");
+                        with_struct!(sf, {
+                            format_msghdr(&mut sf, &data.msgs[i].msg_hdr).await?;
+                        });
+                        argf!(sf, "msg_len: {}", data.msgs[i].msg_len);
+                    });
+                }
+            });
+            argf!(sf, "vlen: {}", data.vlen);
+            argf!(sf, "flags: {}", format_recvmsg_flags(data.flags));
+
+            if data.has_timeout {
+                arg!(sf, "timeout:");
+                with_struct!(sf, {
+                    argf!(sf, "tv_sec: {}", data.timeout.seconds);
+                    argf!(sf, "tv_nsec: {}", data.timeout.nanos);
+                });
+            } else {
+                arg!(sf, "timeout: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sendmmsg => {
+            let data = unsafe { event.data.sendmmsg };
+
+            argf!(sf, "sockfd: {}", data.sockfd);
+            arg!(sf, "msgvec:");
+            with_array!(sf, {
+                for i in 0..data.msgs_count as usize {
+                    with_struct!(sf, {
+                        arg!(sf, "msg_hdr:");
+                        with_struct!(sf, {
+                            format_msghdr(&mut sf, &data.msgs[i].msg_hdr).await?;
+                        });
+                        argf!(sf, "msg_len: {}", data.msgs[i].msg_len);
+                    });
+                }
+            });
+            argf!(sf, "vlen: {}", data.vlen);
+            argf!(sf, "flags: {}", format_sendmsg_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_accept => {
             let data = unsafe { event.data.accept };
 

@@ -505,6 +505,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_accept", syscalls::SYS_accept),
         ("syscall_exit_accept4", syscalls::SYS_accept4),
         ("syscall_exit_wait4", syscalls::SYS_wait4),
+        ("syscall_exit_waitid", syscalls::SYS_waitid),
         ("syscall_exit_getrusage", syscalls::SYS_getrusage),
         ("syscall_exit_clone3", syscalls::SYS_clone3),
         ("syscall_exit_clone", syscalls::SYS_clone),

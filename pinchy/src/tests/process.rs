@@ -381,7 +381,7 @@ syscall_test!(
             },
         }
     },
-    "1001 wait4(pid: -1, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 0}, options: WNOHANG|WUNTRACED, rusage: { ru_utime: { tv_sec: 0, tv_usec: 123456 }, ru_stime: { tv_sec: 0, tv_usec: 78910 }, ru_maxrss: 1024, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 100, ru_majflt: 5, ru_nswap: 0, ru_inblock: 0, ru_oublock: 0, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 0, ru_nivcsw: 0 }) = 1234\n"
+    "1001 wait4(pid: -1, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 0}, options: WNOHANG|WUNTRACED|WSTOPPED, rusage: { ru_utime: { tv_sec: 0, tv_usec: 123456 }, ru_stime: { tv_sec: 0, tv_usec: 78910 }, ru_maxrss: 1024, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 100, ru_majflt: 5, ru_nswap: 0, ru_inblock: 0, ru_oublock: 0, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 0, ru_nivcsw: 0 }) = 1234\n"
 );
 
 syscall_test!(
@@ -408,6 +408,98 @@ syscall_test!(
         }
     },
     "2001 wait4(pid: 1234, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 9}, options: 0, rusage: NULL) = 5678\n"
+);
+
+syscall_test!(
+    test_waitid_successful,
+    {
+        use pinchy_common::{
+            kernel_types::Siginfo, syscalls::SYS_waitid, SyscallEvent, SyscallEventData, WaitidData,
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_waitid,
+            pid: 4000,
+            tid: 4001,
+            return_value: 0, // success
+            data: SyscallEventData {
+                waitid: WaitidData {
+                    idtype: libc::P_PID,
+                    id: 1234,  // wait for child with PID 1234
+                    infop: Siginfo {
+                        si_signo: libc::SIGCHLD,
+                        si_errno: 0,
+                        si_code: 1, // CLD_EXITED
+                        si_pid: 1234,
+                        si_uid: 1000,
+                        si_status: 0, // exit status 0
+                        ..Default::default()
+                    },
+                    options: libc::WEXITED,
+                    has_infop: true,
+                },
+            },
+        }
+    },
+    "4001 waitid(idtype: P_PID, id: 1234, infop: { signo: 17, errno: 0, code: 1, trapno: 0, pid: 1234, uid: 1000, status: 0, utime: 0, stime: 0, value: 0x0, int: 0, ptr: 0x0, overrun: 0, timerid: 0, addr: 0x0, band: 0, fd: 0, addr_lsb: 0, lower: 0x0, upper: 0x0, pkey: 0, call_addr: 0x0, syscall: 0, arch: 0 }, options: WEXITED) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_waitid_p_all,
+    {
+        use pinchy_common::{
+            kernel_types::Siginfo, syscalls::SYS_waitid, SyscallEvent, SyscallEventData, WaitidData,
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_waitid,
+            pid: 5000,
+            tid: 5001,
+            return_value: 0, // success
+            data: SyscallEventData {
+                waitid: WaitidData {
+                    idtype: libc::P_ALL,
+                    id: 0,     // ignored for P_ALL
+                    infop: Siginfo {
+                        si_signo: libc::SIGCHLD,
+                        si_errno: 0,
+                        si_code: 2, // CLD_KILLED
+                        si_pid: 5678,
+                        si_uid: 0,
+                        si_status: 9, // killed by signal 9 (SIGKILL)
+                        ..Default::default()
+                    },
+                    options: libc::WNOHANG | libc::WEXITED,
+                    has_infop: true,
+                },
+            },
+        }
+    },
+    "5001 waitid(idtype: P_ALL, id: 0, infop: { signo: 17, errno: 0, code: 2, trapno: 0, pid: 5678, uid: 0, status: 9, utime: 0, stime: 0, value: 0x0, int: 0, ptr: 0x0, overrun: 0, timerid: 0, addr: 0x0, band: 0, fd: 0, addr_lsb: 0, lower: 0x0, upper: 0x0, pkey: 0, call_addr: 0x0, syscall: 0, arch: 0 }, options: WNOHANG|WEXITED) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_waitid_failed,
+    {
+        use pinchy_common::{syscalls::SYS_waitid, SyscallEvent, SyscallEventData, WaitidData};
+
+        SyscallEvent {
+            syscall_nr: SYS_waitid,
+            pid: 6000,
+            tid: 6001,
+            return_value: -1, // error (e.g., ECHILD)
+            data: SyscallEventData {
+                waitid: WaitidData {
+                    idtype: libc::P_PID,
+                    id: 9999,                  // non-existent child
+                    infop: Default::default(), // not filled on error
+                    options: libc::WEXITED,
+                    has_infop: false, // no siginfo on error
+                },
+            },
+        }
+    },
+    "6001 waitid(idtype: P_PID, id: 9999, infop: NULL, options: WEXITED) = -1 (error)\n"
 );
 
 syscall_test!(

@@ -1762,8 +1762,18 @@ pub fn format_wait_options(options: i32) -> String {
         flags.push("WCONTINUED");
     }
 
+    if options & libc::WEXITED != 0 {
+        flags.push("WEXITED");
+    }
+    if options & libc::WSTOPPED != 0 {
+        flags.push("WSTOPPED");
+    }
+    if options & libc::WNOWAIT != 0 {
+        flags.push("WNOWAIT");
+    }
+
     if flags.is_empty() {
-        format!("{options}")
+        format!("0x{options:x}")
     } else {
         flags.join("|")
     }
@@ -4244,4 +4254,15 @@ pub async fn format_single_iovec(
         }
     }
     Ok(())
+}
+
+/// Format waitid idtype parameter
+pub fn format_waitid_idtype(idtype: u32) -> &'static str {
+    match idtype {
+        libc::P_ALL => "P_ALL",     // Wait for any child
+        libc::P_PID => "P_PID",     // Wait for child with given PID
+        libc::P_PGID => "P_PGID",   // Wait for any child in given process group
+        libc::P_PIDFD => "P_PIDFD", // Wait for child referred to by PID file descriptor
+        _ => "UNKNOWN",
+    }
 }

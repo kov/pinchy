@@ -6,14 +6,15 @@ use pinchy_common::{
     syscalls::{
         SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module, SYS_finit_module,
         SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_init_module, SYS_ioctl, SYS_ioprio_get,
-        SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_reboot, SYS_settimeofday, SYS_sync,
-        SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
+        SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_reboot, SYS_setdomainname,
+        SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname,
+        SYS_vhangup,
     },
     CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData, FinitModuleData,
     GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData, IoprioGetData,
-    IoprioSetData, NanosleepData, PersonalityData, RebootData, RtSigreturnData, SettimeofdayData,
-    SyncData, SyscallEvent, SyscallEventData, SysinfoData, TimesData, UmaskData, UnameData,
-    VhangupData,
+    IoprioSetData, NanosleepData, PersonalityData, RebootData, RtSigreturnData, SetdomainnameData,
+    SethostnameData, SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData,
+    TimesData, UmaskData, UnameData, VhangupData,
 };
 
 use crate::syscall_test;
@@ -1174,4 +1175,90 @@ syscall_test!(
         }
     },
     "3002 delete_module(name: \"nonexistent_module\", flags: 0) = -2 (error)\n"
+);
+
+syscall_test!(
+    parse_sethostname_success,
+    {
+        let mut name = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        let hostname = b"myhostname\0";
+        name[..hostname.len()].copy_from_slice(hostname);
+
+        SyscallEvent {
+            syscall_nr: SYS_sethostname,
+            pid: 4000,
+            tid: 4000,
+            return_value: 0,
+            data: SyscallEventData {
+                sethostname: SethostnameData {
+                    name,
+                    len: 10, // "myhostname"
+                },
+            },
+        }
+    },
+    "4000 sethostname(name: \"myhostname\", len: 10) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sethostname_error,
+    {
+        let mut name = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        let hostname = b"verylonghostname\0";
+        name[..hostname.len()].copy_from_slice(hostname);
+
+        SyscallEvent {
+            syscall_nr: SYS_sethostname,
+            pid: 4001,
+            tid: 4001,
+            return_value: -22, // EINVAL - name too long
+            data: SyscallEventData {
+                sethostname: SethostnameData { name, len: 16 },
+            },
+        }
+    },
+    "4001 sethostname(name: \"verylonghostname\", len: 16) = -22 (error)\n"
+);
+
+syscall_test!(
+    parse_setdomainname_success,
+    {
+        let mut name = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        let domainname = b"mydomain.com\0";
+        name[..domainname.len()].copy_from_slice(domainname);
+
+        SyscallEvent {
+            syscall_nr: SYS_setdomainname,
+            pid: 5000,
+            tid: 5000,
+            return_value: 0,
+            data: SyscallEventData {
+                setdomainname: SetdomainnameData {
+                    name,
+                    len: 12, // "mydomain.com"
+                },
+            },
+        }
+    },
+    "5000 setdomainname(name: \"mydomain.com\", len: 12) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_setdomainname_error,
+    {
+        let mut name = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+        let domainname = b"veryverylongdomainname.example.org\0";
+        name[..domainname.len()].copy_from_slice(domainname);
+
+        SyscallEvent {
+            syscall_nr: SYS_setdomainname,
+            pid: 5001,
+            tid: 5001,
+            return_value: -1, // EPERM - no permission
+            data: SyscallEventData {
+                setdomainname: SetdomainnameData { name, len: 34 },
+            },
+        }
+    },
+    "5001 setdomainname(name: \"veryverylongdomainname.example.org\", len: 34) = -1 (error)\n"
 );

@@ -287,3 +287,21 @@ syscall_handler!(delete_module, args, data, {
         let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
     }
 });
+
+syscall_handler!(sethostname, args, data, {
+    data.len = args[1];
+
+    let name_ptr = args[0] as *const u8;
+    if !name_ptr.is_null() {
+        let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
+    }
+});
+
+syscall_handler!(setdomainname, args, data, {
+    data.len = args[1];
+
+    let name_ptr = args[0] as *const u8;
+    if !name_ptr.is_null() {
+        let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
+    }
+});

@@ -15,7 +15,7 @@ use pinchy_common::{
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
     EpollPWaitData, FcntlData, FlockData, LseekData, OpenAtData, PpollData, PreadData, PwriteData,
     ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData, VectorIOData, VmspliceData,
-    WriteData, DATA_READ_SIZE, IOV_COUNT, MEDIUM_READ_SIZE,
+    WriteData, DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -541,7 +541,7 @@ syscall_test!(
                 iov_len: 4,
             }; pinchy_common::IOV_COUNT],
             iov_lens: [4; pinchy_common::IOV_COUNT],
-            iov_bufs: [[0u8; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+            iov_bufs: [[0u8; pinchy_common::LARGER_READ_SIZE]; pinchy_common::IOV_COUNT],
             iovcnt: 2,
             offset: 0,
             flags: 0,
@@ -557,7 +557,7 @@ syscall_test!(
             data: pinchy_common::SyscallEventData { vector_io: data },
         }
     },
-    "1 readv(fd: 3, iov: [ iovec { base: \"test\", len: 4 }, iovec { base: \"data\", len: 4 } ], iovcnt: 2) = 8 (bytes)\n"
+    "1 readv(fd: 3, iov: [ iovec { base: 0x1000, len: 4, buf: \"test\" }, iovec { base: 0x1000, len: 4, buf: \"data\" } ], iovcnt: 2) = 8 (bytes)\n"
 );
 
 syscall_test!(
@@ -570,7 +570,7 @@ syscall_test!(
                 iov_len: 3,
             }; pinchy_common::IOV_COUNT],
             iov_lens: [3; pinchy_common::IOV_COUNT],
-            iov_bufs: [[0u8; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+            iov_bufs: [[0u8; pinchy_common::LARGER_READ_SIZE]; pinchy_common::IOV_COUNT],
             iovcnt: 1,
             offset: 0,
             flags: 0,
@@ -585,7 +585,7 @@ syscall_test!(
             data: pinchy_common::SyscallEventData { vector_io: data },
         }
     },
-    "2 writev(fd: 4, iov: [ iovec { base: \"abc\", len: 3 } ], iovcnt: 1) = 3 (bytes)\n"
+    "2 writev(fd: 4, iov: [ iovec { base: 0x2000, len: 3, buf: \"abc\" } ], iovcnt: 1) = 3 (bytes)\n"
 );
 
 syscall_test!(
@@ -598,7 +598,7 @@ syscall_test!(
                 iov_len: 5,
             }; pinchy_common::IOV_COUNT],
             iov_lens: [5; pinchy_common::IOV_COUNT],
-            iov_bufs: [[0u8; pinchy_common::MEDIUM_READ_SIZE]; pinchy_common::IOV_COUNT],
+            iov_bufs: [[0u8; pinchy_common::LARGER_READ_SIZE]; pinchy_common::IOV_COUNT],
             iovcnt: 1,
             offset: 1234,
             flags: 0x10,
@@ -613,7 +613,7 @@ syscall_test!(
             data: pinchy_common::SyscallEventData { vector_io: data },
         }
     },
-    "3 preadv2(fd: 5, iov: [ iovec { base: \"hello\", len: 5 } ], iovcnt: 1, offset: 1234, flags: 0x10) = 5\n"
+    "3 preadv2(fd: 5, iov: [ iovec { base: 0x3000, len: 5, buf: \"hello\" } ], iovcnt: 1, offset: 1234, flags: 0x10) = 5\n"
 );
 
 syscall_test!(
@@ -807,7 +807,7 @@ syscall_test!(
 syscall_test!(
     parse_vmsplice,
     {
-        let mut iov_bufs = [[0u8; MEDIUM_READ_SIZE]; IOV_COUNT];
+        let mut iov_bufs = [[0u8; LARGER_READ_SIZE]; IOV_COUNT];
         iov_bufs[0][..4].copy_from_slice(b"test");
         iov_bufs[1][..4].copy_from_slice(b"data");
         SyscallEvent {
@@ -818,8 +818,17 @@ syscall_test!(
             data: pinchy_common::SyscallEventData {
                 vmsplice: VmspliceData {
                     fd: 3,
-                    iovecs: [Iovec { iov_base: 0x1000, iov_len: 4 }, Iovec { iov_base: 0x2000, iov_len: 4 }],
-                    iov_lens: [4, 4],
+                    iovecs: [
+                        Iovec { iov_base: 0x1000, iov_len: 4 },
+                        Iovec { iov_base: 0x2000, iov_len: 4 },
+                        Iovec { iov_base: 0, iov_len: 0 },
+                        Iovec { iov_base: 0, iov_len: 0 },
+                        Iovec { iov_base: 0, iov_len: 0 },
+                        Iovec { iov_base: 0, iov_len: 0 },
+                        Iovec { iov_base: 0, iov_len: 0 },
+                        Iovec { iov_base: 0, iov_len: 0 }
+                    ],
+                    iov_lens: [4, 4, 0, 0, 0, 0, 0, 0],
                     iov_bufs,
                     iovcnt: 2,
                     flags: libc::SPLICE_F_GIFT,
@@ -828,7 +837,7 @@ syscall_test!(
             },
         }
     },
-    "1 vmsplice(fd: 3, iov: [ iovec { base: \"test\", len: 4 }, iovec { base: \"data\", len: 4 } ], iovcnt: 2, flags: 0x8 (SPLICE_F_GIFT)) = 8 (bytes)\n"
+    "1 vmsplice(fd: 3, iov: [ iovec { base: 0x1000, len: 4, buf: \"test\" }, iovec { base: 0x2000, len: 4, buf: \"data\" } ], iovcnt: 2, flags: 0x8 (SPLICE_F_GIFT)) = 8 (bytes)\n"
 );
 
 syscall_test!(

@@ -343,7 +343,7 @@ pub struct Iovec {
 /// Message header structure for socket message operations
 /// Note: we only capture essential fields and a subset of the control message data
 /// due to eBPF stack limitations
-pub const MSG_IOV_COUNT: usize = 4; // Number of iovec structures to capture
+pub const MSG_IOV_COUNT: usize = 8; // Unified with IOV_COUNT
 pub const MSG_CONTROL_SIZE: usize = 64; // Size of control message data to capture
 #[repr(C)]
 #[derive(Debug, Copy, Clone)]

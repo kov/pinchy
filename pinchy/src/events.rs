@@ -32,21 +32,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let data = unsafe { event.data.vector_io };
             argf!(sf, "fd: {}", data.fd);
             arg!(sf, "iov:");
-            with_array!(sf, {
-                for i in 0..data.iovcnt {
-                    arg!(sf, "iovec");
-                    with_struct!(sf, {
-                        let buf = &data.iov_bufs[i];
-                        let len = data.iov_lens[i].min(buf.len());
-                        if len > 0 {
-                            argf!(sf, "base: {}", format_bytes(&buf[..len]));
-                        } else {
-                            arg!(sf, "base: NULL");
-                        }
-                        argf!(sf, "len: {}", data.iov_lens[i]);
-                    });
-                }
-            });
+            format_iovec_array(
+                &mut sf,
+                &data.iovecs,
+                &data.iov_lens,
+                &data.iov_bufs,
+                data.read_count,
+                &IovecFormatOptions::for_io_syscalls(),
+            )
+            .await?;
             argf!(sf, "iovcnt: {}", data.iovcnt);
             if event.syscall_nr == syscalls::SYS_preadv
                 || event.syscall_nr == syscalls::SYS_pwritev
@@ -1635,17 +1629,77 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "pidfd: {}", data.pidfd);
             arg!(sf, "iov:");
-            with_array!(sf, {
-                for i in 0..data.iovcnt {
-                    arg!(sf, "iovec");
-                    with_struct!(sf, {
-                        argf!(sf, "base: 0x{:x}", data.iovecs[i].iov_base);
-                        argf!(sf, "len: {}", data.iovecs[i].iov_len);
-                    });
-                }
-            });
+            format_iovec_array(
+                &mut sf,
+                &data.iovecs,
+                &data.iov_lens,
+                &data.iov_bufs,
+                data.read_count,
+                &IovecFormatOptions::for_address_only(),
+            )
+            .await?;
             argf!(sf, "iovcnt: {}", data.iovcnt);
             argf!(sf, "advice: {}", format_madvise_advice(data.advice));
+            argf!(sf, "flags: {}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_process_vm_readv => {
+            let data = unsafe { event.data.process_vm };
+
+            argf!(sf, "pid: {}", data.pid);
+            arg!(sf, "local_iov:");
+            format_iovec_array(
+                &mut sf,
+                &data.local_iovecs,
+                &data.local_iov_lens,
+                &data.local_iov_bufs,
+                data.local_read_count,
+                &IovecFormatOptions::for_process_vm(),
+            )
+            .await?;
+            argf!(sf, "liovcnt: {}", data.local_iovcnt);
+            arg!(sf, "remote_iov:");
+            format_iovec_array(
+                &mut sf,
+                &data.remote_iovecs,
+                &data.remote_iov_lens,
+                &[], // No buffers for remote iovecs
+                data.remote_read_count,
+                &IovecFormatOptions::for_address_only(),
+            )
+            .await?;
+            argf!(sf, "riovcnt: {}", data.remote_iovcnt);
+            argf!(sf, "flags: {}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_process_vm_writev => {
+            let data = unsafe { event.data.process_vm };
+
+            argf!(sf, "pid: {}", data.pid);
+            arg!(sf, "local_iov:");
+            format_iovec_array(
+                &mut sf,
+                &data.local_iovecs,
+                &data.local_iov_lens,
+                &data.local_iov_bufs,
+                data.local_read_count,
+                &IovecFormatOptions::for_process_vm(),
+            )
+            .await?;
+            argf!(sf, "liovcnt: {}", data.local_iovcnt);
+            arg!(sf, "remote_iov:");
+            format_iovec_array(
+                &mut sf,
+                &data.remote_iovecs,
+                &data.remote_iov_lens,
+                &[], // No buffers for remote iovecs
+                data.remote_read_count,
+                &IovecFormatOptions::for_address_only(),
+            )
+            .await?;
+            argf!(sf, "riovcnt: {}", data.remote_iovcnt);
             argf!(sf, "flags: {}", data.flags);
 
             finish!(sf, event.return_value);
@@ -2728,21 +2782,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let data = unsafe { event.data.vmsplice };
             argf!(sf, "fd: {}", data.fd);
             arg!(sf, "iov:");
-            with_array!(sf, {
-                for i in 0..data.iovcnt {
-                    arg!(sf, "iovec");
-                    with_struct!(sf, {
-                        let buf = &data.iov_bufs[i];
-                        let len = data.iov_lens[i].min(buf.len());
-                        if len > 0 {
-                            argf!(sf, "base: {}", format_bytes(&buf[..len]));
-                        } else {
-                            arg!(sf, "base: NULL");
-                        }
-                        argf!(sf, "len: {}", data.iov_lens[i]);
-                    });
-                }
-            });
+            format_iovec_array(
+                &mut sf,
+                &data.iovecs,
+                &data.iov_lens,
+                &data.iov_bufs,
+                data.read_count,
+                &IovecFormatOptions::for_io_syscalls(),
+            )
+            .await?;
             argf!(sf, "iovcnt: {}", data.iovcnt);
             argf!(sf, "flags: {}", format_splice_flags(data.flags));
             finish!(sf, event.return_value);

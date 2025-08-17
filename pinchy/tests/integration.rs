@@ -917,3 +917,33 @@ fn eventfd_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn execveat_syscall() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises execveat syscalls
+    let handle = run_workload(&["execveat"], "execveat_test");
+
+    // Expected output - we should see execveat calls with different arguments and flags
+    let expected_output = escaped_regex(indoc! {r#"
+        PID execveat(dirfd: NUMBER, pathname: "this-does-not-exist-for-sure", argv: [this-doe, arg1, arg2], envp: [ALPHANUM, ALPHANUM], flags: 0) = -2 (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

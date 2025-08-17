@@ -220,9 +220,7 @@ fn drop_privileges() -> anyhow::Result<()> {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    env_logger::Builder::from_default_env()
-        .filter(None, log::LevelFilter::Warn)
-        .init();
+    env_logger::init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
     // new memcg based accounting, see https://lwn.net/Articles/837122/
@@ -265,6 +263,16 @@ async fn main() -> anyhow::Result<()> {
         .try_into()?;
     program.load()?;
     program.attach("syscalls", "sys_enter_execve")?;
+
+    // Attach execveat entry tracepoint for argument capture. This is necessary specifically
+    // for execveat, as the process gets replaced when it is completed, erasing the data we
+    // need, so we need to capture it beforehand.
+    let program: &mut TracePoint = ebpf
+        .program_mut("syscall_enter_execveat")
+        .unwrap()
+        .try_into()?;
+    program.load()?;
+    program.attach("syscalls", "sys_enter_execveat")?;
 
     load_tailcalls(&mut ebpf)?;
 
@@ -655,6 +663,13 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
         trace!("registered program for {syscall_nr}");
+
+        // FIXME: this is a hack to keep the change small for adding support for this syscall, but we will likely
+        // move to a different model with shared tracepoints for groups of syscalls in the future.
+        if syscall_nr == syscalls::SYS_execve {
+            prog_array.set(syscalls::SYS_execveat as u32, prog.fd()?, 0)?;
+            explicitly_supported.insert(syscalls::SYS_execveat);
+        }
     }
 
     // Load the generic handler for all other syscalls

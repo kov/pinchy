@@ -19,6 +19,10 @@ use crate::{syscall_handler, PID_FILTER, SYSCALL_ARGS_OFFSET};
 static mut EXECVE_ENTER_MAP: HashMap<u32, ExecveEnterData> =
     HashMap::<u32, ExecveEnterData>::with_max_entries(10240, 0);
 
+#[map]
+static mut EXECVEAT_ENTER_MAP: HashMap<u32, ExecveatEnterData> =
+    HashMap::<u32, ExecveatEnterData>::with_max_entries(10240, 0);
+
 #[repr(C)]
 pub struct ExecveEnterData {
     pub filename: [u8; SMALL_READ_SIZE * 4],
@@ -31,40 +35,84 @@ pub struct ExecveEnterData {
     pub envc: u8,
 }
 
+#[repr(C)]
+pub struct ExecveatEnterData {
+    pub dirfd: i32,
+    pub pathname: [u8; SMALL_READ_SIZE * 4],
+    pub pathname_truncated: bool,
+    pub argv: [[u8; SMALL_READ_SIZE]; 4],
+    pub argv_len: [u16; 4],
+    pub argc: u8,
+    pub envp: [[u8; SMALL_READ_SIZE]; 2],
+    pub envp_len: [u16; 2],
+    pub envc: u8,
+    pub flags: i32,
+}
+
 #[tracepoint]
 pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let tid = ctx.pid();
         let return_value = crate::util::get_return_value(&ctx)?;
 
+        // On x86_64, execveat becomes execve after the process has been replaced, so we need to
+        // use the same handler for both and check which map has the entry to decide which one was
+        // traced.
         let enter_data = unsafe { EXECVE_ENTER_MAP.get(&tid) };
         if let Some(enter_data) = enter_data {
+            let data = pinchy_common::SyscallEventData {
+                execve: pinchy_common::ExecveData {
+                    filename: enter_data.filename,
+                    filename_truncated: enter_data.filename_truncated,
+                    argv: enter_data.argv,
+                    argv_len: enter_data.argv_len,
+                    argc: enter_data.argc,
+                    envp: enter_data.envp,
+                    envp_len: enter_data.envp_len,
+                    envc: enter_data.envc,
+                },
+            };
             let _ = unsafe { EXECVE_ENTER_MAP.remove(&tid) };
-            crate::util::output_event(
+            return crate::util::output_event(
                 &ctx,
                 pinchy_common::syscalls::SYS_execve,
                 return_value,
-                pinchy_common::SyscallEventData {
-                    execve: pinchy_common::ExecveData {
-                        filename: enter_data.filename,
-                        filename_truncated: enter_data.filename_truncated,
-                        argv: enter_data.argv,
-                        argv_len: enter_data.argv_len,
-                        argc: enter_data.argc,
-                        envp: enter_data.envp,
-                        envp_len: enter_data.envp_len,
-                        envc: enter_data.envc,
-                    },
-                },
-            )
-        } else {
-            aya_log_ebpf::error!(
-                &ctx,
-                "did not find matching enter data for execve for PID",
-                tid
+                data,
             );
-            return Err(1);
         }
+
+        let enter_data = unsafe { EXECVEAT_ENTER_MAP.get(&tid) };
+        if let Some(enter_data) = enter_data {
+            let data = pinchy_common::SyscallEventData {
+                execveat: pinchy_common::ExecveatData {
+                    dirfd: enter_data.dirfd,
+                    pathname: enter_data.pathname,
+                    pathname_truncated: enter_data.pathname_truncated,
+                    argv: enter_data.argv,
+                    argv_len: enter_data.argv_len,
+                    argc: enter_data.argc,
+                    envp: enter_data.envp,
+                    envp_len: enter_data.envp_len,
+                    envc: enter_data.envc,
+                    flags: enter_data.flags,
+                },
+            };
+            let _ = unsafe { EXECVEAT_ENTER_MAP.remove(&tid) };
+            return crate::util::output_event(
+                &ctx,
+                pinchy_common::syscalls::SYS_execveat,
+                return_value,
+                data,
+            );
+        }
+
+        aya_log_ebpf::error!(
+            &ctx,
+            "did not find matching enter data for execve for PID",
+            tid
+        );
+
+        return Err(1);
     }
     match inner(ctx) {
         Ok(_) => 0,
@@ -86,97 +134,37 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
                 .map_err(|e| e as u32)?
         };
 
+        let mut data = ExecveEnterData {
+            filename: [0u8; SMALL_READ_SIZE * 4],
+            filename_truncated: true,
+            argv: [[0u8; SMALL_READ_SIZE]; 4],
+            argv_len: [0u16; 4],
+            argc: 0,
+            envp: [[0u8; SMALL_READ_SIZE]; 2],
+            envp_len: [0u16; 2],
+            envc: 0,
+        };
         let filename_ptr = args[0] as *const u8;
         let argv_ptr = args[1] as *const *const u8;
         let envp_ptr = args[2] as *const *const u8;
 
-        let mut filename = [0u8; SMALL_READ_SIZE * 4];
-        unsafe {
-            let _ = bpf_probe_read_buf(filename_ptr as *const _, &mut filename);
-        }
-
-        let mut filename_truncated = true;
-        for byte in filename {
-            if byte == 0 {
-                filename_truncated = false;
-                break;
-            }
-        }
-
-        let mut argv = [[0u8; SMALL_READ_SIZE]; 4];
-        let mut argv_len = [0u16; 4];
-        let mut argc = 0u8;
-        for i in 0..128 {
-            let ptr = unsafe { bpf_probe_read_user(argv_ptr.add(i)) };
-            if let Ok(arg_ptr) = ptr {
-                if arg_ptr.is_null() {
-                    break;
-                }
-                if i < 4 {
-                    unsafe {
-                        let _ = bpf_probe_read_buf(arg_ptr as *const _, &mut argv[i]);
-                    }
-                    for j in 0..argv[i].len() {
-                        if argv[i][j] == 0 {
-                            argv_len[i] = j as u16;
-                            break;
-                        }
-                    }
-                    if argv_len[i] == 0 && argv[i][0] != 0 {
-                        argv_len[i] = argv[i].len() as u16;
-                    }
-                }
-                argc += 1;
-            } else {
-                break;
-            }
-        }
-
-        let mut envp = [[0u8; SMALL_READ_SIZE]; 2];
-        let mut envp_len = [0u16; 2];
-        let mut envc = 0u8;
-        for i in 0..128 {
-            let ptr = unsafe { bpf_probe_read_user(envp_ptr.add(i)) };
-            if let Ok(env_ptr) = ptr {
-                if env_ptr.is_null() {
-                    break;
-                }
-                if i < 2 {
-                    unsafe {
-                        let _ = bpf_probe_read_buf(env_ptr as *const _, &mut envp[i]);
-                    }
-                    for j in 0..envp[i].len() {
-                        if envp[i][j] == 0 {
-                            envp_len[i] = j as u16;
-                            break;
-                        }
-                    }
-                    if envp_len[i] == 0 && envp[i][0] != 0 {
-                        envp_len[i] = envp[i].len() as u16;
-                    }
-                }
-                envc += 1;
-            } else {
-                break;
-            }
-        }
+        read_execve_enter_data(
+            filename_ptr,
+            argv_ptr,
+            envp_ptr,
+            &mut data.filename,
+            &mut data.filename_truncated,
+            &mut data.argv,
+            &mut data.argv_len,
+            &mut data.argc,
+            &mut data.envp,
+            &mut data.envp_len,
+            &mut data.envc,
+        );
 
         unsafe {
             EXECVE_ENTER_MAP
-                .insert(
-                    &tid,
-                    &ExecveEnterData {
-                        filename,
-                        filename_truncated,
-                        argv,
-                        argv_len,
-                        argc,
-                        envp,
-                        envp_len,
-                        envc,
-                    },
-                    0,
-                )
+                .insert(&tid, &data, 0)
                 .map_err(|e| e as u32)?;
         }
         Ok(())
@@ -184,6 +172,142 @@ pub fn syscall_enter_execve(ctx: TracePointContext) -> u32 {
     match inner(ctx) {
         Ok(_) => 0,
         Err(ret) => ret,
+    }
+}
+
+#[tracepoint]
+pub fn syscall_enter_execveat(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        if unsafe { PID_FILTER.get(&ctx.tgid()).is_none() } {
+            return Ok(());
+        }
+
+        let tid = ctx.pid();
+
+        let args = unsafe {
+            ctx.read_at::<[usize; 6]>(SYSCALL_ARGS_OFFSET)
+                .map_err(|e| e as u32)?
+        };
+
+        let mut data = ExecveatEnterData {
+            dirfd: args[0] as i32,
+            pathname: [0u8; SMALL_READ_SIZE * 4],
+            pathname_truncated: true,
+            argv: [[0u8; SMALL_READ_SIZE]; 4],
+            argv_len: [0u16; 4],
+            argc: 0,
+            envp: [[0u8; SMALL_READ_SIZE]; 2],
+            envp_len: [0u16; 2],
+            envc: 0,
+            flags: 0,
+        };
+
+        let pathname_ptr = args[1] as *const u8;
+        let argv_ptr = args[2] as *const *const u8;
+        let envp_ptr = args[3] as *const *const u8;
+
+        read_execve_enter_data(
+            pathname_ptr,
+            argv_ptr,
+            envp_ptr,
+            &mut data.pathname,
+            &mut data.pathname_truncated,
+            &mut data.argv,
+            &mut data.argv_len,
+            &mut data.argc,
+            &mut data.envp,
+            &mut data.envp_len,
+            &mut data.envc,
+        );
+
+        unsafe {
+            EXECVEAT_ENTER_MAP
+                .insert(&tid, &data, 0)
+                .map_err(|e| e as u32)?;
+        }
+        Ok(())
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+#[inline(always)]
+fn read_execve_enter_data(
+    pathname_ptr: *const u8,
+    argv_ptr: *const *const u8,
+    envp_ptr: *const *const u8,
+    pathname: &mut [u8; SMALL_READ_SIZE * 4],
+    pathname_truncated: &mut bool,
+    argv: &mut [[u8; SMALL_READ_SIZE]; 4],
+    argv_len: &mut [u16; 4],
+    argc: &mut u8,
+    envp: &mut [[u8; SMALL_READ_SIZE]; 2],
+    envp_len: &mut [u16; 2],
+    envc: &mut u8,
+) {
+    unsafe {
+        let _ = bpf_probe_read_buf(pathname_ptr as *const _, pathname);
+    }
+
+    for byte in pathname {
+        if *byte == 0 {
+            *pathname_truncated = false;
+            break;
+        }
+    }
+
+    for i in 0..128 {
+        let ptr = unsafe { bpf_probe_read_user(argv_ptr.add(i)) };
+        if let Ok(arg_ptr) = ptr {
+            if arg_ptr.is_null() {
+                break;
+            }
+            if i < 4 {
+                unsafe {
+                    let _ = bpf_probe_read_buf(arg_ptr as *const _, &mut argv[i]);
+                }
+                for j in 0..argv[i].len() {
+                    if argv[i][j] == 0 {
+                        argv_len[i] = j as u16;
+                        break;
+                    }
+                }
+                if argv_len[i] == 0 && argv[i][0] != 0 {
+                    argv_len[i] = argv[i].len() as u16;
+                }
+            }
+            *argc += 1;
+        } else {
+            break;
+        }
+    }
+
+    for i in 0..128 {
+        let ptr = unsafe { bpf_probe_read_user(envp_ptr.add(i)) };
+        if let Ok(env_ptr) = ptr {
+            if env_ptr.is_null() {
+                break;
+            }
+            if i < 2 {
+                unsafe {
+                    let _ = bpf_probe_read_buf(env_ptr as *const _, &mut envp[i]);
+                }
+                for j in 0..envp[i].len() {
+                    if envp[i][j] == 0 {
+                        envp_len[i] = j as u16;
+                        break;
+                    }
+                }
+                if envp_len[i] == 0 && envp[i][0] != 0 {
+                    envp_len[i] = envp[i].len() as u16;
+                }
+            }
+            *envc += 1;
+        } else {
+            break;
+        }
     }
 }
 

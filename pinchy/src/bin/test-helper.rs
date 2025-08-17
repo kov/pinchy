@@ -73,6 +73,7 @@ fn main() -> anyhow::Result<()> {
             "filesystem_syscalls_test" => filesystem_syscalls_test(),
             "eventfd_test" => eventfd_test(),
             "timer_test" => timer_test(),
+            "execveat_test" => execveat_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1374,6 +1375,53 @@ fn timer_test() -> anyhow::Result<()> {
                 std::io::Error::last_os_error()
             );
         }
+    }
+
+    Ok(())
+}
+
+fn execveat_test() -> anyhow::Result<()> {
+    use std::{ffi::CString, fs::File, os::unix::io::AsRawFd};
+
+    // Open the directory containing the binary
+    let dir = File::open("/bin")?;
+    let dirfd = dir.as_raw_fd();
+
+    // Test execveat with directory fd and relative path
+    let argv = [
+        CString::new("this-does-not-exist-for-sure")?,
+        CString::new("arg1")?,
+        CString::new("arg2")?,
+    ];
+    let envp = [
+        CString::new("PATH=/bin:/usr/bin")?,
+        CString::new("TEST_VAR=execveat_value")?,
+    ];
+
+    let pathname = CString::new("this-does-not-exist-for-sure")?;
+
+    // Convert CString vectors to pointer arrays
+    let argv_ptrs: Vec<*const libc::c_char> = argv
+        .iter()
+        .map(|arg| arg.as_ptr())
+        .chain(std::iter::once(std::ptr::null()))
+        .collect();
+
+    let envp_ptrs: Vec<*const libc::c_char> = envp
+        .iter()
+        .map(|env| env.as_ptr())
+        .chain(std::iter::once(std::ptr::null()))
+        .collect();
+
+    unsafe {
+        let _ = libc::syscall(
+            libc::SYS_execveat,
+            dirfd,
+            pathname.as_ptr(),
+            argv_ptrs.as_ptr(),
+            envp_ptrs.as_ptr(),
+            0, // flags
+        );
     }
 
     Ok(())

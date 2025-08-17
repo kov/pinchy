@@ -6,15 +6,17 @@ use pinchy_common::syscalls::{SYS_alarm, SYS_getpgrp, SYS_pause};
 use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
-        SYS_clone3, SYS_execve, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpgid, SYS_getpid,
-        SYS_getppid, SYS_getsid, SYS_gettid, SYS_getuid, SYS_pidfd_getfd, SYS_pidfd_open,
-        SYS_prctl, SYS_set_tid_address, SYS_setgid, SYS_setns, SYS_setpgid, SYS_setregid,
-        SYS_setresgid, SYS_setresuid, SYS_setreuid, SYS_setsid, SYS_setuid, SYS_unshare,
+        SYS_clone3, SYS_execve, SYS_execveat, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpgid,
+        SYS_getpid, SYS_getppid, SYS_getsid, SYS_gettid, SYS_getuid, SYS_pidfd_getfd,
+        SYS_pidfd_open, SYS_prctl, SYS_set_tid_address, SYS_setgid, SYS_setns, SYS_setpgid,
+        SYS_setregid, SYS_setresgid, SYS_setresuid, SYS_setreuid, SYS_setsid, SYS_setuid,
+        SYS_unshare,
     },
-    Clone3Data, ExecveData, GenericSyscallData, GetegidData, GeteuidData, GetgidData, GetpgidData,
-    GetpidData, GetppidData, GetsidData, GettidData, GetuidData, PidfdOpenData, SetTidAddressData,
-    SetgidData, SetnsData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData,
-    SetsidData, SetuidData, SyscallEvent, UnshareData, SMALL_READ_SIZE,
+    Clone3Data, ExecveData, ExecveatData, GenericSyscallData, GetegidData, GeteuidData, GetgidData,
+    GetpgidData, GetpidData, GetppidData, GetsidData, GettidData, GetuidData, PidfdOpenData,
+    SetTidAddressData, SetgidData, SetnsData, SetpgidData, SetregidData, SetresgidData,
+    SetresuidData, SetreuidData, SetsidData, SetuidData, SyscallEvent, UnshareData,
+    SMALL_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{AlarmData, GetpgrpData, PauseData};
@@ -92,6 +94,60 @@ syscall_test!(
         event
     },
     "22 execve(filename: \"/bin/find\", argv: [/etc\0, -name\0, org.pinc], envp: [HOME=/ro, WAYLAND=, ... (28 more)]) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_execveat,
+    {
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_execveat,
+            pid: 23,
+            tid: 23,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                execveat: ExecveatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname: [0u8; SMALL_READ_SIZE * 4],
+                    pathname_truncated: false,
+                    argv: [[0u8; SMALL_READ_SIZE]; 4],
+                    argv_len: [0u16; 4],
+                    argc: 0,
+                    envp: [[0u8; SMALL_READ_SIZE]; 2],
+                    envp_len: [0u16; 2],
+                    envc: 0,
+                    flags: libc::AT_EMPTY_PATH,
+                },
+            },
+        };
+
+        let execveat_data = unsafe { &mut event.data.execveat };
+        let pathname = c"/bin/ls".to_bytes_with_nul();
+        execveat_data.pathname[..pathname.len()].copy_from_slice(pathname);
+
+        let argv = [
+            c"/bin/ls".to_bytes_with_nul(),
+            c"-la".to_bytes_with_nul(),
+        ];
+        execveat_data.argv[0][..argv[0].len()].copy_from_slice(argv[0]);
+        execveat_data.argv_len[0] = argv[0].len() as u16;
+
+        execveat_data.argv[1][..argv[1].len()].copy_from_slice(argv[1]);
+        execveat_data.argv_len[1] = argv[1].len() as u16;
+
+        execveat_data.argc = 2;
+
+        let envp = [c"PATH=/u".to_bytes(), c"USER=te".to_bytes()];
+        execveat_data.envp[0][..envp[0].len()].copy_from_slice(envp[0]);
+        execveat_data.envp_len[0] = envp[0].len() as u16;
+
+        execveat_data.envp[1][..envp[1].len()].copy_from_slice(envp[1]);
+        execveat_data.envp_len[1] = envp[1].len() as u16;
+
+        execveat_data.envc = 5;
+
+        event
+    },
+    "23 execveat(dirfd: AT_FDCWD, pathname: \"/bin/ls\", argv: [/bin/ls\0, -la\0], envp: [PATH=/u, USER=te, ... (3 more)], flags: 0x1000 (AT_EMPTY_PATH)) = 0 (success)\n"
 );
 
 syscall_test!(

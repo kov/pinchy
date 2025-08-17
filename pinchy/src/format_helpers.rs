@@ -963,6 +963,28 @@ pub fn format_at_flags(flags: i32) -> String {
     }
 }
 
+/// Formats execveat flags
+pub fn format_execveat_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::AT_EMPTY_PATH != 0 {
+        parts.push("AT_EMPTY_PATH");
+    }
+    if flags & libc::AT_SYMLINK_NOFOLLOW != 0 {
+        parts.push("AT_SYMLINK_NOFOLLOW");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}").into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
 // Formats a resource value for prlimit64 syscall
 pub fn format_resource_type(resource: i32) -> Cow<'static, str> {
     match resource as u32 {

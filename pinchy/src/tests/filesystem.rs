@@ -1,25 +1,23 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::syscalls::SYS_link;
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::LinkData;
 use pinchy_common::{
     syscalls::{
         self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fallocate, SYS_fchmod, SYS_fchmodat,
         SYS_fchown, SYS_fchownat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
-        SYS_getdents64, SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch,
-        SYS_linkat, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
+        SYS_getdents64, SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat,
+        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
         SYS_truncate,
     },
     AcctData, FaccessatData, FallocateData, FchmodData, FchmodatData, FchownData, FchownatData,
     FdatasyncData, FsyncData, FtruncateData, InotifyAddWatchData, InotifyInit1Data,
-    InotifyRmWatchData, LinkatData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
-    SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    InotifyRmWatchData, LinkatData, MkdiratData, MknodatData, Renameat2Data, RenameatData,
+    SyscallEvent, SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
-
-#[cfg(target_arch = "x86_64")]
-use pinchy_common::syscalls::SYS_link;
-
-#[cfg(target_arch = "x86_64")]
-use pinchy_common::LinkData;
 
 use crate::syscall_test;
 

@@ -1525,6 +1525,67 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_execveat => {
+            use std::{ffi::OsString, os::unix::ffi::OsStringExt};
+            let data = unsafe { event.data.execveat };
+
+            // Format dirfd
+            let dirfd_str = format_dirfd(data.dirfd);
+
+            // Format pathname, showing ... if truncated
+            let pathname = format_path(&data.pathname, data.pathname_truncated);
+
+            // Format argv, skipping empty slots and showing ... if truncated
+            let argc = data.argc as usize;
+            let argv = data
+                .argv
+                .iter()
+                .zip(data.argv_len.iter())
+                .take(argc)
+                .map(|(arg, &len)| {
+                    OsString::from_vec(arg[..(len as usize)].to_vec())
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect::<Vec<_>>();
+            let argv_trunc = if argc > data.argv.len() {
+                format!(", ... ({} more)", argc - data.argv.len())
+            } else {
+                String::new()
+            };
+            let argv_str = argv.join(", ") + &argv_trunc;
+
+            // Format envp, skipping empty slots and showing ... if truncated
+            let envc = data.envc as usize;
+            let envp = data
+                .envp
+                .iter()
+                .zip(data.envp_len.iter())
+                .take(envc)
+                .map(|(env, &len)| {
+                    OsString::from_vec(env[..(len as usize)].to_vec())
+                        .to_string_lossy()
+                        .into_owned()
+                })
+                .collect::<Vec<_>>();
+            let envp_trunc = if envc > data.envp.len() {
+                format!(", ... ({} more)", envc - data.envp.len())
+            } else {
+                String::new()
+            };
+            let envp_str = envp.join(", ") + &envp_trunc;
+
+            // Format flags
+            let flags_str = format_execveat_flags(data.flags);
+
+            argf!(sf, "dirfd: {}", dirfd_str);
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "argv: [{}]", argv_str);
+            argf!(sf, "envp: [{}]", envp_str);
+            argf!(sf, "flags: {}", flags_str);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_fstat => {
             let data = unsafe { event.data.fstat };
 
@@ -2616,7 +2677,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_waitid => {
             let data = unsafe { event.data.waitid };
 
-            argf!(sf, "idtype: {}", format_waitid_idtype(data.idtype as u32));
+            argf!(sf, "idtype: {}", format_waitid_idtype(data.idtype));
 
             // Format id based on idtype
             match data.idtype {

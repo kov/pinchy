@@ -102,7 +102,7 @@ pub fn pinchy(ctx: TracePointContext) -> u32 {
         }
 
         // execve has its own enter entry point
-        if syscall_nr == syscalls::SYS_execve {
+        if syscall_nr == syscalls::SYS_execve || syscall_nr == syscalls::SYS_execveat {
             return Ok(0);
         }
 

@@ -44,6 +44,7 @@ pub union SyscallEventData {
     pub sched_setattr: SchedSetattrData,
     pub epoll_ctl: EpollCtlData,
     pub execve: ExecveData,
+    pub execveat: ExecveatData,
     pub fstat: FstatData,
     pub newfstatat: NewfstatatData,
     pub getdents64: Getdents64Data,
@@ -638,6 +639,21 @@ pub struct ExecveData {
     pub envp: [[u8; SMALL_READ_SIZE]; 2],
     pub envp_len: [u16; 2],
     pub envc: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExecveatData {
+    pub dirfd: i32,
+    pub pathname: [u8; SMALL_READ_SIZE * 4],
+    pub pathname_truncated: bool,
+    pub argv: [[u8; SMALL_READ_SIZE]; 4],
+    pub argv_len: [u16; 4],
+    pub argc: u8,
+    pub envp: [[u8; SMALL_READ_SIZE]; 2],
+    pub envp_len: [u16; 2],
+    pub envc: u8,
+    pub flags: i32,
 }
 
 #[repr(C)]

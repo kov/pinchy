@@ -11,7 +11,7 @@ use aya::{
     maps::{ring_buf::RingBuf, Array},
     Ebpf,
 };
-use pinchy_common::SyscallEvent;
+use pinchy_common::{syscalls, SyscallEvent};
 use tokio::{
     io::{unix::AsyncFd, AsyncWriteExt},
     sync::RwLock,
@@ -252,7 +252,7 @@ impl EventDispatch {
         &mut self,
         pid: u32,
         writer: tokio::io::BufWriter<tokio::fs::File>,
-        syscalls: Vec<i64>,
+        mut syscalls: Vec<i64>,
         pidfd: Option<OwnedFd>, // Pass pidfd from server for monitoring
     ) -> anyhow::Result<u64> {
         let client_id = self.next_client_id;
@@ -261,11 +261,16 @@ impl EventDispatch {
         let (event_tx, event_rx) = tokio::sync::mpsc::channel(128);
         let cleanup_tx = self.cleanup_tx.clone();
 
+        // Both execve and execveat rely on the execve exit tracepoint.
+        if syscalls.contains(&syscalls::SYS_execveat) && !syscalls.contains(&syscalls::SYS_execve) {
+            syscalls.push(syscalls::SYS_execve);
+        }
+
         let client_info = Client {
             client_id,
             pid,
             sender: event_tx,
-            syscalls: syscalls.clone(),
+            syscalls,
         };
 
         let is_new_pid = !self.clients_map.contains_key(&pid);

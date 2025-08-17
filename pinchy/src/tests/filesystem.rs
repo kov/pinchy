@@ -3,16 +3,16 @@
 
 use pinchy_common::{
     syscalls::{
-        self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fchmod, SYS_fchmodat, SYS_fchown,
-        SYS_fchownat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
+        self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fallocate, SYS_fchmod, SYS_fchmodat,
+        SYS_fchown, SYS_fchownat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
         SYS_getdents64, SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch,
         SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
         SYS_truncate,
     },
-    AcctData, FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData,
-    FsyncData, FtruncateData, InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData,
-    MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent, SyscallEventData,
-    DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    AcctData, FaccessatData, FallocateData, FchmodData, FchmodatData, FchownData, FchownatData,
+    FdatasyncData, FsyncData, FtruncateData, InotifyAddWatchData, InotifyInit1Data,
+    InotifyRmWatchData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
+    SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
 use crate::syscall_test;
@@ -2390,4 +2390,88 @@ syscall_test!(
         }
     },
     "202 fspick(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0x3 (FSPICK_CLOEXEC|FSPICK_SYMLINK_NOFOLLOW)) = 9 (fd)\n"
+);
+
+syscall_test!(
+    parse_fallocate_default_mode,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fallocate,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                fallocate: FallocateData {
+                    fd: 5,
+                    mode: 0,
+                    offset: 1024,
+                    size: 4096,
+                },
+            },
+        }
+    },
+    "123 fallocate(fd: 5, mode: 0, offset: 1024, size: 4096) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fallocate_keep_size,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fallocate,
+            pid: 456,
+            tid: 456,
+            return_value: 0,
+            data: SyscallEventData {
+                fallocate: FallocateData {
+                    fd: 8,
+                    mode: libc::FALLOC_FL_KEEP_SIZE,
+                    offset: 0,
+                    size: 2048,
+                },
+            },
+        }
+    },
+    "456 fallocate(fd: 8, mode: 0x1 (FALLOC_FL_KEEP_SIZE), offset: 0, size: 2048) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fallocate_punch_hole,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fallocate,
+            pid: 789,
+            tid: 789,
+            return_value: 0,
+            data: SyscallEventData {
+                fallocate: FallocateData {
+                    fd: 12,
+                    mode: libc::FALLOC_FL_PUNCH_HOLE | libc::FALLOC_FL_KEEP_SIZE,
+                    offset: 512,
+                    size: 1024,
+                },
+            },
+        }
+    },
+    "789 fallocate(fd: 12, mode: 0x3 (FALLOC_FL_KEEP_SIZE|FALLOC_FL_PUNCH_HOLE), offset: 512, size: 1024) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fallocate_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fallocate,
+            pid: 999,
+            tid: 999,
+            return_value: -1,
+            data: SyscallEventData {
+                fallocate: FallocateData {
+                    fd: 3,
+                    mode: libc::FALLOC_FL_ZERO_RANGE,
+                    offset: 100,
+                    size: 500,
+                },
+            },
+        }
+    },
+    "999 fallocate(fd: 3, mode: 0x10 (FALLOC_FL_ZERO_RANGE), offset: 100, size: 500) = -1 (error)\n"
 );

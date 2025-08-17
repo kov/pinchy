@@ -6,14 +6,20 @@ use pinchy_common::{
         self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fallocate, SYS_fchmod, SYS_fchmodat,
         SYS_fchown, SYS_fchownat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
         SYS_getdents64, SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch,
-        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
+        SYS_linkat, SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
         SYS_truncate,
     },
     AcctData, FaccessatData, FallocateData, FchmodData, FchmodatData, FchownData, FchownatData,
     FdatasyncData, FsyncData, FtruncateData, InotifyAddWatchData, InotifyInit1Data,
-    InotifyRmWatchData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
+    InotifyRmWatchData, LinkatData, MkdiratData, MknodatData, Renameat2Data, RenameatData, SyscallEvent,
     SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
+
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::syscalls::SYS_link;
+
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::LinkData;
 
 use crate::syscall_test;
 
@@ -2474,4 +2480,134 @@ syscall_test!(
         }
     },
     "999 fallocate(fd: 3, mode: 0x10 (FALLOC_FL_ZERO_RANGE), offset: 100, size: 500) = -1 (error)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_link,
+    {
+        let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; SMALLISH_READ_SIZE];
+        let oldpath_bytes = b"/old/file\0";
+        let newpath_bytes = b"/new/link\0";
+        oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
+        newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
+        SyscallEvent {
+            syscall_nr: SYS_link,
+            pid: 800,
+            tid: 801,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                link: LinkData { oldpath, newpath },
+            },
+        }
+    },
+    "801 link(oldpath: \"/old/file\", newpath: \"/new/link\") = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_link_error,
+    {
+        let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; SMALLISH_READ_SIZE];
+        let oldpath_bytes = b"/nonexistent\0";
+        let newpath_bytes = b"/link\0";
+        oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
+        newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
+        SyscallEvent {
+            syscall_nr: SYS_link,
+            pid: 800,
+            tid: 801,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                link: LinkData { oldpath, newpath },
+            },
+        }
+    },
+    "801 link(oldpath: \"/nonexistent\", newpath: \"/link\") = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_linkat,
+    {
+        let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; SMALLISH_READ_SIZE];
+        let oldpath_bytes = b"file.txt\0";
+        let newpath_bytes = b"link.txt\0";
+        oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
+        newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
+        SyscallEvent {
+            syscall_nr: SYS_linkat,
+            pid: 900,
+            tid: 901,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                linkat: LinkatData {
+                    olddirfd: libc::AT_FDCWD,
+                    oldpath,
+                    newdirfd: libc::AT_FDCWD,
+                    newpath,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "901 linkat(olddirfd: AT_FDCWD, oldpath: \"file.txt\", newdirfd: AT_FDCWD, newpath: \"link.txt\", flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_linkat_with_flags,
+    {
+        let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; SMALLISH_READ_SIZE];
+        let oldpath_bytes = b"symlink\0";
+        let newpath_bytes = b"hardlink\0";
+        oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
+        newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
+        SyscallEvent {
+            syscall_nr: SYS_linkat,
+            pid: 950,
+            tid: 951,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                linkat: LinkatData {
+                    olddirfd: 5,
+                    oldpath,
+                    newdirfd: 6,
+                    newpath,
+                    flags: libc::AT_SYMLINK_FOLLOW,
+                },
+            },
+        }
+    },
+    "951 linkat(olddirfd: 5, oldpath: \"symlink\", newdirfd: 6, newpath: \"hardlink\", flags: AT_SYMLINK_FOLLOW (0x400)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_linkat_error,
+    {
+        let mut oldpath = [0u8; SMALLISH_READ_SIZE];
+        let mut newpath = [0u8; SMALLISH_READ_SIZE];
+        let oldpath_bytes = b"nonexistent\0";
+        let newpath_bytes = b"link\0";
+        oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
+        newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
+        SyscallEvent {
+            syscall_nr: SYS_linkat,
+            pid: 900,
+            tid: 901,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                linkat: LinkatData {
+                    olddirfd: libc::AT_FDCWD,
+                    oldpath,
+                    newdirfd: libc::AT_FDCWD,
+                    newpath,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "901 linkat(olddirfd: AT_FDCWD, oldpath: \"nonexistent\", newdirfd: AT_FDCWD, newpath: \"link\", flags: 0) = -1 (error)\n"
 );

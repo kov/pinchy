@@ -654,3 +654,25 @@ syscall_handler!(fallocate, args, data, {
     data.offset = args[2] as i64;
     data.size = args[3] as i64;
 });
+
+#[cfg(x86_64)]
+syscall_handler!(link, args, data, {
+    let oldpath_ptr = args[0] as *const u8;
+    let newpath_ptr = args[1] as *const u8;
+    unsafe {
+        let _ = bpf_probe_read_buf(oldpath_ptr, &mut data.oldpath);
+        let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
+    }
+});
+
+syscall_handler!(linkat, args, data, {
+    data.olddirfd = args[0] as i32;
+    let oldpath_ptr = args[1] as *const u8;
+    data.newdirfd = args[2] as i32;
+    let newpath_ptr = args[3] as *const u8;
+    data.flags = args[4] as i32;
+    unsafe {
+        let _ = bpf_probe_read_buf(oldpath_ptr, &mut data.oldpath);
+        let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
+    }
+});

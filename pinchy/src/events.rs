@@ -2868,6 +2868,22 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
             finish!(sf, event.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_link => {
+            let data = unsafe { event.data.link };
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_linkat => {
+            let data = unsafe { event.data.linkat };
+            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_shmat => {
             let data = unsafe { event.data.shmat };
 

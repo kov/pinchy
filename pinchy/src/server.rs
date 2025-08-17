@@ -579,6 +579,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_symlink", syscalls::SYS_symlink),
         ("syscall_exit_symlinkat", syscalls::SYS_symlinkat),
+        #[cfg(target_arch = "x86_64")]
+        ("syscall_exit_link", syscalls::SYS_link),
+        ("syscall_exit_linkat", syscalls::SYS_linkat),
         ("syscall_exit_shmget", syscalls::SYS_shmget),
         ("syscall_exit_shmat", syscalls::SYS_shmat),
         ("syscall_exit_shmdt", syscalls::SYS_shmdt),

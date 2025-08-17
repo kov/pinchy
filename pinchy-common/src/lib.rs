@@ -197,6 +197,8 @@ pub union SyscallEventData {
     pub unlinkat: UnlinkatData,
     pub symlink: SymlinkData,
     pub symlinkat: SymlinkatData,
+    pub link: LinkData,
+    pub linkat: LinkatData,
     pub shmat: ShmatData,
     pub shmdt: ShmdtData,
     pub shmget: ShmgetData,
@@ -1653,6 +1655,23 @@ pub struct SymlinkatData {
 }
 
 #[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LinkData {
+    pub oldpath: [u8; SMALLISH_READ_SIZE],
+    pub newpath: [u8; SMALLISH_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LinkatData {
+    pub olddirfd: i32,
+    pub oldpath: [u8; SMALLISH_READ_SIZE],
+    pub newdirfd: i32,
+    pub newpath: [u8; SMALLISH_READ_SIZE],
+    pub flags: i32,
+}
+
+#[repr(C)]
 #[derive(Clone, Copy, Default)]
 pub struct ShmatData {
     pub shmid: i32,
@@ -2492,6 +2511,27 @@ impl Default for ProcessVmData {
             local_read_count: 0,
             remote_read_count: 0,
             local_iov_bufs: [[0; LARGER_READ_SIZE]; IOV_COUNT],
+        }
+    }
+}
+
+impl Default for LinkData {
+    fn default() -> Self {
+        Self {
+            oldpath: [0; SMALLISH_READ_SIZE],
+            newpath: [0; SMALLISH_READ_SIZE],
+        }
+    }
+}
+
+impl Default for LinkatData {
+    fn default() -> Self {
+        Self {
+            olddirfd: 0,
+            oldpath: [0; SMALLISH_READ_SIZE],
+            newdirfd: 0,
+            newpath: [0; SMALLISH_READ_SIZE],
+            flags: 0,
         }
     }
 }

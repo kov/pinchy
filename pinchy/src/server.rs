@@ -493,6 +493,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             syscalls::SYS_sched_setscheduler,
         ),
         ("syscall_exit_faccessat", syscalls::SYS_faccessat),
+        ("syscall_exit_fallocate", syscalls::SYS_fallocate),
         ("syscall_exit_uname", syscalls::SYS_uname),
         ("syscall_exit_readlinkat", syscalls::SYS_readlinkat),
         ("syscall_exit_getcwd", syscalls::SYS_getcwd),

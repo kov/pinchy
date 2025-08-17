@@ -2181,6 +2181,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
 
         // Boolean-like syscalls - 0 for success, non-zero for error
         syscalls::SYS_faccessat
+        | syscalls::SYS_fallocate
         | syscalls::SYS_fchmod
         | syscalls::SYS_fchmodat
         | syscalls::SYS_fchown
@@ -4265,4 +4266,34 @@ pub fn format_waitid_idtype(idtype: u32) -> &'static str {
         libc::P_PIDFD => "P_PIDFD", // Wait for child referred to by PID file descriptor
         _ => "UNKNOWN",
     }
+}
+
+/// Format fallocate mode flags
+pub fn format_fallocate_mode(mode: i32) -> Cow<'static, str> {
+    if mode == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if mode & libc::FALLOC_FL_KEEP_SIZE != 0 {
+        parts.push("FALLOC_FL_KEEP_SIZE");
+    }
+    if mode & libc::FALLOC_FL_PUNCH_HOLE != 0 {
+        parts.push("FALLOC_FL_PUNCH_HOLE");
+    }
+    if mode & libc::FALLOC_FL_COLLAPSE_RANGE != 0 {
+        parts.push("FALLOC_FL_COLLAPSE_RANGE");
+    }
+    if mode & libc::FALLOC_FL_ZERO_RANGE != 0 {
+        parts.push("FALLOC_FL_ZERO_RANGE");
+    }
+    if mode & libc::FALLOC_FL_INSERT_RANGE != 0 {
+        parts.push("FALLOC_FL_INSERT_RANGE");
+    }
+    if mode & libc::FALLOC_FL_UNSHARE_RANGE != 0 {
+        parts.push("FALLOC_FL_UNSHARE_RANGE");
+    }
+
+    format!("0x{:x} ({})", mode, parts.join("|")).into()
 }

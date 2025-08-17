@@ -1780,6 +1780,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_fallocate => {
+            let data = unsafe { event.data.fallocate };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "mode: {}", format_fallocate_mode(data.mode));
+            argf!(sf, "offset: {}", data.offset);
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_set_robust_list => {
             let data = unsafe { event.data.set_robust_list };
 

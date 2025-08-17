@@ -647,3 +647,10 @@ syscall_handler!(fspick, args, data, {
         let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
     }
 });
+
+syscall_handler!(fallocate, args, data, {
+    data.fd = args[0] as i32;
+    data.mode = args[1] as i32;
+    data.offset = args[2] as i64;
+    data.size = args[3] as i64;
+});

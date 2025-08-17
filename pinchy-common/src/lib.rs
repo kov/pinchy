@@ -51,6 +51,7 @@ pub union SyscallEventData {
     pub munmap: MunmapData,
     pub brk: BrkData,
     pub faccessat: FaccessatData,
+    pub fallocate: FallocateData,
     pub mprotect: MprotectData,
     pub getrandom: GetrandomData,
     pub statfs: StatfsData,
@@ -811,6 +812,15 @@ pub struct FaccessatData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub mode: i32,
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FallocateData {
+    pub fd: i32,
+    pub mode: i32,
+    pub offset: i64,
+    pub size: i64,
 }
 
 #[repr(C)]

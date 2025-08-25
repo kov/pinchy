@@ -410,7 +410,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fdatasync,
         syscalls::SYS_ftruncate,
         syscalls::SYS_fchmod,
-        syscalls::SYS_fchmodat,
         syscalls::SYS_fchown,
         syscalls::SYS_flock,
         syscalls::SYS_truncate,
@@ -451,10 +450,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
-        (
-            "syscall_exit_inotify_add_watch",
-            syscalls::SYS_inotify_add_watch,
-        ),
         ("syscall_exit_reboot", syscalls::SYS_reboot),
         ("syscall_exit_epoll_ctl", syscalls::SYS_epoll_ctl),
         ("syscall_exit_epoll_pwait", syscalls::SYS_epoll_pwait),
@@ -467,9 +462,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_pwrite64", syscalls::SYS_pwrite64),
         ("syscall_exit_openat", syscalls::SYS_openat),
         ("syscall_exit_openat2", syscalls::SYS_openat2),
-        ("syscall_exit_fstat", syscalls::SYS_fstat),
-        ("syscall_exit_newfstatat", syscalls::SYS_newfstatat),
-        ("syscall_exit_getdents64", syscalls::SYS_getdents64),
         ("syscall_exit_futex", syscalls::SYS_futex),
         ("syscall_exit_futex_waitv", syscalls::SYS_futex_waitv),
         (
@@ -493,42 +485,18 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             "syscall_exit_process_vm_writev",
             syscalls::SYS_process_vm_writev,
         ),
-        ("syscall_exit_statfs", syscalls::SYS_statfs),
-        ("syscall_exit_fstatfs", syscalls::SYS_fstatfs),
-        ("syscall_exit_fsopen", syscalls::SYS_fsopen),
-        ("syscall_exit_fsconfig", syscalls::SYS_fsconfig),
-        ("syscall_exit_fspick", syscalls::SYS_fspick),
-        ("syscall_exit_statx", syscalls::SYS_statx),
         ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),
         (
             "syscall_exit_sched_setscheduler",
             syscalls::SYS_sched_setscheduler,
         ),
-        ("syscall_exit_faccessat", syscalls::SYS_faccessat),
-        ("syscall_exit_fallocate", syscalls::SYS_fallocate),
         ("syscall_exit_uname", syscalls::SYS_uname),
-        ("syscall_exit_readlinkat", syscalls::SYS_readlinkat),
-        ("syscall_exit_getcwd", syscalls::SYS_getcwd),
-        ("syscall_exit_chdir", syscalls::SYS_chdir),
-        ("syscall_exit_mkdirat", syscalls::SYS_mkdirat),
         ("syscall_exit_wait4", syscalls::SYS_wait4),
         ("syscall_exit_waitid", syscalls::SYS_waitid),
         ("syscall_exit_getrusage", syscalls::SYS_getrusage),
         ("syscall_exit_clone3", syscalls::SYS_clone3),
         ("syscall_exit_clone", syscalls::SYS_clone),
-        ("syscall_exit_flistxattr", syscalls::SYS_flistxattr),
-        ("syscall_exit_listxattr", syscalls::SYS_listxattr),
-        ("syscall_exit_llistxattr", syscalls::SYS_llistxattr),
-        ("syscall_exit_setxattr", syscalls::SYS_setxattr),
-        ("syscall_exit_lsetxattr", syscalls::SYS_lsetxattr),
-        ("syscall_exit_fsetxattr", syscalls::SYS_fsetxattr),
-        ("syscall_exit_getxattr", syscalls::SYS_getxattr),
-        ("syscall_exit_lgetxattr", syscalls::SYS_lgetxattr),
-        ("syscall_exit_fgetxattr", syscalls::SYS_fgetxattr),
-        ("syscall_exit_removexattr", syscalls::SYS_removexattr),
-        ("syscall_exit_lremovexattr", syscalls::SYS_lremovexattr),
-        ("syscall_exit_fremovexattr", syscalls::SYS_fremovexattr),
         ("syscall_exit_gettimeofday", syscalls::SYS_gettimeofday),
         ("syscall_exit_settimeofday", syscalls::SYS_settimeofday),
         ("syscall_exit_nanosleep", syscalls::SYS_nanosleep),
@@ -593,35 +561,93 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
+    // Filesystem syscalls - all handled by the unified filesystem handler
+    const FILESYSTEM_SYSCALLS: &[i64] = &[
+        syscalls::SYS_fstat,
+        syscalls::SYS_newfstatat,
+        syscalls::SYS_getdents64,
+        syscalls::SYS_statfs,
+        syscalls::SYS_fstatfs,
+        syscalls::SYS_fsopen,
+        syscalls::SYS_fsconfig,
+        syscalls::SYS_fspick,
+        syscalls::SYS_statx,
+        syscalls::SYS_faccessat,
+        syscalls::SYS_fallocate,
+        syscalls::SYS_readlinkat,
+        syscalls::SYS_getcwd,
+        syscalls::SYS_chdir,
+        syscalls::SYS_mkdirat,
+        syscalls::SYS_flistxattr,
+        syscalls::SYS_listxattr,
+        syscalls::SYS_llistxattr,
+        syscalls::SYS_setxattr,
+        syscalls::SYS_lsetxattr,
+        syscalls::SYS_fsetxattr,
+        syscalls::SYS_getxattr,
+        syscalls::SYS_lgetxattr,
+        syscalls::SYS_fgetxattr,
+        syscalls::SYS_removexattr,
+        syscalls::SYS_lremovexattr,
+        syscalls::SYS_fremovexattr,
+        syscalls::SYS_fchmodat,
+        syscalls::SYS_fchownat,
+        syscalls::SYS_renameat,
+        syscalls::SYS_renameat2,
+        syscalls::SYS_unlinkat,
+        syscalls::SYS_symlinkat,
+        syscalls::SYS_linkat,
+        syscalls::SYS_acct,
+        syscalls::SYS_mknodat,
+        syscalls::SYS_pivot_root,
+        syscalls::SYS_chroot,
+        syscalls::SYS_open_tree,
+        syscalls::SYS_mount,
+        syscalls::SYS_umount2,
+        syscalls::SYS_mount_setattr,
+        syscalls::SYS_move_mount,
+        syscalls::SYS_swapon,
+        syscalls::SYS_swapoff,
+        syscalls::SYS_inotify_add_watch,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_chown,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_lchown,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_rename,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_rmdir,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_unlink,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_symlink,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_link,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_mknod,
+        syscalls::SYS_truncate,
+    ];
+    let filesystem_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_filesystem")
+        .context("missing filesystem handler")?
+        .try_into()?;
+    filesystem_prog
+        .load()
+        .context("trying to load syscall_exit_filesystem into eBPF")?;
+    for &syscall_nr in FILESYSTEM_SYSCALLS {
+        prog_array.set(syscall_nr as u32, filesystem_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
     for (prog_name, syscall_nr) in [
         ("syscall_exit_pselect6", syscalls::SYS_pselect6),
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_select", syscalls::SYS_select),
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_poll", syscalls::SYS_poll),
-        ("syscall_exit_fchownat", syscalls::SYS_fchownat),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_chown", syscalls::SYS_chown),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_lchown", syscalls::SYS_lchown),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_rename", syscalls::SYS_rename),
-        ("syscall_exit_renameat", syscalls::SYS_renameat),
-        ("syscall_exit_renameat2", syscalls::SYS_renameat2),
         ("syscall_exit_splice", syscalls::SYS_splice),
         ("syscall_exit_tee", syscalls::SYS_tee),
         ("syscall_exit_vmsplice", syscalls::SYS_vmsplice),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_rmdir", syscalls::SYS_rmdir),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_unlink", syscalls::SYS_unlink),
-        ("syscall_exit_unlinkat", syscalls::SYS_unlinkat),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_symlink", syscalls::SYS_symlink),
-        ("syscall_exit_symlinkat", syscalls::SYS_symlinkat),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_link", syscalls::SYS_link),
-        ("syscall_exit_linkat", syscalls::SYS_linkat),
         ("syscall_exit_shmget", syscalls::SYS_shmget),
         ("syscall_exit_shmat", syscalls::SYS_shmat),
         ("syscall_exit_shmdt", syscalls::SYS_shmdt),
@@ -634,7 +660,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_semop", syscalls::SYS_semop),
         ("syscall_exit_semctl", syscalls::SYS_semctl),
         ("syscall_exit_getcpu", syscalls::SYS_getcpu),
-        ("syscall_exit_acct", syscalls::SYS_acct),
         (
             "syscall_exit_pidfd_send_signal",
             syscalls::SYS_pidfd_send_signal,
@@ -657,16 +682,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ),
         ("syscall_exit_sched_getattr", syscalls::SYS_sched_getattr),
         ("syscall_exit_sched_setattr", syscalls::SYS_sched_setattr),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_mknod", syscalls::SYS_mknod),
-        ("syscall_exit_mknodat", syscalls::SYS_mknodat),
-        ("syscall_exit_pivot_root", syscalls::SYS_pivot_root),
-        ("syscall_exit_chroot", syscalls::SYS_chroot),
-        ("syscall_exit_open_tree", syscalls::SYS_open_tree),
-        ("syscall_exit_mount", syscalls::SYS_mount),
-        ("syscall_exit_umount2", syscalls::SYS_umount2),
-        ("syscall_exit_mount_setattr", syscalls::SYS_mount_setattr),
-        ("syscall_exit_move_mount", syscalls::SYS_move_mount),
         ("syscall_exit_sigaltstack", syscalls::SYS_sigaltstack),
         ("syscall_exit_rt_sigprocmask", syscalls::SYS_rt_sigprocmask),
         ("syscall_exit_rt_sigpending", syscalls::SYS_rt_sigpending),
@@ -678,8 +693,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_signalfd", syscalls::SYS_signalfd),
         ("syscall_exit_signalfd4", syscalls::SYS_signalfd4),
-        ("syscall_exit_swapon", syscalls::SYS_swapon),
-        ("syscall_exit_swapoff", syscalls::SYS_swapoff),
         ("syscall_exit_init_module", syscalls::SYS_init_module),
         ("syscall_exit_finit_module", syscalls::SYS_finit_module),
         ("syscall_exit_delete_module", syscalls::SYS_delete_module),

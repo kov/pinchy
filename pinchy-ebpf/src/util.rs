@@ -90,6 +90,13 @@ pub fn get_return_value(ctx: &TracePointContext) -> Result<i64, u32> {
 }
 
 #[macro_export]
+macro_rules! data_mut {
+    ($entry:expr, $field:ident) => {
+        unsafe { &mut $entry.data.$field }
+    };
+}
+
+#[macro_export]
 macro_rules! syscall_handler {
     // Pattern with default data field (same as syscall name)
     ($name:ident, $args:ident, $data:ident, $body:block) => {

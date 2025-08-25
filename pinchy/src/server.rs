@@ -449,15 +449,14 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
-    for (prog_name, syscall_nr) in [
-        ("syscall_exit_execve", syscalls::SYS_execve),
-    ] {
-        let prog: &mut aya::programs::TracePoint = ebpf
-            .program_mut(prog_name)
-            .context("missing tailcall")?
-            .try_into()?;
-        prog.load()
-            .with_context(|| format!("trying to load {prog_name} into eBPF"))?;
+    // execve and execveat share the same handler, see eBPF side comments for details.
+    let prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_execve")
+        .context("missing syscall_exit_execve tailcall")?
+        .try_into()?;
+    prog.load()
+        .context("trying to load syscall_exit_execve into eBPF")?;
+    for syscall_nr in [syscalls::SYS_execve, syscalls::SYS_execveat] {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
     }

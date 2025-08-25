@@ -512,12 +512,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_getcwd", syscalls::SYS_getcwd),
         ("syscall_exit_chdir", syscalls::SYS_chdir),
         ("syscall_exit_mkdirat", syscalls::SYS_mkdirat),
-        ("syscall_exit_recvmsg", syscalls::SYS_recvmsg),
-        ("syscall_exit_recvfrom", syscalls::SYS_recvfrom),
-        ("syscall_exit_sendmsg", syscalls::SYS_sendmsg),
-        ("syscall_exit_sendto", syscalls::SYS_sendto),
-        ("syscall_exit_accept", syscalls::SYS_accept),
-        ("syscall_exit_accept4", syscalls::SYS_accept4),
         ("syscall_exit_wait4", syscalls::SYS_wait4),
         ("syscall_exit_waitid", syscalls::SYS_waitid),
         ("syscall_exit_getrusage", syscalls::SYS_getrusage),
@@ -558,15 +552,48 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_pwritev", syscalls::SYS_pwritev),
         ("syscall_exit_preadv2", syscalls::SYS_preadv2),
         ("syscall_exit_pwritev2", syscalls::SYS_pwritev2),
-        ("syscall_exit_bind", syscalls::SYS_bind),
-        ("syscall_exit_connect", syscalls::SYS_connect),
-        ("syscall_exit_getsockname", syscalls::SYS_getsockname),
-        ("syscall_exit_getpeername", syscalls::SYS_getpeername),
-        ("syscall_exit_setsockopt", syscalls::SYS_setsockopt),
-        ("syscall_exit_getsockopt", syscalls::SYS_getsockopt),
-        ("syscall_exit_recvmmsg", syscalls::SYS_recvmmsg),
-        ("syscall_exit_sendmmsg", syscalls::SYS_sendmmsg),
-        ("syscall_exit_socketpair", syscalls::SYS_socketpair),
+    ] {
+        let prog: &mut aya::programs::TracePoint = ebpf
+            .program_mut(prog_name)
+            .context("missing tailcall")?
+            .try_into()?;
+        prog.load()
+            .with_context(|| format!("trying to load {prog_name} into eBPF"))?;
+        prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Network syscalls - all handled by the unified network handler
+    const NETWORK_SYSCALLS: &[i64] = &[
+        syscalls::SYS_recvmsg,
+        syscalls::SYS_sendmsg,
+        syscalls::SYS_accept,
+        syscalls::SYS_accept4,
+        syscalls::SYS_recvfrom,
+        syscalls::SYS_sendto,
+        syscalls::SYS_bind,
+        syscalls::SYS_connect,
+        syscalls::SYS_socketpair,
+        syscalls::SYS_getsockname,
+        syscalls::SYS_getpeername,
+        syscalls::SYS_setsockopt,
+        syscalls::SYS_getsockopt,
+        syscalls::SYS_recvmmsg,
+        syscalls::SYS_sendmmsg,
+    ];
+    let network_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_network")
+        .context("missing network handler")?
+        .try_into()?;
+    network_prog
+        .load()
+        .context("trying to load syscall_exit_network into eBPF")?;
+    for &syscall_nr in NETWORK_SYSCALLS {
+        prog_array.set(syscall_nr as u32, network_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    for (prog_name, syscall_nr) in [
         ("syscall_exit_pselect6", syscalls::SYS_pselect6),
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_select", syscalls::SYS_select),

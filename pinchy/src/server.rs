@@ -450,12 +450,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
-        ("syscall_exit_futex", syscalls::SYS_futex),
-        ("syscall_exit_futex_waitv", syscalls::SYS_futex_waitv),
-        (
-            "syscall_exit_get_robust_list",
-            syscalls::SYS_get_robust_list,
-        ),
         ("syscall_exit_execve", syscalls::SYS_execve),
         ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),
@@ -715,6 +709,24 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         .context("trying to load syscall_exit_ipc into eBPF")?;
     for &syscall_nr in IPC_SYSCALLS {
         prog_array.set(syscall_nr as u32, ipc_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Sync syscalls - all handled by the unified sync handler
+    const SYNC_SYSCALLS: &[i64] = &[
+        syscalls::SYS_futex,
+        syscalls::SYS_futex_waitv,
+        syscalls::SYS_get_robust_list,
+    ];
+    let sync_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_sync")
+        .context("missing sync handler")?
+        .try_into()?;
+    sync_prog
+        .load()
+        .context("trying to load syscall_exit_sync into eBPF")?;
+    for &syscall_nr in SYNC_SYSCALLS {
+        prog_array.set(syscall_nr as u32, sync_prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
     }
 

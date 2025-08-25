@@ -10,10 +10,10 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::{CloneArgs, Rlimit, Rusage},
-    SMALL_READ_SIZE,
+    syscalls, SMALL_READ_SIZE,
 };
 
-use crate::{syscall_handler, PID_FILTER, SYSCALL_ARGS_OFFSET};
+use crate::{PID_FILTER, SYSCALL_ARGS_OFFSET};
 
 #[map]
 static mut EXECVE_ENTER_MAP: HashMap<u32, ExecveEnterData> =
@@ -311,156 +311,189 @@ fn read_execve_enter_data(
     }
 }
 
-syscall_handler!(prlimit64, prlimit, args, data, return_value, {
-    data.pid = args[0] as i32;
-    data.resource = args[1] as i32;
-    let new_limit_ptr = args[2] as *const Rlimit;
-    let old_limit_ptr = args[3] as *const Rlimit;
+#[tracepoint]
+pub fn syscall_exit_process(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = crate::util::get_syscall_nr(&ctx)?;
+        let args = crate::util::get_args(&ctx, syscall_nr)?;
+        let return_value = crate::util::get_return_value(&ctx)?;
 
-    data.has_new = !new_limit_ptr.is_null();
-    data.has_old = !old_limit_ptr.is_null();
-    data.new_limit = Rlimit::default();
-    data.old_limit = Rlimit::default();
+        let mut entry = crate::util::Entry::new(&ctx, syscall_nr)?;
 
-    if data.has_new {
-        if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(new_limit_ptr as *const _) } {
-            data.new_limit = limit;
-        }
-    }
-    if data.has_old && return_value == 0 {
-        if let Ok(limit) = unsafe { bpf_probe_read_user::<Rlimit>(old_limit_ptr as *const _) } {
-            data.old_limit = limit;
-        }
-    }
-});
+        match syscall_nr {
+            pinchy_common::syscalls::SYS_wait4 => {
+                let data = crate::data_mut!(entry, wait4);
+                data.pid = args[0] as i32;
+                let wstatus_ptr = args[1] as *const i32;
+                data.options = args[2] as i32;
+                let rusage_ptr = args[3] as *const Rusage;
 
-syscall_handler!(wait4, wait4, args, data, return_value, {
-    data.pid = args[0] as i32;
-    let wstatus_ptr = args[1] as *const i32;
-    data.options = args[2] as i32;
-    let rusage_ptr = args[3] as *const Rusage;
+                data.wstatus = 0i32;
+                data.rusage = Rusage::default();
+                data.has_rusage = false;
 
-    data.wstatus = 0i32;
-    data.rusage = Rusage::default();
-    data.has_rusage = false;
-
-    if return_value >= 0 && !wstatus_ptr.is_null() {
-        unsafe {
-            if let Ok(status) = bpf_probe_read_user::<i32>(wstatus_ptr) {
-                data.wstatus = status;
-            }
-        }
-    }
-    if return_value >= 0 && !rusage_ptr.is_null() {
-        unsafe {
-            if let Ok(usage) = bpf_probe_read_user::<Rusage>(rusage_ptr) {
-                data.rusage = usage;
-                data.has_rusage = true;
-            }
-        }
-    }
-});
-
-syscall_handler!(waitid, waitid, args, data, return_value, {
-    data.idtype = args[0] as u32;
-    data.id = args[1] as u32;
-    let infop_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
-    data.options = args[3] as i32;
-
-    data.infop = pinchy_common::kernel_types::Siginfo::default();
-    data.has_infop = false;
-
-    if return_value >= 0 && !infop_ptr.is_null() {
-        unsafe {
-            if let Ok(siginfo) =
-                bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(infop_ptr)
-            {
-                data.infop = siginfo;
-                data.has_infop = true;
-            }
-        }
-    }
-});
-
-syscall_handler!(getrusage, getrusage, args, data, return_value, {
-    data.who = args[0] as i32;
-    let usage_ptr = args[1] as *const Rusage;
-    data.rusage = Rusage::default();
-    if return_value >= 0 && !usage_ptr.is_null() {
-        unsafe {
-            if let Ok(usage) = bpf_probe_read_user::<Rusage>(usage_ptr) {
-                data.rusage = usage;
-            }
-        }
-    }
-});
-
-syscall_handler!(clone3, args, data, {
-    let cl_args_ptr = args[0] as *const CloneArgs;
-    data.size = args[1] as u64;
-    data.cl_args = CloneArgs::default();
-
-    unsafe {
-        let read_size = core::cmp::min(data.size as usize, core::mem::size_of::<CloneArgs>());
-        if read_size > 0 {
-            let _ = bpf_probe_read_buf(
-                cl_args_ptr as *const u8,
-                &mut core::slice::from_raw_parts_mut(
-                    &mut data.cl_args as *mut CloneArgs as *mut u8,
-                    read_size,
-                ),
-            );
-        }
-        if data.cl_args.set_tid != 0 && data.cl_args.set_tid_size > 0 {
-            let set_tid_ptr = data.cl_args.set_tid as *const i32;
-            let max_count = core::cmp::min(
-                data.cl_args.set_tid_size as usize,
-                pinchy_common::CLONE_SET_TID_MAX,
-            );
-            for i in 0..max_count {
-                if let Ok(pid) = bpf_probe_read_user::<i32>(set_tid_ptr.add(i)) {
-                    data.set_tid_array[i] = pid;
-                    data.set_tid_count += 1;
-                } else {
-                    break;
+                if return_value >= 0 && !wstatus_ptr.is_null() {
+                    unsafe {
+                        if let Ok(status) = bpf_probe_read_user::<i32>(wstatus_ptr) {
+                            data.wstatus = status;
+                        }
+                    }
+                }
+                if return_value >= 0 && !rusage_ptr.is_null() {
+                    unsafe {
+                        if let Ok(usage) = bpf_probe_read_user::<Rusage>(rusage_ptr) {
+                            data.rusage = usage;
+                            data.has_rusage = true;
+                        }
+                    }
                 }
             }
-        }
-    }
-});
+            syscalls::SYS_waitid => {
+                let data = crate::data_mut!(entry, waitid);
+                data.idtype = args[0] as u32;
+                data.id = args[1] as u32;
+                let infop_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
+                data.options = args[3] as i32;
 
-syscall_handler!(clone, args, data, {
-    data.flags = args[0] as u64;
-    data.stack = args[1];
-    data.tls = args[4] as u64;
+                data.infop = pinchy_common::kernel_types::Siginfo::default();
+                data.has_infop = false;
 
-    let parent_tid_ptr = args[2] as *const i32;
-    data.parent_tid = if !parent_tid_ptr.is_null() {
-        unsafe { bpf_probe_read_user(parent_tid_ptr).unwrap_or(0) }
-    } else {
-        0
-    };
+                if return_value >= 0 && !infop_ptr.is_null() {
+                    unsafe {
+                        if let Ok(siginfo) =
+                            bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(infop_ptr)
+                        {
+                            data.infop = siginfo;
+                            data.has_infop = true;
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_getrusage => {
+                let data = crate::data_mut!(entry, getrusage);
+                data.who = args[0] as i32;
+                let usage_ptr = args[1] as *const Rusage;
+                data.rusage = Rusage::default();
+                if return_value >= 0 && !usage_ptr.is_null() {
+                    unsafe {
+                        if let Ok(usage) = bpf_probe_read_user::<Rusage>(usage_ptr) {
+                            data.rusage = usage;
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_clone3 => {
+                let data = crate::data_mut!(entry, clone3);
+                let cl_args_ptr = args[0] as *const CloneArgs;
+                data.size = args[1] as u64;
+                data.cl_args = CloneArgs::default();
 
-    let child_tid_ptr = args[3] as *const i32;
-    data.child_tid = if !child_tid_ptr.is_null() {
-        unsafe { bpf_probe_read_user(child_tid_ptr).unwrap_or(0) }
-    } else {
-        0
-    };
-});
+                unsafe {
+                    let read_size =
+                        core::cmp::min(data.size as usize, core::mem::size_of::<CloneArgs>());
+                    if read_size > 0 {
+                        let _ = bpf_probe_read_buf(
+                            cl_args_ptr as *const u8,
+                            &mut core::slice::from_raw_parts_mut(
+                                &mut data.cl_args as *mut CloneArgs as *mut u8,
+                                read_size,
+                            ),
+                        );
+                    }
+                    if data.cl_args.set_tid != 0 && data.cl_args.set_tid_size > 0 {
+                        let set_tid_ptr = data.cl_args.set_tid as *const i32;
+                        let max_count = core::cmp::min(
+                            data.cl_args.set_tid_size as usize,
+                            pinchy_common::CLONE_SET_TID_MAX,
+                        );
+                        for i in 0..max_count {
+                            if let Ok(pid) = bpf_probe_read_user::<i32>(set_tid_ptr.add(i)) {
+                                data.set_tid_array[i] = pid;
+                                data.set_tid_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_clone => {
+                let data = crate::data_mut!(entry, clone);
+                data.flags = args[0] as u64;
+                data.stack = args[1];
+                data.tls = args[4] as u64;
 
-syscall_handler!(pidfd_send_signal, args, data, {
-    data.pidfd = args[0] as i32;
-    data.sig = args[1] as i32;
-    data.info_ptr = args[2];
-    data.flags = args[3] as u32;
-    let info_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
-    if !info_ptr.is_null() {
-        unsafe {
-            if let Ok(info) = bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(info_ptr)
-            {
-                data.info = info;
+                let parent_tid_ptr = args[2] as *const i32;
+                data.parent_tid = if !parent_tid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(parent_tid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+
+                let child_tid_ptr = args[3] as *const i32;
+                data.child_tid = if !child_tid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(child_tid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+            }
+            syscalls::SYS_pidfd_send_signal => {
+                let data = crate::data_mut!(entry, pidfd_send_signal);
+                data.pidfd = args[0] as i32;
+                data.sig = args[1] as i32;
+                data.info_ptr = args[2];
+                data.flags = args[3] as u32;
+                let info_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
+                if !info_ptr.is_null() {
+                    unsafe {
+                        if let Ok(info) =
+                            bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(info_ptr)
+                        {
+                            data.info = info;
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_prlimit64 => {
+                let data = crate::data_mut!(entry, prlimit);
+                data.pid = args[0] as i32;
+                data.resource = args[1] as i32;
+                let new_limit_ptr = args[2] as *const Rlimit;
+                let old_limit_ptr = args[3] as *const Rlimit;
+
+                data.has_new = !new_limit_ptr.is_null();
+                data.has_old = !old_limit_ptr.is_null();
+                data.new_limit = Rlimit::default();
+                data.old_limit = Rlimit::default();
+
+                if data.has_new {
+                    if let Ok(limit) =
+                        unsafe { bpf_probe_read_user::<Rlimit>(new_limit_ptr as *const _) }
+                    {
+                        data.new_limit = limit;
+                    }
+                }
+                if data.has_old && return_value == 0 {
+                    if let Ok(limit) =
+                        unsafe { bpf_probe_read_user::<Rlimit>(old_limit_ptr as *const _) }
+                    {
+                        data.old_limit = limit;
+                    }
+                }
+            }
+
+            _ => {
+                entry.discard();
+                return Ok(());
             }
         }
+
+        entry.submit();
+        Ok(())
     }
-});
+
+    match inner(ctx) {
+        Ok(()) => 0,
+        Err(code) => code,
+    }
+}

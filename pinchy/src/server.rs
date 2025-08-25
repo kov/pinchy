@@ -761,6 +761,29 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
+    // Signal syscalls - all handled by the unified signal handler
+    const SIGNAL_SYSCALLS: &[i64] = &[
+        syscalls::SYS_rt_sigprocmask,
+        syscalls::SYS_rt_sigpending,
+        syscalls::SYS_rt_sigsuspend,
+        syscalls::SYS_rt_sigtimedwait,
+        syscalls::SYS_sigaltstack,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_signalfd,
+        syscalls::SYS_signalfd4,
+    ];
+    let signal_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_signal")
+        .context("missing signal handler")?
+        .try_into()?;
+    signal_prog
+        .load()
+        .context("trying to load syscall_exit_signal into eBPF")?;
+    for &syscall_nr in SIGNAL_SYSCALLS {
+        prog_array.set(syscall_nr as u32, signal_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
     for (prog_name, syscall_nr) in [
         (
             "syscall_exit_sched_getaffinity",
@@ -778,17 +801,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ),
         ("syscall_exit_sched_getattr", syscalls::SYS_sched_getattr),
         ("syscall_exit_sched_setattr", syscalls::SYS_sched_setattr),
-        ("syscall_exit_sigaltstack", syscalls::SYS_sigaltstack),
-        ("syscall_exit_rt_sigprocmask", syscalls::SYS_rt_sigprocmask),
-        ("syscall_exit_rt_sigpending", syscalls::SYS_rt_sigpending),
-        ("syscall_exit_rt_sigsuspend", syscalls::SYS_rt_sigsuspend),
-        (
-            "syscall_exit_rt_sigtimedwait",
-            syscalls::SYS_rt_sigtimedwait,
-        ),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_signalfd", syscalls::SYS_signalfd),
-        ("syscall_exit_signalfd4", syscalls::SYS_signalfd4),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

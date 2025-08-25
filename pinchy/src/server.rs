@@ -451,17 +451,11 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 
     for (prog_name, syscall_nr) in [
         ("syscall_exit_execve", syscalls::SYS_execve),
-        ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),
         (
             "syscall_exit_sched_setscheduler",
             syscalls::SYS_sched_setscheduler,
         ),
-        ("syscall_exit_wait4", syscalls::SYS_wait4),
-        ("syscall_exit_waitid", syscalls::SYS_waitid),
-        ("syscall_exit_getrusage", syscalls::SYS_getrusage),
-        ("syscall_exit_clone3", syscalls::SYS_clone3),
-        ("syscall_exit_clone", syscalls::SYS_clone),
     ] {
         let prog: &mut aya::programs::TracePoint = ebpf
             .program_mut(prog_name)
@@ -745,11 +739,29 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
+    // Process syscalls - all handled by the unified process handler
+    const PROCESS_SYSCALLS: &[i64] = &[
+        syscalls::SYS_wait4,
+        syscalls::SYS_waitid,
+        syscalls::SYS_getrusage,
+        syscalls::SYS_clone3,
+        syscalls::SYS_clone,
+        syscalls::SYS_pidfd_send_signal,
+        syscalls::SYS_prlimit64,
+    ];
+    let process_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_process")
+        .context("missing process handler")?
+        .try_into()?;
+    process_prog
+        .load()
+        .context("trying to load syscall_exit_process into eBPF")?;
+    for &syscall_nr in PROCESS_SYSCALLS {
+        prog_array.set(syscall_nr as u32, process_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
     for (prog_name, syscall_nr) in [
-        (
-            "syscall_exit_pidfd_send_signal",
-            syscalls::SYS_pidfd_send_signal,
-        ),
         (
             "syscall_exit_sched_getaffinity",
             syscalls::SYS_sched_getaffinity,

@@ -246,6 +246,9 @@ async fn main() -> anyhow::Result<()> {
         warn!("failed to initialize eBPF logger: {e}");
     }
 
+    // Keep track of how long it takes to load the eBPF programs.
+    let now = Instant::now();
+
     let program: &mut TracePoint = ebpf.program_mut("pinchy").unwrap().try_into()?;
     program.load()?;
     program.attach("raw_syscalls", "sys_enter")?;
@@ -275,6 +278,8 @@ async fn main() -> anyhow::Result<()> {
     program.attach("syscalls", "sys_enter_execveat")?;
 
     load_tailcalls(&mut ebpf)?;
+
+    println!("Loaded eBPF programs in {:?}", now.elapsed());
 
     // Keeps track of how long since we handled an event; used to decide when to
     // automatically quit.
@@ -405,7 +410,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fdatasync,
         syscalls::SYS_ftruncate,
         syscalls::SYS_fchmod,
-        syscalls::SYS_fchmodat,
         syscalls::SYS_fchown,
         syscalls::SYS_flock,
         syscalls::SYS_truncate,
@@ -445,231 +449,357 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
-    for (prog_name, syscall_nr) in [
-        (
-            "syscall_exit_inotify_add_watch",
-            syscalls::SYS_inotify_add_watch,
-        ),
-        ("syscall_exit_reboot", syscalls::SYS_reboot),
-        ("syscall_exit_epoll_ctl", syscalls::SYS_epoll_ctl),
-        ("syscall_exit_epoll_pwait", syscalls::SYS_epoll_pwait),
-        ("syscall_exit_epoll_pwait2", syscalls::SYS_epoll_pwait2),
-        ("syscall_exit_pipe2", syscalls::SYS_pipe2),
-        ("syscall_exit_ppoll", syscalls::SYS_ppoll),
-        ("syscall_exit_read", syscalls::SYS_read),
-        ("syscall_exit_write", syscalls::SYS_write),
-        ("syscall_exit_pread64", syscalls::SYS_pread64),
-        ("syscall_exit_pwrite64", syscalls::SYS_pwrite64),
-        ("syscall_exit_openat", syscalls::SYS_openat),
-        ("syscall_exit_openat2", syscalls::SYS_openat2),
-        ("syscall_exit_fstat", syscalls::SYS_fstat),
-        ("syscall_exit_newfstatat", syscalls::SYS_newfstatat),
-        ("syscall_exit_getdents64", syscalls::SYS_getdents64),
-        ("syscall_exit_futex", syscalls::SYS_futex),
-        ("syscall_exit_futex_waitv", syscalls::SYS_futex_waitv),
-        (
-            "syscall_exit_get_robust_list",
-            syscalls::SYS_get_robust_list,
-        ),
-        ("syscall_exit_ioctl", syscalls::SYS_ioctl),
-        ("syscall_exit_execve", syscalls::SYS_execve),
-        ("syscall_exit_mmap", syscalls::SYS_mmap),
-        ("syscall_exit_munmap", syscalls::SYS_munmap),
-        ("syscall_exit_madvise", syscalls::SYS_madvise),
-        (
-            "syscall_exit_process_madvise",
-            syscalls::SYS_process_madvise,
-        ),
-        (
-            "syscall_exit_process_vm_readv",
-            syscalls::SYS_process_vm_readv,
-        ),
-        (
-            "syscall_exit_process_vm_writev",
-            syscalls::SYS_process_vm_writev,
-        ),
-        ("syscall_exit_statfs", syscalls::SYS_statfs),
-        ("syscall_exit_fstatfs", syscalls::SYS_fstatfs),
-        ("syscall_exit_fsopen", syscalls::SYS_fsopen),
-        ("syscall_exit_fsconfig", syscalls::SYS_fsconfig),
-        ("syscall_exit_fspick", syscalls::SYS_fspick),
-        ("syscall_exit_statx", syscalls::SYS_statx),
-        ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
-        ("syscall_exit_rseq", syscalls::SYS_rseq),
-        (
-            "syscall_exit_sched_setscheduler",
-            syscalls::SYS_sched_setscheduler,
-        ),
-        ("syscall_exit_faccessat", syscalls::SYS_faccessat),
-        ("syscall_exit_fallocate", syscalls::SYS_fallocate),
-        ("syscall_exit_uname", syscalls::SYS_uname),
-        ("syscall_exit_readlinkat", syscalls::SYS_readlinkat),
-        ("syscall_exit_getcwd", syscalls::SYS_getcwd),
-        ("syscall_exit_chdir", syscalls::SYS_chdir),
-        ("syscall_exit_mkdirat", syscalls::SYS_mkdirat),
-        ("syscall_exit_recvmsg", syscalls::SYS_recvmsg),
-        ("syscall_exit_recvfrom", syscalls::SYS_recvfrom),
-        ("syscall_exit_sendmsg", syscalls::SYS_sendmsg),
-        ("syscall_exit_sendto", syscalls::SYS_sendto),
-        ("syscall_exit_accept", syscalls::SYS_accept),
-        ("syscall_exit_accept4", syscalls::SYS_accept4),
-        ("syscall_exit_wait4", syscalls::SYS_wait4),
-        ("syscall_exit_waitid", syscalls::SYS_waitid),
-        ("syscall_exit_getrusage", syscalls::SYS_getrusage),
-        ("syscall_exit_clone3", syscalls::SYS_clone3),
-        ("syscall_exit_clone", syscalls::SYS_clone),
-        ("syscall_exit_flistxattr", syscalls::SYS_flistxattr),
-        ("syscall_exit_listxattr", syscalls::SYS_listxattr),
-        ("syscall_exit_llistxattr", syscalls::SYS_llistxattr),
-        ("syscall_exit_setxattr", syscalls::SYS_setxattr),
-        ("syscall_exit_lsetxattr", syscalls::SYS_lsetxattr),
-        ("syscall_exit_fsetxattr", syscalls::SYS_fsetxattr),
-        ("syscall_exit_getxattr", syscalls::SYS_getxattr),
-        ("syscall_exit_lgetxattr", syscalls::SYS_lgetxattr),
-        ("syscall_exit_fgetxattr", syscalls::SYS_fgetxattr),
-        ("syscall_exit_removexattr", syscalls::SYS_removexattr),
-        ("syscall_exit_lremovexattr", syscalls::SYS_lremovexattr),
-        ("syscall_exit_fremovexattr", syscalls::SYS_fremovexattr),
-        ("syscall_exit_gettimeofday", syscalls::SYS_gettimeofday),
-        ("syscall_exit_settimeofday", syscalls::SYS_settimeofday),
-        ("syscall_exit_nanosleep", syscalls::SYS_nanosleep),
-        (
-            "syscall_exit_clock_nanosleep",
-            syscalls::SYS_clock_nanosleep,
-        ),
-        ("syscall_exit_adjtimex", syscalls::SYS_adjtimex),
-        ("syscall_exit_clock_adjtime", syscalls::SYS_clock_adjtime),
-        ("syscall_exit_clock_getres", syscalls::SYS_clock_getres),
-        ("syscall_exit_clock_gettime", syscalls::SYS_clock_gettime),
-        ("syscall_exit_clock_settime", syscalls::SYS_clock_settime),
-        ("syscall_exit_timer_create", syscalls::SYS_timer_create),
-        ("syscall_exit_timer_gettime", syscalls::SYS_timer_gettime),
-        ("syscall_exit_timer_settime", syscalls::SYS_timer_settime),
-        ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
-        ("syscall_exit_times", syscalls::SYS_times),
-        ("syscall_exit_readv", syscalls::SYS_readv),
-        ("syscall_exit_writev", syscalls::SYS_writev),
-        ("syscall_exit_preadv", syscalls::SYS_preadv),
-        ("syscall_exit_pwritev", syscalls::SYS_pwritev),
-        ("syscall_exit_preadv2", syscalls::SYS_preadv2),
-        ("syscall_exit_pwritev2", syscalls::SYS_pwritev2),
-        ("syscall_exit_bind", syscalls::SYS_bind),
-        ("syscall_exit_connect", syscalls::SYS_connect),
-        ("syscall_exit_getsockname", syscalls::SYS_getsockname),
-        ("syscall_exit_getpeername", syscalls::SYS_getpeername),
-        ("syscall_exit_setsockopt", syscalls::SYS_setsockopt),
-        ("syscall_exit_getsockopt", syscalls::SYS_getsockopt),
-        ("syscall_exit_recvmmsg", syscalls::SYS_recvmmsg),
-        ("syscall_exit_sendmmsg", syscalls::SYS_sendmmsg),
-        ("syscall_exit_socketpair", syscalls::SYS_socketpair),
-        ("syscall_exit_pselect6", syscalls::SYS_pselect6),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_select", syscalls::SYS_select),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_poll", syscalls::SYS_poll),
-        ("syscall_exit_fchownat", syscalls::SYS_fchownat),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_chown", syscalls::SYS_chown),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_lchown", syscalls::SYS_lchown),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_rename", syscalls::SYS_rename),
-        ("syscall_exit_renameat", syscalls::SYS_renameat),
-        ("syscall_exit_renameat2", syscalls::SYS_renameat2),
-        ("syscall_exit_splice", syscalls::SYS_splice),
-        ("syscall_exit_tee", syscalls::SYS_tee),
-        ("syscall_exit_vmsplice", syscalls::SYS_vmsplice),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_rmdir", syscalls::SYS_rmdir),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_unlink", syscalls::SYS_unlink),
-        ("syscall_exit_unlinkat", syscalls::SYS_unlinkat),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_symlink", syscalls::SYS_symlink),
-        ("syscall_exit_symlinkat", syscalls::SYS_symlinkat),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_link", syscalls::SYS_link),
-        ("syscall_exit_linkat", syscalls::SYS_linkat),
-        ("syscall_exit_shmget", syscalls::SYS_shmget),
-        ("syscall_exit_shmat", syscalls::SYS_shmat),
-        ("syscall_exit_shmdt", syscalls::SYS_shmdt),
-        ("syscall_exit_shmctl", syscalls::SYS_shmctl),
-        ("syscall_exit_msgget", syscalls::SYS_msgget),
-        ("syscall_exit_msgsnd", syscalls::SYS_msgsnd),
-        ("syscall_exit_msgrcv", syscalls::SYS_msgrcv),
-        ("syscall_exit_msgctl", syscalls::SYS_msgctl),
-        ("syscall_exit_semget", syscalls::SYS_semget),
-        ("syscall_exit_semop", syscalls::SYS_semop),
-        ("syscall_exit_semctl", syscalls::SYS_semctl),
-        ("syscall_exit_getcpu", syscalls::SYS_getcpu),
-        ("syscall_exit_acct", syscalls::SYS_acct),
-        (
-            "syscall_exit_pidfd_send_signal",
-            syscalls::SYS_pidfd_send_signal,
-        ),
-        ("syscall_exit_capset", syscalls::SYS_capset),
-        ("syscall_exit_capget", syscalls::SYS_capget),
-        (
-            "syscall_exit_sched_getaffinity",
-            syscalls::SYS_sched_getaffinity,
-        ),
-        (
-            "syscall_exit_sched_setaffinity",
-            syscalls::SYS_sched_setaffinity,
-        ),
-        ("syscall_exit_sched_getparam", syscalls::SYS_sched_getparam),
-        ("syscall_exit_sched_setparam", syscalls::SYS_sched_setparam),
-        (
-            "syscall_exit_sched_rr_get_interval",
-            syscalls::SYS_sched_rr_get_interval,
-        ),
-        ("syscall_exit_sched_getattr", syscalls::SYS_sched_getattr),
-        ("syscall_exit_sched_setattr", syscalls::SYS_sched_setattr),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_mknod", syscalls::SYS_mknod),
-        ("syscall_exit_mknodat", syscalls::SYS_mknodat),
-        ("syscall_exit_pivot_root", syscalls::SYS_pivot_root),
-        ("syscall_exit_chroot", syscalls::SYS_chroot),
-        ("syscall_exit_open_tree", syscalls::SYS_open_tree),
-        ("syscall_exit_mount", syscalls::SYS_mount),
-        ("syscall_exit_umount2", syscalls::SYS_umount2),
-        ("syscall_exit_mount_setattr", syscalls::SYS_mount_setattr),
-        ("syscall_exit_move_mount", syscalls::SYS_move_mount),
-        ("syscall_exit_sigaltstack", syscalls::SYS_sigaltstack),
-        ("syscall_exit_rt_sigprocmask", syscalls::SYS_rt_sigprocmask),
-        ("syscall_exit_rt_sigpending", syscalls::SYS_rt_sigpending),
-        ("syscall_exit_rt_sigsuspend", syscalls::SYS_rt_sigsuspend),
-        (
-            "syscall_exit_rt_sigtimedwait",
-            syscalls::SYS_rt_sigtimedwait,
-        ),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_signalfd", syscalls::SYS_signalfd),
-        ("syscall_exit_signalfd4", syscalls::SYS_signalfd4),
-        ("syscall_exit_swapon", syscalls::SYS_swapon),
-        ("syscall_exit_swapoff", syscalls::SYS_swapoff),
-        ("syscall_exit_init_module", syscalls::SYS_init_module),
-        ("syscall_exit_finit_module", syscalls::SYS_finit_module),
-        ("syscall_exit_delete_module", syscalls::SYS_delete_module),
-        ("syscall_exit_sethostname", syscalls::SYS_sethostname),
-        ("syscall_exit_setdomainname", syscalls::SYS_setdomainname),
-    ] {
-        let prog: &mut TracePoint = ebpf
-            .program_mut(prog_name)
-            .with_context(|| format!("getting eBPF program {prog_name}"))?
-            .try_into()?;
-        prog.load()
-            .with_context(|| format!("trying to load {prog_name} into eBPF"))?;
+    // execve and execveat share the same handler, see eBPF side comments for details.
+    let prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_execve")
+        .context("missing syscall_exit_execve tailcall")?
+        .try_into()?;
+    prog.load()
+        .context("trying to load syscall_exit_execve into eBPF")?;
+    for syscall_nr in [syscalls::SYS_execve, syscalls::SYS_execveat] {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
-        trace!("registered program for {syscall_nr}");
+    }
 
-        // FIXME: this is a hack to keep the change small for adding support for this syscall, but we will likely
-        // move to a different model with shared tracepoints for groups of syscalls in the future.
-        if syscall_nr == syscalls::SYS_execve {
-            prog_array.set(syscalls::SYS_execveat as u32, prog.fd()?, 0)?;
-            explicitly_supported.insert(syscalls::SYS_execveat);
-        }
+    // Scheduling syscalls - all handled by the unified scheduling handler
+    const SCHEDULING_SYSCALLS: &[i64] = &[
+        syscalls::SYS_rseq,
+        syscalls::SYS_sched_setscheduler,
+        syscalls::SYS_sched_getaffinity,
+        syscalls::SYS_sched_setaffinity,
+        syscalls::SYS_sched_getparam,
+        syscalls::SYS_sched_setparam,
+        syscalls::SYS_sched_rr_get_interval,
+        syscalls::SYS_sched_getattr,
+        syscalls::SYS_sched_setattr,
+    ];
+    let scheduling_prog: &mut TracePoint = ebpf
+        .program_mut("syscall_exit_scheduling")
+        .context("getting syscall_exit_scheduling")?
+        .try_into()?;
+    scheduling_prog
+        .load()
+        .context("trying to load syscall_exit_scheduling into eBPF")?;
+    for &syscall_nr in SCHEDULING_SYSCALLS {
+        prog_array.set(syscall_nr as u32, scheduling_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Network syscalls - all handled by the unified network handler
+    const NETWORK_SYSCALLS: &[i64] = &[
+        syscalls::SYS_recvmsg,
+        syscalls::SYS_sendmsg,
+        syscalls::SYS_accept,
+        syscalls::SYS_accept4,
+        syscalls::SYS_recvfrom,
+        syscalls::SYS_sendto,
+        syscalls::SYS_bind,
+        syscalls::SYS_connect,
+        syscalls::SYS_socketpair,
+        syscalls::SYS_getsockname,
+        syscalls::SYS_getpeername,
+        syscalls::SYS_setsockopt,
+        syscalls::SYS_getsockopt,
+        syscalls::SYS_recvmmsg,
+        syscalls::SYS_sendmmsg,
+    ];
+    let network_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_network")
+        .context("missing network handler")?
+        .try_into()?;
+    network_prog
+        .load()
+        .context("trying to load syscall_exit_network into eBPF")?;
+    for &syscall_nr in NETWORK_SYSCALLS {
+        prog_array.set(syscall_nr as u32, network_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Filesystem syscalls - all handled by the unified filesystem handler
+    const FILESYSTEM_SYSCALLS: &[i64] = &[
+        syscalls::SYS_fstat,
+        syscalls::SYS_newfstatat,
+        syscalls::SYS_getdents64,
+        syscalls::SYS_statfs,
+        syscalls::SYS_fstatfs,
+        syscalls::SYS_fsopen,
+        syscalls::SYS_fsconfig,
+        syscalls::SYS_fspick,
+        syscalls::SYS_statx,
+        syscalls::SYS_faccessat,
+        syscalls::SYS_fallocate,
+        syscalls::SYS_readlinkat,
+        syscalls::SYS_getcwd,
+        syscalls::SYS_chdir,
+        syscalls::SYS_mkdirat,
+        syscalls::SYS_flistxattr,
+        syscalls::SYS_listxattr,
+        syscalls::SYS_llistxattr,
+        syscalls::SYS_setxattr,
+        syscalls::SYS_lsetxattr,
+        syscalls::SYS_fsetxattr,
+        syscalls::SYS_getxattr,
+        syscalls::SYS_lgetxattr,
+        syscalls::SYS_fgetxattr,
+        syscalls::SYS_removexattr,
+        syscalls::SYS_lremovexattr,
+        syscalls::SYS_fremovexattr,
+        syscalls::SYS_fchmodat,
+        syscalls::SYS_fchownat,
+        syscalls::SYS_renameat,
+        syscalls::SYS_renameat2,
+        syscalls::SYS_unlinkat,
+        syscalls::SYS_symlinkat,
+        syscalls::SYS_linkat,
+        syscalls::SYS_acct,
+        syscalls::SYS_mknodat,
+        syscalls::SYS_pivot_root,
+        syscalls::SYS_chroot,
+        syscalls::SYS_open_tree,
+        syscalls::SYS_mount,
+        syscalls::SYS_umount2,
+        syscalls::SYS_mount_setattr,
+        syscalls::SYS_move_mount,
+        syscalls::SYS_swapon,
+        syscalls::SYS_swapoff,
+        syscalls::SYS_inotify_add_watch,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_chown,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_lchown,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_rename,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_rmdir,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_unlink,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_symlink,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_link,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_mknod,
+        syscalls::SYS_truncate,
+    ];
+    let filesystem_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_filesystem")
+        .context("missing filesystem handler")?
+        .try_into()?;
+    filesystem_prog
+        .load()
+        .context("trying to load syscall_exit_filesystem into eBPF")?;
+    for &syscall_nr in FILESYSTEM_SYSCALLS {
+        prog_array.set(syscall_nr as u32, filesystem_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Basic I/O syscalls - all handled by the unified basic_io handler
+    const BASIC_IO_SYSCALLS: &[i64] = &[
+        syscalls::SYS_openat,
+        syscalls::SYS_openat2,
+        syscalls::SYS_read,
+        syscalls::SYS_write,
+        syscalls::SYS_pread64,
+        syscalls::SYS_pwrite64,
+        syscalls::SYS_readv,
+        syscalls::SYS_writev,
+        syscalls::SYS_preadv,
+        syscalls::SYS_pwritev,
+        syscalls::SYS_preadv2,
+        syscalls::SYS_pwritev2,
+        syscalls::SYS_epoll_pwait,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_epoll_wait,
+        syscalls::SYS_epoll_pwait2,
+        syscalls::SYS_epoll_ctl,
+        syscalls::SYS_ppoll,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_poll,
+        syscalls::SYS_pselect6,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_select,
+        syscalls::SYS_pipe2,
+        syscalls::SYS_splice,
+        syscalls::SYS_tee,
+        syscalls::SYS_vmsplice,
+    ];
+    let basic_io_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_basic_io")
+        .context("missing basic_io handler")?
+        .try_into()?;
+    basic_io_prog
+        .load()
+        .context("trying to load syscall_exit_basic_io into eBPF")?;
+    for &syscall_nr in BASIC_IO_SYSCALLS {
+        prog_array.set(syscall_nr as u32, basic_io_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Memory syscalls - all handled by the unified memory handler
+    const MEMORY_SYSCALLS: &[i64] = &[
+        syscalls::SYS_mmap,
+        syscalls::SYS_munmap,
+        syscalls::SYS_madvise,
+        syscalls::SYS_process_madvise,
+        syscalls::SYS_process_vm_readv,
+        syscalls::SYS_process_vm_writev,
+    ];
+    let memory_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_memory")
+        .context("missing memory handler")?
+        .try_into()?;
+    memory_prog
+        .load()
+        .context("trying to load syscall_exit_memory into eBPF")?;
+    for &syscall_nr in MEMORY_SYSCALLS {
+        prog_array.set(syscall_nr as u32, memory_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // System syscalls - all handled by the unified system handler
+    const SYSTEM_SYSCALLS: &[i64] = &[
+        syscalls::SYS_reboot,
+        syscalls::SYS_uname,
+        syscalls::SYS_ioctl,
+        syscalls::SYS_gettimeofday,
+        syscalls::SYS_settimeofday,
+        syscalls::SYS_sysinfo,
+        syscalls::SYS_times,
+        syscalls::SYS_nanosleep,
+        syscalls::SYS_clock_nanosleep,
+        syscalls::SYS_getcpu,
+        syscalls::SYS_capget,
+        syscalls::SYS_capset,
+        syscalls::SYS_setrlimit,
+        syscalls::SYS_getrlimit,
+        syscalls::SYS_init_module,
+        syscalls::SYS_finit_module,
+        syscalls::SYS_delete_module,
+        syscalls::SYS_sethostname,
+        syscalls::SYS_setdomainname,
+    ];
+    let system_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_system")
+        .context("missing system handler")?
+        .try_into()?;
+    system_prog
+        .load()
+        .context("trying to load syscall_exit_system into eBPF")?;
+    for &syscall_nr in SYSTEM_SYSCALLS {
+        prog_array.set(syscall_nr as u32, system_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // IPC syscalls - all handled by the unified IPC handler
+    const IPC_SYSCALLS: &[i64] = &[
+        syscalls::SYS_shmget,
+        syscalls::SYS_shmat,
+        syscalls::SYS_shmdt,
+        syscalls::SYS_shmctl,
+        syscalls::SYS_msgget,
+        syscalls::SYS_msgsnd,
+        syscalls::SYS_msgrcv,
+        syscalls::SYS_msgctl,
+        syscalls::SYS_semget,
+        syscalls::SYS_semop,
+        syscalls::SYS_semctl,
+    ];
+    let ipc_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_ipc")
+        .context("missing IPC handler")?
+        .try_into()?;
+    ipc_prog
+        .load()
+        .context("trying to load syscall_exit_ipc into eBPF")?;
+    for &syscall_nr in IPC_SYSCALLS {
+        prog_array.set(syscall_nr as u32, ipc_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Sync syscalls - all handled by the unified sync handler
+    const SYNC_SYSCALLS: &[i64] = &[
+        syscalls::SYS_futex,
+        syscalls::SYS_futex_waitv,
+        syscalls::SYS_get_robust_list,
+    ];
+    let sync_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_sync")
+        .context("missing sync handler")?
+        .try_into()?;
+    sync_prog
+        .load()
+        .context("trying to load syscall_exit_sync into eBPF")?;
+    for &syscall_nr in SYNC_SYSCALLS {
+        prog_array.set(syscall_nr as u32, sync_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Time syscalls - all handled by the unified time handler
+    const TIME_SYSCALLS: &[i64] = &[
+        syscalls::SYS_adjtimex,
+        syscalls::SYS_clock_adjtime,
+        syscalls::SYS_clock_getres,
+        syscalls::SYS_clock_gettime,
+        syscalls::SYS_clock_settime,
+        syscalls::SYS_timer_create,
+        syscalls::SYS_timer_gettime,
+        syscalls::SYS_timer_settime,
+    ];
+    let time_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_time")
+        .context("missing time handler")?
+        .try_into()?;
+    time_prog
+        .load()
+        .context("trying to load syscall_exit_time into eBPF")?;
+    for &syscall_nr in TIME_SYSCALLS {
+        prog_array.set(syscall_nr as u32, time_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Process syscalls - all handled by the unified process handler
+    const PROCESS_SYSCALLS: &[i64] = &[
+        syscalls::SYS_wait4,
+        syscalls::SYS_waitid,
+        syscalls::SYS_getrusage,
+        syscalls::SYS_clone3,
+        syscalls::SYS_clone,
+        syscalls::SYS_pidfd_send_signal,
+        syscalls::SYS_prlimit64,
+    ];
+    let process_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_process")
+        .context("missing process handler")?
+        .try_into()?;
+    process_prog
+        .load()
+        .context("trying to load syscall_exit_process into eBPF")?;
+    for &syscall_nr in PROCESS_SYSCALLS {
+        prog_array.set(syscall_nr as u32, process_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Signal syscalls - all handled by the unified signal handler
+    const SIGNAL_SYSCALLS: &[i64] = &[
+        syscalls::SYS_rt_sigprocmask,
+        syscalls::SYS_rt_sigpending,
+        syscalls::SYS_rt_sigsuspend,
+        syscalls::SYS_rt_sigtimedwait,
+        syscalls::SYS_sigaltstack,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_signalfd,
+        syscalls::SYS_signalfd4,
+    ];
+    let signal_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_signal")
+        .context("missing signal handler")?
+        .try_into()?;
+    signal_prog
+        .load()
+        .context("trying to load syscall_exit_signal into eBPF")?;
+    for &syscall_nr in SIGNAL_SYSCALLS {
+        prog_array.set(syscall_nr as u32, signal_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
     }
 
     // Load the generic handler for all other syscalls

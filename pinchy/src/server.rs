@@ -246,6 +246,9 @@ async fn main() -> anyhow::Result<()> {
         warn!("failed to initialize eBPF logger: {e}");
     }
 
+    // Keep track of how long it takes to load the eBPF programs.
+    let now = Instant::now();
+
     let program: &mut TracePoint = ebpf.program_mut("pinchy").unwrap().try_into()?;
     program.load()?;
     program.attach("raw_syscalls", "sys_enter")?;
@@ -275,6 +278,8 @@ async fn main() -> anyhow::Result<()> {
     program.attach("syscalls", "sys_enter_execveat")?;
 
     load_tailcalls(&mut ebpf)?;
+
+    println!("Loaded eBPF programs in {:?}", now.elapsed());
 
     // Keeps track of how long since we handled an event; used to decide when to
     // automatically quit.

@@ -1,11 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use aya_ebpf::{
-    helpers::bpf_probe_read_user,
-    macros::tracepoint,
-    programs::TracePointContext,
-};
+use aya_ebpf::{helpers::bpf_probe_read_user, macros::tracepoint, programs::TracePointContext};
 use pinchy_common::{
     kernel_types::{FutexWaitv, Timespec},
     syscalls,

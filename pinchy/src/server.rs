@@ -462,14 +462,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_getrusage", syscalls::SYS_getrusage),
         ("syscall_exit_clone3", syscalls::SYS_clone3),
         ("syscall_exit_clone", syscalls::SYS_clone),
-        ("syscall_exit_adjtimex", syscalls::SYS_adjtimex),
-        ("syscall_exit_clock_adjtime", syscalls::SYS_clock_adjtime),
-        ("syscall_exit_clock_getres", syscalls::SYS_clock_getres),
-        ("syscall_exit_clock_gettime", syscalls::SYS_clock_gettime),
-        ("syscall_exit_clock_settime", syscalls::SYS_clock_settime),
-        ("syscall_exit_timer_create", syscalls::SYS_timer_create),
-        ("syscall_exit_timer_gettime", syscalls::SYS_timer_gettime),
-        ("syscall_exit_timer_settime", syscalls::SYS_timer_settime),
     ] {
         let prog: &mut aya::programs::TracePoint = ebpf
             .program_mut(prog_name)
@@ -727,6 +719,29 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         .context("trying to load syscall_exit_sync into eBPF")?;
     for &syscall_nr in SYNC_SYSCALLS {
         prog_array.set(syscall_nr as u32, sync_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Time syscalls - all handled by the unified time handler
+    const TIME_SYSCALLS: &[i64] = &[
+        syscalls::SYS_adjtimex,
+        syscalls::SYS_clock_adjtime,
+        syscalls::SYS_clock_getres,
+        syscalls::SYS_clock_gettime,
+        syscalls::SYS_clock_settime,
+        syscalls::SYS_timer_create,
+        syscalls::SYS_timer_gettime,
+        syscalls::SYS_timer_settime,
+    ];
+    let time_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_time")
+        .context("missing time handler")?
+        .try_into()?;
+    time_prog
+        .load()
+        .context("trying to load syscall_exit_time into eBPF")?;
+    for &syscall_nr in TIME_SYSCALLS {
+        prog_array.set(syscall_nr as u32, time_prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
     }
 

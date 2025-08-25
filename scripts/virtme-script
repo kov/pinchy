@@ -1,4 +1,4 @@
 #!/bin/sh -xe
 mount -t bpf bpf /sys/fs/bpf
 RUST_BACKTRACE=1 ./target/debug/test-integration --nocapture --ignored
-RUST_BACKTRACE=1 ./target/debug/test-auto_quit --nocapture --ignored || true
+RUST_BACKTRACE=1 ./target/debug/test-auto_quit --nocapture --ignored

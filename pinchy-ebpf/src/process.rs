@@ -13,7 +13,7 @@ use pinchy_common::{
     syscalls, SMALL_READ_SIZE,
 };
 
-use crate::{PID_FILTER, SYSCALL_ARGS_OFFSET};
+use crate::{data_mut, PID_FILTER, SYSCALL_ARGS_OFFSET};
 
 #[map]
 static mut EXECVE_ENTER_MAP: HashMap<u32, ExecveEnterData> =
@@ -53,57 +53,48 @@ pub struct ExecveatEnterData {
 pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let tid = ctx.pid();
-        let return_value = crate::util::get_return_value(&ctx)?;
 
         // On x86_64, execveat becomes execve after the process has been replaced, so we need to
         // use the same handler for both and check which map has the entry to decide which one was
         // traced.
         let enter_data = unsafe { EXECVE_ENTER_MAP.get(&tid) };
         if let Some(enter_data) = enter_data {
-            let data = pinchy_common::SyscallEventData {
-                execve: pinchy_common::ExecveData {
-                    filename: enter_data.filename,
-                    filename_truncated: enter_data.filename_truncated,
-                    argv: enter_data.argv,
-                    argv_len: enter_data.argv_len,
-                    argc: enter_data.argc,
-                    envp: enter_data.envp,
-                    envp_len: enter_data.envp_len,
-                    envc: enter_data.envc,
-                },
+            let mut entry = crate::util::Entry::new(&ctx, pinchy_common::syscalls::SYS_execve)?;
+            let data = data_mut!(entry, execve);
+            *data = pinchy_common::ExecveData {
+                filename: enter_data.filename,
+                filename_truncated: enter_data.filename_truncated,
+                argv: enter_data.argv,
+                argv_len: enter_data.argv_len,
+                argc: enter_data.argc,
+                envp: enter_data.envp,
+                envp_len: enter_data.envp_len,
+                envc: enter_data.envc,
             };
             let _ = unsafe { EXECVE_ENTER_MAP.remove(&tid) };
-            return crate::util::output_event(
-                &ctx,
-                pinchy_common::syscalls::SYS_execve,
-                return_value,
-                data,
-            );
+            entry.submit();
+            return Ok(());
         }
 
         let enter_data = unsafe { EXECVEAT_ENTER_MAP.get(&tid) };
         if let Some(enter_data) = enter_data {
-            let data = pinchy_common::SyscallEventData {
-                execveat: pinchy_common::ExecveatData {
-                    dirfd: enter_data.dirfd,
-                    pathname: enter_data.pathname,
-                    pathname_truncated: enter_data.pathname_truncated,
-                    argv: enter_data.argv,
-                    argv_len: enter_data.argv_len,
-                    argc: enter_data.argc,
-                    envp: enter_data.envp,
-                    envp_len: enter_data.envp_len,
-                    envc: enter_data.envc,
-                    flags: enter_data.flags,
-                },
+            let mut entry = crate::util::Entry::new(&ctx, pinchy_common::syscalls::SYS_execveat)?;
+            let data = data_mut!(entry, execveat);
+            *data = pinchy_common::ExecveatData {
+                dirfd: enter_data.dirfd,
+                pathname: enter_data.pathname,
+                pathname_truncated: enter_data.pathname_truncated,
+                argv: enter_data.argv,
+                argv_len: enter_data.argv_len,
+                argc: enter_data.argc,
+                envp: enter_data.envp,
+                envp_len: enter_data.envp_len,
+                envc: enter_data.envc,
+                flags: enter_data.flags,
             };
             let _ = unsafe { EXECVEAT_ENTER_MAP.remove(&tid) };
-            return crate::util::output_event(
-                &ctx,
-                pinchy_common::syscalls::SYS_execveat,
-                return_value,
-                data,
-            );
+            entry.submit();
+            return Ok(());
         }
 
         aya_log_ebpf::error!(

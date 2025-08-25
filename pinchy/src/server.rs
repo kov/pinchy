@@ -451,11 +451,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 
     for (prog_name, syscall_nr) in [
         ("syscall_exit_execve", syscalls::SYS_execve),
-        ("syscall_exit_rseq", syscalls::SYS_rseq),
-        (
-            "syscall_exit_sched_setscheduler",
-            syscalls::SYS_sched_setscheduler,
-        ),
     ] {
         let prog: &mut aya::programs::TracePoint = ebpf
             .program_mut(prog_name)
@@ -464,6 +459,30 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         prog.load()
             .with_context(|| format!("trying to load {prog_name} into eBPF"))?;
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Scheduling syscalls - all handled by the unified scheduling handler
+    const SCHEDULING_SYSCALLS: &[i64] = &[
+        syscalls::SYS_rseq,
+        syscalls::SYS_sched_setscheduler,
+        syscalls::SYS_sched_getaffinity,
+        syscalls::SYS_sched_setaffinity,
+        syscalls::SYS_sched_getparam,
+        syscalls::SYS_sched_setparam,
+        syscalls::SYS_sched_rr_get_interval,
+        syscalls::SYS_sched_getattr,
+        syscalls::SYS_sched_setattr,
+    ];
+    let scheduling_prog: &mut TracePoint = ebpf
+        .program_mut("syscall_exit_scheduling")
+        .context("getting syscall_exit_scheduling")?
+        .try_into()?;
+    scheduling_prog
+        .load()
+        .context("trying to load syscall_exit_scheduling into eBPF")?;
+    for &syscall_nr in SCHEDULING_SYSCALLS {
+        prog_array.set(syscall_nr as u32, scheduling_prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
     }
 
@@ -782,42 +801,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     for &syscall_nr in SIGNAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, signal_prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
-    }
-
-    for (prog_name, syscall_nr) in [
-        (
-            "syscall_exit_sched_getaffinity",
-            syscalls::SYS_sched_getaffinity,
-        ),
-        (
-            "syscall_exit_sched_setaffinity",
-            syscalls::SYS_sched_setaffinity,
-        ),
-        ("syscall_exit_sched_getparam", syscalls::SYS_sched_getparam),
-        ("syscall_exit_sched_setparam", syscalls::SYS_sched_setparam),
-        (
-            "syscall_exit_sched_rr_get_interval",
-            syscalls::SYS_sched_rr_get_interval,
-        ),
-        ("syscall_exit_sched_getattr", syscalls::SYS_sched_getattr),
-        ("syscall_exit_sched_setattr", syscalls::SYS_sched_setattr),
-    ] {
-        let prog: &mut TracePoint = ebpf
-            .program_mut(prog_name)
-            .with_context(|| format!("getting eBPF program {prog_name}"))?
-            .try_into()?;
-        prog.load()
-            .with_context(|| format!("trying to load {prog_name} into eBPF"))?;
-        prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
-        explicitly_supported.insert(syscall_nr);
-        trace!("registered program for {syscall_nr}");
-
-        // FIXME: this is a hack to keep the change small for adding support for this syscall, but we will likely
-        // move to a different model with shared tracepoints for groups of syscalls in the future.
-        if syscall_nr == syscalls::SYS_execve {
-            prog_array.set(syscalls::SYS_execveat as u32, prog.fd()?, 0)?;
-            explicitly_supported.insert(syscalls::SYS_execveat);
-        }
     }
 
     // Load the generic handler for all other syscalls

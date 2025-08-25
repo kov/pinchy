@@ -451,17 +451,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 
     for (prog_name, syscall_nr) in [
         ("syscall_exit_reboot", syscalls::SYS_reboot),
-        ("syscall_exit_epoll_ctl", syscalls::SYS_epoll_ctl),
-        ("syscall_exit_epoll_pwait", syscalls::SYS_epoll_pwait),
-        ("syscall_exit_epoll_pwait2", syscalls::SYS_epoll_pwait2),
-        ("syscall_exit_pipe2", syscalls::SYS_pipe2),
-        ("syscall_exit_ppoll", syscalls::SYS_ppoll),
-        ("syscall_exit_read", syscalls::SYS_read),
-        ("syscall_exit_write", syscalls::SYS_write),
-        ("syscall_exit_pread64", syscalls::SYS_pread64),
-        ("syscall_exit_pwrite64", syscalls::SYS_pwrite64),
-        ("syscall_exit_openat", syscalls::SYS_openat),
-        ("syscall_exit_openat2", syscalls::SYS_openat2),
         ("syscall_exit_futex", syscalls::SYS_futex),
         ("syscall_exit_futex_waitv", syscalls::SYS_futex_waitv),
         (
@@ -499,12 +488,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_timer_settime", syscalls::SYS_timer_settime),
         ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
         ("syscall_exit_times", syscalls::SYS_times),
-        ("syscall_exit_readv", syscalls::SYS_readv),
-        ("syscall_exit_writev", syscalls::SYS_writev),
-        ("syscall_exit_preadv", syscalls::SYS_preadv),
-        ("syscall_exit_pwritev", syscalls::SYS_pwritev),
-        ("syscall_exit_preadv2", syscalls::SYS_preadv2),
-        ("syscall_exit_pwritev2", syscalls::SYS_pwritev2),
     ] {
         let prog: &mut aya::programs::TracePoint = ebpf
             .program_mut(prog_name)
@@ -624,6 +607,48 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
+    // Basic I/O syscalls - all handled by the unified basic_io handler
+    const BASIC_IO_SYSCALLS: &[i64] = &[
+        syscalls::SYS_openat,
+        syscalls::SYS_openat2,
+        syscalls::SYS_read,
+        syscalls::SYS_write,
+        syscalls::SYS_pread64,
+        syscalls::SYS_pwrite64,
+        syscalls::SYS_readv,
+        syscalls::SYS_writev,
+        syscalls::SYS_preadv,
+        syscalls::SYS_pwritev,
+        syscalls::SYS_preadv2,
+        syscalls::SYS_pwritev2,
+        syscalls::SYS_epoll_pwait,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_epoll_wait,
+        syscalls::SYS_epoll_pwait2,
+        syscalls::SYS_epoll_ctl,
+        syscalls::SYS_ppoll,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_poll,
+        syscalls::SYS_pselect6,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_select,
+        syscalls::SYS_pipe2,
+        syscalls::SYS_splice,
+        syscalls::SYS_tee,
+        syscalls::SYS_vmsplice,
+    ];
+    let basic_io_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_basic_io")
+        .context("missing basic_io handler")?
+        .try_into()?;
+    basic_io_prog
+        .load()
+        .context("trying to load syscall_exit_basic_io into eBPF")?;
+    for &syscall_nr in BASIC_IO_SYSCALLS {
+        prog_array.set(syscall_nr as u32, basic_io_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
     // Memory syscalls - all handled by the unified memory handler
     const MEMORY_SYSCALLS: &[i64] = &[
         syscalls::SYS_mmap,
@@ -672,14 +697,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
-        ("syscall_exit_pselect6", syscalls::SYS_pselect6),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_select", syscalls::SYS_select),
-        #[cfg(target_arch = "x86_64")]
-        ("syscall_exit_poll", syscalls::SYS_poll),
-        ("syscall_exit_splice", syscalls::SYS_splice),
-        ("syscall_exit_tee", syscalls::SYS_tee),
-        ("syscall_exit_vmsplice", syscalls::SYS_vmsplice),
         ("syscall_exit_getcpu", syscalls::SYS_getcpu),
         (
             "syscall_exit_pidfd_send_signal",

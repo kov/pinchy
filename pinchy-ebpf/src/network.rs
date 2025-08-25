@@ -400,7 +400,7 @@ pub fn syscall_exit_network(ctx: TracePointContext) -> u32 {
     }
 }
 
-#[inline(always)]
+#[inline(never)]
 fn parse_msghdr(
     msg_ptr: *const u8,
     msghdr: &mut kernel_types::Msghdr,

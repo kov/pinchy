@@ -1,16 +1,8 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use aya_ebpf::{
-    helpers::bpf_probe_read_user,
-    macros::tracepoint,
-    programs::TracePointContext,
-};
-use pinchy_common::{
-    kernel_types::Timespec,
-    syscalls,
-    ClockTimeData,
-};
+use aya_ebpf::{helpers::bpf_probe_read_user, macros::tracepoint, programs::TracePointContext};
+use pinchy_common::{kernel_types::Timespec, syscalls, ClockTimeData};
 
 use crate::{data_mut, util};
 
@@ -26,7 +18,8 @@ pub fn syscall_exit_time(ctx: TracePointContext) -> u32 {
             syscalls::SYS_adjtimex => {
                 let data = data_mut!(entry, adjtimex);
                 let timex_ptr = args[0] as *const pinchy_common::kernel_types::Timex;
-                if let Ok(val) = unsafe { bpf_probe_read_user::<pinchy_common::kernel_types::Timex>(timex_ptr) }
+                if let Ok(val) =
+                    unsafe { bpf_probe_read_user::<pinchy_common::kernel_types::Timex>(timex_ptr) }
                 {
                     data.timex = val;
                 }
@@ -35,7 +28,8 @@ pub fn syscall_exit_time(ctx: TracePointContext) -> u32 {
                 let data = data_mut!(entry, clock_adjtime);
                 data.clockid = args[0] as i32;
                 let timex_ptr = args[1] as *const pinchy_common::kernel_types::Timex;
-                if let Ok(val) = unsafe { bpf_probe_read_user::<pinchy_common::kernel_types::Timex>(timex_ptr) }
+                if let Ok(val) =
+                    unsafe { bpf_probe_read_user::<pinchy_common::kernel_types::Timex>(timex_ptr) }
                 {
                     data.timex = val;
                 }

@@ -75,6 +75,56 @@ them as references.
 **Always import the module `pinchy_common::syscalls` and use the constants as
 `syscalls::SYS_<name>` in all code outside the arch files.**
 
+## Consolidated Handler Architecture
+
+The project uses a consolidated handler architecture where syscalls are grouped
+by category and handled by unified tracepoint functions. This design improves
+startup performance by reducing the number of eBPF programs that need to be
+loaded.
+
+### Consolidated Handler Pattern
+
+Each category has a single `syscall_exit_<category>` tracepoint function that:
+
+1. **Uses a match statement** on `syscall_nr` to dispatch to syscall-specific logic
+2. **Uses the `data_mut!()` macro** for safe access to syscall data structures
+3. **Follows a consistent pattern** for argument parsing and data population
+4. **Handles architecture-specific syscalls** with `#[cfg(x86_64)]` attributes
+
+### Example Consolidated Handler Structure
+
+```rust
+#[tracepoint]
+pub fn syscall_exit_category(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = util::get_syscall_nr(&ctx)?;
+        let args = util::get_args(&ctx, syscall_nr)?;
+        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
+
+        match syscall_nr {
+            syscalls::SYS_example => {
+                let data = data_mut!(entry, example);
+                data.arg1 = args[0] as u32;
+                // ... handle syscall-specific logic
+            }
+            // ... other syscalls in this category
+            _ => {
+                entry.discard();
+                return Ok(());
+            }
+        }
+
+        entry.submit();
+        Ok(())
+    }
+
+    match inner(ctx) {
+        Ok(()) => 0,
+        Err(code) => code,
+    }
+}
+```
+
 ## Determining if a Syscall is Trivial or Complex
 
 A syscall is considered "trivial" or "complex" based on how we need to handle
@@ -160,24 +210,39 @@ addresses):
 #### For Complex Syscalls
 (Has pointer arguments or needs special handling):
 
-- Add a new tracepoint named `syscall_exit_<name>` in one of the files in
-  `pinchy-ebpf/src/`, see the syscall categories above. The tracepoint should
-  be added using the `syscall_handler!()` macro.
+- Add the syscall to one of the consolidated handlers in the appropriate file in
+  `pinchy-ebpf/src/`, see the syscall categories above. Complex syscalls are
+  handled by unified tracepoint functions like `syscall_exit_filesystem`,
+  `syscall_exit_network`, etc. that use match statements to dispatch to
+  syscall-specific logic.
 
-- **Important**: Do not make any changes before reading the macro in
-  `pinchy-ebpf/src/util.rs` and looking at several uses in existing handlers.
+- **Important**: Before adding a new syscall, study the existing consolidated
+  handlers to understand the pattern. Each handler uses a unified tracepoint
+  with a match statement on `syscall_nr` and the `data_mut!()` macro for safe
+  data structure access.
 
-- Register it in the appropriate array in `load_tailcalls()` in
-  `pinchy/src/server.rs`.
+- Register it in the appropriate `SYSCALL_CATEGORY_SYSCALLS` array in
+  `load_tailcalls()` in `pinchy/src/server.rs`. The available arrays are:
+  - `BASIC_IO_SYSCALLS` for basic I/O operations
+  - `FILESYSTEM_SYSCALLS` for filesystem operations
+  - `NETWORK_SYSCALLS` for network operations
+  - `MEMORY_SYSCALLS` for memory management
+  - `PROCESS_SYSCALLS` for process management
+  - `SIGNAL_SYSCALLS` for signal handling
+  - `TIME_SYSCALLS` for time-related operations
+  - `IPC_SYSCALLS` for inter-process communication
+  - `SYNC_SYSCALLS` for synchronization primitives
+  - `SYSTEM_SYSCALLS` for system-level operations
+  - `SCHEDULING_SYSCALLS` for CPU scheduling operations
 
 - **Important**: When adding new handlers, always look at several existing
-  handlers to understand how things are done, do not limit yourself to looking
-  at only the file you will add the handler to, read at least 2 others.
+  consolidated handlers to understand the pattern. Do not create individual
+  tracepoint functions - add to the existing consolidated handlers.
 
 - When parsing structs on the eBPF side, use `bpf_probe_read_user()` only when
   reading small structs; use `bpf_probe_read_buf()` when reading byte arrays
   and bigger structs so that the read can be done directly into the reserved
-  ringbuf memory (see the `syscall_handler!()` macro and the `Entry` type in
+  ringbuf memory (see the consolidated handlers and the `Entry` type in
   `pinchy-ebpf/src/util.rs` for context), thus saving on stack usage.
 
 ### 3. Define Syscall Arguments
@@ -340,13 +405,13 @@ Ensure the new syscall is being traced and parsed correctly by adding a test
 ## Important Rule: Avoid Duplicate Handling
 
 When adding support for a syscall, **never add both a match branch in the
-trivial handler and a dedicated `syscall_handler!` macro for the same
-syscall.**
+trivial handler and a case in a consolidated handler for the same syscall.**
 
 - If the syscall is trivial, only add it to the trivial handler and
   `TRIVIAL_SYSCALLS`.
-- If the syscall is complex, only add a dedicated handler and register it in
-  the appropriate tailcall array.
+- If the syscall is complex, only add it to the appropriate consolidated
+  handler and register it in the corresponding `SYSCALL_CATEGORY_SYSCALLS`
+  array.
 
 # Building and Development
 
@@ -419,7 +484,7 @@ Helper functions for parsing specific arguments should go under
   build (`cargo clean`) before investigating further.
 
 - If a syscall is not being traced, double-check all steps above, especially
-  the tailcall and event parsing registration.
+  the handler registration and event parsing registration.
 
 ## Critical Best Practices Summary
 

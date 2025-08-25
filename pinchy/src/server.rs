@@ -450,14 +450,12 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
-        ("syscall_exit_reboot", syscalls::SYS_reboot),
         ("syscall_exit_futex", syscalls::SYS_futex),
         ("syscall_exit_futex_waitv", syscalls::SYS_futex_waitv),
         (
             "syscall_exit_get_robust_list",
             syscalls::SYS_get_robust_list,
         ),
-        ("syscall_exit_ioctl", syscalls::SYS_ioctl),
         ("syscall_exit_execve", syscalls::SYS_execve),
         ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),
@@ -465,19 +463,11 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
             "syscall_exit_sched_setscheduler",
             syscalls::SYS_sched_setscheduler,
         ),
-        ("syscall_exit_uname", syscalls::SYS_uname),
         ("syscall_exit_wait4", syscalls::SYS_wait4),
         ("syscall_exit_waitid", syscalls::SYS_waitid),
         ("syscall_exit_getrusage", syscalls::SYS_getrusage),
         ("syscall_exit_clone3", syscalls::SYS_clone3),
         ("syscall_exit_clone", syscalls::SYS_clone),
-        ("syscall_exit_gettimeofday", syscalls::SYS_gettimeofday),
-        ("syscall_exit_settimeofday", syscalls::SYS_settimeofday),
-        ("syscall_exit_nanosleep", syscalls::SYS_nanosleep),
-        (
-            "syscall_exit_clock_nanosleep",
-            syscalls::SYS_clock_nanosleep,
-        ),
         ("syscall_exit_adjtimex", syscalls::SYS_adjtimex),
         ("syscall_exit_clock_adjtime", syscalls::SYS_clock_adjtime),
         ("syscall_exit_clock_getres", syscalls::SYS_clock_getres),
@@ -486,8 +476,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_timer_create", syscalls::SYS_timer_create),
         ("syscall_exit_timer_gettime", syscalls::SYS_timer_gettime),
         ("syscall_exit_timer_settime", syscalls::SYS_timer_settime),
-        ("syscall_exit_sysinfo", syscalls::SYS_sysinfo),
-        ("syscall_exit_times", syscalls::SYS_times),
     ] {
         let prog: &mut aya::programs::TracePoint = ebpf
             .program_mut(prog_name)
@@ -670,6 +658,40 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
+    // System syscalls - all handled by the unified system handler
+    const SYSTEM_SYSCALLS: &[i64] = &[
+        syscalls::SYS_reboot,
+        syscalls::SYS_uname,
+        syscalls::SYS_ioctl,
+        syscalls::SYS_gettimeofday,
+        syscalls::SYS_settimeofday,
+        syscalls::SYS_sysinfo,
+        syscalls::SYS_times,
+        syscalls::SYS_nanosleep,
+        syscalls::SYS_clock_nanosleep,
+        syscalls::SYS_getcpu,
+        syscalls::SYS_capget,
+        syscalls::SYS_capset,
+        syscalls::SYS_setrlimit,
+        syscalls::SYS_getrlimit,
+        syscalls::SYS_init_module,
+        syscalls::SYS_finit_module,
+        syscalls::SYS_delete_module,
+        syscalls::SYS_sethostname,
+        syscalls::SYS_setdomainname,
+    ];
+    let system_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_system")
+        .context("missing system handler")?
+        .try_into()?;
+    system_prog
+        .load()
+        .context("trying to load syscall_exit_system into eBPF")?;
+    for &syscall_nr in SYSTEM_SYSCALLS {
+        prog_array.set(syscall_nr as u32, system_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
     // IPC syscalls - all handled by the unified IPC handler
     const IPC_SYSCALLS: &[i64] = &[
         syscalls::SYS_shmget,
@@ -697,13 +719,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     for (prog_name, syscall_nr) in [
-        ("syscall_exit_getcpu", syscalls::SYS_getcpu),
         (
             "syscall_exit_pidfd_send_signal",
             syscalls::SYS_pidfd_send_signal,
         ),
-        ("syscall_exit_capset", syscalls::SYS_capset),
-        ("syscall_exit_capget", syscalls::SYS_capget),
         (
             "syscall_exit_sched_getaffinity",
             syscalls::SYS_sched_getaffinity,
@@ -731,11 +750,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         ("syscall_exit_signalfd", syscalls::SYS_signalfd),
         ("syscall_exit_signalfd4", syscalls::SYS_signalfd4),
-        ("syscall_exit_init_module", syscalls::SYS_init_module),
-        ("syscall_exit_finit_module", syscalls::SYS_finit_module),
-        ("syscall_exit_delete_module", syscalls::SYS_delete_module),
-        ("syscall_exit_sethostname", syscalls::SYS_sethostname),
-        ("syscall_exit_setdomainname", syscalls::SYS_setdomainname),
     ] {
         let prog: &mut TracePoint = ebpf
             .program_mut(prog_name)

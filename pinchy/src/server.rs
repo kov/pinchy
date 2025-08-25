@@ -470,21 +470,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ),
         ("syscall_exit_ioctl", syscalls::SYS_ioctl),
         ("syscall_exit_execve", syscalls::SYS_execve),
-        ("syscall_exit_mmap", syscalls::SYS_mmap),
-        ("syscall_exit_munmap", syscalls::SYS_munmap),
-        ("syscall_exit_madvise", syscalls::SYS_madvise),
-        (
-            "syscall_exit_process_madvise",
-            syscalls::SYS_process_madvise,
-        ),
-        (
-            "syscall_exit_process_vm_readv",
-            syscalls::SYS_process_vm_readv,
-        ),
-        (
-            "syscall_exit_process_vm_writev",
-            syscalls::SYS_process_vm_writev,
-        ),
         ("syscall_exit_prlimit64", syscalls::SYS_prlimit64),
         ("syscall_exit_rseq", syscalls::SYS_rseq),
         (
@@ -639,6 +624,53 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
+    // Memory syscalls - all handled by the unified memory handler
+    const MEMORY_SYSCALLS: &[i64] = &[
+        syscalls::SYS_mmap,
+        syscalls::SYS_munmap,
+        syscalls::SYS_madvise,
+        syscalls::SYS_process_madvise,
+        syscalls::SYS_process_vm_readv,
+        syscalls::SYS_process_vm_writev,
+    ];
+    let memory_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_memory")
+        .context("missing memory handler")?
+        .try_into()?;
+    memory_prog
+        .load()
+        .context("trying to load syscall_exit_memory into eBPF")?;
+    for &syscall_nr in MEMORY_SYSCALLS {
+        prog_array.set(syscall_nr as u32, memory_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // IPC syscalls - all handled by the unified IPC handler
+    const IPC_SYSCALLS: &[i64] = &[
+        syscalls::SYS_shmget,
+        syscalls::SYS_shmat,
+        syscalls::SYS_shmdt,
+        syscalls::SYS_shmctl,
+        syscalls::SYS_msgget,
+        syscalls::SYS_msgsnd,
+        syscalls::SYS_msgrcv,
+        syscalls::SYS_msgctl,
+        syscalls::SYS_semget,
+        syscalls::SYS_semop,
+        syscalls::SYS_semctl,
+    ];
+    let ipc_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_ipc")
+        .context("missing IPC handler")?
+        .try_into()?;
+    ipc_prog
+        .load()
+        .context("trying to load syscall_exit_ipc into eBPF")?;
+    for &syscall_nr in IPC_SYSCALLS {
+        prog_array.set(syscall_nr as u32, ipc_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
     for (prog_name, syscall_nr) in [
         ("syscall_exit_pselect6", syscalls::SYS_pselect6),
         #[cfg(target_arch = "x86_64")]
@@ -648,17 +680,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         ("syscall_exit_splice", syscalls::SYS_splice),
         ("syscall_exit_tee", syscalls::SYS_tee),
         ("syscall_exit_vmsplice", syscalls::SYS_vmsplice),
-        ("syscall_exit_shmget", syscalls::SYS_shmget),
-        ("syscall_exit_shmat", syscalls::SYS_shmat),
-        ("syscall_exit_shmdt", syscalls::SYS_shmdt),
-        ("syscall_exit_shmctl", syscalls::SYS_shmctl),
-        ("syscall_exit_msgget", syscalls::SYS_msgget),
-        ("syscall_exit_msgsnd", syscalls::SYS_msgsnd),
-        ("syscall_exit_msgrcv", syscalls::SYS_msgrcv),
-        ("syscall_exit_msgctl", syscalls::SYS_msgctl),
-        ("syscall_exit_semget", syscalls::SYS_semget),
-        ("syscall_exit_semop", syscalls::SYS_semop),
-        ("syscall_exit_semctl", syscalls::SYS_semctl),
         ("syscall_exit_getcpu", syscalls::SYS_getcpu),
         (
             "syscall_exit_pidfd_send_signal",

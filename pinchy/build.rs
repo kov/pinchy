@@ -11,7 +11,10 @@ fn main() -> anyhow::Result<()> {
         .context("MetadataCommand::exec")?;
     let ebpf_package = packages
         .into_iter()
-        .find(|cargo_metadata::Package { name, .. }| name == "pinchy-ebpf")
+        .find(|cargo_metadata::Package { name, .. }| name.as_str() == "pinchy-ebpf")
         .ok_or_else(|| anyhow!("pinchy-ebpf package not found"))?;
-    aya_build::build_ebpf([ebpf_package])
+    aya_build::build_ebpf(
+        [ebpf_package],
+        aya_build::Toolchain::Custom("nightly-2025-06-13"),
+    )
 }

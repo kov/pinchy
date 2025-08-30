@@ -268,8 +268,10 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 unsafe {
                     let events_ptr = args[1] as *const EpollEvent;
                     for (i, event) in data.events.iter_mut().enumerate() {
-                        let event_ptr = events_ptr.add(i);
-                        *event = bpf_probe_read_user(event_ptr).unwrap_or_default();
+                        if i < return_value as usize {
+                            let event_ptr = events_ptr.add(i);
+                            *event = bpf_probe_read_user(event_ptr).unwrap_or_default();
+                        }
                     }
                 }
             }

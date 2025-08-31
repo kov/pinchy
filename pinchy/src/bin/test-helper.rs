@@ -76,6 +76,7 @@ fn main() -> anyhow::Result<()> {
             "timer_test" => timer_test(),
             "execveat_test" => execveat_test(),
             "pipe_operations_test" => pipe_operations_test(),
+            "io_multiplexing_test" => io_multiplexing_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1635,6 +1636,163 @@ fn execveat_test() -> anyhow::Result<()> {
             envp_ptrs.as_ptr(),
             0, // flags
         );
+    }
+
+    Ok(())
+}
+
+fn io_multiplexing_test() -> anyhow::Result<()> {
+    unsafe {
+        // Create a pipe for testing I/O readiness
+        let mut pipe_fds = [0i32; 2];
+        let pipe_result = libc::pipe(pipe_fds.as_mut_ptr());
+        if pipe_result < 0 {
+            bail!("pipe() failed");
+        }
+
+        let read_fd = pipe_fds[0];
+        let write_fd = pipe_fds[1];
+
+        // Test 1: select (x86_64 only) - timeout case
+        #[cfg(target_arch = "x86_64")]
+        {
+            let mut readfds: libc::fd_set = std::mem::zeroed();
+            libc::FD_ZERO(&mut readfds);
+            libc::FD_SET(read_fd, &mut readfds);
+
+            let mut timeout = libc::timeval {
+                tv_sec: 0,
+                tv_usec: 0, // Immediate timeout
+            };
+
+            let nfds = read_fd + 1;
+            let result = libc::syscall(
+                libc::SYS_select,
+                nfds,
+                &mut readfds as *mut libc::fd_set,
+                std::ptr::null_mut::<libc::fd_set>(),
+                std::ptr::null_mut::<libc::fd_set>(),
+                &mut timeout as *mut libc::timeval,
+            );
+
+            // Should timeout (return 0)
+            if result != 0 {
+                bail!("select should have timed out, got: {}", result);
+            }
+        }
+
+        // Test 2: poll - timeout case
+        #[cfg(target_arch = "x86_64")]
+        {
+            let mut pollfd = libc::pollfd {
+                fd: read_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+
+            let result = libc::poll(&mut pollfd, 1, 0); // 0ms timeout
+            if result != 0 {
+                bail!("poll should have timed out, got: {}", result);
+            }
+        }
+
+        // Test 3: ppoll - timeout case (skip extra timeout, just test once)
+        // Note: This test starts after some initial polling by the test framework
+
+        // Write some data to make the fd ready
+        let test_data = b"test data for multiplexing";
+        let write_result = libc::write(
+            write_fd,
+            test_data.as_ptr() as *const c_void,
+            test_data.len(),
+        );
+        if write_result < 0 {
+            bail!("write() failed");
+        }
+
+        // Test 4: select (x86_64 only) - ready case
+        #[cfg(target_arch = "x86_64")]
+        {
+            let mut readfds: libc::fd_set = std::mem::zeroed();
+            libc::FD_ZERO(&mut readfds);
+            libc::FD_SET(read_fd, &mut readfds);
+
+            let mut timeout = libc::timeval {
+                tv_sec: 1,
+                tv_usec: 0,
+            };
+
+            let nfds = read_fd + 1;
+            let result = libc::syscall(
+                libc::SYS_select,
+                nfds,
+                &mut readfds as *mut libc::fd_set,
+                std::ptr::null_mut::<libc::fd_set>(),
+                std::ptr::null_mut::<libc::fd_set>(),
+                &mut timeout as *mut libc::timeval,
+            );
+
+            // Should return 1 (one fd ready)
+            if result != 1 {
+                bail!("select should have found 1 ready fd, got: {}", result);
+            }
+
+            // Verify the fd is still set
+            if !libc::FD_ISSET(read_fd, &readfds) {
+                bail!("read_fd should be set in readfds");
+            }
+        }
+
+        // Test 5: poll (x86_64 only) - ready case
+        #[cfg(target_arch = "x86_64")]
+        {
+            let mut pollfd = libc::pollfd {
+                fd: read_fd,
+                events: libc::POLLIN,
+                revents: 0,
+            };
+
+            let result = libc::poll(&mut pollfd, 1, 1000); // 1 second timeout
+            if result != 1 {
+                bail!("poll should have found 1 ready fd, got: {}", result);
+            }
+
+            // Verify the fd is ready for reading
+            if pollfd.revents & libc::POLLIN == 0 {
+                bail!("read_fd should be ready for reading");
+            }
+        }
+
+        // Test 6: ppoll - ready case
+        let mut pollfd_ppoll_ready = libc::pollfd {
+            fd: read_fd,
+            events: libc::POLLIN,
+            revents: 0,
+        };
+
+        let timeout_ppoll_ready = libc::timespec {
+            tv_sec: 1,
+            tv_nsec: 0,
+        };
+
+        let result = libc::ppoll(
+            &mut pollfd_ppoll_ready,
+            1,
+            &timeout_ppoll_ready,
+            std::ptr::null(),
+        );
+        if result != 1 {
+            bail!("ppoll should have found 1 ready fd, got: {}", result);
+        }
+
+        // Verify the fd is ready for reading
+        if pollfd_ppoll_ready.revents & libc::POLLIN == 0 {
+            bail!("read_fd should be ready for reading in ppoll");
+        }
+
+        // Clean up
+        libc::close(read_fd);
+        libc::close(write_fd);
     }
 
     Ok(())

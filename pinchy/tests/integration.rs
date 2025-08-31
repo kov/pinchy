@@ -330,6 +330,52 @@ fn pipe_operations_syscalls() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn io_multiplexing_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises I/O multiplexing syscalls
+    // Architecture-specific syscalls: select and poll are x86_64 only
+    #[cfg(target_arch = "x86_64")]
+    let handle = run_workload(&["select", "poll", "ppoll"], "io_multiplexing_test");
+
+    #[cfg(target_arch = "aarch64")]
+    let handle = run_workload(&["ppoll"], "io_multiplexing_test");
+
+    // Expected output - architecture-specific formatting
+    #[cfg(target_arch = "x86_64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID select(nfds: NUMBER, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, usecs: 0 }) = 0 (timeout)
+        PID poll(fds: [ pollfd { fd: NUMBER, events: POLLIN, revents: 0 } ], nfds: 1, timeout: 0) = 0 (timeout)
+        PID ppoll(fds: [ { NUMBER, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: NUMBER }, sigmask) = 1 (ready) [NUMBER = POLLIN]
+        PID select(nfds: NUMBER, readfds: [ NUMBER ], writefds: NULL, exceptfds: NULL, timeout: { secs: 1, usecs: 0 }) = 1 (ready)
+        PID poll(fds: [ pollfd { fd: NUMBER, events: POLLIN, revents: POLLIN } ], nfds: 1, timeout: 1000) = 1 (ready)
+    "#});
+
+    #[cfg(target_arch = "aarch64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID ppoll(fds: [ { 0,  }, { 1,  }, { 2,  } ], nfds: 3, timeout: { secs: 0, nanos: 0 }, sigmask) = 0 (timeout)
+        PID ppoll(fds: [ { NUMBER, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: NUMBER }, sigmask) = 1 (ready) [NUMBER = POLLIN]
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
     let events: Vec<String> = events.iter().map(|&s| s.to_owned()).collect();
     let test_name = test_name.to_owned();

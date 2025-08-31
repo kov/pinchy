@@ -8,7 +8,10 @@ use aya_ebpf::{
     EbpfContext as _,
 };
 use aya_log_ebpf::error;
-use pinchy_common::{kernel_types::Timespec, SyscallEvent};
+use pinchy_common::{
+    kernel_types::{EpollEvent, Timespec},
+    SyscallEvent,
+};
 
 use crate::{ENTER_MAP, EVENTS, SYSCALL_RETURN_OFFSET};
 
@@ -35,6 +38,25 @@ use pinchy_common::kernel_types::Timeval;
 #[inline(always)]
 pub fn read_timeval(timeval_ptr: *const Timeval) -> Timeval {
     unsafe { bpf_probe_read_user::<Timeval>(timeval_ptr) }.unwrap_or_default()
+}
+
+#[inline(always)]
+pub fn read_epoll_events(events_ptr: *const EpollEvent, nevents: usize, events: &mut [EpollEvent]) {
+    if events_ptr.is_null() || nevents == 0 {
+        return;
+    }
+
+    let base_ptr = events_ptr;
+    for (i, event) in events.iter_mut().enumerate() {
+        if i < nevents {
+            unsafe {
+                let ptr = base_ptr.add(i);
+                if let Ok(evt) = bpf_probe_read_user::<EpollEvent>(ptr) {
+                    *event = evt;
+                }
+            }
+        }
+    }
 }
 
 #[inline(always)]

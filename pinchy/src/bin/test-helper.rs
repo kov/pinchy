@@ -71,6 +71,7 @@ fn main() -> anyhow::Result<()> {
             "pselect6_test" => pselect6_test(),
             "filesystem_sync_test" => filesystem_sync_test(),
             "filesystem_syscalls_test" => filesystem_syscalls_test(),
+            "epoll_test" => epoll_test(),
             "eventfd_test" => eventfd_test(),
             "timer_test" => timer_test(),
             "execveat_test" => execveat_test(),
@@ -1218,6 +1219,83 @@ fn filesystem_sync_test() -> anyhow::Result<()> {
     drop(file);
     let _ = std::fs::remove_file("test_sync_file.tmp");
 
+    Ok(())
+}
+
+fn epoll_test() -> anyhow::Result<()> {
+    unsafe {
+        let epfd = libc::epoll_create1(libc::EPOLL_CLOEXEC);
+        if epfd < 0 {
+            bail!("epoll_create1 failed: {}", std::io::Error::last_os_error());
+        }
+
+        let efd = libc::eventfd(0, 0);
+        if efd < 0 {
+            bail!("eventfd failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut event = libc::epoll_event {
+            events: libc::EPOLLIN as u32,
+            u64: 0x1234,
+        };
+        if libc::epoll_ctl(epfd, libc::EPOLL_CTL_ADD, efd, &mut event) != 0 {
+            bail!("epoll_ctl add failed: {}", std::io::Error::last_os_error());
+        }
+
+        let val: u64 = 1;
+        if libc::write(
+            efd,
+            &val as *const u64 as *const c_void,
+            std::mem::size_of::<u64>(),
+        ) < 0
+        {
+            bail!("eventfd write failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut events: [libc::epoll_event; 8] = std::mem::zeroed();
+        let nfds = libc::epoll_pwait(epfd, events.as_mut_ptr(), 8, 0, std::ptr::null());
+        if nfds < 0 {
+            bail!("epoll_pwait failed: {}", std::io::Error::last_os_error());
+        }
+        assert_eq!(nfds, 1, "epoll_pwait should return 1");
+
+        if libc::epoll_ctl(epfd, libc::EPOLL_CTL_DEL, efd, std::ptr::null_mut()) != 0 {
+            bail!("epoll_ctl del failed: {}", std::io::Error::last_os_error());
+        }
+
+        let timeout = libc::timespec {
+            tv_sec: 0,
+            tv_nsec: 0,
+        };
+        // epoll_pwait2 requires a valid events buffer if maxevents > 0.
+        // Passing maxevents == 0 can yield EINVAL on some kernels.
+        // Use a small buffer and expect a timeout with 0 events.
+        let mut events2: [libc::epoll_event; 8] = std::mem::zeroed();
+        let nfds2 = libc::syscall(
+            libc::SYS_epoll_pwait2,
+            epfd,
+            events2.as_mut_ptr(),
+            events2.len() as libc::c_int,
+            &timeout as *const libc::timespec,
+            std::ptr::null::<libc::sigset_t>(),
+            0usize,
+        );
+        if nfds2 < 0 {
+            bail!("epoll_pwait2 failed: {}", std::io::Error::last_os_error());
+        }
+        assert_eq!(nfds2, 0);
+
+        // Similarly, ensure maxevents > 0 for epoll_wait to avoid EINVAL.
+        let mut events3: [libc::epoll_event; 8] = std::mem::zeroed();
+        let nfds3 = libc::epoll_wait(epfd, events3.as_mut_ptr(), events3.len() as libc::c_int, 0);
+        if nfds3 < 0 {
+            bail!("epoll_wait failed: {}", std::io::Error::last_os_error());
+        }
+        assert_eq!(nfds3, 0);
+
+        libc::close(efd);
+        libc::close(epfd);
+    }
     Ok(())
 }
 

@@ -9,7 +9,7 @@ use aya_ebpf::{
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 use pinchy_common::{
-    kernel_types::{EpollEvent, FdSet, Pollfd, Timespec},
+    kernel_types::{FdSet, Pollfd, Timespec},
     syscalls,
 };
 
@@ -18,7 +18,8 @@ use crate::util::read_timeval;
 use crate::{
     data_mut,
     util::{
-        get_args, get_return_value, get_syscall_nr, read_iovec_array, read_timespec, Entry, IovecOp,
+        get_args, get_return_value, get_syscall_nr, read_epoll_events, read_iovec_array,
+        read_timespec, Entry, IovecOp,
     },
 };
 
@@ -221,20 +222,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 data.epfd = args[0] as i32;
                 data.max_events = args[2] as i32;
                 data.timeout = args[3] as i32;
-
-                let events_ptr = args[1] as *const EpollEvent;
-                for (i, item) in data.events.iter_mut().enumerate() {
-                    if i < return_value as usize {
-                        unsafe {
-                            let events_ptr = events_ptr.add(i);
-                            if let Ok(evt) =
-                                bpf_probe_read_user::<EpollEvent>(events_ptr as *const _)
-                            {
-                                *item = evt;
-                            }
-                        }
-                    }
-                }
+                read_epoll_events(args[1] as *const _, return_value as usize, &mut data.events);
             }
             #[cfg(x86_64)]
             syscalls::SYS_epoll_wait => {
@@ -242,20 +230,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 data.epfd = args[0] as i32;
                 data.max_events = args[2] as i32;
                 data.timeout = args[3] as i32;
-
-                let events_ptr = args[1] as *const EpollEvent;
-                for (i, item) in data.events.iter_mut().enumerate() {
-                    if i < return_value as usize {
-                        unsafe {
-                            let events_ptr = events_ptr.add(i);
-                            if let Ok(evt) =
-                                bpf_probe_read_user::<EpollEvent>(events_ptr as *const _)
-                            {
-                                *item = evt;
-                            }
-                        }
-                    }
-                }
+                read_epoll_events(args[1] as *const _, return_value as usize, &mut data.events);
             }
             syscalls::SYS_epoll_pwait2 => {
                 let data = data_mut!(entry, epoll_pwait2);
@@ -264,26 +239,18 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 data.timeout = read_timespec(args[3] as *const Timespec);
                 data.sigmask = args[4];
                 data.sigsetsize = args[5];
-
-                unsafe {
-                    let events_ptr = args[1] as *const EpollEvent;
-                    for (i, event) in data.events.iter_mut().enumerate() {
-                        if i < return_value as usize {
-                            let event_ptr = events_ptr.add(i);
-                            *event = bpf_probe_read_user(event_ptr).unwrap_or_default();
-                        }
-                    }
-                }
+                read_epoll_events(args[1] as *const _, return_value as usize, &mut data.events);
             }
             syscalls::SYS_epoll_ctl => {
                 let data = data_mut!(entry, epoll_ctl);
                 data.epfd = args[0] as i32;
                 data.op = args[1] as i32;
                 data.fd = args[2] as i32;
-                let event_ptr = args[3] as *const EpollEvent;
-                if !event_ptr.is_null() {
-                    data.event = unsafe { bpf_probe_read_user(event_ptr).unwrap_or_default() };
-                }
+                read_epoll_events(
+                    args[3] as *const _,
+                    1,
+                    core::slice::from_mut(&mut data.event),
+                );
             }
             syscalls::SYS_ppoll => {
                 let data = data_mut!(entry, ppoll);

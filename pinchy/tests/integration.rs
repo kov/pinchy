@@ -347,11 +347,12 @@ fn io_multiplexing_syscalls() {
     // Expected output - architecture-specific formatting
     #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID select(nfds: NUMBER, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, usecs: 0 }) = 0 (timeout)
+        PID poll(fds: [ pollfd { fd: NUMBER, events: NUMBER, revents: NUMBER }, pollfd { fd: NUMBER, events: NUMBER, revents: NUMBER }, pollfd { fd: NUMBER, events: NUMBER, revents: NUMBER } ], nfds: 3, timeout: 0) = 0 (timeout)
+        PID select(nfds: NUMBER, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout:, tv_sec: 0, tv_usec: 0) = 0 (timeout)
         PID poll(fds: [ pollfd { fd: NUMBER, events: POLLIN, revents: 0 } ], nfds: 1, timeout: 0) = 0 (timeout)
-        PID ppoll(fds: [ { NUMBER, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: NUMBER }, sigmask) = 1 (ready) [NUMBER = POLLIN]
-        PID select(nfds: NUMBER, readfds: [ NUMBER ], writefds: NULL, exceptfds: NULL, timeout: { secs: 1, usecs: 0 }) = 1 (ready)
+        PID select(nfds: NUMBER, readfds: [ NUMBER ], writefds: NULL, exceptfds: NULL, timeout:, tv_sec: 0, tv_usec: NUMBER) = 1 (ready)
         PID poll(fds: [ pollfd { fd: NUMBER, events: POLLIN, revents: POLLIN } ], nfds: 1, timeout: 1000) = 1 (ready)
+        PID ppoll(fds: [ { NUMBER, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: NUMBER }, sigmask) = 1 (ready) [NUMBER = POLLIN]
     "#});
 
     #[cfg(target_arch = "aarch64")]
@@ -403,6 +404,7 @@ fn escaped_regex(expected_output: &str) -> String {
         .replace("NUMBER", "[0-9]+")
         .replace("MODE", "[rwx-]+")
         .replace("ALPHANUM", "[^ \"]+")
+        .replace("MAYBEITEM_", "([^ \"]+ )?")
         .replace("MAYBETRUNCATED", r"( ... \(truncated\))?")
 }
 
@@ -1070,6 +1072,53 @@ fn execveat_syscall() {
     // Expected output - we should see execveat calls with different arguments and flags
     let expected_output = escaped_regex(indoc! {r#"
         PID execveat(dirfd: NUMBER, pathname: "this-does-not-exist-for-sure", argv: [this-doe, arg1, arg2], envp: [ALPHANUM, ALPHANUM], flags: 0) = -2 (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn xattr_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises extended attribute syscalls
+    let handle = run_workload(
+        &[
+            "setxattr",
+            "fsetxattr",
+            "getxattr",
+            "fgetxattr",
+            "listxattr",
+            "flistxattr",
+        ],
+        "xattr_test",
+    );
+
+    // Expected output - we should see all xattr operations. MAYBEITEM_ is to catch systems that have selinux attrs.
+    let expected_output = escaped_regex(indoc! {r#"
+        PID setxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "test_value_1", size: 12, flags: 0) = 0 (success)
+        PID fsetxattr(fd: NUMBER, name: "user.test_attr2", value: "another_test_value", size: 18, flags: 0) = 0 (success)
+        PID getxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "test_value_1", size: 64) = 12
+        PID fgetxattr(fd: NUMBER, name: "user.test_attr2", value: "another_test_value", size: 64) = 18
+        PID listxattr(pathname: "/tmp/xattr_test_file", list: [ MAYBEITEM_ALPHANUM, ALPHANUM ], size: 256) = NUMBER
+        PID flistxattr(fd: NUMBER, list: [ MAYBEITEM_ALPHANUM, ALPHANUM ], size: 256) = NUMBER
+        PID getxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "ALPHANUM", size: 0) = 12
+        PID getxattr(pathname: "/tmp/xattr_test_file", name: "user.nonexistent", value: ADDR, size: 64) = -61 (error)
     "#});
 
     let output = handle.join().unwrap();

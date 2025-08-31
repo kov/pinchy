@@ -77,6 +77,7 @@ fn main() -> anyhow::Result<()> {
             "execveat_test" => execveat_test(),
             "pipe_operations_test" => pipe_operations_test(),
             "io_multiplexing_test" => io_multiplexing_test(),
+            "xattr_test" => xattr_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1794,6 +1795,140 @@ fn io_multiplexing_test() -> anyhow::Result<()> {
         libc::close(read_fd);
         libc::close(write_fd);
     }
+
+    Ok(())
+}
+
+fn xattr_test() -> anyhow::Result<()> {
+    use std::{ffi::CString, fs::File, io::Write, os::unix::io::AsRawFd};
+
+    // Create a temporary file for testing extended attributes
+    let mut file = File::create("/tmp/xattr_test_file")?;
+    file.write_all(b"test file for xattr operations")?;
+    file.sync_all()?;
+    let fd = file.as_raw_fd();
+
+    // File path for path-based xattr operations
+    let file_path = CString::new("/tmp/xattr_test_file")?;
+
+    // Test attribute names and values
+    let attr_name1 = CString::new("user.test_attr1")?;
+    let attr_value1 = b"test_value_1";
+
+    let attr_name2 = CString::new("user.test_attr2")?;
+    let attr_value2 = b"another_test_value";
+
+    unsafe {
+        // Test 1: setxattr - set extended attribute via path
+        let result = libc::setxattr(
+            file_path.as_ptr(),
+            attr_name1.as_ptr(),
+            attr_value1.as_ptr() as *const libc::c_void,
+            attr_value1.len(),
+            0, // flags
+        );
+        if result != 0 {
+            bail!("setxattr failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: fsetxattr - set extended attribute via file descriptor
+        let result = libc::fsetxattr(
+            fd,
+            attr_name2.as_ptr(),
+            attr_value2.as_ptr() as *const libc::c_void,
+            attr_value2.len(),
+            0, // flags
+        );
+        if result != 0 {
+            bail!("fsetxattr failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 3: getxattr - get extended attribute via path
+        let mut buffer1 = vec![0u8; 64];
+        let result = libc::getxattr(
+            file_path.as_ptr(),
+            attr_name1.as_ptr(),
+            buffer1.as_mut_ptr() as *mut libc::c_void,
+            buffer1.len(),
+        );
+        if result < 0 {
+            bail!("getxattr failed: {}", std::io::Error::last_os_error());
+        }
+        // Verify we got the expected value
+        assert_eq!(&buffer1[..result as usize], attr_value1);
+
+        // Test 4: fgetxattr - get extended attribute via file descriptor
+        let mut buffer2 = vec![0u8; 64];
+        let result = libc::fgetxattr(
+            fd,
+            attr_name2.as_ptr(),
+            buffer2.as_mut_ptr() as *mut libc::c_void,
+            buffer2.len(),
+        );
+        if result < 0 {
+            bail!("fgetxattr failed: {}", std::io::Error::last_os_error());
+        }
+        // Verify we got the expected value
+        assert_eq!(&buffer2[..result as usize], attr_value2);
+
+        // Test 5: listxattr - list all extended attributes via path
+        let mut list_buffer = vec![0u8; 256];
+        let result = libc::listxattr(
+            file_path.as_ptr(),
+            list_buffer.as_mut_ptr() as *mut libc::c_char,
+            list_buffer.len(),
+        );
+        if result < 0 {
+            bail!("listxattr failed: {}", std::io::Error::last_os_error());
+        }
+        // The result should contain both attribute names we set
+        let list_str =
+            std::str::from_utf8(&list_buffer[..result as usize]).unwrap_or("invalid_utf8");
+        assert!(list_str.contains("user.test_attr1"));
+        assert!(list_str.contains("user.test_attr2"));
+
+        // Test 6: flistxattr - list all extended attributes via file descriptor
+        let mut flist_buffer = vec![0u8; 256];
+        let result = libc::flistxattr(
+            fd,
+            flist_buffer.as_mut_ptr() as *mut libc::c_char,
+            flist_buffer.len(),
+        );
+        if result < 0 {
+            bail!("flistxattr failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 7: Test getxattr with NULL buffer to get size
+        let size = libc::getxattr(
+            file_path.as_ptr(),
+            attr_name1.as_ptr(),
+            std::ptr::null_mut(),
+            0,
+        );
+        if size < 0 {
+            bail!(
+                "getxattr size query failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        assert_eq!(size as usize, attr_value1.len());
+
+        // Test 8: Test error case - non-existent attribute
+        let nonexistent_attr = CString::new("user.nonexistent")?;
+        let mut error_buffer = vec![0u8; 64];
+        let result = libc::getxattr(
+            file_path.as_ptr(),
+            nonexistent_attr.as_ptr(),
+            error_buffer.as_mut_ptr() as *mut libc::c_void,
+            error_buffer.len(),
+        );
+        // This should fail with ENODATA
+        assert_eq!(result, -1);
+    }
+
+    // Clean up
+    drop(file);
+    let _ = std::fs::remove_file("/tmp/xattr_test_file");
 
     Ok(())
 }

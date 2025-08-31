@@ -78,6 +78,7 @@ fn main() -> anyhow::Result<()> {
             "pipe_operations_test" => pipe_operations_test(),
             "io_multiplexing_test" => io_multiplexing_test(),
             "xattr_test" => xattr_test(),
+            "sysv_ipc_test" => sysv_ipc_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1929,6 +1930,178 @@ fn xattr_test() -> anyhow::Result<()> {
     // Clean up
     drop(file);
     let _ = std::fs::remove_file("/tmp/xattr_test_file");
+
+    Ok(())
+}
+
+fn sysv_ipc_test() -> anyhow::Result<()> {
+    unsafe {
+        // === SHARED MEMORY TESTS ===
+
+        // Test 1: shmget - create a shared memory segment
+        let shm_key = 0x12345678; // IPC_PRIVATE would be 0, but we want a specific key
+        let shm_size = 4096;
+        let shm_id = libc::shmget(shm_key, shm_size, libc::IPC_CREAT | 0o666);
+        if shm_id < 0 {
+            bail!("shmget failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: shmat - attach the shared memory segment
+        let shm_addr = libc::shmat(shm_id, std::ptr::null(), 0);
+        if shm_addr == (-1isize) as *mut libc::c_void {
+            bail!("shmat failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 3: shmctl with IPC_STAT - get shared memory info
+        let mut shm_ds: libc::shmid_ds = std::mem::zeroed();
+        let result = libc::shmctl(shm_id, libc::IPC_STAT, &mut shm_ds);
+        if result != 0 {
+            bail!(
+                "shmctl IPC_STAT failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 4: shmdt - detach the shared memory segment
+        let result = libc::shmdt(shm_addr);
+        if result != 0 {
+            bail!("shmdt failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 5: shmctl with IPC_RMID - remove the shared memory segment
+        let result = libc::shmctl(shm_id, libc::IPC_RMID, std::ptr::null_mut());
+        if result != 0 {
+            bail!(
+                "shmctl IPC_RMID failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // === MESSAGE QUEUE TESTS ===
+
+        // Test 6: msgget - create a message queue
+        let msg_key = 0x12345679; // Use a smaller key to avoid overflow
+        let msg_id = libc::msgget(msg_key, libc::IPC_CREAT | 0o666);
+        if msg_id < 0 {
+            bail!("msgget failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Prepare a test message
+        #[repr(C)]
+        struct TestMessage {
+            mtype: libc::c_long,
+            mtext: [libc::c_char; 32],
+        }
+
+        let mut test_msg = TestMessage {
+            mtype: 1, // Message type 1
+            mtext: [0; 32],
+        };
+
+        // Copy test data into message
+        let test_data = b"Hello, SysV IPC message queue!";
+        let copy_len = std::cmp::min(test_data.len(), test_msg.mtext.len() - 1);
+        for (i, &byte) in test_data.iter().take(copy_len).enumerate() {
+            test_msg.mtext[i] = byte as libc::c_char;
+        }
+
+        // Test 7: msgsnd - send a message
+        let result = libc::msgsnd(
+            msg_id,
+            &test_msg as *const TestMessage as *const libc::c_void,
+            test_data.len(),
+            0, // no flags
+        );
+        if result != 0 {
+            bail!("msgsnd failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 8: msgctl with IPC_STAT - get message queue info
+        let mut msg_ds: libc::msqid_ds = std::mem::zeroed();
+        let result = libc::msgctl(msg_id, libc::IPC_STAT, &mut msg_ds);
+        if result != 0 {
+            bail!(
+                "msgctl IPC_STAT failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 9: msgrcv - receive the message
+        let mut recv_msg = TestMessage {
+            mtype: 0,
+            mtext: [0; 32],
+        };
+        let result = libc::msgrcv(
+            msg_id,
+            &mut recv_msg as *mut TestMessage as *mut libc::c_void,
+            32, // max size
+            0,  // any message type
+            0,  // no flags
+        );
+        if result < 0 {
+            bail!("msgrcv failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 10: msgctl with IPC_RMID - remove the message queue
+        let result = libc::msgctl(msg_id, libc::IPC_RMID, std::ptr::null_mut());
+        if result != 0 {
+            bail!(
+                "msgctl IPC_RMID failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // === SEMAPHORE TESTS ===
+
+        // Test 11: semget - create a semaphore set
+        let sem_key = 0x11223344;
+        let sem_count = 2; // Create 2 semaphores
+        let sem_id = libc::semget(sem_key, sem_count, libc::IPC_CREAT | 0o666);
+        if sem_id < 0 {
+            bail!("semget failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 12: semctl with SETVAL - set semaphore value
+        let result = libc::semctl(sem_id, 0, libc::SETVAL, 5); // Set semaphore 0 to value 5
+        if result != 0 {
+            bail!("semctl SETVAL failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 13: semctl with GETVAL - get semaphore value
+        let sem_val = libc::semctl(sem_id, 0, libc::GETVAL, 0);
+        if sem_val < 0 {
+            bail!("semctl GETVAL failed: {}", std::io::Error::last_os_error());
+        }
+        assert_eq!(sem_val, 5, "Semaphore value should be 5");
+
+        // Test 14: semop - perform semaphore operations
+        let mut sem_ops = [
+            libc::sembuf {
+                sem_num: 0,                       // semaphore 0
+                sem_op: -1,                       // decrement by 1
+                sem_flg: libc::IPC_NOWAIT as i16, // don't block
+            },
+            libc::sembuf {
+                sem_num: 1, // semaphore 1
+                sem_op: 1,  // increment by 1
+                sem_flg: 0, // default flags
+            },
+        ];
+
+        let result = libc::semop(sem_id, sem_ops.as_mut_ptr(), sem_ops.len());
+        if result != 0 {
+            bail!("semop failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 15: semctl with IPC_RMID - remove the semaphore set
+        let result = libc::semctl(sem_id, 0, libc::IPC_RMID, 0);
+        if result != 0 {
+            bail!(
+                "semctl IPC_RMID failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+    }
 
     Ok(())
 }

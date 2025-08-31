@@ -318,7 +318,7 @@ syscall_test!(
             },
         }
     },
-    "20001 semget(key: 0xfeed, nsems: 4, semflg: IPC_CREAT|IPC_EXCL) = 123\n"
+    "20001 semget(key: 0xfeed, nsems: 4, semflg: IPC_CREAT|IPC_EXCL) = 123 (semid)\n"
 );
 
 syscall_test!(

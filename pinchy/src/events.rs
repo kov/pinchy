@@ -393,7 +393,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(sf, "{}", data.pipefd[0]);
                 argf!(sf, "{}", data.pipefd[1]);
             });
-            argf!(sf, "flags: 0x{:x}", data.flags);
+            argf!(sf, "flags: {}", format_pipe2_flags(data.flags));
             finish!(sf, event.return_value);
         }
         syscalls::SYS_dup3 => {

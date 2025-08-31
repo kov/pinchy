@@ -291,6 +291,45 @@ fn fcntl_syscalls() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn pipe_operations_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises pipe operations
+    let handle = run_workload(
+        &["pipe2", "splice", "tee", "vmsplice"],
+        "pipe_operations_test",
+    );
+
+    // Expected output - we should see all pipe operations
+    let expected_output = escaped_regex(indoc! {r#"
+        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0) = 0 (success)
+        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0x800 (O_NONBLOCK)) = 0 (success)
+        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0x80000 (O_CLOEXEC)) = 0 (success)
+        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0x80800 (O_CLOEXEC|O_NONBLOCK)) = 0 (success)
+        PID splice(fd_in: NUMBER, off_in: 0x0, fd_out: NUMBER, off_out: 0x0, len: 20, flags: 0x1 (SPLICE_F_MOVE)) = 20 (bytes)
+        PID tee(fd_in: NUMBER, fd_out: NUMBER, len: 20, flags: 0x2 (SPLICE_F_NONBLOCK)) = 20 (bytes)
+        PID vmsplice(fd: NUMBER, iov: [ iovec { base: ADDR, len: 18, buf: "vmsplice test data" } ], iovcnt: 1, flags: 0x8 (SPLICE_F_GIFT)) = 18 (bytes)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
     let events: Vec<String> = events.iter().map(|&s| s.to_owned()).collect();
     let test_name = test_name.to_owned();

@@ -75,6 +75,7 @@ fn main() -> anyhow::Result<()> {
             "eventfd_test" => eventfd_test(),
             "timer_test" => timer_test(),
             "execveat_test" => execveat_test(),
+            "pipe_operations_test" => pipe_operations_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -1453,6 +1454,140 @@ fn timer_test() -> anyhow::Result<()> {
                 std::io::Error::last_os_error()
             );
         }
+    }
+
+    Ok(())
+}
+
+fn pipe_operations_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test 1: pipe2 with no flags
+        let mut pipe_fds = [0i32; 2];
+        let result = libc::syscall(libc::SYS_pipe2, pipe_fds.as_mut_ptr(), 0);
+        if result != 0 {
+            bail!(
+                "pipe2 with no flags failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        let pipe1_read = pipe_fds[0];
+        let pipe1_write = pipe_fds[1];
+
+        // Test 2: pipe2 with O_NONBLOCK
+        let mut pipe_fds2 = [0i32; 2];
+        let result = libc::syscall(libc::SYS_pipe2, pipe_fds2.as_mut_ptr(), libc::O_NONBLOCK);
+        if result != 0 {
+            bail!(
+                "pipe2 with O_NONBLOCK failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        let pipe2_read = pipe_fds2[0];
+        let pipe2_write = pipe_fds2[1];
+
+        // Test 3: pipe2 with O_CLOEXEC
+        let mut pipe_fds3 = [0i32; 2];
+        let result = libc::syscall(libc::SYS_pipe2, pipe_fds3.as_mut_ptr(), libc::O_CLOEXEC);
+        if result != 0 {
+            bail!(
+                "pipe2 with O_CLOEXEC failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        let pipe3_read = pipe_fds3[0];
+        let pipe3_write = pipe_fds3[1];
+
+        // Test 4: pipe2 with O_NONBLOCK|O_CLOEXEC
+        let mut pipe_fds4 = [0i32; 2];
+        let result = libc::syscall(
+            libc::SYS_pipe2,
+            pipe_fds4.as_mut_ptr(),
+            libc::O_NONBLOCK | libc::O_CLOEXEC,
+        );
+        if result != 0 {
+            bail!(
+                "pipe2 with O_NONBLOCK|O_CLOEXEC failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        let pipe4_read = pipe_fds4[0];
+        let pipe4_write = pipe_fds4[1];
+
+        // Write some data to the first pipe for splice operations
+        let test_data = b"Hello, splice world!";
+        let bytes_written = libc::write(
+            pipe1_write,
+            test_data.as_ptr() as *const libc::c_void,
+            test_data.len(),
+        );
+        if bytes_written != test_data.len() as isize {
+            bail!("Failed to write test data to pipe");
+        }
+
+        // Test 5: splice from pipe1 to pipe2
+        let bytes_spliced = libc::syscall(
+            libc::SYS_splice,
+            pipe1_read,
+            std::ptr::null_mut::<libc::loff_t>(),
+            pipe2_write,
+            std::ptr::null_mut::<libc::loff_t>(),
+            test_data.len(),
+            libc::SPLICE_F_MOVE,
+        );
+        if bytes_spliced != test_data.len() as i64 {
+            bail!(
+                "splice failed: expected {}, got {}",
+                test_data.len(),
+                bytes_spliced
+            );
+        }
+
+        // Test 6: tee from pipe2 to pipe3 (duplicate data)
+        let bytes_teed = libc::syscall(
+            libc::SYS_tee,
+            pipe2_read,
+            pipe3_write,
+            test_data.len(),
+            libc::SPLICE_F_NONBLOCK,
+        );
+        if bytes_teed != test_data.len() as i64 {
+            bail!(
+                "tee failed: expected {}, got {}",
+                test_data.len(),
+                bytes_teed
+            );
+        }
+
+        // Test 7: vmsplice to write data from user space to pipe4
+        let vmsplice_data = b"vmsplice test data";
+        let iov = libc::iovec {
+            iov_base: vmsplice_data.as_ptr() as *mut libc::c_void,
+            iov_len: vmsplice_data.len(),
+        };
+        let bytes_vmspliced = libc::syscall(
+            libc::SYS_vmsplice,
+            pipe4_write,
+            &iov as *const libc::iovec,
+            1,
+            libc::SPLICE_F_GIFT,
+        );
+        if bytes_vmspliced != vmsplice_data.len() as i64 {
+            bail!(
+                "vmsplice failed: expected {}, got {}",
+                vmsplice_data.len(),
+                bytes_vmspliced
+            );
+        }
+
+        // Clean up - close all file descriptors
+        libc::close(pipe1_read);
+        libc::close(pipe1_write);
+        libc::close(pipe2_read);
+        libc::close(pipe2_write);
+        libc::close(pipe3_read);
+        libc::close(pipe3_write);
+        libc::close(pipe4_read);
+        libc::close(pipe4_write);
     }
 
     Ok(())

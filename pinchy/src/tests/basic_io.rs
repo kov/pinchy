@@ -416,10 +416,7 @@ syscall_test!(
             },
         }
     },
-    &format!(
-        "1 pipe2(pipefd: [ 3, 4 ], flags: 0x{:x}) = 0 (success)\n",
-        libc::O_CLOEXEC
-    )
+    "1 pipe2(pipefd: [ 3, 4 ], flags: 0x80000 (O_CLOEXEC)) = 0 (success)\n"
 );
 
 syscall_test!(

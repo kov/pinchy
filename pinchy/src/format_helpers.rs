@@ -3275,6 +3275,14 @@ pub fn format_eventfd_flags(flags: i32) -> Cow<'static, str> {
     format_fd_flags(flags as u32, EVENTFD_FLAGS)
 }
 
+pub fn format_pipe2_flags(flags: i32) -> Cow<'static, str> {
+    const PIPE2_FLAGS: &[(u32, &str)] = &[
+        (libc::O_CLOEXEC as u32, "O_CLOEXEC"),
+        (libc::O_NONBLOCK as u32, "O_NONBLOCK"),
+    ];
+    format_fd_flags(flags as u32, PIPE2_FLAGS)
+}
+
 pub fn format_capabilities(words: &[u32]) -> String {
     // List of capabilities, see /usr/include/linux/capability.h
     const CAP_NAMES: [&str; 40] = [

@@ -2467,6 +2467,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             _ => std::borrow::Cow::Owned(format!("{return_value} (msqid)")),
         },
 
+        syscalls::SYS_semget => match return_value {
+            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (semid)")),
+        },
+
         syscalls::SYS_inotify_add_watch => match return_value {
             -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (wd)")),

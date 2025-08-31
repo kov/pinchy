@@ -1136,3 +1136,53 @@ fn xattr_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn sysv_ipc_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises SysV IPC syscalls
+    let handle = run_workload(
+        &[
+            "shmget", "shmat", "shmdt", "shmctl", "msgget", "msgsnd", "msgrcv", "msgctl", "semget",
+            "semop", "semctl",
+        ],
+        "sysv_ipc_test",
+    );
+
+    // Expected output - we should see all SysV IPC operations
+    // The exact IDs and addresses will vary, so we use regex patterns
+    let expected_output = escaped_regex(indoc! {r#"
+        PID shmget(key: 0x12345678, size: 4096, shmflg: 0o666|IPC_CREAT) = NUMBER (shmid)
+        PID shmat(shmid: NUMBER, shmaddr: 0x0, shmflg: 0x0) = ADDR
+        PID shmctl(shmid: NUMBER, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345678, uid: NUMBER, gid: NUMBER, cuid: NUMBER, cgid: NUMBER, mode: 0o666 (rw-rw-rw-), seq: NUMBER }, segsz: NUMBER, atime: NUMBER, dtime: NUMBER, ctime: NUMBER, cpid: NUMBER, lpid: NUMBER, nattch: NUMBER }) = 0 (success)
+        PID shmdt(shmaddr: ADDR) = 0 (success)
+        PID shmctl(shmid: NUMBER, cmd: IPC_RMID, buf: NULL) = 0 (success)
+        PID msgget(key: 0x12345679, msgflg: IPC_CREAT) = NUMBER (msqid)
+        PID msgsnd(msqid: NUMBER, msgp: ADDR, msgsz: 30, msgflg: 0x0) = 0 (success)
+        PID msgctl(msqid: NUMBER, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345679, uid: NUMBER, gid: NUMBER, cuid: NUMBER, cgid: NUMBER, mode: 0o666 (rw-rw-rw-), seq: NUMBER }, stime: NUMBER, rtime: NUMBER, ctime: NUMBER, cbytes: NUMBER, qnum: NUMBER, qbytes: NUMBER, lspid: NUMBER, lrpid: NUMBER }) = 0 (success)
+        PID msgrcv(msqid: NUMBER, msgp: ADDR, msgsz: 32, msgtyp: 0, msgflg: 0x0) = 30
+        PID msgctl(msqid: NUMBER, cmd: IPC_RMID, buf: NULL) = 0 (success)
+        PID semget(key: 0x11223344, nsems: 2, semflg: IPC_CREAT) = NUMBER (semid)
+        PID semctl(semid: NUMBER, semnum: 0, op: SETVAL, val: 0) = 0 (success)
+        PID semctl(semid: NUMBER, semnum: 0, op: GETVAL) = 5
+        PID semctl(semid: NUMBER, semnum: 0, op: IPC_RMID, arg: 0x0 (unknown)) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

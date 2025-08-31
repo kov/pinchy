@@ -29,6 +29,61 @@ fn basic_output() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn epoll_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    #[cfg(target_arch = "x86_64")]
+    let handle = run_workload(
+        &[
+            "epoll_create1",
+            "epoll_ctl",
+            "epoll_pwait",
+            "epoll_pwait2",
+            "epoll_wait",
+        ],
+        "epoll_test",
+    );
+
+    #[cfg(target_arch = "aarch64")]
+    let handle = run_workload(
+        &["epoll_create1", "epoll_ctl", "epoll_pwait", "epoll_pwait2"],
+        "epoll_test",
+    );
+
+    #[cfg(target_arch = "x86_64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID epoll_create1(flags: EPOLL_CLOEXEC) = NUMBER (fd)
+        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_ADD, fd: NUMBER, event: epoll_event { events: POLLIN, data: ADDR }) = 0 (success)
+        PID epoll_pwait(epfd: NUMBER, events: [ epoll_event { events: POLLIN, data: ADDR } ], max_events: 8, timeout: 0, sigmask) = 1
+        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_DEL, fd: NUMBER, event: epoll_event { events: , data: 0x0 }) = 0 (success)
+        PID epoll_pwait2(epfd: NUMBER, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
+        PID epoll_wait(epfd: NUMBER, events: [  ], max_events: 8, timeout: 0) = 0 (success)
+    "#});
+
+    #[cfg(target_arch = "aarch64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID epoll_create1(flags: EPOLL_CLOEXEC) = NUMBER (fd)
+        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_ADD, fd: NUMBER, event: epoll_event { events: POLLIN, data: ADDR }) = 0 (success)
+        PID epoll_pwait(epfd: NUMBER, events: [ epoll_event { events: POLLIN, data: ADDR } ], max_events: 8, timeout: 0, sigmask) = 1
+        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_DEL, fd: NUMBER, event: epoll_event { events: , data: 0x0 }) = 0 (success)
+        PID epoll_pwait2(epfd: NUMBER, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
+        PID epoll_pwait(epfd: NUMBER, events: [  ], max_events: 8, timeout: 0, sigmask) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn drop_privileges() {
     let pinchy = PinchyTest::new(None, None);
 

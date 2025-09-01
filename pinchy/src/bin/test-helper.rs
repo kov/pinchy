@@ -79,6 +79,7 @@ fn main() -> anyhow::Result<()> {
             "io_multiplexing_test" => io_multiplexing_test(),
             "xattr_test" => xattr_test(),
             "sysv_ipc_test" => sysv_ipc_test(),
+            "socketpair_sendmmsg_test" => socketpair_sendmmsg_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -2101,6 +2102,162 @@ fn sysv_ipc_test() -> anyhow::Result<()> {
                 std::io::Error::last_os_error()
             );
         }
+    }
+
+    Ok(())
+}
+
+fn socketpair_sendmmsg_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test 1: Create a socket pair (AF_UNIX SOCK_STREAM)
+        let mut sv = [0i32; 2];
+        let result = libc::socketpair(libc::AF_UNIX, libc::SOCK_STREAM, 0, sv.as_mut_ptr());
+        if result != 0 {
+            bail!("socketpair failed: {}", std::io::Error::last_os_error());
+        }
+
+        let sock1 = sv[0];
+        let sock2 = sv[1];
+
+        // Test 2: Create another socket pair (AF_UNIX SOCK_DGRAM) for variety
+        let mut sv_dgram = [0i32; 2];
+        let result = libc::socketpair(libc::AF_UNIX, libc::SOCK_DGRAM, 0, sv_dgram.as_mut_ptr());
+        if result != 0 {
+            bail!(
+                "socketpair DGRAM failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 3: Prepare messages for sendmmsg
+        let msg1 = b"First message";
+        let msg2 = b"Second message";
+
+        let mut iov1 = libc::iovec {
+            iov_base: msg1.as_ptr() as *mut libc::c_void,
+            iov_len: msg1.len(),
+        };
+
+        let mut iov2 = libc::iovec {
+            iov_base: msg2.as_ptr() as *mut libc::c_void,
+            iov_len: msg2.len(),
+        };
+
+        let msghdr1 = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut iov1,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+
+        let msghdr2 = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut iov2,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+
+        let mut mmsghdr = [
+            libc::mmsghdr {
+                msg_hdr: msghdr1,
+                msg_len: 0,
+            },
+            libc::mmsghdr {
+                msg_hdr: msghdr2,
+                msg_len: 0,
+            },
+        ];
+
+        // Test 4: Send multiple messages using sendmmsg
+        let sent = libc::sendmmsg(sock1, mmsghdr.as_mut_ptr(), 2, 0);
+        if sent < 0 {
+            bail!("sendmmsg failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 5: Prepare buffers for recvmmsg
+        let mut recv_buf1 = [0u8; 64];
+        let mut recv_buf2 = [0u8; 64];
+
+        let mut recv_iov1 = libc::iovec {
+            iov_base: recv_buf1.as_mut_ptr() as *mut libc::c_void,
+            iov_len: recv_buf1.len(),
+        };
+
+        let mut recv_iov2 = libc::iovec {
+            iov_base: recv_buf2.as_mut_ptr() as *mut libc::c_void,
+            iov_len: recv_buf2.len(),
+        };
+
+        let recv_msghdr1 = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut recv_iov1,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+
+        let recv_msghdr2 = libc::msghdr {
+            msg_name: std::ptr::null_mut(),
+            msg_namelen: 0,
+            msg_iov: &mut recv_iov2,
+            msg_iovlen: 1,
+            msg_control: std::ptr::null_mut(),
+            msg_controllen: 0,
+            msg_flags: 0,
+        };
+
+        let mut recv_mmsghdr = [
+            libc::mmsghdr {
+                msg_hdr: recv_msghdr1,
+                msg_len: 0,
+            },
+            libc::mmsghdr {
+                msg_hdr: recv_msghdr2,
+                msg_len: 0,
+            },
+        ];
+
+        // Test 6: Receive multiple messages using recvmmsg
+        let timeout = libc::timespec {
+            tv_sec: 0,          // Make timeout very short to avoid hanging
+            tv_nsec: 100000000, // 100ms
+        };
+
+        let received = libc::recvmmsg(
+            sock2,
+            recv_mmsghdr.as_mut_ptr(),
+            2,
+            libc::MSG_DONTWAIT, // Non-blocking to avoid hanging
+            &timeout as *const libc::timespec as *mut libc::timespec,
+        );
+        if received < 0 {
+            // It's ok if this fails in some cases, we just want to trigger the syscall
+            eprintln!(
+                "recvmmsg failed (expected in some cases): {}",
+                std::io::Error::last_os_error()
+            );
+        } else {
+            // For SOCK_STREAM, messages might be concatenated, so just verify we got some data
+            eprintln!("recvmmsg received {} messages successfully", received);
+            eprintln!(
+                "Message 1 length: {}, Message 2 length: {}",
+                recv_mmsghdr[0].msg_len, recv_mmsghdr[1].msg_len
+            );
+        }
+
+        // Close all file descriptors
+        libc::close(sock1);
+        libc::close(sock2);
+        libc::close(sv_dgram[0]);
+        libc::close(sv_dgram[1]);
     }
 
     Ok(())

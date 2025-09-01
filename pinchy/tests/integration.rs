@@ -1186,3 +1186,40 @@ fn sysv_ipc_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn socketpair_sendmmsg_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises socketpair, sendmmsg, and recvmmsg syscalls
+    let handle = run_workload(
+        &["socketpair", "sendmmsg", "recvmmsg"],
+        "socketpair_sendmmsg_test",
+    );
+
+    // Expected output - we should see socketpair creating socket pairs,
+    // then sendmmsg and recvmmsg for batch message operations
+    let expected_output = escaped_regex(indoc! {r#"
+        PID socketpair(domain: AF_UNIX, type: SOCK_STREAM, protocol: 0, sv: [NUMBER, NUMBER]) = 0 (success)
+        PID socketpair(domain: AF_UNIX, type: SOCK_DGRAM, protocol: 0, sv: [NUMBER, NUMBER]) = 0 (success)
+        PID sendmmsg(sockfd: NUMBER, msgvec: [  { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 13 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 14 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } ], vlen: 2, flags: 0) = 2 (messages)
+        PID recvmmsg(sockfd: NUMBER, msgvec: [  { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 64 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 27 } { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 64 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } ], vlen: 2, flags: 0x40 (MSG_DONTWAIT), timeout: { tv_sec: 0, tv_nsec: NUMBER }) = 1 (messages)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

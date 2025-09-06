@@ -31,6 +31,14 @@ pub mod fs_constants {
     pub const FSPICK_SYMLINK_NOFOLLOW: u32 = 0x00000002;
     pub const FSPICK_NO_AUTOMOUNT: u32 = 0x00000004;
     pub const FSPICK_EMPTY_PATH: u32 = 0x00000008;
+
+    // openat2() resolve flags
+    pub const RESOLVE_BENEATH: u64 = 0x1;
+    pub const RESOLVE_IN_ROOT: u64 = 0x2;
+    pub const RESOLVE_NO_MAGICLINKS: u64 = 0x4;
+    pub const RESOLVE_NO_SYMLINKS: u64 = 0x8;
+    pub const RESOLVE_NO_XDEV: u64 = 0x10;
+    pub const RESOLVE_CACHED: u64 = 0x20;
 }
 
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
@@ -4185,6 +4193,66 @@ mod tests {
             "0x801 (O_NONBLOCK|UNKNOWN)"
         );
     }
+
+    #[test]
+    fn test_format_resolve_flags() {
+        // Test no flags
+        assert_eq!(format_resolve_flags(0), "0");
+
+        // Test individual flags
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_BENEATH),
+            "0x1 (RESOLVE_BENEATH)"
+        );
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_IN_ROOT),
+            "0x2 (RESOLVE_IN_ROOT)"
+        );
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_NO_MAGICLINKS),
+            "0x4 (RESOLVE_NO_MAGICLINKS)"
+        );
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_NO_SYMLINKS),
+            "0x8 (RESOLVE_NO_SYMLINKS)"
+        );
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_NO_XDEV),
+            "0x10 (RESOLVE_NO_XDEV)"
+        );
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_CACHED),
+            "0x20 (RESOLVE_CACHED)"
+        );
+
+        // Test multiple flags
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_BENEATH | fs_constants::RESOLVE_NO_SYMLINKS),
+            "0x9 (RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS)"
+        );
+
+        // Test all flags
+        assert_eq!(
+            format_resolve_flags(
+                fs_constants::RESOLVE_BENEATH
+                    | fs_constants::RESOLVE_IN_ROOT
+                    | fs_constants::RESOLVE_NO_MAGICLINKS
+                    | fs_constants::RESOLVE_NO_SYMLINKS
+                    | fs_constants::RESOLVE_NO_XDEV
+                    | fs_constants::RESOLVE_CACHED
+            ),
+            "0x3f (RESOLVE_BENEATH|RESOLVE_IN_ROOT|RESOLVE_NO_MAGICLINKS|RESOLVE_NO_SYMLINKS|RESOLVE_NO_XDEV|RESOLVE_CACHED)"
+        );
+
+        // Test unknown flag
+        assert_eq!(format_resolve_flags(0x40), "0x40 (UNKNOWN)");
+
+        // Test known flag with unknown bits
+        assert_eq!(
+            format_resolve_flags(fs_constants::RESOLVE_BENEATH | 0x40),
+            "0x41 (RESOLVE_BENEATH|UNKNOWN)"
+        );
+    }
 }
 
 // ===== Iovec Formatting Helpers =====
@@ -4331,4 +4399,50 @@ pub fn format_fallocate_mode(mode: i32) -> Cow<'static, str> {
     }
 
     format!("0x{:x} ({})", mode, parts.join("|")).into()
+}
+
+/// Format openat2 resolve flags
+pub fn format_resolve_flags(flags: u64) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & fs_constants::RESOLVE_BENEATH != 0 {
+        parts.push("RESOLVE_BENEATH");
+    }
+    if flags & fs_constants::RESOLVE_IN_ROOT != 0 {
+        parts.push("RESOLVE_IN_ROOT");
+    }
+    if flags & fs_constants::RESOLVE_NO_MAGICLINKS != 0 {
+        parts.push("RESOLVE_NO_MAGICLINKS");
+    }
+    if flags & fs_constants::RESOLVE_NO_SYMLINKS != 0 {
+        parts.push("RESOLVE_NO_SYMLINKS");
+    }
+    if flags & fs_constants::RESOLVE_NO_XDEV != 0 {
+        parts.push("RESOLVE_NO_XDEV");
+    }
+    if flags & fs_constants::RESOLVE_CACHED != 0 {
+        parts.push("RESOLVE_CACHED");
+    }
+
+    let known_flags = fs_constants::RESOLVE_BENEATH
+        | fs_constants::RESOLVE_IN_ROOT
+        | fs_constants::RESOLVE_NO_MAGICLINKS
+        | fs_constants::RESOLVE_NO_SYMLINKS
+        | fs_constants::RESOLVE_NO_XDEV
+        | fs_constants::RESOLVE_CACHED;
+
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
 }

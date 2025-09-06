@@ -4332,3 +4332,49 @@ pub fn format_fallocate_mode(mode: i32) -> Cow<'static, str> {
 
     format!("0x{:x} ({})", mode, parts.join("|")).into()
 }
+
+/// Format openat2 resolve flags
+pub fn format_resolve_flags(flags: u64) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::RESOLVE_BENEATH != 0 {
+        parts.push("RESOLVE_BENEATH");
+    }
+    if flags & libc::RESOLVE_IN_ROOT != 0 {
+        parts.push("RESOLVE_IN_ROOT");
+    }
+    if flags & libc::RESOLVE_NO_MAGICLINKS != 0 {
+        parts.push("RESOLVE_NO_MAGICLINKS");
+    }
+    if flags & libc::RESOLVE_NO_SYMLINKS != 0 {
+        parts.push("RESOLVE_NO_SYMLINKS");
+    }
+    if flags & libc::RESOLVE_NO_XDEV != 0 {
+        parts.push("RESOLVE_NO_XDEV");
+    }
+    if flags & libc::RESOLVE_CACHED != 0 {
+        parts.push("RESOLVE_CACHED");
+    }
+
+    let known_flags = libc::RESOLVE_BENEATH
+        | libc::RESOLVE_IN_ROOT
+        | libc::RESOLVE_NO_MAGICLINKS
+        | libc::RESOLVE_NO_SYMLINKS
+        | libc::RESOLVE_NO_XDEV
+        | libc::RESOLVE_CACHED;
+
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}

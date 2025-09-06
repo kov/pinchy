@@ -5,7 +5,7 @@ use std::pin::Pin;
 
 use indoc::indoc;
 use pinchy_common::{
-    kernel_types::{EpollEvent, Iovec, Timespec},
+    kernel_types::{EpollEvent, Iovec, OpenHow, Timespec},
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
         SYS_epoll_pwait2, SYS_fcntl, SYS_flock, SYS_lseek, SYS_openat, SYS_openat2, SYS_pipe2,
@@ -13,9 +13,9 @@ use pinchy_common::{
         SYS_tee, SYS_vmsplice, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
-    EpollPWaitData, FcntlData, FlockData, LseekData, OpenAtData, PpollData, PreadData, PwriteData,
-    ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData, VectorIOData, VmspliceData,
-    WriteData, DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
+    EpollPWaitData, FcntlData, FlockData, LseekData, OpenAt2Data, OpenAtData, PpollData, PreadData,
+    PwriteData, ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData, VectorIOData,
+    VmspliceData, WriteData, DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -324,11 +324,15 @@ syscall_test!(
             tid: 22,
             return_value: 3,
             data: pinchy_common::SyscallEventData {
-                openat2: OpenAtData {
+                openat2: OpenAt2Data {
                     dfd: libc::AT_FDCWD,
                     pathname: [0u8; DATA_READ_SIZE],
-                    flags: libc::O_RDONLY | libc::O_CLOEXEC,
-                    mode: 0o666,
+                    how: OpenHow {
+                        flags: (libc::O_RDONLY | libc::O_CLOEXEC) as u64,
+                        mode: 0o666,
+                        resolve: libc::RESOLVE_BENEATH | libc::RESOLVE_NO_SYMLINKS,
+                    },
+                    size: 24, // size of struct open_how
                 },
             },
         };
@@ -337,7 +341,36 @@ syscall_test!(
         openat2_data.pathname[..path.len()].copy_from_slice(path);
         event
     },
-    "22 openat2(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3 (fd)\n"
+    "22 openat2(dfd: AT_FDCWD, pathname: \"/etc/passwd\", how: { flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-), resolve: 0xc (RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS) }, size: 24) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_openat2_no_resolve_flags,
+    {
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_openat2,
+            pid: 22,
+            tid: 22,
+            return_value: 4,
+            data: pinchy_common::SyscallEventData {
+                openat2: OpenAt2Data {
+                    dfd: libc::AT_FDCWD,
+                    pathname: [0u8; DATA_READ_SIZE],
+                    how: OpenHow {
+                        flags: libc::O_WRONLY as u64,
+                        mode: 0o644,
+                        resolve: 0, // No resolve flags
+                    },
+                    size: 24,
+                },
+            },
+        };
+        let openat2_data = unsafe { &mut event.data.openat2 };
+        let path = c"/tmp/test".to_bytes_with_nul();
+        openat2_data.pathname[..path.len()].copy_from_slice(path);
+        event
+    },
+    "22 openat2(dfd: AT_FDCWD, pathname: \"/tmp/test\", how: { flags: 0x1 (O_WRONLY), mode: 0o644 (rw-r--r--), resolve: 0 }, size: 24) = 4 (fd)\n"
 );
 
 syscall_test!(

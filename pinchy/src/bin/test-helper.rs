@@ -80,6 +80,7 @@ fn main() -> anyhow::Result<()> {
             "xattr_test" => xattr_test(),
             "sysv_ipc_test" => sysv_ipc_test(),
             "socketpair_sendmmsg_test" => socketpair_sendmmsg_test(),
+            "system_info_test" => system_info_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -2258,6 +2259,30 @@ fn socketpair_sendmmsg_test() -> anyhow::Result<()> {
         libc::close(sock2);
         libc::close(sv_dgram[0]);
         libc::close(sv_dgram[1]);
+    }
+
+    Ok(())
+}
+
+fn system_info_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test 1: uname - get system information
+        let mut utsname: libc::utsname = std::mem::zeroed();
+        let result = libc::uname(&mut utsname);
+        if result != 0 {
+            bail!("uname failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: sysinfo - get system statistics
+        let mut info: libc::sysinfo = std::mem::zeroed();
+        let result = libc::sysinfo(&mut info);
+        if result != 0 {
+            bail!("sysinfo failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Verify we got reasonable values
+        assert!(info.uptime > 0, "System uptime should be positive");
+        assert!(info.totalram > 0, "Total RAM should be positive");
     }
 
     Ok(())

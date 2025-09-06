@@ -571,6 +571,47 @@ fn identity_syscalls() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn mmap_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises mmap and munmap syscalls
+    let handle = run_workload(&["mmap", "munmap"], "mmap_test");
+
+    // Verify that our specific test mmap calls are present in the output
+    let expected_output = escaped_regex(indoc! {r#"
+        PID mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = ADDR (addr)
+        PID mmap(addr: 0x0, length: 4096, prot: 0x1 (PROT_READ), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = ADDR (addr)
+        PID mmap(addr: 0x0, length: 4096, prot: 0x0, flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = ADDR (addr)
+        PID mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0xa022 (MAP_PRIVATE|MAP_ANONYMOUS|MAP_LOCKED|MAP_POPULATE), fd: -1, offset: 0x0) = ADDR (addr)
+        PID mmap(addr: 0x12345000, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x32 (MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS), fd: -1, offset: 0x0) = 0x12345000 (addr)
+        PID munmap(addr: ADDR, length: 4096) = 0 (success)
+        PID munmap(addr: ADDR, length: 4096) = 0 (success)
+        PID munmap(addr: ADDR, length: 4096) = 0 (success)
+        PID munmap(addr: ADDR, length: 4096) = 0 (success)
+        PID munmap(addr: 0x12345000, length: 4096) = 0 (success)
+        PID munmap(addr: 0x0, length: 4096) = 0 (success)
+        PID munmap(addr: 0x1000, length: 0) = -22 (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn madvise_syscall() {
     let pinchy = PinchyTest::new(None, None);
 

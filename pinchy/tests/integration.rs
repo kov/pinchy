@@ -1223,3 +1223,41 @@ fn socketpair_sendmmsg_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn timer_test() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(
+        &[
+            "timer_create",
+            "timer_settime",
+            "timer_gettime",
+            "timer_getoverrun",
+            "timer_delete",
+        ],
+        "timer_test",
+    );
+
+    let expected_output = escaped_regex(indoc! {r#"
+        PID timer_create(clockid: CLOCK_REALTIME, sevp: { sigev_notify: SIGEV_SIGNAL, sigev_signo: 10, sigev_value.sival_int: 42 }, timerid: <output>) = 0 (success)
+        PID timer_settime(timerid: ADDR, flags: 0, new_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: 2, nanos: 500000000 } }, old_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 0, nanos: 0 } }) = 0 (success)
+        PID timer_gettime(timerid: ADDR, curr_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: NUMBER, nanos: NUMBER } }) = 0 (success)
+        PID timer_getoverrun(timerid: ADDR) = 0 (overruns)
+        PID timer_delete(timerid: ADDR) = 0 (success)
+        PID timer_create(clockid: CLOCK_MONOTONIC, sevp: NULL, timerid: <output>) = 0 (success)
+        PID timer_delete(timerid: ADDR) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

@@ -1393,8 +1393,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "dfd: {}", format_dirfd(data.dfd));
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "flags: {}", format_flags(data.flags));
-            argf!(sf, "mode: {}", format_mode(data.mode));
+            arg!(sf, "how:");
+            with_struct!(sf, {
+                argf!(sf, "flags: {}", format_flags(data.how.flags as i32));
+                argf!(sf, "mode: {}", format_mode(data.how.mode as u32));
+                argf!(sf, "resolve: {}", format_resolve_flags(data.how.resolve));
+            });
+            argf!(sf, "size: {}", data.size);
 
             finish!(sf, event.return_value);
         }

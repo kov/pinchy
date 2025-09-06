@@ -9,7 +9,7 @@ use aya_ebpf::{
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 use pinchy_common::{
-    kernel_types::{FdSet, Pollfd, Timespec},
+    kernel_types::{FdSet, OpenHow, Pollfd, Timespec},
     syscalls,
 };
 
@@ -47,12 +47,21 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
             syscalls::SYS_openat2 => {
                 let data = data_mut!(entry, openat2);
                 data.dfd = args[0] as i32;
-                data.flags = args[2] as i32;
-                data.mode = args[3] as u32;
+                data.size = args[3];
 
                 let pathname_ptr = args[1] as *const u8;
+                let how_ptr = args[2] as *const OpenHow;
+
+                // Read pathname
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut data.pathname);
+                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                }
+
+                // Read struct open_how
+                unsafe {
+                    if let Ok(how) = bpf_probe_read_user(how_ptr) {
+                        data.how = how;
+                    }
                 }
             }
             syscalls::SYS_read => {

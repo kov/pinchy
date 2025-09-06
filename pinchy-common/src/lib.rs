@@ -35,7 +35,7 @@ pub union SyscallEventData {
     pub pwrite: PwriteData,
     pub lseek: LseekData,
     pub openat: OpenAtData,
-    pub openat2: OpenAtData,
+    pub openat2: OpenAt2Data,
     pub futex: FutexData,
     pub futex_waitv: FutexWaitvData,
     pub sched_yield: SchedYieldData,
@@ -539,6 +539,15 @@ pub struct OpenAtData {
     pub pathname: [u8; DATA_READ_SIZE],
     pub flags: i32,
     pub mode: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct OpenAt2Data {
+    pub dfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub how: kernel_types::OpenHow, // struct open_how
+    pub size: usize,                // size argument
 }
 
 #[repr(C)]

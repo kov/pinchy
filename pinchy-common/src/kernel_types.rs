@@ -24,6 +24,16 @@ pub struct Timespec {
     pub nanos: i64,
 }
 
+/// Structure for openat2 syscall, matching the kernel's struct open_how
+/// See: https://man7.org/linux/man-pages/man2/openat2.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct OpenHow {
+    pub flags: u64,   // File creation and status flags (O_* constants)
+    pub mode: u64,    // File mode (when creating files)
+    pub resolve: u64, // Path resolution flags (RESOLVE_* constants)
+}
+
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Itimerspec {

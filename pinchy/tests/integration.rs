@@ -810,6 +810,45 @@ fn uname_sysinfo_syscalls() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn prctl_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises various prctl operations
+    let handle = run_workload(&["prctl"], "prctl_test");
+
+    // Expected output - prctl operations with various argument patterns
+    let expected_output = escaped_regex(indoc! {r#"
+        PID prctl(PR_SET_NAME, ADDR) = 0 (success)
+        PID prctl(PR_GET_NAME, ADDR) = 0 (success)
+        PID prctl(PR_GET_DUMPABLE) = NUMBER
+        PID prctl(PR_SET_DUMPABLE, 0x0) = 0 (success)
+        PID prctl(PR_GET_DUMPABLE) = 0 (success)
+        PID prctl(PR_SET_DUMPABLE, 0x1) = 0 (success)
+        PID prctl(PR_CAPBSET_READ, 0x15) = NUMBER
+        PID prctl(PR_CAPBSET_DROP, 0x15) = 0 (success)
+        PID prctl(PR_GET_KEEPCAPS) = 0 (success)
+        PID prctl(PR_SET_KEEPCAPS, 0x1) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn ioprio_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 

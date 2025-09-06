@@ -285,7 +285,10 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                     let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
                 }
             }
-
+            syscalls::SYS_prctl => {
+                let data = data_mut!(entry, generic);
+                data.args = args;
+            }
             _ => {
                 entry.discard();
                 return Ok(());

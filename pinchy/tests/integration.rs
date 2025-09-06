@@ -404,6 +404,7 @@ fn escaped_regex(expected_output: &str) -> String {
         .replace("NUMBER", "[0-9]+")
         .replace("MODE", "[rwx-]+")
         .replace("ALPHANUM", "[^ \"]+")
+        .replace("QUOTEDSTRING", "\"[^\"]*\"")
         .replace("MAYBEITEM_", "([^ \"]+ )?")
         .replace("MAYBETRUNCATED", r"( ... \(truncated\))?")
 }
@@ -757,6 +758,37 @@ fn system_operations() {
         PID umask(mask: 0o22) = 18
         PID umask(mask: 0o22) = 18
         PID sync() = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn uname_sysinfo_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises system information syscalls
+    let handle = run_workload(&["uname", "sysinfo"], "system_info_test");
+
+    // Expected output - uname and sysinfo calls
+    let expected_output = escaped_regex(indoc! {r#"
+        PID uname(struct utsname: { sysname: QUOTEDSTRING, nodename: QUOTEDSTRING, release: QUOTEDSTRING, version: QUOTEDSTRING, machine: QUOTEDSTRING, domainname: QUOTEDSTRING }) = 0 (success)
+        PID sysinfo(info: { uptime: NUMBER seconds, loads: [NUMBER, NUMBER, NUMBER], totalram: NUMBER MB, freeram: NUMBER MB, sharedram: NUMBER MB, bufferram: NUMBER MB, totalswap: NUMBER MB, freeswap: NUMBER MB, procs: NUMBER, mem_unit: NUMBER bytes }) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();

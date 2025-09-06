@@ -82,6 +82,7 @@ fn main() -> anyhow::Result<()> {
             "socketpair_sendmmsg_test" => socketpair_sendmmsg_test(),
             "system_info_test" => system_info_test(),
             "prctl_test" => prctl_test(),
+            "mmap_test" => mmap_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -2376,6 +2377,121 @@ fn prctl_test() -> anyhow::Result<()> {
         // Test 10: PR_SET_KEEPCAPS - try to set keep capabilities (may fail for non-root)
         let _result = libc::prctl(libc::PR_SET_KEEPCAPS, 1);
         // This may fail for non-root users, which is fine for testing
+    }
+
+    Ok(())
+}
+
+fn mmap_test() -> anyhow::Result<()> {
+    unsafe {
+        let page_size = 4096;
+
+        // Test 1: mmap with PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS
+        let addr1 = libc::mmap(
+            std::ptr::null_mut(),
+            page_size,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+        if addr1 == libc::MAP_FAILED {
+            bail!("mmap 1 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: mmap with only PROT_READ, MAP_PRIVATE | MAP_ANONYMOUS
+        let addr2 = libc::mmap(
+            std::ptr::null_mut(),
+            page_size,
+            libc::PROT_READ,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+        if addr2 == libc::MAP_FAILED {
+            bail!("mmap 2 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 3: mmap with PROT_NONE
+        let addr3 = libc::mmap(
+            std::ptr::null_mut(),
+            page_size,
+            libc::PROT_NONE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+        if addr3 == libc::MAP_FAILED {
+            bail!("mmap 3 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 4: mmap with additional flags (MAP_LOCKED, MAP_POPULATE)
+        let addr4 = libc::mmap(
+            std::ptr::null_mut(),
+            page_size,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_LOCKED | libc::MAP_POPULATE,
+            -1,
+            0,
+        );
+        // This might fail due to permissions or limits, which is fine for testing
+        let addr4_valid = addr4 != libc::MAP_FAILED;
+
+        // Test 5: mmap with fixed address (might fail, which is good for error testing)
+        let fixed_addr = 0x12345000usize as *mut libc::c_void;
+        let addr5 = libc::mmap(
+            fixed_addr,
+            page_size,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS | libc::MAP_FIXED,
+            -1,
+            0,
+        );
+        let addr5_valid = addr5 != libc::MAP_FAILED;
+
+        // Test munmap for all successful mappings
+
+        // Test 6: munmap addr1
+        let result = libc::munmap(addr1, page_size);
+        if result != 0 {
+            bail!("munmap 1 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 7: munmap addr2
+        let result = libc::munmap(addr2, page_size);
+        if result != 0 {
+            bail!("munmap 2 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 8: munmap addr3
+        let result = libc::munmap(addr3, page_size);
+        if result != 0 {
+            bail!("munmap 3 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 9: munmap addr4 (only if mmap succeeded)
+        if addr4_valid {
+            let result = libc::munmap(addr4, page_size);
+            if result != 0 {
+                bail!("munmap 4 failed: {}", std::io::Error::last_os_error());
+            }
+        }
+
+        // Test 10: munmap addr5 (only if mmap succeeded)
+        if addr5_valid {
+            let result = libc::munmap(addr5, page_size);
+            if result != 0 {
+                bail!("munmap 5 failed: {}", std::io::Error::last_os_error());
+            }
+        }
+
+        // Test 11: munmap with invalid address (might succeed or fail depending on system)
+        let _result = libc::munmap(std::ptr::null_mut(), page_size);
+        // Result can vary by system - just generate the syscall for tracing
+
+        // Test 12: munmap with invalid size (might succeed or fail depending on system)
+        let _result = libc::munmap(0x1000 as *mut libc::c_void, 0);
+        // Result can vary by system - just generate the syscall for tracing
     }
 
     Ok(())

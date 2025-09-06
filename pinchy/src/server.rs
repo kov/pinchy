@@ -677,6 +677,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_delete_module,
         syscalls::SYS_sethostname,
         syscalls::SYS_setdomainname,
+        syscalls::SYS_prctl,
     ];
     let system_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_system")

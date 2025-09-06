@@ -81,6 +81,7 @@ fn main() -> anyhow::Result<()> {
             "sysv_ipc_test" => sysv_ipc_test(),
             "socketpair_sendmmsg_test" => socketpair_sendmmsg_test(),
             "system_info_test" => system_info_test(),
+            "prctl_test" => prctl_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -2283,6 +2284,98 @@ fn system_info_test() -> anyhow::Result<()> {
         // Verify we got reasonable values
         assert!(info.uptime > 0, "System uptime should be positive");
         assert!(info.totalram > 0, "Total RAM should be positive");
+    }
+
+    Ok(())
+}
+
+fn prctl_test() -> anyhow::Result<()> {
+    use std::ffi::CStr;
+
+    unsafe {
+        // Test 1: PR_SET_NAME - set process name
+        let process_name = CString::new("pinchy_test").expect("CString::new failed");
+        let result = libc::prctl(libc::PR_SET_NAME, process_name.as_ptr());
+        if result != 0 {
+            bail!("PR_SET_NAME failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: PR_GET_NAME - get process name back
+        let mut name_buf = [0u8; 16]; // PR_GET_NAME buffer should be 16 bytes
+        let result = libc::prctl(libc::PR_GET_NAME, name_buf.as_mut_ptr());
+        if result != 0 {
+            bail!("PR_GET_NAME failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Verify the name was set correctly
+        let name_cstr = CStr::from_ptr(name_buf.as_ptr() as *const libc::c_char);
+        let name_str = name_cstr.to_str().expect("Invalid UTF-8 in process name");
+        assert!(
+            name_str.starts_with("pinchy_test"),
+            "Process name should start with 'pinchy_test', got: {}",
+            name_str
+        );
+
+        // Test 3: PR_GET_DUMPABLE - get current dumpable state
+        let result = libc::prctl(libc::PR_GET_DUMPABLE);
+        if result < 0 {
+            bail!(
+                "PR_GET_DUMPABLE failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        let original_dumpable = result;
+
+        // Test 4: PR_SET_DUMPABLE - set dumpable state to 0 (not dumpable)
+        let result = libc::prctl(libc::PR_SET_DUMPABLE, 0);
+        if result != 0 {
+            bail!(
+                "PR_SET_DUMPABLE failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 5: PR_GET_DUMPABLE again to verify change
+        let result = libc::prctl(libc::PR_GET_DUMPABLE);
+        if result < 0 {
+            bail!(
+                "PR_GET_DUMPABLE failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+        assert_eq!(result, 0, "Dumpable state should be 0");
+
+        // Test 6: Restore original dumpable state
+        let result = libc::prctl(libc::PR_SET_DUMPABLE, original_dumpable);
+        if result != 0 {
+            bail!(
+                "PR_SET_DUMPABLE restore failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 7: PR_CAPBSET_READ - read capability from bounding set
+        // We'll read CAP_SYS_ADMIN (21) which may or may not be present
+        let _result = libc::prctl(libc::PR_CAPBSET_READ, 21); // CAP_SYS_ADMIN
+                                                              // This can return 0 (not present), 1 (present), or -1 (error)
+                                                              // We'll accept any valid result since we're testing the tracing
+
+        // Test 8: PR_CAPBSET_DROP - try to drop a capability (expected to fail for non-root)
+        let _result = libc::prctl(libc::PR_CAPBSET_DROP, 21); // CAP_SYS_ADMIN
+                                                              // This will likely fail with EPERM for non-root, which is fine for testing
+
+        // Test 9: PR_GET_KEEPCAPS - get keep capabilities flag
+        let result = libc::prctl(libc::PR_GET_KEEPCAPS);
+        if result < 0 {
+            bail!(
+                "PR_GET_KEEPCAPS failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 10: PR_SET_KEEPCAPS - try to set keep capabilities (may fail for non-root)
+        let _result = libc::prctl(libc::PR_SET_KEEPCAPS, 1);
+        // This may fail for non-root users, which is fine for testing
     }
 
     Ok(())

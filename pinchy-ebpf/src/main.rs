@@ -566,6 +566,14 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 let data = unsafe { &mut entry.data.unshare };
                 data.flags = args[0] as i32;
             }
+            syscalls::SYS_timer_delete => {
+                let data = unsafe { &mut entry.data.timer_delete };
+                data.timerid = args[0];
+            }
+            syscalls::SYS_timer_getoverrun => {
+                let data = unsafe { &mut entry.data.timer_getoverrun };
+                data.timerid = args[0];
+            }
             #[cfg(x86_64)]
             syscalls::SYS_pause | syscalls::SYS_getpgrp | syscalls::SYS_inotify_init => {}
             syscalls::SYS_sched_yield

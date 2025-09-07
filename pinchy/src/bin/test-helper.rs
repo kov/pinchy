@@ -760,6 +760,21 @@ fn file_descriptor_test() -> anyhow::Result<()> {
             bail!("dup failed: {}", std::io::Error::last_os_error());
         }
 
+        // Test dup2 - duplicate to a specific file descriptor
+        #[cfg(target_arch = "x86_64")]
+        let dup2_fd = libc::dup2(fd, 10);
+
+        #[cfg(target_arch = "x86_64")]
+        if dup2_fd < 0 {
+            bail!("dup2 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test dup3 - duplicate with flags
+        let dup3_fd = libc::dup3(fd, 11, 0);
+        if dup3_fd < 0 {
+            bail!("dup3 failed: {}", std::io::Error::last_os_error());
+        }
+
         // Test close_range - close a range of file descriptors
         // We'll close from dup_fd to dup_fd (just one fd)
         let result = libc::syscall(libc::SYS_close_range, dup_fd, dup_fd, 0);
@@ -768,6 +783,10 @@ fn file_descriptor_test() -> anyhow::Result<()> {
             libc::close(dup_fd);
         }
 
+        // Clean up the dup2 and dup3 file descriptors
+        #[cfg(target_arch = "x86_64")]
+        libc::close(dup2_fd);
+        libc::close(dup3_fd);
         libc::close(fd);
     }
 

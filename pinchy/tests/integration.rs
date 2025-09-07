@@ -683,11 +683,28 @@ fn file_descriptor_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 
     // Run a workload that exercises file descriptor syscalls
-    let handle = run_workload(&["dup", "close_range"], "file_descriptor_test");
+    #[cfg(target_arch = "x86_64")]
+    let handle = run_workload(
+        &["dup", "dup2", "dup3", "close_range"],
+        "file_descriptor_test",
+    );
 
-    // Expected output - we should see dup and close_range calls
+    #[cfg(target_arch = "aarch64")]
+    let handle = run_workload(&["dup", "dup3", "close_range"], "file_descriptor_test");
+
+    // Expected output - we should see dup, dup2, dup3 and close_range calls
+    #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
         PID dup(oldfd: NUMBER) = NUMBER (fd)
+        PID dup2(oldfd: NUMBER, newfd: 10) = 10 (fd)
+        PID dup3(oldfd: NUMBER, newfd: 11, flags: 0) = 11 (fd)
+        PID close_range(fd: NUMBER, max_fd: NUMBER, flags: 0x0) = 0 (success)
+    "#});
+
+    #[cfg(target_arch = "aarch64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID dup(oldfd: NUMBER) = NUMBER (fd)
+        PID dup3(oldfd: NUMBER, newfd: 11, flags: 0) = 11 (fd)
         PID close_range(fd: NUMBER, max_fd: NUMBER, flags: 0x0) = 0 (success)
     "#});
 

@@ -120,7 +120,7 @@ fn pinchy_reads() {
     let pinchy = PinchyTest::new(None, None);
 
     // Run a workload
-    let handle = run_workload(&["openat", "read", "lseek"], "pinchy_reads");
+    let handle = run_workload(&["openat", "openat2", "read", "lseek"], "pinchy_reads");
 
     // Client's output
     let expected_output = escaped_regex(indoc! {r#"
@@ -129,6 +129,9 @@ fn pinchy_reads() {
            PID read(fd: 3, buf: "are Foundation, Inc.,\n 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n Everyone is permitted to copy and distribute " ... (896 more bytes), count: 1024) = 1024 (bytes)
            PID lseek(fd: 3, offset: 0, whence: 2) = 18092
            PID read(fd: 3, buf: "", count: 1024) = 0 (bytes)
+           PID openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0xc (RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS) }, size: 24) = NUMBER (fd)
+           PID openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0 }, size: 24) = NUMBER (fd)
+           PID openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0x4 (RESOLVE_NO_SYMLINKS) }, size: 24) = -2 (error)
     "#});
 
     let output = handle.join().unwrap();

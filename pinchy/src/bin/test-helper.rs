@@ -149,6 +149,7 @@ fn filesystem_syscalls_test() -> anyhow::Result<()> {
 
 fn pinchy_reads() -> anyhow::Result<()> {
     unsafe {
+        // Test openat first
         let fd = libc::openat(
             libc::AT_FDCWD,
             c"pinchy/tests/GPLv2".as_ptr(),
@@ -170,6 +171,68 @@ fn pinchy_reads() -> anyhow::Result<()> {
         // This read should produce EOF.
         let count = libc::read(fd, buf.as_mut_ptr() as *mut c_void, buf.capacity());
         assert_eq!(count, 0);
+
+        libc::close(fd);
+
+        // Test openat2 with RESOLVE_* flags (successful case)
+        use pinchy_common::kernel_types::OpenHow;
+
+        let how = OpenHow {
+            flags: libc::O_RDONLY as u64,
+            mode: 0,
+            resolve: libc::RESOLVE_BENEATH | libc::RESOLVE_NO_SYMLINKS,
+        };
+
+        let fd2 = libc::syscall(
+            libc::SYS_openat2,
+            libc::AT_FDCWD,
+            c"pinchy/tests/GPLv2".as_ptr(),
+            &how as *const OpenHow,
+            std::mem::size_of::<OpenHow>(),
+        ) as i32;
+
+        if fd2 >= 0 {
+            libc::close(fd2);
+        }
+
+        // Test openat2 with no resolve flags (should succeed)
+        let how_simple = OpenHow {
+            flags: libc::O_RDONLY as u64,
+            mode: 0,
+            resolve: 0, // No resolve flags
+        };
+
+        let fd3 = libc::syscall(
+            libc::SYS_openat2,
+            libc::AT_FDCWD,
+            c"pinchy/tests/GPLv2".as_ptr(),
+            &how_simple as *const OpenHow,
+            std::mem::size_of::<OpenHow>(),
+        ) as i32;
+
+        if fd3 >= 0 {
+            libc::close(fd3);
+        }
+
+        // Test openat2 error case - non-existent file
+        let how_error = OpenHow {
+            flags: libc::O_RDONLY as u64,
+            mode: 0,
+            resolve: libc::RESOLVE_NO_SYMLINKS,
+        };
+
+        let fd_error = libc::syscall(
+            libc::SYS_openat2,
+            libc::AT_FDCWD,
+            c"pinchy/tests/non-existent-file".as_ptr(),
+            &how_error as *const OpenHow,
+            std::mem::size_of::<OpenHow>(),
+        ) as i32;
+
+        // This should fail, but we still trace the error
+        if fd_error >= 0 {
+            libc::close(fd_error);
+        }
     }
     Ok(())
 }

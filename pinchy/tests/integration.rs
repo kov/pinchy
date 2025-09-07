@@ -1393,3 +1393,35 @@ fn timer_test() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn ioctl_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises ioctl syscalls
+    let handle = run_workload(&["ioctl"], "ioctl_test");
+
+    // Expected output - we should see ioctl calls with different requests
+    let expected_output = escaped_regex(indoc! {r#"
+        PID ioctl(fd: 3, request: (0x541b) tty::FIONREAD, arg: ADDR) = 0 (success)
+        PID ioctl(fd: 3, request: (0xdeadbeef) other::unknown, arg: ADDR) = -25 (error)
+        PID ioctl(fd: 3, request: (0x5451) tty::FIOCLEX, arg: 0x0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

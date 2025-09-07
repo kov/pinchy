@@ -83,6 +83,7 @@ fn main() -> anyhow::Result<()> {
             "system_info_test" => system_info_test(),
             "prctl_test" => prctl_test(),
             "mmap_test" => mmap_test(),
+            "ioctl_test" => ioctl_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -2574,6 +2575,46 @@ fn mmap_test() -> anyhow::Result<()> {
         // Test 12: munmap with invalid size (might succeed or fail depending on system)
         let _result = libc::munmap(0x1000 as *mut libc::c_void, 0);
         // Result can vary by system - just generate the syscall for tracing
+    }
+
+    Ok(())
+}
+
+fn ioctl_test() -> anyhow::Result<()> {
+    unsafe {
+        // Open the GPLv2 file for testing ioctl operations
+        let fd = libc::openat(
+            libc::AT_FDCWD,
+            c"pinchy/tests/GPLv2".as_ptr(),
+            libc::O_RDONLY,
+        );
+        if fd < 0 {
+            bail!(
+                "Failed to open test file: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 1: FIONREAD ioctl - get number of bytes available to read
+        let mut bytes_available: libc::c_int = 0;
+        let result = libc::ioctl(fd, libc::FIONREAD, &mut bytes_available as *mut libc::c_int);
+        if result != 0 {
+            bail!("FIONREAD ioctl failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: Invalid ioctl request - should fail
+        let mut dummy_arg: libc::c_int = 0;
+        let _result = libc::ioctl(fd, 0xDEADBEEF, &mut dummy_arg as *mut libc::c_int);
+        // This should fail with EINVAL, but we still trace the syscall
+
+        // Test 3: Another valid ioctl - FIOCLEX (set close-on-exec flag)
+        let result = libc::ioctl(fd, libc::FIOCLEX, 0);
+        if result != 0 {
+            bail!("FIOCLEX ioctl failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Clean up
+        libc::close(fd);
     }
 
     Ok(())

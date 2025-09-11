@@ -154,9 +154,15 @@ fn pinchy_reads() {
 fn filesystem_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 
-    // Run a workload that exercises getdents64, fstat, newfstatat, faccessat
+    // Run a workload that exercises getdents64, fstat, newfstatat, faccessat, faccessat2
     let handle = run_workload(
-        &["getdents64", "fstat", "newfstatat", "faccessat"],
+        &[
+            "getdents64",
+            "fstat",
+            "newfstatat",
+            "faccessat",
+            "faccessat2",
+        ],
         "filesystem_syscalls_test",
     );
 
@@ -166,6 +172,8 @@ fn filesystem_syscalls() {
         PID fstat(fd: NUMBER, struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }) = 0 (success)
         PID newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }, flags: 0) = 0 (success)
         PID faccessat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
+        PID faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
+        PID faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", mode: R_OK, flags: 0) = -2 (error)
     "#});
 
     let output = handle.join().unwrap();

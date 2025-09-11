@@ -112,7 +112,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
-            syscalls::SYS_faccessat => {
+            syscalls::SYS_faccessat | syscalls::SYS_faccessat2 => {
                 let data = data_mut!(entry, faccessat);
                 data.dirfd = args[0] as i32;
                 let pathname_ptr = args[1] as *const u8;

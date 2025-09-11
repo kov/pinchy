@@ -527,6 +527,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fspick,
         syscalls::SYS_statx,
         syscalls::SYS_faccessat,
+        syscalls::SYS_faccessat2,
         syscalls::SYS_fallocate,
         syscalls::SYS_readlinkat,
         syscalls::SYS_getcwd,

@@ -145,6 +145,32 @@ fn filesystem_syscalls_test() -> anyhow::Result<()> {
     };
     assert_eq!(res, 0, "faccessat should succeed for readable file");
 
+    // Call faccessat2 for the same readable file. This syscall is supported on
+    // recent kernels and is handled the same way in the eBPF code; we exercise
+    // the success case and an error case to validate formatting for both.
+    let _ = unsafe {
+        libc::syscall(
+            libc::SYS_faccessat2,
+            libc::AT_FDCWD,
+            gpl_cpath.as_ptr(),
+            libc::R_OK,
+            0,
+        )
+    };
+
+    // Error case: faccessat2 on a non-existent path (should fail)
+    let _ = unsafe {
+        libc::syscall(
+            libc::SYS_faccessat2,
+            libc::AT_FDCWD,
+            c"pinchy/tests/non-existent-file".as_ptr(),
+            libc::R_OK,
+            0,
+        )
+    };
+    // We don't assert a specific result here since failure is acceptable and
+    // we're primarily testing tracing/formatting of the syscall arguments.
+
     Ok(())
 }
 

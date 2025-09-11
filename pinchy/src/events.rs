@@ -1833,16 +1833,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        syscalls::SYS_faccessat => {
+        syscalls::SYS_faccessat | syscalls::SYS_faccessat2 => {
             let data = unsafe { event.data.faccessat };
 
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "mode: {}", format_access_mode(data.mode));
 
-            // FIXME: I believe this argument is not used for faccessat, only
-            // for faccessat2?
-            argf!(sf, "flags: {}", format_at_flags(data.flags));
+            if event.syscall_nr == syscalls::SYS_faccessat2 {
+                argf!(sf, "flags: {}", format_at_flags(data.flags));
+            }
 
             finish!(sf, event.return_value);
         }

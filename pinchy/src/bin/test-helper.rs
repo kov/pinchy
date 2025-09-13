@@ -789,11 +789,11 @@ fn file_descriptor_test() -> anyhow::Result<()> {
 
         // Test dup2 - duplicate to a specific file descriptor
         #[cfg(target_arch = "x86_64")]
-        {
-            let dup2_fd = libc::dup2(fd, 10);
-            if dup2_fd < 0 {
-                bail!("dup2 failed: {}", std::io::Error::last_os_error());
-            }
+        let dup2_fd = libc::dup2(fd, 10);
+
+        #[cfg(target_arch = "x86_64")]
+        if dup2_fd < 0 {
+            bail!("dup2 failed: {}", std::io::Error::last_os_error());
         }
 
         // Test dup3 - duplicate with flags

@@ -83,6 +83,7 @@ fn main() -> anyhow::Result<()> {
             "system_info_test" => system_info_test(),
             "prctl_test" => prctl_test(),
             "mmap_test" => mmap_test(),
+            "ioctl_test" => ioctl_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -143,6 +144,32 @@ fn filesystem_syscalls_test() -> anyhow::Result<()> {
         )
     };
     assert_eq!(res, 0, "faccessat should succeed for readable file");
+
+    // Call faccessat2 for the same readable file. This syscall is supported on
+    // recent kernels and is handled the same way in the eBPF code; we exercise
+    // the success case and an error case to validate formatting for both.
+    let _ = unsafe {
+        libc::syscall(
+            libc::SYS_faccessat2,
+            libc::AT_FDCWD,
+            gpl_cpath.as_ptr(),
+            libc::R_OK,
+            0,
+        )
+    };
+
+    // Error case: faccessat2 on a non-existent path (should fail)
+    let _ = unsafe {
+        libc::syscall(
+            libc::SYS_faccessat2,
+            libc::AT_FDCWD,
+            c"pinchy/tests/non-existent-file".as_ptr(),
+            libc::R_OK,
+            0,
+        )
+    };
+    // We don't assert a specific result here since failure is acceptable and
+    // we're primarily testing tracing/formatting of the syscall arguments.
 
     Ok(())
 }
@@ -760,6 +787,21 @@ fn file_descriptor_test() -> anyhow::Result<()> {
             bail!("dup failed: {}", std::io::Error::last_os_error());
         }
 
+        // Test dup2 - duplicate to a specific file descriptor
+        #[cfg(target_arch = "x86_64")]
+        let dup2_fd = libc::dup2(fd, 10);
+
+        #[cfg(target_arch = "x86_64")]
+        if dup2_fd < 0 {
+            bail!("dup2 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test dup3 - duplicate with flags
+        let dup3_fd = libc::dup3(fd, 11, 0);
+        if dup3_fd < 0 {
+            bail!("dup3 failed: {}", std::io::Error::last_os_error());
+        }
+
         // Test close_range - close a range of file descriptors
         // We'll close from dup_fd to dup_fd (just one fd)
         let result = libc::syscall(libc::SYS_close_range, dup_fd, dup_fd, 0);
@@ -768,6 +810,10 @@ fn file_descriptor_test() -> anyhow::Result<()> {
             libc::close(dup_fd);
         }
 
+        // Clean up the dup2 and dup3 file descriptors
+        #[cfg(target_arch = "x86_64")]
+        libc::close(dup2_fd);
+        libc::close(dup3_fd);
         libc::close(fd);
     }
 
@@ -2555,6 +2601,46 @@ fn mmap_test() -> anyhow::Result<()> {
         // Test 12: munmap with invalid size (might succeed or fail depending on system)
         let _result = libc::munmap(0x1000 as *mut libc::c_void, 0);
         // Result can vary by system - just generate the syscall for tracing
+    }
+
+    Ok(())
+}
+
+fn ioctl_test() -> anyhow::Result<()> {
+    unsafe {
+        // Open the GPLv2 file for testing ioctl operations
+        let fd = libc::openat(
+            libc::AT_FDCWD,
+            c"pinchy/tests/GPLv2".as_ptr(),
+            libc::O_RDONLY,
+        );
+        if fd < 0 {
+            bail!(
+                "Failed to open test file: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 1: FIONREAD ioctl - get number of bytes available to read
+        let mut bytes_available: libc::c_int = 0;
+        let result = libc::ioctl(fd, libc::FIONREAD, &mut bytes_available as *mut libc::c_int);
+        if result != 0 {
+            bail!("FIONREAD ioctl failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: Invalid ioctl request - should fail
+        let mut dummy_arg: libc::c_int = 0;
+        let _result = libc::ioctl(fd, 0xDEADBEEF, &mut dummy_arg as *mut libc::c_int);
+        // This should fail with EINVAL, but we still trace the syscall
+
+        // Test 3: Another valid ioctl - FIOCLEX (set close-on-exec flag)
+        let result = libc::ioctl(fd, libc::FIOCLEX, 0);
+        if result != 0 {
+            bail!("FIOCLEX ioctl failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Clean up
+        libc::close(fd);
     }
 
     Ok(())

@@ -336,6 +336,54 @@ syscall_test!(
 );
 
 syscall_test!(
+    parse_faccessat2_success,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/etc/hosts.conf";
+        pathname[0..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_faccessat2, // ensure parser chooses faccessat2
+            pid: 1000,
+            tid: 1002,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                faccessat: FaccessatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    mode: libc::R_OK | libc::W_OK,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    &"1002 faccessat2(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0 (success)\n".to_string()
+);
+
+syscall_test!(
+    parse_faccessat2_with_flags_error,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/etc/hosts";
+        pathname[0..path.len()].copy_from_slice(path);
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_faccessat2,
+            pid: 1000,
+            tid: 1003,
+            return_value: -1,
+            data: pinchy_common::SyscallEventData {
+                faccessat: FaccessatData {
+                    dirfd: 3,
+                    pathname,
+                    mode: libc::F_OK,
+                    flags: libc::AT_SYMLINK_NOFOLLOW,
+                },
+            },
+        }
+    },
+    "1003 faccessat2(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
+);
+
+syscall_test!(
     parse_newfstatat_success,
     {
         use pinchy_common::{kernel_types::Stat, NewfstatatData};

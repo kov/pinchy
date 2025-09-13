@@ -154,9 +154,15 @@ fn pinchy_reads() {
 fn filesystem_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 
-    // Run a workload that exercises getdents64, fstat, newfstatat, faccessat
+    // Run a workload that exercises getdents64, fstat, newfstatat, faccessat, faccessat2
     let handle = run_workload(
-        &["getdents64", "fstat", "newfstatat", "faccessat"],
+        &[
+            "getdents64",
+            "fstat",
+            "newfstatat",
+            "faccessat",
+            "faccessat2",
+        ],
         "filesystem_syscalls_test",
     );
 
@@ -166,6 +172,8 @@ fn filesystem_syscalls() {
         PID fstat(fd: NUMBER, struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }) = 0 (success)
         PID newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }, flags: 0) = 0 (success)
         PID faccessat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
+        PID faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
+        PID faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", mode: R_OK, flags: 0) = -2 (error)
     "#});
 
     let output = handle.join().unwrap();
@@ -683,11 +691,28 @@ fn file_descriptor_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 
     // Run a workload that exercises file descriptor syscalls
-    let handle = run_workload(&["dup", "close_range"], "file_descriptor_test");
+    #[cfg(target_arch = "x86_64")]
+    let handle = run_workload(
+        &["dup", "dup2", "dup3", "close_range"],
+        "file_descriptor_test",
+    );
 
-    // Expected output - we should see dup and close_range calls
+    #[cfg(target_arch = "aarch64")]
+    let handle = run_workload(&["dup", "dup3", "close_range"], "file_descriptor_test");
+
+    // Expected output - we should see dup, dup2, dup3 and close_range calls
+    #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
         PID dup(oldfd: NUMBER) = NUMBER (fd)
+        PID dup2(oldfd: NUMBER, newfd: 10) = 10 (fd)
+        PID dup3(oldfd: NUMBER, newfd: 11, flags: 0) = 11 (fd)
+        PID close_range(fd: NUMBER, max_fd: NUMBER, flags: 0x0) = 0 (success)
+    "#});
+
+    #[cfg(target_arch = "aarch64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID dup(oldfd: NUMBER) = NUMBER (fd)
+        PID dup3(oldfd: NUMBER, newfd: 11, flags: 0) = 11 (fd)
         PID close_range(fd: NUMBER, max_fd: NUMBER, flags: 0x0) = 0 (success)
     "#});
 
@@ -1371,6 +1396,38 @@ fn timer_test() {
         .success()
         .stdout(predicate::str::is_match(&expected_output).unwrap());
 
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn ioctl_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises ioctl syscalls
+    let handle = run_workload(&["ioctl"], "ioctl_test");
+
+    // Expected output - we should see ioctl calls with different requests
+    let expected_output = escaped_regex(indoc! {r#"
+        PID ioctl(fd: 3, request: (0x541b) tty::FIONREAD, arg: ADDR) = 0 (success)
+        PID ioctl(fd: 3, request: (0xdeadbeef) other::unknown, arg: ADDR) = -25 (error)
+        PID ioctl(fd: 3, request: (0x5451) tty::FIOCLEX, arg: 0x0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
     Assert::new(output)
         .success()

@@ -338,7 +338,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_chown => {
                 let data = data_mut!(entry, chown);
                 data.uid = args[1] as u32;
@@ -348,7 +348,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_lchown => {
                 let data = data_mut!(entry, chown);
                 data.uid = args[1] as u32;
@@ -366,7 +366,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_rename => {
                 let data = data_mut!(entry, rename);
                 let oldpath_ptr = args[0] as *const u8;
@@ -420,7 +420,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_rmdir => {
                 let data = data_mut!(entry, rmdir);
                 let pathname_ptr = args[0] as *const u8;
@@ -428,7 +428,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_unlink => {
                 let data = data_mut!(entry, unlink);
                 let pathname_ptr = args[0] as *const u8;
@@ -452,7 +452,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_symlink => {
                 let data = data_mut!(entry, symlink);
                 let target_ptr = args[0] as *const u8;
@@ -494,7 +494,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_mknod => {
                 let data = data_mut!(entry, mknod);
                 data.mode = args[1] as u32;
@@ -665,7 +665,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.offset = args[2] as i64;
                 data.size = args[3] as i64;
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_link => {
                 let data = data_mut!(entry, link);
                 let oldpath_ptr = args[0] as *const u8;

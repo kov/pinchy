@@ -190,6 +190,33 @@ fn filesystem_syscalls() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn statfs_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises statfs and fstatfs
+    let handle = run_workload(&["statfs", "fstatfs"], "statfs_test");
+
+    // Expected output - we test both success and error cases
+    let expected_output = escaped_regex(indoc! {r#"
+        PID statfs(pathname: "pinchy/tests/GPLv2", buf: { type: ALPHANUM (0xHEXNUMBER), block_size: NUMBER, blocks: NUMBER, blocks_free: NUMBER, blocks_available: NUMBER, files: NUMBER, files_free: NUMBER, fsid: [SIGNEDNUMBER, SIGNEDNUMBER], name_max: NUMBER, fragment_size: NUMBER, mount_flags: 0xHEXNUMBER (ALPHANUM) }) = 0 (success)
+        PID statfs(pathname: "/non/existent/path", buf: <unavailable>) = -2 (error)
+        PID fstatfs(fd: NUMBER, buf: { type: ALPHANUM (0xHEXNUMBER), block_size: NUMBER, blocks: NUMBER, blocks_free: NUMBER, blocks_available: NUMBER, files: NUMBER, files_free: NUMBER, fsid: [SIGNEDNUMBER, SIGNEDNUMBER], name_max: NUMBER, fragment_size: NUMBER, mount_flags: 0xHEXNUMBER (ALPHANUM) }) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn rt_sig() {
     let pinchy = PinchyTest::new(None, None);
 
@@ -409,9 +436,12 @@ fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
 }
 
 fn escaped_regex(expected_output: &str) -> String {
+    // Note that replacement order may matter. For instance, NUMBER will mess up HEXNUMBER
     regex::escape(expected_output)
         .replace("PID", r"\d+")
         .replace("ADDR", "0x[0-9a-f]+")
+        .replace("HEXNUMBER", "[0-9a-f]+")
+        .replace("SIGNEDNUMBER", "-?[0-9]+")
         .replace("NUMBER", "[0-9]+")
         .replace("MODE", "[rwx-]+")
         .replace("ALPHANUM", "[^ \"]+")

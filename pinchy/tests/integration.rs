@@ -1433,3 +1433,58 @@ fn ioctl_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn filesystem_links_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises filesystem link operations
+    #[cfg(target_arch = "x86_64")]
+    let handle = run_workload(
+        &["symlinkat", "readlinkat", "linkat", "link"],
+        "filesystem_links_test",
+    );
+
+    #[cfg(target_arch = "aarch64")]
+    let handle = run_workload(
+        &["symlinkat", "readlinkat", "linkat"],
+        "filesystem_links_test",
+    );
+
+    // Expected output - we should see all filesystem link operations
+    #[cfg(target_arch = "x86_64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
+        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
+        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
+        PID link(oldpath: "/tmp/filesystem_links_target", newpath: "/tmp/filesystem_links_link2") = 0 (success)
+        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
+        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"MAYBETRUNCATED, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"MAYBETRUNCATED, flags: 0) = -2 (error)
+    "#});
+
+    #[cfg(target_arch = "aarch64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        PID symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
+        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
+        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
+        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
+        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"MAYBETRUNCATED, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"MAYBETRUNCATED, flags: 0) = -2 (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

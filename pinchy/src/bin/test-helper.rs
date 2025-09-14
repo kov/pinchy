@@ -84,6 +84,7 @@ fn main() -> anyhow::Result<()> {
             "prctl_test" => prctl_test(),
             "mmap_test" => mmap_test(),
             "ioctl_test" => ioctl_test(),
+            "filesystem_links_test" => filesystem_links_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -2641,6 +2642,131 @@ fn ioctl_test() -> anyhow::Result<()> {
 
         // Clean up
         libc::close(fd);
+    }
+
+    Ok(())
+}
+
+fn filesystem_links_test() -> anyhow::Result<()> {
+    use std::ffi::CString;
+
+    unsafe {
+        // Create a temporary target file for our link operations
+        let target_fd = libc::openat(
+            libc::AT_FDCWD,
+            c"/tmp/filesystem_links_target".as_ptr(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+            0o644,
+        );
+        if target_fd < 0 {
+            bail!(
+                "Failed to create target file: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Write some content to the target file
+        let content = b"This is a test file for link operations";
+        let bytes_written = libc::write(
+            target_fd,
+            content.as_ptr() as *const libc::c_void,
+            content.len(),
+        );
+        if bytes_written != content.len() as isize {
+            bail!("Failed to write content to target file");
+        }
+        libc::close(target_fd);
+
+        // Test 1: symlinkat - Create a symbolic link
+        let target_path = CString::new("/tmp/filesystem_links_target")?;
+        let symlink_path = CString::new("/tmp/filesystem_links_symlink")?;
+
+        let result = libc::syscall(
+            libc::SYS_symlinkat,
+            target_path.as_ptr(),
+            libc::AT_FDCWD,
+            symlink_path.as_ptr(),
+        );
+        if result != 0 {
+            bail!("symlinkat failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: readlinkat - Read the symbolic link back
+        let mut read_buffer = [0u8; 256];
+        let bytes_read = libc::syscall(
+            libc::SYS_readlinkat,
+            libc::AT_FDCWD,
+            symlink_path.as_ptr(),
+            read_buffer.as_mut_ptr(),
+            read_buffer.len(),
+        );
+        if bytes_read < 0 {
+            bail!("readlinkat failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Verify we got the expected target path back
+        let read_target = std::str::from_utf8(&read_buffer[..bytes_read as usize])
+            .expect("Invalid UTF-8 in symlink target");
+        assert_eq!(read_target, "/tmp/filesystem_links_target");
+
+        // Test 3: linkat - Create a hard link
+        let hardlink_path = CString::new("/tmp/filesystem_links_hardlink")?;
+        let result = libc::syscall(
+            libc::SYS_linkat,
+            libc::AT_FDCWD,
+            target_path.as_ptr(),
+            libc::AT_FDCWD,
+            hardlink_path.as_ptr(),
+            0, // flags
+        );
+        if result != 0 {
+            bail!("linkat failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 4: link syscall (x86_64 only) - Create another hard link
+        #[cfg(target_arch = "x86_64")]
+        {
+            let link2_path = CString::new("/tmp/filesystem_links_link2")?;
+            let result = libc::syscall(libc::SYS_link, target_path.as_ptr(), link2_path.as_ptr());
+            if result != 0 {
+                bail!("link failed: {}", std::io::Error::last_os_error());
+            }
+        }
+
+        // Test 5: Error case - readlinkat on non-existent symlink
+        let nonexistent_path = CString::new("/tmp/filesystem_links_nonexistent")?;
+        let mut error_buffer = [0u8; 256];
+        let _ = libc::syscall(
+            libc::SYS_readlinkat,
+            libc::AT_FDCWD,
+            nonexistent_path.as_ptr(),
+            error_buffer.as_mut_ptr(),
+            error_buffer.len(),
+        );
+        // This should fail, but we still trace it
+
+        // Test 6: Error case - linkat with non-existent source
+        let result = libc::syscall(
+            libc::SYS_linkat,
+            libc::AT_FDCWD,
+            nonexistent_path.as_ptr(),
+            libc::AT_FDCWD,
+            c"/tmp/filesystem_links_error_link".as_ptr(),
+            0,
+        );
+        // This should fail, but we still trace it
+        assert_eq!(result, -1, "linkat with non-existent source should fail");
+
+        // Clean up all created files
+        libc::unlink(target_path.as_ptr());
+        libc::unlink(symlink_path.as_ptr());
+        libc::unlink(hardlink_path.as_ptr());
+
+        #[cfg(target_arch = "x86_64")]
+        {
+            let link2_path = CString::new("/tmp/filesystem_links_link2")?;
+            libc::unlink(link2_path.as_ptr());
+        }
     }
 
     Ok(())

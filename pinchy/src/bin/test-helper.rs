@@ -85,6 +85,7 @@ fn main() -> anyhow::Result<()> {
             "mmap_test" => mmap_test(),
             "ioctl_test" => ioctl_test(),
             "filesystem_links_test" => filesystem_links_test(),
+            "statfs_test" => statfs_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -171,6 +172,58 @@ fn filesystem_syscalls_test() -> anyhow::Result<()> {
     };
     // We don't assert a specific result here since failure is acceptable and
     // we're primarily testing tracing/formatting of the syscall arguments.
+
+    Ok(())
+}
+
+fn statfs_test() -> anyhow::Result<()> {
+    use std::{fs::File, os::unix::io::AsRawFd, path::Path};
+
+    // Test both statfs (with path) and fstatfs (with file descriptor)
+    let gpl_path = Path::new("pinchy/tests/GPLv2");
+    let gpl_cpath =
+        CString::new(gpl_path.as_os_str().as_encoded_bytes()).expect("Converting path to CString");
+
+    // --- statfs: Get filesystem stats for a path ---
+    let mut statfs_buf: libc::statfs = unsafe { std::mem::zeroed() };
+    let statfs_result = unsafe {
+        libc::syscall(
+            libc::SYS_statfs,
+            gpl_cpath.as_ptr(),
+            &mut statfs_buf as *mut _,
+        )
+    };
+    // statfs should succeed for existing path
+    assert_eq!(statfs_result, 0, "statfs should succeed");
+
+    // --- statfs error case: non-existent path ---
+    let mut statfs_buf_err: libc::statfs = unsafe { std::mem::zeroed() };
+    let _ = unsafe {
+        libc::syscall(
+            libc::SYS_statfs,
+            c"/non/existent/path".as_ptr(),
+            &mut statfs_buf_err as *mut _,
+        )
+    };
+    // We expect this to fail but don't assert - we're testing tracing
+
+    // --- fstatfs: Get filesystem stats for a file descriptor ---
+    let file = File::open(gpl_path)?;
+    let fd = file.as_raw_fd();
+    let mut fstatfs_buf: libc::statfs = unsafe { std::mem::zeroed() };
+    let fstatfs_result =
+        unsafe { libc::syscall(libc::SYS_fstatfs, fd, &mut fstatfs_buf as *mut _) };
+    assert_eq!(fstatfs_result, 0, "fstatfs should succeed");
+
+    // Verify that both calls give similar filesystem information
+    assert_eq!(
+        statfs_buf.f_type, fstatfs_buf.f_type,
+        "filesystem types should match"
+    );
+    assert_eq!(
+        statfs_buf.f_bsize, fstatfs_buf.f_bsize,
+        "block sizes should match"
+    );
 
     Ok(())
 }

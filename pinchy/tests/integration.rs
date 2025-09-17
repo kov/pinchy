@@ -52,22 +52,22 @@ fn epoll_syscalls() {
 
     #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID epoll_create1(flags: EPOLL_CLOEXEC) = NUMBER (fd)
-        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_ADD, fd: NUMBER, event: epoll_event { events: POLLIN, data: ADDR }) = 0 (success)
-        PID epoll_pwait(epfd: NUMBER, events: [ epoll_event { events: POLLIN, data: ADDR } ], max_events: 8, timeout: 0, sigmask) = 1
-        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_DEL, fd: NUMBER, event: epoll_event { events: , data: 0x0 }) = 0 (success)
-        PID epoll_pwait2(epfd: NUMBER, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
-        PID epoll_wait(epfd: NUMBER, events: [  ], max_events: 8, timeout: 0) = 0 (success)
+        @PID@ epoll_create1(flags: EPOLL_CLOEXEC) = @NUMBER@ (fd)
+        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_ADD, fd: @NUMBER@, event: epoll_event { events: POLLIN, data: @ADDR@ }) = 0 (success)
+        @PID@ epoll_pwait(epfd: @NUMBER@, events: [ epoll_event { events: POLLIN, data: @ADDR@ } ], max_events: 8, timeout: 0, sigmask) = 1
+        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_DEL, fd: @NUMBER@, event: epoll_event { events: , data: 0x0 }) = 0 (success)
+        @PID@ epoll_pwait2(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
+        @PID@ epoll_wait(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: 0) = 0 (success)
     "#});
 
     #[cfg(target_arch = "aarch64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID epoll_create1(flags: EPOLL_CLOEXEC) = NUMBER (fd)
-        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_ADD, fd: NUMBER, event: epoll_event { events: POLLIN, data: ADDR }) = 0 (success)
-        PID epoll_pwait(epfd: NUMBER, events: [ epoll_event { events: POLLIN, data: ADDR } ], max_events: 8, timeout: 0, sigmask) = 1
-        PID epoll_ctl(epfd: NUMBER, op: EPOLL_CTL_DEL, fd: NUMBER, event: epoll_event { events: , data: 0x0 }) = 0 (success)
-        PID epoll_pwait2(epfd: NUMBER, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
-        PID epoll_pwait(epfd: NUMBER, events: [  ], max_events: 8, timeout: 0, sigmask) = 0 (success)
+        @PID@ epoll_create1(flags: EPOLL_CLOEXEC) = @NUMBER@ (fd)
+        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_ADD, fd: @NUMBER@, event: epoll_event { events: POLLIN, data: @ADDR@ }) = 0 (success)
+        @PID@ epoll_pwait(epfd: @NUMBER@, events: [ epoll_event { events: POLLIN, data: @ADDR@ } ], max_events: 8, timeout: 0, sigmask) = 1
+        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_DEL, fd: @NUMBER@, event: epoll_event { events: , data: 0x0 }) = 0 (success)
+        @PID@ epoll_pwait2(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
+        @PID@ epoll_pwait(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: 0, sigmask) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -124,14 +124,14 @@ fn pinchy_reads() {
 
     // Client's output
     let expected_output = escaped_regex(indoc! {r#"
-           PID openat(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", flags: 0x0 (O_RDONLY), mode: 0) = 3 (fd)
-           PID read(fd: 3, buf: "                    GNU GENERAL PUBLIC LICENSE\n                       Version 2, June 1991\n\n Copyright (C) 1989, 1991 Free Softw", count: 128) = 128 (bytes)
-           PID read(fd: 3, buf: "are Foundation, Inc.,\n 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n Everyone is permitted to copy and distribute " ... (896 more bytes), count: 1024) = 1024 (bytes)
-           PID lseek(fd: 3, offset: 0, whence: 2) = 18092
-           PID read(fd: 3, buf: "", count: 1024) = 0 (bytes)
-           PID openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0xc (RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS) }, size: 24) = NUMBER (fd)
-           PID openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0 }, size: 24) = NUMBER (fd)
-           PID openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0x4 (RESOLVE_NO_SYMLINKS) }, size: 24) = -2 (error)
+        @PID@ openat(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", flags: 0x0 (O_RDONLY), mode: 0) = 3 (fd)
+        @PID@ read(fd: 3, buf: "                    GNU GENERAL PUBLIC LICENSE\n                       Version 2, June 1991\n\n Copyright (C) 1989, 1991 Free Softw", count: 128) = 128 (bytes)
+        @PID@ read(fd: 3, buf: "are Foundation, Inc.,\n 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA\n Everyone is permitted to copy and distribute " ... (896 more bytes), count: 1024) = 1024 (bytes)
+        @PID@ lseek(fd: 3, offset: 0, whence: 2) = 18092
+        @PID@ read(fd: 3, buf: "", count: 1024) = 0 (bytes)
+        @PID@ openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0xc (RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS) }, size: 24) = @NUMBER@ (fd)
+        @PID@ openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0 }, size: 24) = @NUMBER@ (fd)
+        @PID@ openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0x4 (RESOLVE_NO_SYMLINKS) }, size: 24) = -2 (error)
     "#});
 
     let output = handle.join().unwrap();
@@ -168,12 +168,12 @@ fn filesystem_syscalls() {
 
     // Client's output - we expect the syscalls from the workload
     let expected_output = escaped_regex(indoc! {r#"
-        PID getdents64(fd: NUMBER, count: NUMBER, entries: [ dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED }, dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED }, dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED }, dirent { ino: NUMBER, off: NUMBER, reclen: NUMBER, type: NUMBER, name: "ALPHANUM"MAYBETRUNCATED } ]) = 184 (bytes)
-        PID fstat(fd: NUMBER, struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }) = 0 (success)
-        PID newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0oNUMBER (MODE), ino: NUMBER, dev: NUMBER, nlink: NUMBER, uid: NUMBER, gid: NUMBER, size: 18092, blksize: NUMBER, blocks: NUMBER, atime: NUMBER, mtime: NUMBER, ctime: NUMBER }, flags: 0) = 0 (success)
-        PID faccessat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK) = 0 (success)
-        PID faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
-        PID faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", mode: R_OK, flags: 0) = -2 (error)
+        @PID@ getdents64(fd: @NUMBER@, count: @NUMBER@, entries: [ dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ } ]) = 184 (bytes)
+        @PID@ fstat(fd: @NUMBER@, struct stat: { mode: 0o@NUMBER@ (@MODE@), ino: @NUMBER@, dev: @NUMBER@, nlink: @NUMBER@, uid: @NUMBER@, gid: @NUMBER@, size: 18092, blksize: @NUMBER@, blocks: @NUMBER@, atime: @NUMBER@, mtime: @NUMBER@, ctime: @NUMBER@ }) = 0 (success)
+        @PID@ newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0o@NUMBER@ (@MODE@), ino: @NUMBER@, dev: @NUMBER@, nlink: @NUMBER@, uid: @NUMBER@, gid: @NUMBER@, size: 18092, blksize: @NUMBER@, blocks: @NUMBER@, atime: @NUMBER@, mtime: @NUMBER@, ctime: @NUMBER@ }, flags: 0) = 0 (success)
+        @PID@ faccessat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK) = 0 (success)
+        @PID@ faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
+        @PID@ faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", mode: R_OK, flags: 0) = -2 (error)
     "#});
 
     let output = handle.join().unwrap();
@@ -198,9 +198,9 @@ fn statfs_syscalls() {
 
     // Expected output - we test both success and error cases
     let expected_output = escaped_regex(indoc! {r#"
-        PID statfs(pathname: "pinchy/tests/GPLv2", buf: { type: ALPHANUM (0xHEXNUMBER), block_size: NUMBER, blocks: NUMBER, blocks_free: NUMBER, blocks_available: NUMBER, files: NUMBER, files_free: NUMBER, fsid: [SIGNEDNUMBER, SIGNEDNUMBER], name_max: NUMBER, fragment_size: NUMBER, mount_flags: 0xHEXNUMBER (ALPHANUM) }) = 0 (success)
-        PID statfs(pathname: "/non/existent/path", buf: <unavailable>) = -2 (error)
-        PID fstatfs(fd: NUMBER, buf: { type: ALPHANUM (0xHEXNUMBER), block_size: NUMBER, blocks: NUMBER, blocks_free: NUMBER, blocks_available: NUMBER, files: NUMBER, files_free: NUMBER, fsid: [SIGNEDNUMBER, SIGNEDNUMBER], name_max: NUMBER, fragment_size: NUMBER, mount_flags: 0xHEXNUMBER (ALPHANUM) }) = 0 (success)
+        @PID@ statfs(pathname: "pinchy/tests/GPLv2", buf: { type: @ALPHANUM@ (0x@HEXNUMBER@), block_size: @NUMBER@, blocks: @NUMBER@, blocks_free: @NUMBER@, blocks_available: @NUMBER@, files: @NUMBER@, files_free: @NUMBER@, fsid: [@SIGNEDNUMBER@, @SIGNEDNUMBER@], name_max: @NUMBER@, fragment_size: @NUMBER@, mount_flags: 0x@HEXNUMBER@ (@ALPHANUM@) }) = 0 (success)
+        @PID@ statfs(pathname: "/non/existent/path", buf: <unavailable>) = -2 (error)
+        @PID@ fstatfs(fd: @NUMBER@, buf: { type: @ALPHANUM@ (0x@HEXNUMBER@), block_size: @NUMBER@, blocks: @NUMBER@, blocks_free: @NUMBER@, blocks_available: @NUMBER@, files: @NUMBER@, files_free: @NUMBER@, fsid: [@SIGNEDNUMBER@, @SIGNEDNUMBER@], name_max: @NUMBER@, fragment_size: @NUMBER@, mount_flags: 0x@HEXNUMBER@ (@ALPHANUM@) }) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -225,10 +225,10 @@ fn rt_sig() {
 
     // Client's output - we expect pretty-printed signal sets
     let expected_output = escaped_regex(indoc! {r#"
-        PID rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1], oldset: [], sigsetsize: 8) = 0 (success)
-        PID rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: [SIGUSR1], sigsetsize: 8) = 0 (success)
-        PID rt_sigprocmask(how: SIG_UNBLOCK, set: [SIGUSR1], oldset: NULL, sigsetsize: 8) = 0 (success)
-        PID rt_sigprocmask(how: SIG_SETMASK, set: [], oldset: NULL, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1], oldset: [], sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: [SIGUSR1], sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_UNBLOCK, set: [SIGUSR1], oldset: NULL, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_SETMASK, set: [], oldset: NULL, sigsetsize: 8) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -254,9 +254,9 @@ fn rt_sigaction_realtime() {
 
     // Client's output - we expect rt_sigaction calls with SIGRT1
     let expected_output = escaped_regex(indoc! {r#"
-        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0 (success)
-        PID rt_sigaction(signum: SIGRT1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0 (success)
-        PID rt_sigaction(signum: SIGRT1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGRT1, act: @ADDR@, oldact: @ADDR@, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGRT1, act: 0x0, oldact: @ADDR@, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGRT1, act: @ADDR@, oldact: 0x0, sigsetsize: 8) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -282,9 +282,9 @@ fn rt_sigaction_standard() {
 
     // Client's output - we expect rt_sigaction calls with SIGUSR1
     let expected_output = escaped_regex(indoc! {r#"
-        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: ADDR, sigsetsize: 8) = 0 (success)
-        PID rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: ADDR, sigsetsize: 8) = 0 (success)
-        PID rt_sigaction(signum: SIGUSR1, act: ADDR, oldact: 0x0, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGUSR1, act: @ADDR@, oldact: @ADDR@, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: @ADDR@, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGUSR1, act: @ADDR@, oldact: 0x0, sigsetsize: 8) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -310,11 +310,11 @@ fn fcntl_syscalls() {
 
     // Client's output - we expect several fcntl calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID fcntl(fd: 3, cmd: F_GETFL, arg: 0x0) = NUMBER
-        PID fcntl(fd: 3, cmd: F_GETFD, arg: 0x0) = 0 (success)
-        PID fcntl(fd: 3, cmd: F_SETFD, arg: 0x1) = 0 (success)
-        PID fcntl(fd: 3, cmd: F_DUPFD, arg: 0xa) = 10
-        PID fcntl(fd: 3, cmd: F_DUPFD_CLOEXEC, arg: 0x14) = 20
+        @PID@ fcntl(fd: 3, cmd: F_GETFL, arg: 0x0) = @NUMBER@
+        @PID@ fcntl(fd: 3, cmd: F_GETFD, arg: 0x0) = 0 (success)
+        @PID@ fcntl(fd: 3, cmd: F_SETFD, arg: 0x1) = 0 (success)
+        @PID@ fcntl(fd: 3, cmd: F_DUPFD, arg: 0xa) = 10
+        @PID@ fcntl(fd: 3, cmd: F_DUPFD_CLOEXEC, arg: 0x14) = 20
     "#});
 
     let output = handle.join().unwrap();
@@ -343,13 +343,13 @@ fn pipe_operations_syscalls() {
 
     // Expected output - we should see all pipe operations
     let expected_output = escaped_regex(indoc! {r#"
-        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0) = 0 (success)
-        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0x800 (O_NONBLOCK)) = 0 (success)
-        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0x80000 (O_CLOEXEC)) = 0 (success)
-        PID pipe2(pipefd: [ NUMBER, NUMBER ], flags: 0x80800 (O_CLOEXEC|O_NONBLOCK)) = 0 (success)
-        PID splice(fd_in: NUMBER, off_in: 0x0, fd_out: NUMBER, off_out: 0x0, len: 20, flags: 0x1 (SPLICE_F_MOVE)) = 20 (bytes)
-        PID tee(fd_in: NUMBER, fd_out: NUMBER, len: 20, flags: 0x2 (SPLICE_F_NONBLOCK)) = 20 (bytes)
-        PID vmsplice(fd: NUMBER, iov: [ iovec { base: ADDR, len: 18, buf: "vmsplice test data" } ], iovcnt: 1, flags: 0x8 (SPLICE_F_GIFT)) = 18 (bytes)
+        @PID@ pipe2(pipefd: [ @NUMBER@, @NUMBER@ ], flags: 0) = 0 (success)
+        @PID@ pipe2(pipefd: [ @NUMBER@, @NUMBER@ ], flags: 0x800 (O_NONBLOCK)) = 0 (success)
+        @PID@ pipe2(pipefd: [ @NUMBER@, @NUMBER@ ], flags: 0x80000 (O_CLOEXEC)) = 0 (success)
+        @PID@ pipe2(pipefd: [ @NUMBER@, @NUMBER@ ], flags: 0x80800 (O_CLOEXEC|O_NONBLOCK)) = 0 (success)
+        @PID@ splice(fd_in: @NUMBER@, off_in: 0x0, fd_out: @NUMBER@, off_out: 0x0, len: 20, flags: 0x1 (SPLICE_F_MOVE)) = 20 (bytes)
+        @PID@ tee(fd_in: @NUMBER@, fd_out: @NUMBER@, len: 20, flags: 0x2 (SPLICE_F_NONBLOCK)) = 20 (bytes)
+        @PID@ vmsplice(fd: @NUMBER@, iov: [ iovec { base: @ADDR@, len: 18, buf: "vmsplice test data" } ], iovcnt: 1, flags: 0x8 (SPLICE_F_GIFT)) = 18 (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -385,18 +385,18 @@ fn io_multiplexing_syscalls() {
     // Expected output - architecture-specific formatting
     #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID poll(fds: [ pollfd { fd: NUMBER, events: NUMBER, revents: NUMBER }, pollfd { fd: NUMBER, events: NUMBER, revents: NUMBER }, pollfd { fd: NUMBER, events: NUMBER, revents: NUMBER } ], nfds: 3, timeout: 0) = 0 (timeout)
-        PID select(nfds: NUMBER, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout:, tv_sec: 0, tv_usec: 0) = 0 (timeout)
-        PID poll(fds: [ pollfd { fd: NUMBER, events: POLLIN, revents: 0 } ], nfds: 1, timeout: 0) = 0 (timeout)
-        PID select(nfds: NUMBER, readfds: [ NUMBER ], writefds: NULL, exceptfds: NULL, timeout:, tv_sec: 0, tv_usec: NUMBER) = 1 (ready)
-        PID poll(fds: [ pollfd { fd: NUMBER, events: POLLIN, revents: POLLIN } ], nfds: 1, timeout: 1000) = 1 (ready)
-        PID ppoll(fds: [ { NUMBER, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: NUMBER }, sigmask) = 1 (ready) [NUMBER = POLLIN]
+        @PID@ poll(fds: [ pollfd { fd: @NUMBER@, events: @NUMBER@, revents: @NUMBER@ }, pollfd { fd: @NUMBER@, events: @NUMBER@, revents: @NUMBER@ }, pollfd { fd: @NUMBER@, events: @NUMBER@, revents: @NUMBER@ } ], nfds: 3, timeout: 0) = 0 (timeout)
+        @PID@ select(nfds: @NUMBER@, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout:, tv_sec: 0, tv_usec: 0) = 0 (timeout)
+        @PID@ poll(fds: [ pollfd { fd: @NUMBER@, events: POLLIN, revents: 0 } ], nfds: 1, timeout: 0) = 0 (timeout)
+        @PID@ select(nfds: @NUMBER@, readfds: [ @NUMBER@ ], writefds: NULL, exceptfds: NULL, timeout:, tv_sec: 0, tv_usec: @NUMBER@) = 1 (ready)
+        @PID@ poll(fds: [ pollfd { fd: @NUMBER@, events: POLLIN, revents: POLLIN } ], nfds: 1, timeout: 1000) = 1 (ready)
+        @PID@ ppoll(fds: [ { @NUMBER@, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: @NUMBER@ }, sigmask) = 1 (ready) [@NUMBER@ = POLLIN]
     "#});
 
     #[cfg(target_arch = "aarch64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID ppoll(fds: [ { 0,  }, { 1,  }, { 2,  } ], nfds: 3, timeout: { secs: 0, nanos: 0 }, sigmask) = 0 (timeout)
-        PID ppoll(fds: [ { NUMBER, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: NUMBER }, sigmask) = 1 (ready) [NUMBER = POLLIN]
+        @PID@ ppoll(fds: [ { 0,  }, { 1,  }, { 2,  } ], nfds: 3, timeout: { secs: 0, nanos: 0 }, sigmask) = 0 (timeout)
+        @PID@ ppoll(fds: [ { @NUMBER@, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: @NUMBER@ }, sigmask) = 1 (ready) [@NUMBER@ = POLLIN]
     "#});
 
     let output = handle.join().unwrap();
@@ -436,18 +436,19 @@ fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
 }
 
 fn escaped_regex(expected_output: &str) -> String {
-    // Note that replacement order may matter. For instance, NUMBER will mess up HEXNUMBER
-    regex::escape(expected_output)
-        .replace("PID", r"\d+")
-        .replace("ADDR", "0x[0-9a-f]+")
-        .replace("HEXNUMBER", "[0-9a-f]+")
-        .replace("SIGNEDNUMBER", "-?[0-9]+")
-        .replace("NUMBER", "[0-9]+")
-        .replace("MODE", "[rwx-]+")
-        .replace("ALPHANUM", "[^ \"]+")
-        .replace("QUOTEDSTRING", "\"[^\"]*\"")
-        .replace("MAYBEITEM_", "([^ \"]+ )?")
-        .replace("MAYBETRUNCATED", r"( ... \(truncated\))?")
+    // Use unique markers to avoid accidental partial replacements
+    let mut escaped = regex::escape(expected_output);
+    escaped = escaped.replace("@PID@", r"\d+");
+    escaped = escaped.replace("@ADDR@", "0x[0-9a-f]+");
+    escaped = escaped.replace("@HEXNUMBER@", "[0-9a-f]+");
+    escaped = escaped.replace("@SIGNEDNUMBER@", "-?[0-9]+");
+    escaped = escaped.replace("@NUMBER@", "[0-9]+");
+    escaped = escaped.replace("@MODE@", "[rwx-]+");
+    escaped = escaped.replace("@ALPHANUM@", "[^ \"]+");
+    escaped = escaped.replace("@QUOTEDSTRING@", "\"[^\"]*\"");
+    escaped = escaped.replace("@MAYBEITEM_@", "([^ \"]+ )?");
+    escaped = escaped.replace("@MAYBETRUNCATED@", r"( ... \(truncated\))?");
+    escaped
 }
 
 #[test]
@@ -459,7 +460,7 @@ fn fchdir_syscall() {
     let handle = run_workload(&["fchdir"], "fchdir_test");
 
     let expected_output = escaped_regex(indoc! {r#"
-        PID fchdir(fd: 3) = 0 (success)
+        @PID@ fchdir(fd: 3) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -485,12 +486,12 @@ fn filesystem_sync_syscalls() {
     );
 
     let expected_output = escaped_regex(indoc! {r#"
-        PID fsync(fd: PID) = 0 (success)
-        PID fdatasync(fd: PID) = 0 (success)
-        PID ftruncate(fd: PID, length: 10) = 0 (success)
-        PID ftruncate(fd: PID, length: 50) = 0 (success)
-        PID fchmod(fd: PID, mode: 0o644 (rw-r--r--)) = 0 (success)
-        PID fchmod(fd: PID, mode: 0o755 (rwxr-xr-x)) = 0 (success)
+        @PID@ fsync(fd: @NUMBER@) = 0 (success)
+        @PID@ fdatasync(fd: @NUMBER@) = 0 (success)
+        @PID@ ftruncate(fd: @NUMBER@, length: 10) = 0 (success)
+        @PID@ ftruncate(fd: @NUMBER@, length: 50) = 0 (success)
+        @PID@ fchmod(fd: @NUMBER@, mode: 0o644 (rw-r--r--)) = 0 (success)
+        @PID@ fchmod(fd: @NUMBER@, mode: 0o755 (rwxr-xr-x)) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -516,9 +517,9 @@ fn network_syscalls() {
     // Expected output - we should see accept4, recvmsg, and sendmsg calls
     // The exact addresses and file descriptors will vary, so we use regex patterns
     let expected_output = escaped_regex(indoc! {r#"
-        PID accept4(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16, flags: 0x80000 (SOCK_CLOEXEC)) = NUMBER (fd)
-        PID sendmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: NUMBER } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER (bytes)
-        PID recvmsg(sockfd: NUMBER, msg: { name: NULL, iov: [  { base: ADDR, len: 1024 } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = NUMBER (bytes)
+        @PID@ accept4(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: 16, flags: 0x80000 (SOCK_CLOEXEC)) = @NUMBER@ (fd)
+        @PID@ sendmsg(sockfd: @NUMBER@, msg: { name: NULL, iov: [  { base: @ADDR@, len: @NUMBER@ } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = @NUMBER@ (bytes)
+        @PID@ recvmsg(sockfd: @NUMBER@, msg: { name: NULL, iov: [  { base: @ADDR@, len: 1024 } ], iovlen: 1, control: NULL, flags: 0 }, flags: 0) = @NUMBER@ (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -540,6 +541,47 @@ fn network_syscalls() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn socket_introspection_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(
+        &[
+            "getsockname",
+            "getpeername",
+            "setsockopt",
+            "getsockopt",
+            "sendto",
+        ],
+        "socket_introspection_test",
+    );
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ getsockname(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: 16) = 0 (success)
+        @PID@ getsockname(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: 16) = 0 (success)
+        @PID@ getpeername(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: 16) = 0 (success)
+        @PID@ setsockopt(sockfd: @NUMBER@, level: SOL_SOCKET, optname: SO_REUSEADDR, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+        @PID@ getsockopt(sockfd: @NUMBER@, level: SOL_SOCKET, optname: SO_REUSEADDR, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+        @PID@ setsockopt(sockfd: @NUMBER@, level: SOL_SOCKET, optname: SO_KEEPALIVE, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+        @PID@ getsockopt(sockfd: @NUMBER@, level: SOL_SOCKET, optname: SO_KEEPALIVE, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+        @PID@ setsockopt(sockfd: @NUMBER@, level: IPPROTO_TCP, optname: TCP_NODELAY, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+        @PID@ getsockopt(sockfd: @NUMBER@, level: IPPROTO_TCP, optname: TCP_NODELAY, optval: "\u{1}\0\0\0", optlen: 4) = 0 (success)
+        @PID@ sendto(sockfd: @NUMBER@, buf: "socket introspection", size: 20, flags: 0, dest_addr: { family: AF_INET, addr: 127.0.0.1:9 }, addrlen: 16) = 20 (bytes)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn recvfrom_syscall() {
     let pinchy = PinchyTest::new(None, None);
 
@@ -548,8 +590,8 @@ fn recvfrom_syscall() {
 
     // Expected output - we should see recvfrom calls with and without source address
     let expected_output = escaped_regex(indoc! {r#"
-        PID recvfrom(sockfd: NUMBER, buf: "UDP recvfrom test!", size: 1024, flags: 0, src_addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: NUMBER) = 18 (bytes)
-        PID recvfrom(sockfd: NUMBER, buf: "second message", size: 1024, flags: 0, src_addr: NULL, addrlen: 0) = 14 (bytes)
+        @PID@ recvfrom(sockfd: @NUMBER@, buf: "UDP recvfrom test!", size: 1024, flags: 0, src_addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: @NUMBER@) = 18 (bytes)
+        @PID@ recvfrom(sockfd: @NUMBER@, buf: "second message", size: 1024, flags: 0, src_addr: NULL, addrlen: 0) = 14 (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -584,13 +626,13 @@ fn identity_syscalls() {
 
     // Expected output - we should see all identity syscalls returning reasonable values
     let expected_output = escaped_regex(indoc! {r#"
-        PID getpid() = PID (pid)
-        PID gettid() = NUMBER (pid)
-        PID getuid() = NUMBER (id)
-        PID geteuid() = NUMBER (id)
-        PID getgid() = NUMBER (id)
-        PID getegid() = NUMBER (id)
-        PID getppid() = NUMBER (pid)
+        @PID@ getpid() = @PID@ (pid)
+        @PID@ gettid() = @NUMBER@ (pid)
+        @PID@ getuid() = @NUMBER@ (id)
+        @PID@ geteuid() = @NUMBER@ (id)
+        @PID@ getgid() = @NUMBER@ (id)
+        @PID@ getegid() = @NUMBER@ (id)
+        @PID@ getppid() = @NUMBER@ (pid)
     "#});
 
     let output = handle.join().unwrap();
@@ -620,18 +662,18 @@ fn mmap_syscalls() {
 
     // Verify that our specific test mmap calls are present in the output
     let expected_output = escaped_regex(indoc! {r#"
-        PID mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = ADDR (addr)
-        PID mmap(addr: 0x0, length: 4096, prot: 0x1 (PROT_READ), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = ADDR (addr)
-        PID mmap(addr: 0x0, length: 4096, prot: 0x0, flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = ADDR (addr)
-        PID mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0xa022 (MAP_PRIVATE|MAP_ANONYMOUS|MAP_LOCKED|MAP_POPULATE), fd: -1, offset: 0x0) = ADDR (addr)
-        PID mmap(addr: 0x12345000, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x32 (MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS), fd: -1, offset: 0x0) = 0x12345000 (addr)
-        PID munmap(addr: ADDR, length: 4096) = 0 (success)
-        PID munmap(addr: ADDR, length: 4096) = 0 (success)
-        PID munmap(addr: ADDR, length: 4096) = 0 (success)
-        PID munmap(addr: ADDR, length: 4096) = 0 (success)
-        PID munmap(addr: 0x12345000, length: 4096) = 0 (success)
-        PID munmap(addr: 0x0, length: 4096) = 0 (success)
-        PID munmap(addr: 0x1000, length: 0) = -22 (error)
+        @PID@ mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = @ADDR@ (addr)
+        @PID@ mmap(addr: 0x0, length: 4096, prot: 0x1 (PROT_READ), flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = @ADDR@ (addr)
+        @PID@ mmap(addr: 0x0, length: 4096, prot: 0x0, flags: 0x22 (MAP_PRIVATE|MAP_ANONYMOUS), fd: -1, offset: 0x0) = @ADDR@ (addr)
+        @PID@ mmap(addr: 0x0, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0xa022 (MAP_PRIVATE|MAP_ANONYMOUS|MAP_LOCKED|MAP_POPULATE), fd: -1, offset: 0x0) = @ADDR@ (addr)
+        @PID@ mmap(addr: 0x12345000, length: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), flags: 0x32 (MAP_PRIVATE|MAP_FIXED|MAP_ANONYMOUS), fd: -1, offset: 0x0) = 0x12345000 (addr)
+        @PID@ munmap(addr: @ADDR@, length: 4096) = 0 (success)
+        @PID@ munmap(addr: @ADDR@, length: 4096) = 0 (success)
+        @PID@ munmap(addr: @ADDR@, length: 4096) = 0 (success)
+        @PID@ munmap(addr: @ADDR@, length: 4096) = 0 (success)
+        @PID@ munmap(addr: 0x12345000, length: 4096) = 0 (success)
+        @PID@ munmap(addr: 0x0, length: 4096) = 0 (success)
+        @PID@ munmap(addr: 0x1000, length: 0) = -22 (error)
     "#});
 
     let output = handle.join().unwrap();
@@ -661,10 +703,10 @@ fn madvise_syscall() {
 
     // Expected output - we should see multiple madvise calls with different advice values
     let expected_output = escaped_regex(indoc! {r#"
-        PID madvise(addr: ADDR, length: 4096, advice: MADV_WILLNEED (3)) = 0 (success)
-        PID madvise(addr: ADDR, length: 4096, advice: MADV_DONTNEED (4)) = 0 (success)
-        PID madvise(addr: ADDR, length: 4096, advice: MADV_NORMAL (0)) = 0 (success)
-        PID madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -12 (error)
+        @PID@ madvise(addr: @ADDR@, length: 4096, advice: MADV_WILLNEED (3)) = 0 (success)
+        @PID@ madvise(addr: @ADDR@, length: 4096, advice: MADV_DONTNEED (4)) = 0 (success)
+        @PID@ madvise(addr: @ADDR@, length: 4096, advice: MADV_NORMAL (0)) = 0 (success)
+        @PID@ madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -12 (error)
     "#});
 
     let output = handle.join().unwrap();
@@ -694,8 +736,8 @@ fn mlock_syscalls() {
 
     // Expected output - we should see mlock and munlockall calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID mlock(addr: ADDR, len: 4096) = 0 (success)
-        PID munlockall() = 0 (success)
+        @PID@ mlock(addr: @ADDR@, len: 4096) = 0 (success)
+        @PID@ munlockall() = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -733,17 +775,17 @@ fn file_descriptor_syscalls() {
     // Expected output - we should see dup, dup2, dup3 and close_range calls
     #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID dup(oldfd: NUMBER) = NUMBER (fd)
-        PID dup2(oldfd: NUMBER, newfd: 10) = 10 (fd)
-        PID dup3(oldfd: NUMBER, newfd: 11, flags: 0) = 11 (fd)
-        PID close_range(fd: NUMBER, max_fd: NUMBER, flags: 0x0) = 0 (success)
+        @PID@ dup(oldfd: @NUMBER@) = @NUMBER@ (fd)
+        @PID@ dup2(oldfd: @NUMBER@, newfd: 10) = 10 (fd)
+        @PID@ dup3(oldfd: @NUMBER@, newfd: 11, flags: 0) = 11 (fd)
+        @PID@ close_range(fd: @NUMBER@, max_fd: @NUMBER@, flags: 0x0) = 0 (success)
     "#});
 
     #[cfg(target_arch = "aarch64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID dup(oldfd: NUMBER) = NUMBER (fd)
-        PID dup3(oldfd: NUMBER, newfd: 11, flags: 0) = 11 (fd)
-        PID close_range(fd: NUMBER, max_fd: NUMBER, flags: 0x0) = 0 (success)
+        @PID@ dup(oldfd: @NUMBER@) = @NUMBER@ (fd)
+        @PID@ dup3(oldfd: @NUMBER@, newfd: 11, flags: 0) = 11 (fd)
+        @PID@ close_range(fd: @NUMBER@, max_fd: @NUMBER@, flags: 0x0) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -776,10 +818,10 @@ fn session_process_syscalls() {
 
     // Expected output - we should see process group and session calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID getpgid(pid: 0) = NUMBER (pid)
-        PID getsid(pid: 0) = NUMBER (pid)
-        PID setpgid(pid: 0, pgid: NUMBER) = 0 (success)
-        PID setsid() = NUMBER (pid)
+        @PID@ getpgid(pid: 0) = @NUMBER@ (pid)
+        @PID@ getsid(pid: 0) = @NUMBER@ (pid)
+        @PID@ setpgid(pid: 0, pgid: @NUMBER@) = 0 (success)
+        @PID@ setsid() = @NUMBER@ (pid)
     "#});
 
     let output = handle.join().unwrap();
@@ -819,12 +861,12 @@ fn uid_gid_syscalls() {
 
     // Expected output - these should succeed with root privileges
     let expected_output = escaped_regex(indoc! {r#"
-        PID setuid(uid: NUMBER) = 0 (success)
-        PID setgid(gid: NUMBER) = 0 (success)
-        PID setreuid(ruid: NUMBER, euid: NUMBER) = 0 (success)
-        PID setregid(rgid: NUMBER, egid: NUMBER) = 0 (success)
-        PID setresuid(ruid: NUMBER, euid: NUMBER, suid: NUMBER) = 0 (success)
-        PID setresgid(rgid: NUMBER, egid: NUMBER, sgid: NUMBER) = 0 (success)
+        @PID@ setuid(uid: @NUMBER@) = 0 (success)
+        @PID@ setgid(gid: @NUMBER@) = 0 (success)
+        @PID@ setreuid(ruid: @NUMBER@, euid: @NUMBER@) = 0 (success)
+        @PID@ setregid(rgid: @NUMBER@, egid: @NUMBER@) = 0 (success)
+        @PID@ setresuid(ruid: @NUMBER@, euid: @NUMBER@, suid: @NUMBER@) = 0 (success)
+        @PID@ setresgid(rgid: @NUMBER@, egid: @NUMBER@, sgid: @NUMBER@) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -854,9 +896,9 @@ fn system_operations() {
 
     // Expected output - umask and sync calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID umask(mask: 0o22) = 18
-        PID umask(mask: 0o22) = 18
-        PID sync() = 0 (success)
+        @PID@ umask(mask: 0o22) = 18
+        @PID@ umask(mask: 0o22) = 18
+        @PID@ sync() = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -886,8 +928,8 @@ fn uname_sysinfo_syscalls() {
 
     // Expected output - uname and sysinfo calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID uname(struct utsname: { sysname: QUOTEDSTRING, nodename: QUOTEDSTRING, release: QUOTEDSTRING, version: QUOTEDSTRING, machine: QUOTEDSTRING, domainname: QUOTEDSTRING }) = 0 (success)
-        PID sysinfo(info: { uptime: NUMBER seconds, loads: [NUMBER, NUMBER, NUMBER], totalram: NUMBER MB, freeram: NUMBER MB, sharedram: NUMBER MB, bufferram: NUMBER MB, totalswap: NUMBER MB, freeswap: NUMBER MB, procs: NUMBER, mem_unit: NUMBER bytes }) = 0 (success)
+        @PID@ uname(struct utsname: { sysname: @QUOTEDSTRING@, nodename: @QUOTEDSTRING@, release: @QUOTEDSTRING@, version: @QUOTEDSTRING@, machine: @QUOTEDSTRING@, domainname: @QUOTEDSTRING@ }) = 0 (success)
+        @PID@ sysinfo(info: { uptime: @NUMBER@ seconds, loads: [@NUMBER@, @NUMBER@, @NUMBER@], totalram: @NUMBER@ MB, freeram: @NUMBER@ MB, sharedram: @NUMBER@ MB, bufferram: @NUMBER@ MB, totalswap: @NUMBER@ MB, freeswap: @NUMBER@ MB, procs: @NUMBER@, mem_unit: @NUMBER@ bytes }) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -917,16 +959,16 @@ fn prctl_syscalls() {
 
     // Expected output - prctl operations with various argument patterns
     let expected_output = escaped_regex(indoc! {r#"
-        PID prctl(PR_SET_NAME, ADDR) = 0 (success)
-        PID prctl(PR_GET_NAME, ADDR) = 0 (success)
-        PID prctl(PR_GET_DUMPABLE) = NUMBER
-        PID prctl(PR_SET_DUMPABLE, 0x0) = 0 (success)
-        PID prctl(PR_GET_DUMPABLE) = 0 (success)
-        PID prctl(PR_SET_DUMPABLE, 0x1) = 0 (success)
-        PID prctl(PR_CAPBSET_READ, 0x15) = NUMBER
-        PID prctl(PR_CAPBSET_DROP, 0x15) = 0 (success)
-        PID prctl(PR_GET_KEEPCAPS) = 0 (success)
-        PID prctl(PR_SET_KEEPCAPS, 0x1) = 0 (success)
+        @PID@ prctl(PR_SET_NAME, @ADDR@) = 0 (success)
+        @PID@ prctl(PR_GET_NAME, @ADDR@) = 0 (success)
+        @PID@ prctl(PR_GET_DUMPABLE) = @NUMBER@
+        @PID@ prctl(PR_SET_DUMPABLE, 0x0) = 0 (success)
+        @PID@ prctl(PR_GET_DUMPABLE) = 0 (success)
+        @PID@ prctl(PR_SET_DUMPABLE, 0x1) = 0 (success)
+        @PID@ prctl(PR_CAPBSET_READ, 0x15) = @NUMBER@
+        @PID@ prctl(PR_CAPBSET_DROP, 0x15) = 0 (success)
+        @PID@ prctl(PR_GET_KEEPCAPS) = 0 (success)
+        @PID@ prctl(PR_SET_KEEPCAPS, 0x1) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -956,8 +998,8 @@ fn ioprio_syscalls() {
 
     // Expected output - ioprio_get and ioprio_set calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID ioprio_get(which: 1, who: 0) = 0
-        PID ioprio_set(which: 1, who: 0, ioprio: 0) = 0 (success)
+        @PID@ ioprio_get(which: 1, who: 0) = 0
+        @PID@ ioprio_set(which: 1, who: 0, ioprio: 0) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -990,8 +1032,8 @@ fn scheduler_syscalls() {
 
     // Expected output - sched_getscheduler and sched_setscheduler calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID sched_getscheduler(pid: 0) = 0 (success)
-        PID sched_setscheduler(pid: 0, policy: SCHED_OTHER, param: { sched_priority: 0 }) = 0 (success)
+        @PID@ sched_getscheduler(pid: 0) = 0 (success)
+        @PID@ sched_setscheduler(pid: 0, policy: SCHED_OTHER, param: { sched_priority: 0 }) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -1021,9 +1063,9 @@ fn pread_pwrite_syscalls() {
 
     // Expected output - pread and pwrite calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID write(fd: NUMBER, buf: "Hello, world! This is test data for pread/pwrite.", count: 49) = 49 (bytes)
-        PID pwrite64(fd: NUMBER, buf: "pinch", count: 5, offset: 7) = 5 (bytes)
-        PID pread64(fd: NUMBER, buf: "lo, pinch! This is test data", count: 28, offset: 3) = 28 (bytes)
+        @PID@ write(fd: @NUMBER@, buf: "Hello, world! This is test data for pread/pwrite.", count: 49) = 49 (bytes)
+        @PID@ pwrite64(fd: @NUMBER@, buf: "pinch", count: 5, offset: 7) = 5 (bytes)
+        @PID@ pread64(fd: @NUMBER@, buf: "lo, pinch! This is test data", count: 28, offset: 3) = 28 (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -1053,8 +1095,8 @@ fn readv_writev_syscalls() {
 
     // Expected output - readv and writev calls
     let expected_output = escaped_regex(indoc! {r#"
-        PID writev(fd: NUMBER, iov: [ iovec { base: ADDR, len: 7, buf: "Hello, " }, iovec { base: ADDR, len: 6, buf: "world!" } ], iovcnt: 2) = 13 (bytes)
-        PID readv(fd: NUMBER, iov: [ iovec { base: ADDR, len: 7, buf: "Hello, " }, iovec { base: ADDR, len: 6, buf: "world!" } ], iovcnt: 2) = 13 (bytes)
+        @PID@ writev(fd: @NUMBER@, iov: [ iovec { base: @ADDR@, len: 7, buf: "Hello, " }, iovec { base: @ADDR@, len: 6, buf: "world!" } ], iovcnt: 2) = 13 (bytes)
+        @PID@ readv(fd: @NUMBER@, iov: [ iovec { base: @ADDR@, len: 7, buf: "Hello, " }, iovec { base: @ADDR@, len: 6, buf: "world!" } ], iovcnt: 2) = 13 (bytes)
     "#});
 
     let output = handle.join().unwrap();
@@ -1088,17 +1130,17 @@ fn socket_lifecycle_syscalls() {
     // Expected output - we should see all socket lifecycle syscalls
     // The exact addresses and file descriptors will vary, so we use regex patterns
     let expected_output = escaped_regex(indoc! {r#"
-        PID socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = NUMBER (fd)
-        PID socket(domain: AF_INET, type: SOCK_DGRAM, protocol: 0) = NUMBER (fd)
-        PID bind(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:0 }, addrlen: 16) = 0 (success)
-        PID listen(sockfd: NUMBER, backlog: 5) = 0 (success)
-        PID socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = NUMBER (fd)
-        PID connect(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16) = 0 (success)
-        PID shutdown(sockfd: NUMBER, how: SHUT_RD) = 0 (success)
-        PID shutdown(sockfd: NUMBER, how: SHUT_WR) = 0 (success)
-        PID socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = NUMBER (fd)
-        PID connect(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16) = 0 (success)
-        PID shutdown(sockfd: NUMBER, how: SHUT_RDWR) = 0 (success)
+        @PID@ socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = @NUMBER@ (fd)
+        @PID@ socket(domain: AF_INET, type: SOCK_DGRAM, protocol: 0) = @NUMBER@ (fd)
+        @PID@ bind(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:0 }, addrlen: 16) = 0 (success)
+        @PID@ listen(sockfd: @NUMBER@, backlog: 5) = 0 (success)
+        @PID@ socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = @NUMBER@ (fd)
+        @PID@ connect(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: 16) = 0 (success)
+        @PID@ shutdown(sockfd: @NUMBER@, how: SHUT_RD) = 0 (success)
+        @PID@ shutdown(sockfd: @NUMBER@, how: SHUT_WR) = 0 (success)
+        @PID@ socket(domain: AF_INET, type: SOCK_STREAM, protocol: 0) = @NUMBER@ (fd)
+        @PID@ connect(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: 16) = 0 (success)
+        @PID@ shutdown(sockfd: @NUMBER@, how: SHUT_RDWR) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -1129,7 +1171,7 @@ fn accept_syscall() {
     // Expected output - we should see accept call
     // The exact addresses and file descriptors will vary, so we use regex patterns
     let expected_output = escaped_regex(indoc! {r#"
-        PID accept(sockfd: NUMBER, addr: { family: AF_INET, addr: 127.0.0.1:NUMBER }, addrlen: 16) = NUMBER (fd)
+        @PID@ accept(sockfd: @NUMBER@, addr: { family: AF_INET, addr: 127.0.0.1:@NUMBER@ }, addrlen: 16) = @NUMBER@ (fd)
     "#});
 
     let output = handle.join().unwrap();
@@ -1160,8 +1202,8 @@ fn pselect6_syscall() {
     // 1. One that times out (return 0)
     // 2. One that finds a ready fd (return 1)
     let expected_output = escaped_regex(indoc! {r#"
-        PID pselect6(nfds: 4, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, nanos: 0 }, sigmask: <present>) = 0 (timeout)
-        PID pselect6(nfds: 4, readfds: [ 3 ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, nanos: NUMBER }, sigmask: <present>) = 1 (ready)
+        @PID@ pselect6(nfds: 4, readfds: [  ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, nanos: 0 }, sigmask: <present>) = 0 (timeout)
+        @PID@ pselect6(nfds: 4, readfds: [ 3 ], writefds: NULL, exceptfds: NULL, timeout: { secs: 0, nanos: @NUMBER@ }, sigmask: <present>) = 1 (ready)
     "#});
 
     let output = handle.join().unwrap();
@@ -1194,24 +1236,24 @@ fn eventfd_syscalls() {
     // eventfd() syscall (x86_64 only) and eventfd2() are both tested
     #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID eventfd2(initval: 0, flags: 0) = NUMBER (fd)
-        PID eventfd2(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = NUMBER (fd)
-        PID eventfd2(initval: 10, flags: 0x800 (EFD_NONBLOCK)) = NUMBER (fd)
-        PID eventfd(initval: 42, flags: 0) = NUMBER (fd)
-        PID close(fd: NUMBER) = 0 (success)
-        PID close(fd: NUMBER) = 0 (success)
-        PID close(fd: NUMBER) = 0 (success)
-        PID close(fd: NUMBER) = 0 (success)
+        @PID@ eventfd2(initval: 0, flags: 0) = @NUMBER@ (fd)
+        @PID@ eventfd2(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = @NUMBER@ (fd)
+        @PID@ eventfd2(initval: 10, flags: 0x800 (EFD_NONBLOCK)) = @NUMBER@ (fd)
+        @PID@ eventfd(initval: 42, flags: 0) = @NUMBER@ (fd)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
     "#});
 
     #[cfg(target_arch = "aarch64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID eventfd2(initval: 0, flags: 0) = NUMBER (fd)
-        PID eventfd2(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = NUMBER (fd)
-        PID eventfd2(initval: 10, flags: 0x800 (EFD_NONBLOCK)) = NUMBER (fd)
-        PID close(fd: NUMBER) = 0 (success)
-        PID close(fd: NUMBER) = 0 (success)
-        PID close(fd: NUMBER) = 0 (success)
+        @PID@ eventfd2(initval: 0, flags: 0) = @NUMBER@ (fd)
+        @PID@ eventfd2(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = @NUMBER@ (fd)
+        @PID@ eventfd2(initval: 10, flags: 0x800 (EFD_NONBLOCK)) = @NUMBER@ (fd)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -1241,7 +1283,7 @@ fn execveat_syscall() {
 
     // Expected output - we should see execveat calls with different arguments and flags
     let expected_output = escaped_regex(indoc! {r#"
-        PID execveat(dirfd: NUMBER, pathname: "this-does-not-exist-for-sure", argv: [this-doe, arg1, arg2], envp: [ALPHANUM, ALPHANUM], flags: 0) = -2 (error)
+        @PID@ execveat(dirfd: @NUMBER@, pathname: "this-does-not-exist-for-sure", argv: [this-doe, arg1, arg2], envp: [@ALPHANUM@, @ALPHANUM@], flags: 0) = -2 (error)
     "#});
 
     let output = handle.join().unwrap();
@@ -1281,14 +1323,14 @@ fn xattr_syscalls() {
 
     // Expected output - we should see all xattr operations. MAYBEITEM_ is to catch systems that have selinux attrs.
     let expected_output = escaped_regex(indoc! {r#"
-        PID setxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "test_value_1", size: 12, flags: 0) = 0 (success)
-        PID fsetxattr(fd: NUMBER, name: "user.test_attr2", value: "another_test_value", size: 18, flags: 0) = 0 (success)
-        PID getxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "test_value_1", size: 64) = 12
-        PID fgetxattr(fd: NUMBER, name: "user.test_attr2", value: "another_test_value", size: 64) = 18
-        PID listxattr(pathname: "/tmp/xattr_test_file", list: [ MAYBEITEM_ALPHANUM, ALPHANUM ], size: 256) = NUMBER
-        PID flistxattr(fd: NUMBER, list: [ MAYBEITEM_ALPHANUM, ALPHANUM ], size: 256) = NUMBER
-        PID getxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "ALPHANUM", size: 0) = 12
-        PID getxattr(pathname: "/tmp/xattr_test_file", name: "user.nonexistent", value: ADDR, size: 64) = -61 (error)
+        @PID@ setxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "test_value_1", size: 12, flags: 0) = 0 (success)
+        @PID@ fsetxattr(fd: @NUMBER@, name: "user.test_attr2", value: "another_test_value", size: 18, flags: 0) = 0 (success)
+        @PID@ getxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "test_value_1", size: 64) = 12
+        @PID@ fgetxattr(fd: @NUMBER@, name: "user.test_attr2", value: "another_test_value", size: 64) = 18
+        @PID@ listxattr(pathname: "/tmp/xattr_test_file", list: [ @MAYBEITEM_@@ALPHANUM@, @ALPHANUM@ ], size: 256) = @NUMBER@
+        @PID@ flistxattr(fd: @NUMBER@, list: [ @MAYBEITEM_@@ALPHANUM@, @ALPHANUM@ ], size: 256) = @NUMBER@
+        @PID@ getxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "@ALPHANUM@", size: 0) = 12
+        @PID@ getxattr(pathname: "/tmp/xattr_test_file", name: "user.nonexistent", value: @ADDR@, size: 64) = -61 (error)
     "#});
 
     let output = handle.join().unwrap();
@@ -1325,20 +1367,20 @@ fn sysv_ipc_syscalls() {
     // Expected output - we should see all SysV IPC operations
     // The exact IDs and addresses will vary, so we use regex patterns
     let expected_output = escaped_regex(indoc! {r#"
-        PID shmget(key: 0x12345678, size: 4096, shmflg: 0o666|IPC_CREAT) = NUMBER (shmid)
-        PID shmat(shmid: NUMBER, shmaddr: 0x0, shmflg: 0x0) = ADDR
-        PID shmctl(shmid: NUMBER, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345678, uid: NUMBER, gid: NUMBER, cuid: NUMBER, cgid: NUMBER, mode: 0o666 (rw-rw-rw-), seq: NUMBER }, segsz: NUMBER, atime: NUMBER, dtime: NUMBER, ctime: NUMBER, cpid: NUMBER, lpid: NUMBER, nattch: NUMBER }) = 0 (success)
-        PID shmdt(shmaddr: ADDR) = 0 (success)
-        PID shmctl(shmid: NUMBER, cmd: IPC_RMID, buf: NULL) = 0 (success)
-        PID msgget(key: 0x12345679, msgflg: IPC_CREAT) = NUMBER (msqid)
-        PID msgsnd(msqid: NUMBER, msgp: ADDR, msgsz: 30, msgflg: 0x0) = 0 (success)
-        PID msgctl(msqid: NUMBER, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345679, uid: NUMBER, gid: NUMBER, cuid: NUMBER, cgid: NUMBER, mode: 0o666 (rw-rw-rw-), seq: NUMBER }, stime: NUMBER, rtime: NUMBER, ctime: NUMBER, cbytes: NUMBER, qnum: NUMBER, qbytes: NUMBER, lspid: NUMBER, lrpid: NUMBER }) = 0 (success)
-        PID msgrcv(msqid: NUMBER, msgp: ADDR, msgsz: 32, msgtyp: 0, msgflg: 0x0) = 30
-        PID msgctl(msqid: NUMBER, cmd: IPC_RMID, buf: NULL) = 0 (success)
-        PID semget(key: 0x11223344, nsems: 2, semflg: IPC_CREAT) = NUMBER (semid)
-        PID semctl(semid: NUMBER, semnum: 0, op: SETVAL, val: 0) = 0 (success)
-        PID semctl(semid: NUMBER, semnum: 0, op: GETVAL) = 5
-        PID semctl(semid: NUMBER, semnum: 0, op: IPC_RMID, arg: 0x0 (unknown)) = 0 (success)
+        @PID@ shmget(key: 0x12345678, size: 4096, shmflg: 0o666|IPC_CREAT) = @NUMBER@ (shmid)
+        @PID@ shmat(shmid: @NUMBER@, shmaddr: 0x0, shmflg: 0x0) = @ADDR@
+        @PID@ shmctl(shmid: @NUMBER@, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345678, uid: @NUMBER@, gid: @NUMBER@, cuid: @NUMBER@, cgid: @NUMBER@, mode: 0o666 (rw-rw-rw-), seq: @NUMBER@ }, segsz: @NUMBER@, atime: @NUMBER@, dtime: @NUMBER@, ctime: @NUMBER@, cpid: @NUMBER@, lpid: @NUMBER@, nattch: @NUMBER@ }) = 0 (success)
+        @PID@ shmdt(shmaddr: @ADDR@) = 0 (success)
+        @PID@ shmctl(shmid: @NUMBER@, cmd: IPC_RMID, buf: NULL) = 0 (success)
+        @PID@ msgget(key: 0x12345679, msgflg: IPC_CREAT) = @NUMBER@ (msqid)
+        @PID@ msgsnd(msqid: @NUMBER@, msgp: @ADDR@, msgsz: 30, msgflg: 0x0) = 0 (success)
+        @PID@ msgctl(msqid: @NUMBER@, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345679, uid: @NUMBER@, gid: @NUMBER@, cuid: @NUMBER@, cgid: @NUMBER@, mode: 0o666 (rw-rw-rw-), seq: @NUMBER@ }, stime: @NUMBER@, rtime: @NUMBER@, ctime: @NUMBER@, cbytes: @NUMBER@, qnum: @NUMBER@, qbytes: @NUMBER@, lspid: @NUMBER@, lrpid: @NUMBER@ }) = 0 (success)
+        @PID@ msgrcv(msqid: @NUMBER@, msgp: @ADDR@, msgsz: 32, msgtyp: 0, msgflg: 0x0) = 30
+        @PID@ msgctl(msqid: @NUMBER@, cmd: IPC_RMID, buf: NULL) = 0 (success)
+        @PID@ semget(key: 0x11223344, nsems: 2, semflg: IPC_CREAT) = @NUMBER@ (semid)
+        @PID@ semctl(semid: @NUMBER@, semnum: 0, op: SETVAL, val: 0) = 0 (success)
+        @PID@ semctl(semid: @NUMBER@, semnum: 0, op: GETVAL) = 5
+        @PID@ semctl(semid: @NUMBER@, semnum: 0, op: IPC_RMID, arg: 0x0 (unknown)) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -1372,10 +1414,10 @@ fn socketpair_sendmmsg_syscalls() {
     // Expected output - we should see socketpair creating socket pairs,
     // then sendmmsg and recvmmsg for batch message operations
     let expected_output = escaped_regex(indoc! {r#"
-        PID socketpair(domain: AF_UNIX, type: SOCK_STREAM, protocol: 0, sv: [NUMBER, NUMBER]) = 0 (success)
-        PID socketpair(domain: AF_UNIX, type: SOCK_DGRAM, protocol: 0, sv: [NUMBER, NUMBER]) = 0 (success)
-        PID sendmmsg(sockfd: NUMBER, msgvec: [  { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 13 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 14 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } ], vlen: 2, flags: 0) = 2 (messages)
-        PID recvmmsg(sockfd: NUMBER, msgvec: [  { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 64 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 27 } { msg_hdr: { name: NULL, iov: [  { base: ADDR, len: 64 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } ], vlen: 2, flags: 0x40 (MSG_DONTWAIT), timeout: { tv_sec: 0, tv_nsec: NUMBER }) = 1 (messages)
+        @PID@ socketpair(domain: AF_UNIX, type: SOCK_STREAM, protocol: 0, sv: [@NUMBER@, @NUMBER@]) = 0 (success)
+        @PID@ socketpair(domain: AF_UNIX, type: SOCK_DGRAM, protocol: 0, sv: [@NUMBER@, @NUMBER@]) = 0 (success)
+        @PID@ sendmmsg(sockfd: @NUMBER@, msgvec: [  { msg_hdr: { name: NULL, iov: [  { base: @ADDR@, len: 13 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } { msg_hdr: { name: NULL, iov: [  { base: @ADDR@, len: 14 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } ], vlen: 2, flags: 0) = 2 (messages)
+        @PID@ recvmmsg(sockfd: @NUMBER@, msgvec: [  { msg_hdr: { name: NULL, iov: [  { base: @ADDR@, len: 64 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 27 } { msg_hdr: { name: NULL, iov: [  { base: @ADDR@, len: 64 } ], iovlen: 1, control: NULL, flags: 0 }, msg_len: 0 } ], vlen: 2, flags: 0x40 (MSG_DONTWAIT), timeout: { tv_sec: 0, tv_nsec: @NUMBER@ }) = 1 (messages)
     "#});
 
     let output = handle.join().unwrap();
@@ -1412,13 +1454,13 @@ fn timer_test() {
     );
 
     let expected_output = escaped_regex(indoc! {r#"
-        PID timer_create(clockid: CLOCK_REALTIME, sevp: { sigev_notify: SIGEV_SIGNAL, sigev_signo: 10, sigev_value.sival_int: 42 }, timerid: <output>) = 0 (success)
-        PID timer_settime(timerid: ADDR, flags: 0, new_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: 2, nanos: 500000000 } }, old_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 0, nanos: 0 } }) = 0 (success)
-        PID timer_gettime(timerid: ADDR, curr_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: NUMBER, nanos: NUMBER } }) = 0 (success)
-        PID timer_getoverrun(timerid: ADDR) = 0 (overruns)
-        PID timer_delete(timerid: ADDR) = 0 (success)
-        PID timer_create(clockid: CLOCK_MONOTONIC, sevp: NULL, timerid: <output>) = 0 (success)
-        PID timer_delete(timerid: ADDR) = 0 (success)
+        @PID@ timer_create(clockid: CLOCK_REALTIME, sevp: { sigev_notify: SIGEV_SIGNAL, sigev_signo: 10, sigev_value.sival_int: 42 }, timerid: <output>) = 0 (success)
+        @PID@ timer_settime(timerid: @ADDR@, flags: 0, new_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: 2, nanos: 500000000 } }, old_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 0, nanos: 0 } }) = 0 (success)
+        @PID@ timer_gettime(timerid: @ADDR@, curr_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: @NUMBER@, nanos: @NUMBER@ } }) = 0 (success)
+        @PID@ timer_getoverrun(timerid: @ADDR@) = 0 (overruns)
+        @PID@ timer_delete(timerid: @ADDR@) = 0 (success)
+        @PID@ timer_create(clockid: CLOCK_MONOTONIC, sevp: NULL, timerid: <output>) = 0 (success)
+        @PID@ timer_delete(timerid: @ADDR@) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -1443,9 +1485,9 @@ fn ioctl_syscalls() {
 
     // Expected output - we should see ioctl calls with different requests
     let expected_output = escaped_regex(indoc! {r#"
-        PID ioctl(fd: 3, request: (0x541b) tty::FIONREAD, arg: ADDR) = 0 (success)
-        PID ioctl(fd: 3, request: (0xdeadbeef) other::unknown, arg: ADDR) = -25 (error)
-        PID ioctl(fd: 3, request: (0x5451) tty::FIOCLEX, arg: 0x0) = 0 (success)
+        @PID@ ioctl(fd: 3, request: (0x541b) tty::FIONREAD, arg: @ADDR@) = 0 (success)
+        @PID@ ioctl(fd: 3, request: (0xdeadbeef) other::unknown, arg: @ADDR@) = -25 (error)
+        @PID@ ioctl(fd: 3, request: (0x5451) tty::FIOCLEX, arg: 0x0) = 0 (success)
     "#});
 
     let output = handle.join().unwrap();
@@ -1486,21 +1528,21 @@ fn filesystem_links_syscalls() {
     // Expected output - we should see all filesystem link operations
     #[cfg(target_arch = "x86_64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
-        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
-        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
-        PID link(oldpath: "/tmp/filesystem_links_target", newpath: "/tmp/filesystem_links_link2") = 0 (success)
-        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
-        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"MAYBETRUNCATED, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"MAYBETRUNCATED, flags: 0) = -2 (error)
+        @PID@ symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
+        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
+        @PID@ link(oldpath: "/tmp/filesystem_links_target", newpath: "/tmp/filesystem_links_link2") = 0 (success)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
+        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (error)
     "#});
 
     #[cfg(target_arch = "aarch64")]
     let expected_output = escaped_regex(indoc! {r#"
-        PID symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
-        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
-        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
-        PID readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
-        PID linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"MAYBETRUNCATED, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"MAYBETRUNCATED, flags: 0) = -2 (error)
+        @PID@ symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
+        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
+        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (error)
     "#});
 
     let output = handle.join().unwrap();

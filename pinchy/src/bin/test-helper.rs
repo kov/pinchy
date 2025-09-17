@@ -86,6 +86,7 @@ fn main() -> anyhow::Result<()> {
             "ioctl_test" => ioctl_test(),
             "filesystem_links_test" => filesystem_links_test(),
             "statfs_test" => statfs_test(),
+            "socket_introspection_test" => socket_introspection_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -484,6 +485,301 @@ fn fcntl_test() -> anyhow::Result<()> {
         libc::close(new_fd2);
         libc::close(new_fd);
         libc::close(fd);
+    }
+
+    Ok(())
+}
+
+fn socket_introspection_test() -> anyhow::Result<()> {
+    unsafe {
+        let server_fd = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+
+        if server_fd < 0 {
+            bail!("socket() failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut server_addr: libc::sockaddr_in = std::mem::zeroed();
+        server_addr.sin_family = libc::AF_INET as u16;
+        server_addr.sin_port = 0;
+        server_addr.sin_addr.s_addr = u32::from_be_bytes([127, 0, 0, 1]).to_be();
+
+        let bind_result = libc::bind(
+            server_fd,
+            &server_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+            std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+        );
+
+        if bind_result < 0 {
+            bail!("bind() failed: {}", std::io::Error::last_os_error());
+        }
+
+        let listen_result = libc::listen(server_fd, 1);
+
+        if listen_result < 0 {
+            bail!("listen() failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut bound_addr: libc::sockaddr_in = std::mem::zeroed();
+        let mut bound_len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
+        let server_getsockname = libc::getsockname(
+            server_fd,
+            &mut bound_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+            &mut bound_len,
+        );
+
+        if server_getsockname < 0 {
+            bail!(
+                "server getsockname() failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        assert!(bound_len >= std::mem::size_of::<libc::sockaddr_in>() as u32);
+
+        let client_fd = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+
+        if client_fd < 0 {
+            bail!(
+                "client socket() failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let connect_result = libc::connect(
+            client_fd,
+            &bound_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+            std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+        );
+
+        if connect_result < 0 {
+            bail!("connect() failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut accepted_addr: libc::sockaddr_in = std::mem::zeroed();
+        let mut accepted_len = std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t;
+        let accepted_fd = libc::accept(
+            server_fd,
+            &mut accepted_addr as *mut libc::sockaddr_in as *mut libc::sockaddr,
+            &mut accepted_len,
+        );
+
+        if accepted_fd < 0 {
+            bail!("accept() failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut local_addr: libc::sockaddr_storage = std::mem::zeroed();
+        let mut local_len = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+        let getsockname_result = libc::getsockname(
+            client_fd,
+            &mut local_addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
+            &mut local_len,
+        );
+
+        if getsockname_result < 0 {
+            bail!(
+                "client getsockname() failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        assert!(local_len > 0);
+
+        let mut peer_addr: libc::sockaddr_storage = std::mem::zeroed();
+        let mut peer_len = std::mem::size_of::<libc::sockaddr_storage>() as libc::socklen_t;
+        let getpeername_result = libc::getpeername(
+            client_fd,
+            &mut peer_addr as *mut libc::sockaddr_storage as *mut libc::sockaddr,
+            &mut peer_len,
+        );
+
+        if getpeername_result < 0 {
+            bail!(
+                "client getpeername() failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        assert!(peer_len > 0);
+
+        let option_fd = libc::socket(libc::AF_INET, libc::SOCK_STREAM, 0);
+
+        if option_fd < 0 {
+            bail!(
+                "socket() for setsockopt failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let value: libc::c_int = 1;
+        let value_ptr = &value as *const libc::c_int as *const libc::c_void;
+        let value_len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+        let reuseaddr_result = libc::setsockopt(
+            option_fd,
+            libc::SOL_SOCKET,
+            libc::SO_REUSEADDR,
+            value_ptr,
+            value_len,
+        );
+
+        if reuseaddr_result < 0 {
+            bail!(
+                "setsockopt(SO_REUSEADDR) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let mut reuseaddr_value = 0;
+        let mut reuseaddr_len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+        let reuseaddr_get_result = libc::getsockopt(
+            option_fd,
+            libc::SOL_SOCKET,
+            libc::SO_REUSEADDR,
+            &mut reuseaddr_value as *mut libc::c_int as *mut libc::c_void,
+            &mut reuseaddr_len,
+        );
+
+        if reuseaddr_get_result < 0 {
+            bail!(
+                "getsockopt(SO_REUSEADDR) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        assert_eq!(reuseaddr_value, 1);
+
+        let keepalive_result = libc::setsockopt(
+            client_fd,
+            libc::SOL_SOCKET,
+            libc::SO_KEEPALIVE,
+            value_ptr,
+            value_len,
+        );
+
+        if keepalive_result < 0 {
+            bail!(
+                "setsockopt(SO_KEEPALIVE) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let mut keepalive_value = 0;
+        let mut keepalive_len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+        let keepalive_get_result = libc::getsockopt(
+            client_fd,
+            libc::SOL_SOCKET,
+            libc::SO_KEEPALIVE,
+            &mut keepalive_value as *mut libc::c_int as *mut libc::c_void,
+            &mut keepalive_len,
+        );
+
+        if keepalive_get_result < 0 {
+            bail!(
+                "getsockopt(SO_KEEPALIVE) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        assert_eq!(keepalive_value, 1);
+
+        let nodelay_result = libc::setsockopt(
+            client_fd,
+            libc::IPPROTO_TCP,
+            libc::TCP_NODELAY,
+            value_ptr,
+            value_len,
+        );
+
+        if nodelay_result < 0 {
+            bail!(
+                "setsockopt(TCP_NODELAY) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let mut nodelay_value = 0;
+        let mut nodelay_len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+        let nodelay_get_result = libc::getsockopt(
+            client_fd,
+            libc::IPPROTO_TCP,
+            libc::TCP_NODELAY,
+            &mut nodelay_value as *mut libc::c_int as *mut libc::c_void,
+            &mut nodelay_len,
+        );
+
+        if nodelay_get_result < 0 {
+            bail!(
+                "getsockopt(TCP_NODELAY) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        assert_eq!(nodelay_value, 1);
+
+        let close_option = libc::close(option_fd);
+
+        if close_option < 0 {
+            bail!(
+                "close(option_fd) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let udp_fd = libc::socket(libc::AF_INET, libc::SOCK_DGRAM, 0);
+
+        if udp_fd < 0 {
+            bail!("UDP socket() failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut dest_addr: libc::sockaddr_in = std::mem::zeroed();
+        dest_addr.sin_family = libc::AF_INET as u16;
+        dest_addr.sin_port = u16::to_be(9);
+        dest_addr.sin_addr.s_addr = u32::from_be_bytes([127, 0, 0, 1]).to_be();
+        let message = b"socket introspection";
+        let sendto_result = libc::sendto(
+            udp_fd,
+            message.as_ptr() as *const libc::c_void,
+            message.len(),
+            0,
+            &dest_addr as *const libc::sockaddr_in as *const libc::sockaddr,
+            std::mem::size_of::<libc::sockaddr_in>() as libc::socklen_t,
+        );
+
+        if sendto_result < 0 {
+            bail!("sendto failed: {}", std::io::Error::last_os_error());
+        }
+
+        let close_udp = libc::close(udp_fd);
+
+        if close_udp < 0 {
+            bail!("close(udp_fd) failed: {}", std::io::Error::last_os_error());
+        }
+
+        let close_client = libc::close(client_fd);
+
+        if close_client < 0 {
+            bail!(
+                "close(client_fd) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let close_accepted = libc::close(accepted_fd);
+
+        if close_accepted < 0 {
+            bail!(
+                "close(accepted_fd) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        let close_server = libc::close(server_fd);
+
+        if close_server < 0 {
+            bail!(
+                "close(server_fd) failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
     }
 
     Ok(())

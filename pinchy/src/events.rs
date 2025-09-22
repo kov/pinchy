@@ -775,6 +775,45 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_timerfd_create => {
+            let data = unsafe { event.data.timerfd_create };
+
+            argf!(sf, "clockid: {}", format_clockid(data.clockid));
+            argf!(sf, "flags: {}", format_timerfd_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_timerfd_gettime => {
+            let data = unsafe { event.data.timerfd_gettime };
+
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "curr_value:");
+            format_itimerspec(&mut sf, data.curr_value).await?;
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_timerfd_settime => {
+            let data = unsafe { event.data.timerfd_settime };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "flags: {}", format_timer_settime_flags(data.flags));
+
+            if data.has_new_value {
+                arg!(sf, "new_value:");
+                format_itimerspec(&mut sf, data.new_value).await?;
+            } else {
+                arg!(sf, "new_value: NULL");
+            }
+
+            if data.has_old_value {
+                arg!(sf, "old_value:");
+                format_itimerspec(&mut sf, data.old_value).await?;
+            } else {
+                arg!(sf, "old_value: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getpriority => {
             let data = unsafe { event.data.getpriority };
 

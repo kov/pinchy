@@ -6,10 +6,11 @@ use pinchy_common::{
     syscalls::{
         SYS_adjtimex, SYS_clock_adjtime, SYS_clock_getres, SYS_clock_gettime, SYS_clock_settime,
         SYS_timer_create, SYS_timer_delete, SYS_timer_getoverrun, SYS_timer_gettime,
-        SYS_timer_settime,
+        SYS_timer_settime, SYS_timerfd_create, SYS_timerfd_gettime, SYS_timerfd_settime,
     },
     AdjtimexData, ClockAdjtimeData, ClockTimeData, SyscallEvent, SyscallEventData, TimerCreateData,
-    TimerDeleteData, TimerGetoverrunData, TimerGettimeData, TimerSettimeData,
+    TimerDeleteData, TimerGetoverrunData, TimerGettimeData, TimerSettimeData, TimerfdCreateData,
+    TimerfdGettimeData, TimerfdSettimeData,
 };
 
 use crate::syscall_test;
@@ -347,4 +348,119 @@ syscall_test!(
         }
     },
     "1006 timer_settime(timerid: 0x13579bdf, flags: 0, new_value: { it_interval: { secs: 0, nanos: 100000000 }, it_value: { secs: 0, nanos: 50000000 } }, old_value: NULL) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timerfd_create_basic,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timerfd_create,
+            pid: 2001,
+            tid: 2001,
+            return_value: 5,
+            data: SyscallEventData {
+                timerfd_create: TimerfdCreateData {
+                    clockid: libc::CLOCK_MONOTONIC,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "2001 timerfd_create(clockid: CLOCK_MONOTONIC, flags: 0) = 5 (fd)\n"
+);
+
+syscall_test!(
+    test_timerfd_create_with_flags,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timerfd_create,
+            pid: 2002,
+            tid: 2002,
+            return_value: 6,
+            data: SyscallEventData {
+                timerfd_create: TimerfdCreateData {
+                    clockid: libc::CLOCK_REALTIME,
+                    flags: libc::TFD_CLOEXEC | libc::TFD_NONBLOCK,
+                },
+            },
+        }
+    },
+    "2002 timerfd_create(clockid: CLOCK_REALTIME, flags: TFD_CLOEXEC|TFD_NONBLOCK) = 6 (fd)\n"
+);
+
+syscall_test!(
+    test_timerfd_gettime,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timerfd_gettime,
+            pid: 2003,
+            tid: 2003,
+            return_value: 0,
+            data: SyscallEventData {
+                timerfd_gettime: TimerfdGettimeData {
+                    fd: 5,
+                    curr_value: Itimerspec {
+                        it_interval: Timespec { seconds: 1, nanos: 500_000_000 },
+                        it_value: Timespec { seconds: 0, nanos: 750_000_000 },
+                    },
+                },
+            },
+        }
+    },
+    "2003 timerfd_gettime(fd: 5, curr_value: { it_interval: { secs: 1, nanos: 500000000 }, it_value: { secs: 0, nanos: 750000000 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timerfd_settime_relative,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timerfd_settime,
+            pid: 2004,
+            tid: 2004,
+            return_value: 0,
+            data: SyscallEventData {
+                timerfd_settime: TimerfdSettimeData {
+                    fd: 6,
+                    flags: 0, // Relative timer
+                    has_new_value: true,
+                    new_value: Itimerspec {
+                        it_interval: Timespec { seconds: 2, nanos: 0 },
+                        it_value: Timespec { seconds: 1, nanos: 500_000_000 },
+                    },
+                    has_old_value: true,
+                    old_value: Itimerspec {
+                        it_interval: Timespec { seconds: 0, nanos: 0 },
+                        it_value: Timespec { seconds: 0, nanos: 0 },
+                    },
+                },
+            },
+        }
+    },
+    "2004 timerfd_settime(fd: 6, flags: 0, new_value: { it_interval: { secs: 2, nanos: 0 }, it_value: { secs: 1, nanos: 500000000 } }, old_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 0, nanos: 0 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_timerfd_settime_absolute,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_timerfd_settime,
+            pid: 2005,
+            tid: 2005,
+            return_value: 0,
+            data: SyscallEventData {
+                timerfd_settime: TimerfdSettimeData {
+                    fd: 7,
+                    flags: 1, // TIMER_ABSTIME
+                    has_new_value: true,
+                    new_value: Itimerspec {
+                        it_interval: Timespec { seconds: 0, nanos: 0 },
+                        it_value: Timespec { seconds: 1675209700, nanos: 0 }, // Absolute time
+                    },
+                    has_old_value: false,
+                    old_value: Itimerspec::default(),
+                },
+            },
+        }
+    },
+    "2005 timerfd_settime(fd: 7, flags: TIMER_ABSTIME, new_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 1675209700, nanos: 0 } }, old_value: NULL) = 0 (success)\n"
 );

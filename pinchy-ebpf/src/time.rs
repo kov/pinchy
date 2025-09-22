@@ -100,6 +100,48 @@ pub fn syscall_exit_time(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
+            syscalls::SYS_timerfd_create => {
+                let data = data_mut!(entry, timerfd_create);
+                data.clockid = args[0] as i32;
+                data.flags = args[1] as i32;
+            }
+            syscalls::SYS_timerfd_gettime => {
+                let data = data_mut!(entry, timerfd_gettime);
+                data.fd = args[0] as i32;
+                let curr_value_ptr = args[1] as *const pinchy_common::kernel_types::Itimerspec;
+                if let Ok(curr_value) = unsafe { bpf_probe_read_user(curr_value_ptr) } {
+                    data.curr_value = curr_value;
+                }
+            }
+            syscalls::SYS_timerfd_settime => {
+                let data = data_mut!(entry, timerfd_settime);
+                data.fd = args[0] as i32;
+                data.flags = args[1] as i32;
+
+                let new_value_ptr = args[2] as *const pinchy_common::kernel_types::Itimerspec;
+                if new_value_ptr.is_null() {
+                    data.has_new_value = false;
+                } else {
+                    if let Ok(new_value) = unsafe { bpf_probe_read_user(new_value_ptr) } {
+                        data.new_value = new_value;
+                        data.has_new_value = true;
+                    } else {
+                        data.has_new_value = false;
+                    }
+                }
+
+                let old_value_ptr = args[3] as *const pinchy_common::kernel_types::Itimerspec;
+                if old_value_ptr.is_null() {
+                    data.has_old_value = false;
+                } else {
+                    if let Ok(old_value) = unsafe { bpf_probe_read_user(old_value_ptr) } {
+                        data.old_value = old_value;
+                        data.has_old_value = true;
+                    } else {
+                        data.has_old_value = false;
+                    }
+                }
+            }
 
             _ => {
                 entry.discard();

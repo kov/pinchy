@@ -74,6 +74,7 @@ fn main() -> anyhow::Result<()> {
             "epoll_test" => epoll_test(),
             "eventfd_test" => eventfd_test(),
             "timer_test" => timer_test(),
+            "timerfd_test" => timerfd_test(),
             "execveat_test" => execveat_test(),
             "pipe_operations_test" => pipe_operations_test(),
             "io_multiplexing_test" => io_multiplexing_test(),
@@ -1920,6 +1921,112 @@ fn timer_test() -> anyhow::Result<()> {
                 std::io::Error::last_os_error()
             );
         }
+    }
+
+    Ok(())
+}
+
+fn timerfd_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test 1: timerfd_create with CLOCK_REALTIME and no flags
+        let timerfd = libc::syscall(libc::SYS_timerfd_create, libc::CLOCK_REALTIME, 0);
+        if timerfd < 0 {
+            bail!("timerfd_create failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: timerfd_settime with relative time
+        let new_value = libc::itimerspec {
+            it_interval: libc::timespec {
+                tv_sec: 1,
+                tv_nsec: 0,
+            },
+            it_value: libc::timespec {
+                tv_sec: 2,
+                tv_nsec: 500_000_000,
+            },
+        };
+        let mut old_value: libc::itimerspec = std::mem::zeroed();
+        let result = libc::syscall(
+            libc::SYS_timerfd_settime,
+            timerfd,
+            0, // flags = 0 (relative time)
+            &new_value as *const libc::itimerspec,
+            &mut old_value as *mut libc::itimerspec,
+        );
+        if result != 0 {
+            bail!(
+                "timerfd_settime failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 3: timerfd_gettime
+        let mut curr_value: libc::itimerspec = std::mem::zeroed();
+        let result = libc::syscall(
+            libc::SYS_timerfd_gettime,
+            timerfd,
+            &mut curr_value as *mut libc::itimerspec,
+        );
+        if result != 0 {
+            bail!(
+                "timerfd_gettime failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Close the timerfd
+        libc::close(timerfd as i32);
+
+        // Test 4: timerfd_create with CLOCK_MONOTONIC and TFD_CLOEXEC
+        let timerfd2 = libc::syscall(libc::SYS_timerfd_create, libc::CLOCK_MONOTONIC, 0o2000000); // TFD_CLOEXEC
+        if timerfd2 < 0 {
+            bail!(
+                "timerfd_create with TFD_CLOEXEC failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 5: timerfd_settime with absolute time (TIMER_ABSTIME flag)
+        let abs_time = libc::itimerspec {
+            it_interval: libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            },
+            it_value: libc::timespec {
+                tv_sec: 1675209600, // Some absolute time
+                tv_nsec: 0,
+            },
+        };
+        let result = libc::syscall(
+            libc::SYS_timerfd_settime,
+            timerfd2,
+            1, // TIMER_ABSTIME
+            &abs_time as *const libc::itimerspec,
+            std::ptr::null_mut::<libc::itimerspec>(),
+        );
+        if result != 0 {
+            bail!(
+                "timerfd_settime with TIMER_ABSTIME failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 6: timerfd_gettime on the second timer
+        let mut curr_value2: libc::itimerspec = std::mem::zeroed();
+        let result = libc::syscall(
+            libc::SYS_timerfd_gettime,
+            timerfd2,
+            &mut curr_value2 as *mut libc::itimerspec,
+        );
+        if result != 0 {
+            bail!(
+                "timerfd_gettime on second timer failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Close the second timerfd
+        libc::close(timerfd2 as i32);
     }
 
     Ok(())

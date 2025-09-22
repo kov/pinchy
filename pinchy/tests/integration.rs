@@ -1477,6 +1477,44 @@ fn timer_test() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn timerfd_test() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(
+        &[
+            "timerfd_create",
+            "timerfd_settime",
+            "timerfd_gettime",
+            "close",
+        ],
+        "timerfd_test",
+    );
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ timerfd_create(clockid: CLOCK_REALTIME, flags: 0) = @NUMBER@ (fd)
+        @PID@ timerfd_settime(fd: @NUMBER@, flags: 0, new_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: 2, nanos: 500000000 } }, old_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 0, nanos: 0 } }) = 0 (success)
+        @PID@ timerfd_gettime(fd: @NUMBER@, curr_value: { it_interval: { secs: 1, nanos: 0 }, it_value: { secs: @NUMBER@, nanos: @NUMBER@ } }) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ timerfd_create(clockid: CLOCK_MONOTONIC, flags: TFD_CLOEXEC) = @NUMBER@ (fd)
+        @PID@ timerfd_settime(fd: @NUMBER@, flags: TIMER_ABSTIME, new_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 1675209600, nanos: 0 } }, old_value: NULL) = 0 (success)
+        @PID@ timerfd_gettime(fd: @NUMBER@, curr_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: @NUMBER@, nanos: @NUMBER@ } }) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn ioctl_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 

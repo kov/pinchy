@@ -241,6 +241,9 @@ pub union SyscallEventData {
     pub timer_gettime: TimerGettimeData,
     pub timer_settime: TimerSettimeData,
     pub timer_getoverrun: TimerGetoverrunData,
+    pub timerfd_create: TimerfdCreateData,
+    pub timerfd_gettime: TimerfdGettimeData,
+    pub timerfd_settime: TimerfdSettimeData,
     pub statx: StatxData,
     pub capsetget: CapsetgetData,
     pub flock: FlockData,
@@ -2301,6 +2304,31 @@ pub struct TimerSettimeData {
 #[derive(Clone, Copy, Default)]
 pub struct TimerGetoverrunData {
     pub timerid: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerfdCreateData {
+    pub clockid: i32,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerfdGettimeData {
+    pub fd: i32,
+    pub curr_value: crate::kernel_types::Itimerspec,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct TimerfdSettimeData {
+    pub fd: i32,
+    pub flags: i32,
+    pub has_new_value: bool,
+    pub new_value: crate::kernel_types::Itimerspec,
+    pub has_old_value: bool,
+    pub old_value: crate::kernel_types::Itimerspec,
 }
 
 #[repr(C)]

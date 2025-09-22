@@ -746,6 +746,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_timer_create,
         syscalls::SYS_timer_gettime,
         syscalls::SYS_timer_settime,
+        syscalls::SYS_timerfd_create,
+        syscalls::SYS_timerfd_gettime,
+        syscalls::SYS_timerfd_settime,
     ];
     let time_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_time")

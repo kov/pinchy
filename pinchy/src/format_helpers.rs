@@ -3778,6 +3778,39 @@ pub fn format_timer_settime_flags(flags: i32) -> String {
     }
 }
 
+pub fn format_timerfd_flags(flags: i32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts: Vec<Cow<'static, str>> = Vec::new();
+
+    if flags & libc::TFD_CLOEXEC != 0 {
+        parts.push(Cow::Borrowed("TFD_CLOEXEC"));
+    }
+
+    if flags & libc::TFD_NONBLOCK != 0 {
+        parts.push(Cow::Borrowed("TFD_NONBLOCK"));
+    }
+
+    let remaining = flags & !(libc::TFD_CLOEXEC | libc::TFD_NONBLOCK);
+    if remaining != 0 {
+        parts.push(Cow::Owned(format!("0x{remaining:x}")));
+    }
+
+    if parts.is_empty() {
+        Cow::Owned(format!("0x{flags:x}"))
+    } else {
+        Cow::Owned(
+            parts
+                .into_iter()
+                .map(|c| c.into_owned())
+                .collect::<Vec<_>>()
+                .join("|"),
+        )
+    }
+}
+
 pub fn format_fsopen_flags(flags: u32) -> Cow<'static, str> {
     if flags == 0 {
         return Cow::Borrowed("0");

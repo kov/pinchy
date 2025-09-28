@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::bail;
-use pinchy_common::DATA_READ_SIZE;
+use pinchy_common::{syscalls, DATA_READ_SIZE};
 
 /// Returns the workspace root by walking up from the crate root.
 fn find_workspace_root(mut dir: PathBuf) -> PathBuf {
@@ -88,6 +88,7 @@ fn main() -> anyhow::Result<()> {
             "filesystem_links_test" => filesystem_links_test(),
             "statfs_test" => statfs_test(),
             "socket_introspection_test" => socket_introspection_test(),
+            "aio_test" => aio_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -3224,6 +3225,111 @@ fn filesystem_links_test() -> anyhow::Result<()> {
             libc::unlink(link2_path.as_ptr());
         }
     }
+
+    Ok(())
+}
+
+fn aio_test() -> anyhow::Result<()> {
+    use std::{fs::OpenOptions, io::Write, mem, os::unix::io::AsRawFd};
+
+    // Create a temporary file for AIO operations
+    let mut temp_file = OpenOptions::new()
+        .create(true)
+        .write(true)
+        .read(true)
+        .truncate(true)
+        .open("/tmp/aio_test_file")?;
+
+    // Write some initial data
+    temp_file.write_all(b"Hello, AIO World! This is a test file for async I/O operations.")?;
+    temp_file.sync_all()?;
+    let fd = temp_file.as_raw_fd();
+
+    unsafe {
+        // Step 1: Setup AIO context
+        let mut ctx: u64 = 0;
+        let ctx_ptr = &mut ctx as *mut u64;
+        let ret = libc::syscall(libc::SYS_io_setup, 128, ctx_ptr);
+        if ret != 0 {
+            // AIO might not be supported, just return Ok to avoid test failure
+            println!("io_setup failed (AIO not supported?), skipping AIO test");
+            return Ok(());
+        }
+
+        // Step 2: Prepare an IOCB structure using the proper struct
+        let mut buffer = vec![0u8; 64];
+
+        let iocb = pinchy_common::kernel_types::IoCb {
+            aio_data: 0xdeadbeef,
+            aio_key: 0,
+            aio_rw_flags: 0,
+            aio_lio_opcode: 0, // IOCB_CMD_PREAD
+            aio_reqprio: 0,
+            aio_fildes: fd as u32,
+            aio_buf: buffer.as_mut_ptr() as u64,
+            aio_nbytes: buffer.len() as u64,
+            aio_offset: 0,
+            aio_reserved2: 0,
+            aio_flags: 0,
+            aio_resfd: 0,
+        };
+
+        // Step 3: Submit the IOCB
+        let iocb_ptr = &iocb as *const pinchy_common::kernel_types::IoCb;
+        let iocb_ptrs = [iocb_ptr];
+        let ret = libc::syscall(libc::SYS_io_submit, ctx, 1, iocb_ptrs.as_ptr());
+        if ret != 1 {
+            println!("io_submit failed, cleaning up");
+            libc::syscall(libc::SYS_io_destroy, ctx);
+            return Ok(());
+        }
+
+        // Step 4: Try to get events
+        let mut events = [0u64; 8]; // 2 io_event structures (32 bytes each)
+        let timeout = [1i64, 0i64]; // 1 second timeout (timespec-like)
+        let ret = libc::syscall(
+            libc::SYS_io_getevents,
+            ctx,
+            1,                   // min_nr
+            2,                   // nr
+            events.as_mut_ptr(), // events
+            timeout.as_ptr(),    // timeout
+        );
+
+        // Step 5: Try io_pgetevents with empty signal set (if supported)
+        if ret >= 0 {
+            let sigset = [0u64; 16]; // Empty sigset_t
+            let aio_sigset = [
+                sigset.as_ptr() as u64,           // sigmask pointer
+                mem::size_of_val(&sigset) as u64, // sigsetsize
+            ];
+
+            let _ret2 = libc::syscall(
+                syscalls::SYS_io_pgetevents,
+                ctx,
+                0,                   // min_nr
+                2,                   // nr
+                events.as_mut_ptr(), // events
+                timeout.as_ptr(),    // timeout
+                aio_sigset.as_ptr(), // usig
+            );
+        }
+
+        // Step 6: Try to cancel operations (might fail, that's ok)
+        let mut result_event = [0u64; 4]; // io_event structure
+        let _ret = libc::syscall(
+            libc::SYS_io_cancel,
+            ctx,
+            iocb_ptr,
+            result_event.as_mut_ptr(),
+        );
+
+        // Step 7: Destroy the AIO context
+        libc::syscall(libc::SYS_io_destroy, ctx);
+    }
+
+    // Clean up the temp file
+    std::fs::remove_file("/tmp/aio_test_file").ok();
 
     Ok(())
 }

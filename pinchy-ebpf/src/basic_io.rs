@@ -9,7 +9,7 @@ use aya_ebpf::{
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 use pinchy_common::{
-    kernel_types::{FdSet, OpenHow, Pollfd, Timespec},
+    kernel_types::{AioSigset, FdSet, IoCb, IoEvent, OpenHow, Pollfd, Sigset, Timespec},
     syscalls,
 };
 
@@ -405,6 +405,144 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                     &mut data.read_count,
                     return_value,
                 );
+            }
+            syscalls::SYS_io_setup => {
+                let data = data_mut!(entry, io_setup);
+                data.nr_events = args[0] as u32;
+                data.ctx_idp = args[1] as u64;
+            }
+            syscalls::SYS_io_destroy => {
+                let data = data_mut!(entry, io_destroy);
+                data.ctx_id = args[0] as u64;
+            }
+            syscalls::SYS_io_submit => {
+                let data = data_mut!(entry, io_submit);
+                data.ctx_id = args[0] as u64;
+                data.nr = args[1] as i64;
+                data.iocbpp = args[2] as u64;
+
+                // Read bounded array of IOCBs
+                let nr_to_read = if data.nr < 0 { 0 } else { data.nr as usize };
+                let max_to_read = core::cmp::min(nr_to_read, data.iocbs.len());
+                data.iocb_count = max_to_read as u32;
+
+                if data.iocbpp != 0 && max_to_read > 0 {
+                    // Read array of IOCB pointers
+                    let iocb_ptrs_ptr = data.iocbpp as *const u64;
+                    for i in 0..max_to_read {
+                        unsafe {
+                            if let Ok(iocb_ptr) = bpf_probe_read_user::<u64>(iocb_ptrs_ptr.add(i)) {
+                                if iocb_ptr != 0 {
+                                    if let Ok(iocb) =
+                                        bpf_probe_read_user::<IoCb>(iocb_ptr as *const _)
+                                    {
+                                        data.iocbs[i] = iocb;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_io_cancel => {
+                let data = data_mut!(entry, io_cancel);
+                data.ctx_id = args[0] as u64;
+                data.iocb = args[1] as u64;
+                data.result = args[2] as u64;
+
+                // Try to read result event if pointer is valid and syscall succeeded
+                data.has_result = data.result != 0 && return_value == 0;
+                if data.has_result {
+                    unsafe {
+                        if let Ok(event) = bpf_probe_read_user::<IoEvent>(data.result as *const _) {
+                            data.result_event = event;
+                        } else {
+                            data.has_result = false;
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_io_getevents => {
+                let data = data_mut!(entry, io_getevents);
+                data.ctx_id = args[0] as u64;
+                data.min_nr = args[1] as i64;
+                data.nr = args[2] as i64;
+                data.events = args[3] as u64;
+                data.timeout = args[4] as u64;
+
+                // Read timeout if provided
+                data.has_timeout = data.timeout != 0;
+                if data.has_timeout {
+                    data.timeout_data = read_timespec(data.timeout as *const _);
+                }
+
+                // Read bounded array of events if syscall succeeded
+                if data.events != 0 && return_value > 0 {
+                    let nr_events = return_value as usize;
+                    let max_to_read = core::cmp::min(nr_events, data.event_array.len());
+                    data.event_count = max_to_read as u32;
+
+                    let events_ptr = data.events as *const IoEvent;
+                    for i in 0..max_to_read {
+                        unsafe {
+                            if let Ok(event) = bpf_probe_read_user::<IoEvent>(events_ptr.add(i)) {
+                                data.event_array[i] = event;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_io_pgetevents => {
+                let data = data_mut!(entry, io_pgetevents);
+                data.ctx_id = args[0] as u64;
+                data.min_nr = args[1] as i64;
+                data.nr = args[2] as i64;
+                data.events = args[3] as u64;
+                data.timeout = args[4] as u64;
+                data.usig = args[5] as u64;
+
+                // Read timeout if provided
+                data.has_timeout = data.timeout != 0;
+                if data.has_timeout {
+                    data.timeout_data = read_timespec(data.timeout as *const _);
+                }
+
+                // Read signal set info if provided
+                data.has_usig = data.usig != 0;
+                if data.has_usig {
+                    unsafe {
+                        if let Ok(aio_sigset) =
+                            bpf_probe_read_user::<AioSigset>(data.usig as *const _)
+                        {
+                            data.usig_data = aio_sigset;
+
+                            // Try to read the actual sigset if pointer is valid
+                            if aio_sigset.sigmask != 0 && aio_sigset.sigsetsize <= 128 {
+                                if let Ok(sigset) =
+                                    bpf_probe_read_user::<Sigset>(aio_sigset.sigmask as *const _)
+                                {
+                                    data.sigset_data = sigset;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Read bounded array of events if syscall succeeded
+                if data.events != 0 && return_value > 0 {
+                    let nr_events = return_value as usize;
+                    let max_to_read = core::cmp::min(nr_events, data.event_array.len());
+                    data.event_count = max_to_read as u32;
+
+                    let events_ptr = data.events as *const IoEvent;
+                    for i in 0..max_to_read {
+                        unsafe {
+                            if let Ok(event) = bpf_probe_read_user::<IoEvent>(events_ptr.add(i)) {
+                                data.event_array[i] = event;
+                            }
+                        }
+                    }
+                }
             }
             _ => {
                 entry.discard();

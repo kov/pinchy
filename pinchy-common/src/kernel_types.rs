@@ -9,6 +9,24 @@ pub const SIGEV_NONE: i32 = 1; // other notification: meaningless
 pub const SIGEV_THREAD: i32 = 2; // deliver via thread creation
 pub const SIGEV_THREAD_ID: i32 = 4; // deliver to thread (Linux-specific)
 
+// AIO constants for IO control block commands
+pub const IOCB_CMD_PREAD: u16 = 0;
+pub const IOCB_CMD_PWRITE: u16 = 1;
+pub const IOCB_CMD_FSYNC: u16 = 2;
+pub const IOCB_CMD_FDSYNC: u16 = 3;
+pub const IOCB_CMD_POLL: u16 = 5;
+pub const IOCB_CMD_NOOP: u16 = 6;
+pub const IOCB_CMD_PREADV: u16 = 7;
+pub const IOCB_CMD_PWRITEV: u16 = 8;
+
+// AIO flags for IO control blocks
+pub const IOCB_FLAG_RESFD: u32 = 1 << 0; // aio_resfd is valid
+pub const IOCB_FLAG_IOPRIO: u32 = 1 << 1; // aio_reqprio is valid
+
+// Constants for bounded arrays in AIO data structures
+pub const AIO_IOCB_ARRAY_CAP: usize = 4;
+pub const AIO_EVENT_ARRAY_CAP: usize = 4;
+
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Pollfd {
@@ -648,4 +666,62 @@ pub struct FutexWaitv {
     pub uaddr: u64,
     pub flags: u32,
     pub __reserved: u32,
+}
+
+/// Async I/O control block structure, matching the kernel's struct iocb
+/// See: https://man7.org/linux/man-pages/man2/io_submit.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct IoCb {
+    pub aio_data: u64, // data to be returned in event's data
+
+    // Byte order handling for aio_key/aio_rw_flags
+    #[cfg(target_endian = "little")]
+    pub aio_key: u32, // the kernel sets aio_key to the req #
+    #[cfg(target_endian = "little")]
+    pub aio_rw_flags: u32, // RWF_* flags
+
+    #[cfg(target_endian = "big")]
+    pub aio_rw_flags: u32, // RWF_* flags
+    #[cfg(target_endian = "big")]
+    pub aio_key: u32, // the kernel sets aio_key to the req #
+
+    // common fields
+    pub aio_lio_opcode: u16, // see IOCB_CMD_* constants
+    pub aio_reqprio: i16,
+    pub aio_fildes: u32,
+
+    pub aio_buf: u64,    // buffer pointer
+    pub aio_nbytes: u64, // number of bytes
+    pub aio_offset: i64, // file offset
+
+    // extra parameters
+    pub aio_reserved2: u64, // TODO: use this for a (struct sigevent *)
+
+    // flags for the "struct iocb"
+    pub aio_flags: u32,
+
+    // if the IOCB_FLAG_RESFD flag of "aio_flags" is set, this is an
+    // eventfd to signal AIO readiness to
+    pub aio_resfd: u32,
+}
+
+/// Async I/O event structure, matching the kernel's struct io_event
+/// See: https://man7.org/linux/man-pages/man2/io_getevents.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct IoEvent {
+    pub data: u64, // the data field from the iocb
+    pub obj: u64,  // what iocb this event came from
+    pub res: i64,  // result code for this event
+    pub res2: i64, // secondary result
+}
+
+/// Async I/O sigset structure for io_pgetevents
+/// Contains signal mask and signal set size
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct AioSigset {
+    pub sigmask: u64,    // pointer to sigset_t
+    pub sigsetsize: u64, // size of signal set
 }

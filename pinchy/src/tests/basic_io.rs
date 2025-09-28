@@ -5,17 +5,19 @@ use std::pin::Pin;
 
 use indoc::indoc;
 use pinchy_common::{
-    kernel_types::{EpollEvent, Iovec, OpenHow, Timespec},
+    kernel_types::{AioSigset, EpollEvent, IoCb, IoEvent, Iovec, OpenHow, Sigset, Timespec},
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
-        SYS_epoll_pwait2, SYS_fcntl, SYS_flock, SYS_lseek, SYS_openat, SYS_openat2, SYS_pipe2,
-        SYS_ppoll, SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice,
-        SYS_tee, SYS_vmsplice, SYS_write, SYS_writev,
+        SYS_epoll_pwait2, SYS_fcntl, SYS_flock, SYS_io_cancel, SYS_io_destroy, SYS_io_getevents,
+        SYS_io_pgetevents, SYS_io_setup, SYS_io_submit, SYS_lseek, SYS_openat, SYS_openat2,
+        SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv,
+        SYS_splice, SYS_tee, SYS_vmsplice, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
-    EpollPWaitData, FcntlData, FlockData, LseekData, OpenAt2Data, OpenAtData, PpollData, PreadData,
-    PwriteData, ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData, VectorIOData,
-    VmspliceData, WriteData, DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
+    EpollPWaitData, FcntlData, FlockData, IoCancelData, IoDestroyData, IoGeteventsData,
+    IoPgeteventsData, IoSetupData, IoSubmitData, LseekData, OpenAt2Data, OpenAtData, PpollData,
+    PreadData, PwriteData, ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData,
+    VectorIOData, VmspliceData, WriteData, DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -25,6 +27,7 @@ use pinchy_common::{
 
 use crate::{
     events::handle_event,
+    format_helpers::aio_constants,
     formatting::{Formatter, FormattingStyle},
     syscall_test,
 };
@@ -906,4 +909,195 @@ syscall_test!(
         }
     },
     "456 flock(fd: 7, operation: 0x8 (LOCK_UN)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_io_setup,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_io_setup,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                io_setup: IoSetupData {
+                    nr_events: 1024,
+                    ctx_idp: 0x7ffe12345678,
+                },
+            },
+        }
+    },
+    "123 io_setup(nr_events: 1024, ctx_idp: 0x7ffe12345678) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_io_destroy,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_io_destroy,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                io_destroy: IoDestroyData { ctx_id: 0x12345678 },
+            },
+        }
+    },
+    "123 io_destroy(ctx_id: 0x12345678) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_io_submit,
+    {
+        let mut iocb1 = IoCb::default();
+        iocb1.aio_data = 0xdead;
+        iocb1.aio_key = 1;
+        iocb1.aio_rw_flags = libc::RWF_HIPRI as u32;
+        iocb1.aio_lio_opcode = aio_constants::IOCB_CMD_PREAD;
+        iocb1.aio_reqprio = 0;
+        iocb1.aio_fildes = 3;
+        iocb1.aio_buf = 0x7ffe87654321;
+        iocb1.aio_nbytes = 4096;
+        iocb1.aio_offset = 0;
+        iocb1.aio_flags = aio_constants::IOCB_FLAG_RESFD;
+        iocb1.aio_resfd = 4;
+
+        let mut iocb2 = IoCb::default();
+        iocb2.aio_data = 0xbeef;
+        iocb2.aio_lio_opcode = aio_constants::IOCB_CMD_PWRITE;
+        iocb2.aio_fildes = 5;
+        iocb2.aio_buf = 0x7ffe11111111;
+        iocb2.aio_nbytes = 2048;
+        iocb2.aio_offset = 1024;
+
+        SyscallEvent {
+            syscall_nr: SYS_io_submit,
+            pid: 123,
+            tid: 123,
+            return_value: 2,
+            data: SyscallEventData {
+                io_submit: IoSubmitData {
+                    ctx_id: 0x12345678,
+                    nr: 2,
+                    iocbpp: 0x7ffe22222222,
+                    iocbs: [iocb1, iocb2, IoCb::default(), IoCb::default()],
+                    iocb_count: 2,
+                },
+            },
+        }
+    },
+    "123 io_submit(ctx_id: 0x12345678, nr: 2, iocbpp: 0x7ffe22222222, iocbs: [ iocb { data: 0xdead, key: 1, rw_flags: 0x1 (RWF_HIPRI), lio_opcode: IOCB_CMD_PREAD, reqprio: 0, fildes: 3, buf: 0x7ffe87654321, nbytes: 4096, offset: 0, flags: 0x1 (IOCB_FLAG_RESFD), resfd: 4 }, iocb { data: 0xbeef, key: 0, rw_flags: 0, lio_opcode: IOCB_CMD_PWRITE, reqprio: 0, fildes: 5, buf: 0x7ffe11111111, nbytes: 2048, offset: 1024, flags: 0 } ]) = 2 (requests)\n"
+);
+
+syscall_test!(
+    parse_io_cancel,
+    {
+        let result_event = IoEvent {
+            data: 0xdead,
+            obj: 0x12345678,
+            res: -125, // -ECANCELED
+            res2: 0,
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_io_cancel,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                io_cancel: IoCancelData {
+                    ctx_id: 0x12345678,
+                    iocb: 0x7ffe11111111,
+                    result: 0x7ffe22222222,
+                    has_result: true,
+                    result_event,
+                },
+            },
+        }
+    },
+    "123 io_cancel(ctx_id: 0x12345678, iocb: 0x7ffe11111111, result: 0x7ffe22222222, result_event: { data: 0xdead, obj: 0x12345678, res: -125, res2: 0 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_io_getevents,
+    {
+        let event1 = IoEvent {
+            data: 0xdead,
+            obj: 0x11111111,
+            res: 4096,
+            res2: 0,
+        };
+
+        let event2 = IoEvent {
+            data: 0xbeef,
+            obj: 0x22222222,
+            res: 2048,
+            res2: 0,
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_io_getevents,
+            pid: 123,
+            tid: 123,
+            return_value: 2,
+            data: SyscallEventData {
+                io_getevents: IoGeteventsData {
+                    ctx_id: 0x12345678,
+                    min_nr: 1,
+                    nr: 4,
+                    events: 0x7ffe33333333,
+                    timeout: 0x7ffe44444444,
+                    event_array: [event1, event2, IoEvent::default(), IoEvent::default()],
+                    event_count: 2,
+                    has_timeout: true,
+                    timeout_data: Timespec { seconds: 1, nanos: 500000000 },
+                },
+            },
+        }
+    },
+    "123 io_getevents(ctx_id: 0x12345678, min_nr: 1, nr: 4, events: 0x7ffe33333333, timeout: { secs: 1, nanos: 500000000 }, events_returned: [ event { data: 0xdead, obj: 0x11111111, res: 4096, res2: 0 }, event { data: 0xbeef, obj: 0x22222222, res: 2048, res2: 0 } ]) = 2 (events)\n"
+);
+
+syscall_test!(
+    parse_io_pgetevents_with_sigset,
+    {
+        let event1 = IoEvent {
+            data: 0xcafe,
+            obj: 0x55555555,
+            res: 1024,
+            res2: 0,
+        };
+
+        let mut sigset = Sigset::default();
+        // Set SIGUSR1 (signal 10) in the sigset - bit 9 (0-indexed)
+        sigset.bytes[1] = 0x02; // bit 9 = byte 1, bit 1
+
+        SyscallEvent {
+            syscall_nr: SYS_io_pgetevents,
+            pid: 123,
+            tid: 123,
+            return_value: 1,
+            data: SyscallEventData {
+                io_pgetevents: IoPgeteventsData {
+                    ctx_id: 0x12345678,
+                    min_nr: 1,
+                    nr: 2,
+                    events: 0x7ffe55555555,
+                    timeout: 0,
+                    usig: 0x7ffe66666666,
+                    event_array: [event1, IoEvent::default(), IoEvent::default(), IoEvent::default()],
+                    event_count: 1,
+                    has_timeout: false,
+                    timeout_data: Timespec::default(),
+                    has_usig: true,
+                    usig_data: AioSigset {
+                        sigmask: 0x7ffe77777777,
+                        sigsetsize: 8,
+                    },
+                    sigset_data: sigset,
+                },
+            },
+        }
+    },
+    "123 io_pgetevents(ctx_id: 0x12345678, min_nr: 1, nr: 2, events: 0x7ffe55555555, timeout: NULL, usig: { sigmask: 0x7ffe77777777, sigsetsize: 8, sigset: [SIGUSR1] }, events_returned: [ event { data: 0xcafe, obj: 0x55555555, res: 1024, res2: 0 } ]) = 1 (events)\n"
 );

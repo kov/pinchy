@@ -623,6 +623,13 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_splice,
         syscalls::SYS_tee,
         syscalls::SYS_vmsplice,
+        // Async I/O syscalls
+        syscalls::SYS_io_setup,
+        syscalls::SYS_io_destroy,
+        syscalls::SYS_io_submit,
+        syscalls::SYS_io_cancel,
+        syscalls::SYS_io_getevents,
+        syscalls::SYS_io_pgetevents,
     ];
     let basic_io_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_basic_io")

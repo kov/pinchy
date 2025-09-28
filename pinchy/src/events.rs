@@ -8,7 +8,7 @@ use pinchy_common::{kernel_types, syscalls, SyscallEvent};
 
 use crate::{
     arg, argf, finish,
-    format_helpers::{format_futex_waitv_flags, *},
+    format_helpers::{aio_constants, format_futex_waitv_flags, *},
     formatting::Formatter,
     ioctls::format_ioctl_request,
     raw, with_array, with_struct,
@@ -3296,6 +3296,157 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "name: {}", format_path(&data.name, false));
             argf!(sf, "len: {}", data.len);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_setup => {
+            let data = unsafe { event.data.io_setup };
+
+            argf!(sf, "nr_events: {}", data.nr_events);
+            argf!(sf, "ctx_idp: 0x{:x}", data.ctx_idp);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_destroy => {
+            let data = unsafe { event.data.io_destroy };
+
+            argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_submit => {
+            let data = unsafe { event.data.io_submit };
+
+            argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
+            argf!(sf, "nr: {}", data.nr);
+            argf!(sf, "iocbpp: 0x{:x}", data.iocbpp);
+
+            if data.iocb_count > 0 {
+                arg!(sf, "iocbs:");
+                with_array!(sf, {
+                    for i in 0..data.iocb_count as usize {
+                        let iocb = data.iocbs[i];
+                        arg!(sf, "iocb");
+                        with_struct!(sf, {
+                            argf!(sf, "data: 0x{:x}", iocb.aio_data);
+                            argf!(sf, "key: {}", iocb.aio_key);
+                            argf!(sf, "rw_flags: {}", format_rwf_flags(iocb.aio_rw_flags));
+                            argf!(sf, "lio_opcode: {}", format_iocb_cmd(iocb.aio_lio_opcode));
+                            argf!(sf, "reqprio: {}", iocb.aio_reqprio);
+                            argf!(sf, "fildes: {}", iocb.aio_fildes);
+                            argf!(sf, "buf: 0x{:x}", iocb.aio_buf);
+                            argf!(sf, "nbytes: {}", iocb.aio_nbytes);
+                            argf!(sf, "offset: {}", iocb.aio_offset);
+                            argf!(sf, "flags: {}", format_iocb_flags(iocb.aio_flags));
+                            if iocb.aio_flags & aio_constants::IOCB_FLAG_RESFD != 0 {
+                                argf!(sf, "resfd: {}", iocb.aio_resfd);
+                            }
+                        });
+                    }
+                });
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_cancel => {
+            let data = unsafe { event.data.io_cancel };
+
+            argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
+            argf!(sf, "iocb: 0x{:x}", data.iocb);
+            argf!(sf, "result: 0x{:x}", data.result);
+
+            if data.has_result {
+                arg!(sf, "result_event:");
+                with_struct!(sf, {
+                    argf!(sf, "data: 0x{:x}", data.result_event.data);
+                    argf!(sf, "obj: 0x{:x}", data.result_event.obj);
+                    argf!(sf, "res: {}", data.result_event.res);
+                    argf!(sf, "res2: {}", data.result_event.res2);
+                });
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_getevents => {
+            let data = unsafe { event.data.io_getevents };
+
+            argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
+            argf!(sf, "min_nr: {}", data.min_nr);
+            argf!(sf, "nr: {}", data.nr);
+            argf!(sf, "events: 0x{:x}", data.events);
+
+            if data.has_timeout {
+                arg!(sf, "timeout:");
+                format_timespec(&mut sf, data.timeout_data).await?;
+            } else {
+                argf!(sf, "timeout: NULL");
+            }
+
+            if data.event_count > 0 {
+                arg!(sf, "events_returned:");
+                with_array!(sf, {
+                    for i in 0..data.event_count as usize {
+                        let event = data.event_array[i];
+                        arg!(sf, "event");
+                        with_struct!(sf, {
+                            argf!(sf, "data: 0x{:x}", event.data);
+                            argf!(sf, "obj: 0x{:x}", event.obj);
+                            argf!(sf, "res: {}", event.res);
+                            argf!(sf, "res2: {}", event.res2);
+                        });
+                    }
+                });
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_pgetevents => {
+            let data = unsafe { event.data.io_pgetevents };
+
+            argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
+            argf!(sf, "min_nr: {}", data.min_nr);
+            argf!(sf, "nr: {}", data.nr);
+            argf!(sf, "events: 0x{:x}", data.events);
+
+            if data.has_timeout {
+                arg!(sf, "timeout:");
+                format_timespec(&mut sf, data.timeout_data).await?;
+            } else {
+                argf!(sf, "timeout: NULL");
+            }
+
+            if data.has_usig {
+                arg!(sf, "usig:");
+                with_struct!(sf, {
+                    argf!(sf, "sigmask: 0x{:x}", data.usig_data.sigmask);
+                    argf!(sf, "sigsetsize: {}", data.usig_data.sigsetsize);
+                    if data.usig_data.sigmask != 0 {
+                        argf!(
+                            sf,
+                            "sigset: {}",
+                            format_sigset(&data.sigset_data, data.usig_data.sigsetsize as usize)
+                        );
+                    }
+                });
+            } else {
+                argf!(sf, "usig: NULL");
+            }
+
+            if data.event_count > 0 {
+                arg!(sf, "events_returned:");
+                with_array!(sf, {
+                    for i in 0..data.event_count as usize {
+                        let event = data.event_array[i];
+                        arg!(sf, "event");
+                        with_struct!(sf, {
+                            argf!(sf, "data: 0x{:x}", event.data);
+                            argf!(sf, "obj: 0x{:x}", event.obj);
+                            argf!(sf, "res: {}", event.res);
+                            argf!(sf, "res2: {}", event.res2);
+                        });
+                    }
+                });
+            }
 
             finish!(sf, event.return_value);
         }

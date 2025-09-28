@@ -1598,3 +1598,49 @@ fn filesystem_links_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn aio_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises Async I/O syscalls
+    let handle = run_workload(
+        &[
+            "io_setup",
+            "io_submit",
+            "io_getevents",
+            "io_pgetevents",
+            "io_cancel",
+            "io_destroy",
+        ],
+        "aio_test",
+    );
+
+    // Expected output - we should see all AIO syscalls
+    // Note: Some syscalls might fail if AIO is not supported, but we should still see the traces
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ io_setup(nr_events: 128, ctx_idp: @ADDR@) = 0 (success)
+        @PID@ io_submit(ctx_id: @ADDR@, nr: 1, iocbpp: @ADDR@, iocbs: [ iocb { data: @ADDR@, key: @NUMBER@, rw_flags: @NUMBER@, lio_opcode: IOCB_CMD_PREAD, reqprio: @NUMBER@, fildes: @NUMBER@, buf: @ADDR@, nbytes: 64, offset: 0, flags: @NUMBER@ } ]) = 1 (requests)
+        @PID@ io_getevents(ctx_id: @ADDR@, min_nr: 1, nr: 2, events: @ADDR@, timeout: { secs: 1, nanos: 0 }, events_returned: [ event { data: @ADDR@, obj: @ADDR@, res: @SIGNEDNUMBER@, res2: @SIGNEDNUMBER@ } ]) = 1 (events)
+        @PID@ io_pgetevents(ctx_id: @ADDR@, min_nr: 0, nr: 2, events: @ADDR@, timeout: { secs: 1, nanos: 0 }, usig: { sigmask: @ADDR@, sigsetsize: @NUMBER@, sigset: [] }) = -@NUMBER@ (error)
+        @PID@ io_cancel(ctx_id: @ADDR@, iocb: @ADDR@, result: @ADDR@) = -@NUMBER@ (error)
+        @PID@ io_destroy(ctx_id: @ADDR@) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

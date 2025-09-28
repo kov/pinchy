@@ -33,6 +33,23 @@ pub mod fs_constants {
     pub const FSPICK_EMPTY_PATH: u32 = 0x00000008;
 }
 
+// AIO constants - these are not available in libc, defined from uapi/linux/aio_abi.h
+pub mod aio_constants {
+    // IOCB command opcodes
+    pub const IOCB_CMD_PREAD: u16 = 0;
+    pub const IOCB_CMD_PWRITE: u16 = 1;
+    pub const IOCB_CMD_FSYNC: u16 = 2;
+    pub const IOCB_CMD_FDSYNC: u16 = 3;
+    pub const IOCB_CMD_POLL: u16 = 5;
+    pub const IOCB_CMD_NOOP: u16 = 6;
+    pub const IOCB_CMD_PREADV: u16 = 7;
+    pub const IOCB_CMD_PWRITEV: u16 = 8;
+
+    // IOCB flags
+    pub const IOCB_FLAG_RESFD: u32 = 1 << 0; // aio_resfd is valid
+    pub const IOCB_FLAG_IOPRIO: u32 = 1 << 1; // aio_reqprio is valid
+}
+
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     let mut strs = vec![];
 
@@ -2187,6 +2204,29 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_recvmmsg | syscalls::SYS_sendmmsg => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (messages)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        // AIO syscalls
+        syscalls::SYS_io_submit => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (requests)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+        syscalls::SYS_io_getevents | syscalls::SYS_io_pgetevents => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (events)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+        syscalls::SYS_io_setup | syscalls::SYS_io_destroy | syscalls::SYS_io_cancel => {
+            if return_value == 0 {
+                std::borrow::Cow::Borrowed("0 (success)")
             } else {
                 std::borrow::Cow::Owned(format!("{return_value} (error)"))
             }
@@ -4409,5 +4449,80 @@ pub fn format_resolve_flags(flags: u64) -> Cow<'static, str> {
         Cow::Owned(format!("0x{flags:x}"))
     } else {
         Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+    }
+}
+
+/// Format IOCB command opcode
+pub fn format_iocb_cmd(opcode: u16) -> Cow<'static, str> {
+    match opcode {
+        aio_constants::IOCB_CMD_PREAD => "IOCB_CMD_PREAD".into(),
+        aio_constants::IOCB_CMD_PWRITE => "IOCB_CMD_PWRITE".into(),
+        aio_constants::IOCB_CMD_FSYNC => "IOCB_CMD_FSYNC".into(),
+        aio_constants::IOCB_CMD_FDSYNC => "IOCB_CMD_FDSYNC".into(),
+        aio_constants::IOCB_CMD_POLL => "IOCB_CMD_POLL".into(),
+        aio_constants::IOCB_CMD_NOOP => "IOCB_CMD_NOOP".into(),
+        aio_constants::IOCB_CMD_PREADV => "IOCB_CMD_PREADV".into(),
+        aio_constants::IOCB_CMD_PWRITEV => "IOCB_CMD_PWRITEV".into(),
+        _ => format!("{}", opcode).into(),
+    }
+}
+
+/// Format RWF flags (used in aio_rw_flags)
+pub fn format_rwf_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    // Use libc constants for RWF_* flags where available
+    if flags & libc::RWF_HIPRI as u32 != 0 {
+        parts.push("RWF_HIPRI");
+    }
+    if flags & libc::RWF_DSYNC as u32 != 0 {
+        parts.push("RWF_DSYNC");
+    }
+    if flags & libc::RWF_SYNC as u32 != 0 {
+        parts.push("RWF_SYNC");
+    }
+
+    let known_flags = libc::RWF_HIPRI as u32 | libc::RWF_DSYNC as u32 | libc::RWF_SYNC as u32;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags).into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+/// Format IOCB flags
+pub fn format_iocb_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & aio_constants::IOCB_FLAG_RESFD != 0 {
+        parts.push("IOCB_FLAG_RESFD");
+    }
+    if flags & aio_constants::IOCB_FLAG_IOPRIO != 0 {
+        parts.push("IOCB_FLAG_IOPRIO");
+    }
+
+    let known_flags = aio_constants::IOCB_FLAG_RESFD | aio_constants::IOCB_FLAG_IOPRIO;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags).into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
     }
 }

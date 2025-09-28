@@ -276,6 +276,12 @@ pub union SyscallEventData {
     pub delete_module: DeleteModuleData,
     pub sethostname: SethostnameData,
     pub setdomainname: SetdomainnameData,
+    pub io_setup: IoSetupData,
+    pub io_destroy: IoDestroyData,
+    pub io_submit: IoSubmitData,
+    pub io_cancel: IoCancelData,
+    pub io_getevents: IoGeteventsData,
+    pub io_pgetevents: IoPgeteventsData,
 }
 
 #[repr(C)]
@@ -2585,6 +2591,127 @@ impl Default for LinkatData {
             newdirfd: 0,
             newpath: [0; SMALLISH_READ_SIZE],
             flags: 0,
+        }
+    }
+}
+
+// Async I/O data structures
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct IoSetupData {
+    pub nr_events: u32,
+    pub ctx_idp: u64, // pointer to aio_context_t
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct IoDestroyData {
+    pub ctx_id: u64, // aio_context_t
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IoSubmitData {
+    pub ctx_id: u64, // aio_context_t
+    pub nr: i64,     // number of iocbs
+    pub iocbpp: u64, // pointer to iocb array
+
+    // Bounded snapshot of IOCBs
+    pub iocbs: [kernel_types::IoCb; kernel_types::AIO_IOCB_ARRAY_CAP],
+    pub iocb_count: u32, // How many IOCBs we actually captured
+}
+
+impl Default for IoSubmitData {
+    fn default() -> Self {
+        Self {
+            ctx_id: 0,
+            nr: 0,
+            iocbpp: 0,
+            iocbs: [kernel_types::IoCb::default(); kernel_types::AIO_IOCB_ARRAY_CAP],
+            iocb_count: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct IoCancelData {
+    pub ctx_id: u64,                         // aio_context_t
+    pub iocb: u64,                           // pointer to iocb to cancel
+    pub result: u64,                         // pointer to io_event result
+    pub has_result: bool,                    // whether result pointer was valid
+    pub result_event: kernel_types::IoEvent, // captured result event
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IoGeteventsData {
+    pub ctx_id: u64,  // aio_context_t
+    pub min_nr: i64,  // minimum number of events
+    pub nr: i64,      // maximum number of events
+    pub events: u64,  // pointer to io_event array
+    pub timeout: u64, // pointer to timespec
+
+    // Bounded snapshot of events
+    pub event_array: [kernel_types::IoEvent; kernel_types::AIO_EVENT_ARRAY_CAP],
+    pub event_count: u32,       // How many events we actually captured
+    pub has_timeout: bool,      // whether timeout was provided
+    pub timeout_data: Timespec, // captured timeout data
+}
+
+impl Default for IoGeteventsData {
+    fn default() -> Self {
+        Self {
+            ctx_id: 0,
+            min_nr: 0,
+            nr: 0,
+            events: 0,
+            timeout: 0,
+            event_array: [kernel_types::IoEvent::default(); kernel_types::AIO_EVENT_ARRAY_CAP],
+            event_count: 0,
+            has_timeout: false,
+            timeout_data: Timespec::default(),
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IoPgeteventsData {
+    pub ctx_id: u64,  // aio_context_t
+    pub min_nr: i64,  // minimum number of events
+    pub nr: i64,      // maximum number of events
+    pub events: u64,  // pointer to io_event array
+    pub timeout: u64, // pointer to timespec
+    pub usig: u64,    // pointer to aio_sigset
+
+    // Bounded snapshot of events
+    pub event_array: [kernel_types::IoEvent; kernel_types::AIO_EVENT_ARRAY_CAP],
+    pub event_count: u32,       // How many events we actually captured
+    pub has_timeout: bool,      // whether timeout was provided
+    pub timeout_data: Timespec, // captured timeout data
+    pub has_usig: bool,         // whether usig was provided
+    pub usig_data: kernel_types::AioSigset, // captured sigset data
+    pub sigset_data: kernel_types::Sigset, // captured signal set
+}
+
+impl Default for IoPgeteventsData {
+    fn default() -> Self {
+        Self {
+            ctx_id: 0,
+            min_nr: 0,
+            nr: 0,
+            events: 0,
+            timeout: 0,
+            usig: 0,
+            event_array: [kernel_types::IoEvent::default(); kernel_types::AIO_EVENT_ARRAY_CAP],
+            event_count: 0,
+            has_timeout: false,
+            timeout_data: Timespec::default(),
+            has_usig: false,
+            usig_data: kernel_types::AioSigset::default(),
+            sigset_data: kernel_types::Sigset::default(),
         }
     }
 }

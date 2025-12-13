@@ -89,6 +89,7 @@ fn main() -> anyhow::Result<()> {
             "statfs_test" => statfs_test(),
             "socket_introspection_test" => socket_introspection_test(),
             "aio_test" => aio_test(),
+            "landlock_test" => landlock_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -3330,6 +3331,116 @@ fn aio_test() -> anyhow::Result<()> {
 
     // Clean up the temp file
     std::fs::remove_file("/tmp/aio_test_file").ok();
+
+    Ok(())
+}
+
+fn landlock_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test landlock_create_ruleset
+        // First try with null attr and VERSION flag to check version/support
+        let ruleset_fd = libc::syscall(
+            syscalls::SYS_landlock_create_ruleset,
+            std::ptr::null::<u8>(), // attr (NULL to check version)
+            0,                      // size
+            1,                      // LANDLOCK_CREATE_RULESET_VERSION flag
+        );
+
+        // Close the fd if it was opened
+        if ruleset_fd >= 0 {
+            libc::close(ruleset_fd as i32);
+        }
+
+        // Now create an actual ruleset with valid parameters
+        // Define a minimal landlock_ruleset_attr structure
+        #[repr(C)]
+        struct LandlockRulesetAttr {
+            handled_access_fs: u64,
+        }
+
+        let attr = LandlockRulesetAttr {
+            handled_access_fs: 0, // No FS access restrictions
+        };
+
+        let ruleset_fd = libc::syscall(
+            syscalls::SYS_landlock_create_ruleset,
+            &attr as *const _ as *const u8,
+            std::mem::size_of::<LandlockRulesetAttr>(),
+            0, // flags = 0
+        );
+
+        // Test landlock_add_rule with PATH_BENEATH rule type
+        // Use the fd from create_ruleset if it succeeded, otherwise use -1
+        let fd_for_add_rule = if ruleset_fd >= 0 {
+            ruleset_fd as i32
+        } else {
+            -1
+        };
+
+        // Create a valid path_beneath rule attribute
+        #[repr(C)]
+        struct LandlockPathBeneathAttr {
+            allowed_access: u64,
+            parent_fd: i32,
+        }
+
+        let path_attr = LandlockPathBeneathAttr {
+            allowed_access: pinchy_common::LANDLOCK_ACCESS_FS_EXECUTE
+                | pinchy_common::LANDLOCK_ACCESS_FS_WRITE_FILE
+                | pinchy_common::LANDLOCK_ACCESS_FS_READ_FILE
+                | pinchy_common::LANDLOCK_ACCESS_FS_READ_DIR
+                | pinchy_common::LANDLOCK_ACCESS_FS_REMOVE_DIR
+                | pinchy_common::LANDLOCK_ACCESS_FS_REMOVE_FILE,
+            parent_fd: 4, // Some valid fd
+        };
+
+        let _result = libc::syscall(
+            syscalls::SYS_landlock_add_rule,
+            fd_for_add_rule,
+            1, // LANDLOCK_RULE_PATH_BENEATH
+            &path_attr as *const _ as *const u8,
+            0, // flags
+        );
+
+        // Test landlock_add_rule with NET_PORT rule type
+        #[repr(C)]
+        struct LandlockNetPortAttr {
+            allowed_access: u64,
+            port: u64,
+        }
+
+        let net_attr = LandlockNetPortAttr {
+            allowed_access: pinchy_common::LANDLOCK_ACCESS_NET_BIND_TCP
+                | pinchy_common::LANDLOCK_ACCESS_NET_CONNECT_TCP,
+            port: 8080,
+        };
+
+        let _result = libc::syscall(
+            syscalls::SYS_landlock_add_rule,
+            fd_for_add_rule,
+            2, // LANDLOCK_RULE_NET_PORT
+            &net_attr as *const _ as *const u8,
+            0, // flags
+        );
+
+        // Test landlock_restrict_self
+        let fd_for_restrict = if ruleset_fd >= 0 {
+            ruleset_fd as i32
+        } else {
+            -1
+        };
+
+        let _result = libc::syscall(
+            syscalls::SYS_landlock_restrict_self,
+            fd_for_restrict,
+            0, // flags
+        );
+
+        // Close the file descriptor if it was created
+        if ruleset_fd >= 0 {
+            libc::close(ruleset_fd as i32);
+        }
+    }
 
     Ok(())
 }

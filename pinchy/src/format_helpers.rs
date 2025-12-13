@@ -50,6 +50,8 @@ pub mod aio_constants {
     pub const IOCB_FLAG_IOPRIO: u32 = 1 << 1; // aio_reqprio is valid
 }
 
+// Landlock constants are defined in pinchy-common
+
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     let mut strs = vec![];
 
@@ -2148,7 +2150,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_open_tree
         | syscalls::SYS_fsopen
         | syscalls::SYS_fsmount
-        | syscalls::SYS_fspick => {
+        | syscalls::SYS_fspick
+        | syscalls::SYS_landlock_create_ruleset => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
             } else {
@@ -4524,5 +4527,122 @@ pub fn format_iocb_flags(flags: u32) -> Cow<'static, str> {
         format!("0x{:x}", flags).into()
     } else {
         format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+/// Format landlock ruleset creation flags
+pub fn format_landlock_ruleset_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & pinchy_common::LANDLOCK_CREATE_RULESET_VERSION != 0 {
+        parts.push("LANDLOCK_CREATE_RULESET_VERSION");
+    }
+
+    let known_flags = pinchy_common::LANDLOCK_CREATE_RULESET_VERSION;
+    let remaining = flags & !known_flags;
+    if remaining != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags).into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+/// Format landlock rule type
+pub fn format_landlock_rule_type(rule_type: u32) -> Cow<'static, str> {
+    match rule_type {
+        pinchy_common::LANDLOCK_RULE_PATH_BENEATH => "LANDLOCK_RULE_PATH_BENEATH".into(),
+        pinchy_common::LANDLOCK_RULE_NET_PORT => "LANDLOCK_RULE_NET_PORT".into(),
+        _ => format!("{}", rule_type).into(),
+    }
+}
+
+/// Format landlock filesystem access rights
+pub fn format_landlock_fs_access(access: u64) -> Cow<'static, str> {
+    if access == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_EXECUTE != 0 {
+        parts.push("EXECUTE");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_WRITE_FILE != 0 {
+        parts.push("WRITE_FILE");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_READ_FILE != 0 {
+        parts.push("READ_FILE");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_READ_DIR != 0 {
+        parts.push("READ_DIR");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_REMOVE_DIR != 0 {
+        parts.push("REMOVE_DIR");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_REMOVE_FILE != 0 {
+        parts.push("REMOVE_FILE");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_MAKE_CHAR != 0 {
+        parts.push("MAKE_CHAR");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_MAKE_BLOCK != 0 {
+        parts.push("MAKE_BLOCK");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_MAKE_FIFO != 0 {
+        parts.push("MAKE_FIFO");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_MAKE_SOCK != 0 {
+        parts.push("MAKE_SOCK");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_TRUNCATE != 0 {
+        parts.push("TRUNCATE");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_REFER != 0 {
+        parts.push("REFER");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_CHOWN != 0 {
+        parts.push("CHOWN");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_CHMOD != 0 {
+        parts.push("CHMOD");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_FS_CHGRP != 0 {
+        parts.push("CHGRP");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", access).into()
+    } else {
+        format!("0x{:x} ({})", access, parts.join("|")).into()
+    }
+}
+
+/// Format landlock network access rights
+pub fn format_landlock_net_access(access: u64) -> Cow<'static, str> {
+    if access == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    if access & pinchy_common::LANDLOCK_ACCESS_NET_BIND_TCP != 0 {
+        parts.push("BIND_TCP");
+    }
+    if access & pinchy_common::LANDLOCK_ACCESS_NET_CONNECT_TCP != 0 {
+        parts.push("CONNECT_TCP");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", access).into()
+    } else {
+        format!("0x{:x} ({})", access, parts.join("|")).into()
     }
 }

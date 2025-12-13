@@ -3450,6 +3450,61 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_landlock_create_ruleset => {
+            let data = unsafe { event.data.landlock_create_ruleset };
+
+            argf!(sf, "attr: 0x{:x}", data.attr);
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_landlock_ruleset_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_landlock_add_rule => {
+            let data = unsafe { event.data.landlock_add_rule };
+
+            argf!(sf, "ruleset_fd: {}", data.ruleset_fd);
+            argf!(
+                sf,
+                "rule_type: {}",
+                format_landlock_rule_type(data.rule_type)
+            );
+
+            match data.rule_type {
+                pinchy_common::LANDLOCK_RULE_PATH_BENEATH => {
+                    let attr = unsafe { data.rule_attr_data.path_beneath };
+                    argf!(sf, "parent_fd: {}", attr.parent_fd);
+                    argf!(
+                        sf,
+                        "allowed_access: {}",
+                        format_landlock_fs_access(attr.allowed_access)
+                    );
+                }
+                pinchy_common::LANDLOCK_RULE_NET_PORT => {
+                    let attr = unsafe { data.rule_attr_data.net_port };
+                    argf!(sf, "port: {}", attr.port);
+                    argf!(
+                        sf,
+                        "access_rights: {}",
+                        format_landlock_net_access(attr.allowed_access)
+                    );
+                }
+                _ => {
+                    argf!(sf, "rule_attr: 0x{:x}", data.rule_attr);
+                }
+            }
+
+            argf!(sf, "flags: {}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_landlock_restrict_self => {
+            let data = unsafe { event.data.landlock_restrict_self };
+
+            argf!(sf, "ruleset_fd: {}", data.ruleset_fd);
+            argf!(sf, "flags: {}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

@@ -2,17 +2,19 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::{CapUserData, CapUserHeader, Rlimit, Utsname},
+    kernel_types::{CapUserData, CapUserHeader, LandlockRuleAttrUnion, Rlimit, Utsname},
     syscalls::{
         SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module, SYS_finit_module,
         SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_init_module, SYS_ioctl, SYS_ioprio_get,
-        SYS_ioprio_set, SYS_nanosleep, SYS_personality, SYS_reboot, SYS_setdomainname,
+        SYS_ioprio_set, SYS_landlock_add_rule, SYS_landlock_create_ruleset,
+        SYS_landlock_restrict_self, SYS_nanosleep, SYS_personality, SYS_reboot, SYS_setdomainname,
         SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname,
         SYS_vhangup,
     },
     CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData, FinitModuleData,
     GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData, IoprioGetData,
-    IoprioSetData, NanosleepData, PersonalityData, RebootData, RtSigreturnData, SetdomainnameData,
+    IoprioSetData, LandlockAddRuleData, LandlockCreateRulesetData, LandlockRestrictSelfData,
+    NanosleepData, PersonalityData, RebootData, RtSigreturnData, SetdomainnameData,
     SethostnameData, SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData,
     TimesData, UmaskData, UnameData, VhangupData,
 };
@@ -1261,4 +1263,166 @@ syscall_test!(
         }
     },
     "5001 setdomainname(name: \"veryverylongdomainname.example.org\", len: 34) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_landlock_create_ruleset_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_landlock_create_ruleset,
+            pid: 6000,
+            tid: 6000,
+            return_value: 3,
+            data: SyscallEventData {
+                landlock_create_ruleset: LandlockCreateRulesetData {
+                    attr: 0xdeadbeef,
+                    size: 16,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "6000 landlock_create_ruleset(attr: 0xdeadbeef, size: 16, flags: 0) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_landlock_create_ruleset_with_flags,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_landlock_create_ruleset,
+            pid: 6001,
+            tid: 6001,
+            return_value: 4,
+            data: SyscallEventData {
+                landlock_create_ruleset: LandlockCreateRulesetData {
+                    attr: 0xcafebabe,
+                    size: 24,
+                    flags: pinchy_common::LANDLOCK_CREATE_RULESET_VERSION,
+                },
+            },
+        }
+    },
+    "6001 landlock_create_ruleset(attr: 0xcafebabe, size: 24, flags: 0x1 (LANDLOCK_CREATE_RULESET_VERSION)) = 4 (fd)\n"
+);
+
+syscall_test!(
+    parse_landlock_add_rule_path_beneath,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_landlock_add_rule,
+            pid: 6002,
+            tid: 6002,
+            return_value: 0,
+            data: SyscallEventData {
+                landlock_add_rule: LandlockAddRuleData {
+                    ruleset_fd: 3,
+                    rule_type: pinchy_common::LANDLOCK_RULE_PATH_BENEATH,
+                    rule_attr: 0x7fff12345678,
+                    flags: 0,
+                    rule_attr_data: LandlockRuleAttrUnion {
+                        path_beneath: pinchy_common::kernel_types::LandlockPathBeneathAttr {
+                            allowed_access: pinchy_common::LANDLOCK_ACCESS_FS_EXECUTE
+                                | pinchy_common::LANDLOCK_ACCESS_FS_WRITE_FILE
+                                | pinchy_common::LANDLOCK_ACCESS_FS_READ_FILE
+                                | pinchy_common::LANDLOCK_ACCESS_FS_READ_DIR
+                                | pinchy_common::LANDLOCK_ACCESS_FS_REMOVE_DIR
+                                | pinchy_common::LANDLOCK_ACCESS_FS_REMOVE_FILE,
+                            parent_fd: 4,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "6002 landlock_add_rule(ruleset_fd: 3, rule_type: LANDLOCK_RULE_PATH_BENEATH, parent_fd: 4, allowed_access: 0x3f (EXECUTE|WRITE_FILE|READ_FILE|READ_DIR|REMOVE_DIR|REMOVE_FILE), flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_landlock_add_rule_net_port,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_landlock_add_rule,
+            pid: 6003,
+            tid: 6003,
+            return_value: 0,
+            data: SyscallEventData {
+                landlock_add_rule: LandlockAddRuleData {
+                    ruleset_fd: 4,
+                    rule_type: pinchy_common::LANDLOCK_RULE_NET_PORT,
+                    rule_attr: 0x7fff87654321,
+                    flags: 0,
+                    rule_attr_data: LandlockRuleAttrUnion {
+                        net_port: pinchy_common::kernel_types::LandlockNetPortAttr {
+                            allowed_access: pinchy_common::LANDLOCK_ACCESS_NET_BIND_TCP
+                                | pinchy_common::LANDLOCK_ACCESS_NET_CONNECT_TCP,
+                            port: 8080,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "6003 landlock_add_rule(ruleset_fd: 4, rule_type: LANDLOCK_RULE_NET_PORT, port: 8080, access_rights: 0x3 (BIND_TCP|CONNECT_TCP), flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_landlock_add_rule_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_landlock_add_rule,
+            pid: 6004,
+            tid: 6004,
+            return_value: -9, // EBADF - bad file descriptor
+            data: SyscallEventData {
+                landlock_add_rule: LandlockAddRuleData {
+                    ruleset_fd: 999,
+                    rule_type: pinchy_common::LANDLOCK_RULE_PATH_BENEATH,
+                    rule_attr: 0,
+                    flags: 0,
+                    rule_attr_data: LandlockRuleAttrUnion {
+                        path_beneath: pinchy_common::kernel_types::LandlockPathBeneathAttr::default(),
+                    },
+                },
+            },
+        }
+    },
+    "6004 landlock_add_rule(ruleset_fd: 999, rule_type: LANDLOCK_RULE_PATH_BENEATH, parent_fd: 0, allowed_access: 0, flags: 0) = -9 (error)\n"
+);
+
+syscall_test!(
+    parse_landlock_restrict_self_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_landlock_restrict_self,
+            pid: 6005,
+            tid: 6005,
+            return_value: 0,
+            data: SyscallEventData {
+                landlock_restrict_self: LandlockRestrictSelfData {
+                    ruleset_fd: 3,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "6005 landlock_restrict_self(ruleset_fd: 3, flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_landlock_restrict_self_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_landlock_restrict_self,
+            pid: 6006,
+            tid: 6006,
+            return_value: -22, // EINVAL - invalid argument
+            data: SyscallEventData {
+                landlock_restrict_self: LandlockRestrictSelfData {
+                    ruleset_fd: -1,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "6006 landlock_restrict_self(ruleset_fd: -1, flags: 0) = -22 (error)\n"
 );

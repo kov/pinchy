@@ -1644,3 +1644,49 @@ fn aio_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn landlock_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises Landlock syscalls
+    let handle = run_workload(
+        &[
+            "landlock_create_ruleset",
+            "landlock_add_rule",
+            "landlock_restrict_self",
+        ],
+        "landlock_test",
+    );
+
+    // Expected output - we should see all landlock syscalls with parsed rule attributes
+    // 1. First create_ruleset with NULL attr and VERSION flag (checks version)
+    // 2. Second create_ruleset with actual attributes (may succeed or fail)
+    // 3. landlock_add_rule with PATH_BENEATH rule type (parsed attributes)
+    // 4. landlock_add_rule with NET_PORT rule type (parsed attributes)
+    // 5. landlock_restrict_self
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ landlock_create_ruleset(attr: 0x0, size: 0, flags: 0x1 (LANDLOCK_CREATE_RULESET_VERSION)) = @NUMBER@ (fd)
+        @PID@ landlock_create_ruleset(attr: @ADDR@, size: @NUMBER@, flags: 0) = -@NUMBER@ (error)
+        @PID@ landlock_add_rule(ruleset_fd: -1, rule_type: LANDLOCK_RULE_PATH_BENEATH, parent_fd: 4, allowed_access: 0x3f (EXECUTE|WRITE_FILE|READ_FILE|READ_DIR|REMOVE_DIR|REMOVE_FILE), flags: 0) = -@NUMBER@ (error)
+        @PID@ landlock_add_rule(ruleset_fd: -1, rule_type: LANDLOCK_RULE_NET_PORT, port: 8080, access_rights: 0x3 (BIND_TCP|CONNECT_TCP), flags: 0) = -@NUMBER@ (error)
+        @PID@ landlock_restrict_self(ruleset_fd: -1, flags: 0) = -@NUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

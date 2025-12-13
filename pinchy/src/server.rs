@@ -686,6 +686,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_sethostname,
         syscalls::SYS_setdomainname,
         syscalls::SYS_prctl,
+        syscalls::SYS_landlock_create_ruleset,
+        syscalls::SYS_landlock_add_rule,
+        syscalls::SYS_landlock_restrict_self,
     ];
     let system_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_system")

@@ -8,8 +8,8 @@ use aya_ebpf::{
 };
 use pinchy_common::{
     kernel_types::{
-        self, CapUserData, CapUserHeader, Rlimit, Sysinfo, Timespec, Timeval, Timezone, Tms,
-        Utsname,
+        self, CapUserData, CapUserHeader, LandlockNetPortAttr, LandlockPathBeneathAttr, Rlimit,
+        Sysinfo, Timespec, Timeval, Timezone, Tms, Utsname,
     },
     syscalls,
 };
@@ -288,6 +288,48 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
             syscalls::SYS_prctl => {
                 let data = data_mut!(entry, generic);
                 data.args = args;
+            }
+            syscalls::SYS_landlock_create_ruleset => {
+                let data = data_mut!(entry, landlock_create_ruleset);
+                data.attr = args[0] as u64;
+                data.size = args[1];
+                data.flags = args[2] as u32;
+            }
+            syscalls::SYS_landlock_add_rule => {
+                let data = data_mut!(entry, landlock_add_rule);
+                data.ruleset_fd = args[0] as i32;
+                data.rule_type = args[1] as u32;
+                data.rule_attr = args[2] as u64;
+                data.flags = args[3] as u32;
+
+                let rule_attr_ptr = args[2] as *const u8;
+
+                match data.rule_type {
+                    pinchy_common::LANDLOCK_RULE_PATH_BENEATH => {
+                        if let Ok(attr) = unsafe {
+                            bpf_probe_read_user::<LandlockPathBeneathAttr>(
+                                rule_attr_ptr as *const LandlockPathBeneathAttr,
+                            )
+                        } {
+                            data.rule_attr_data.path_beneath = attr;
+                        }
+                    }
+                    pinchy_common::LANDLOCK_RULE_NET_PORT => {
+                        if let Ok(attr) = unsafe {
+                            bpf_probe_read_user::<LandlockNetPortAttr>(
+                                rule_attr_ptr as *const LandlockNetPortAttr,
+                            )
+                        } {
+                            data.rule_attr_data.net_port = attr;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            syscalls::SYS_landlock_restrict_self => {
+                let data = data_mut!(entry, landlock_restrict_self);
+                data.ruleset_fd = args[0] as i32;
+                data.flags = args[1] as u32;
             }
             _ => {
                 entry.discard();

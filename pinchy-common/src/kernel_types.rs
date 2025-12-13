@@ -725,3 +725,38 @@ pub struct AioSigset {
     pub sigmask: u64,    // pointer to sigset_t
     pub sigsetsize: u64, // size of signal set
 }
+
+/// Landlock path_beneath rule attribute
+/// Used with LANDLOCK_RULE_PATH_BENEATH rule type
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct LandlockPathBeneathAttr {
+    pub allowed_access: u64,
+    pub parent_fd: i32,
+}
+
+/// Landlock net_port rule attribute
+/// Used with LANDLOCK_RULE_NET_PORT rule type
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct LandlockNetPortAttr {
+    pub allowed_access: u64,
+    pub port: u64,
+}
+
+/// Union to hold either path_beneath or net_port rule attributes
+/// Only one is valid depending on the rule_type field in LandlockAddRuleData
+#[repr(C)]
+#[derive(Copy, Clone)]
+pub union LandlockRuleAttrUnion {
+    pub path_beneath: LandlockPathBeneathAttr,
+    pub net_port: LandlockNetPortAttr,
+}
+
+impl Default for LandlockRuleAttrUnion {
+    fn default() -> Self {
+        LandlockRuleAttrUnion {
+            path_beneath: LandlockPathBeneathAttr::default(),
+        }
+    }
+}

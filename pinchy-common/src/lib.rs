@@ -3,7 +3,7 @@
 
 #![no_std]
 
-use crate::kernel_types::{EpollEvent, Timespec};
+use crate::kernel_types::{EpollEvent, LandlockRuleAttrUnion, Timespec};
 
 pub mod kernel_types;
 pub mod syscalls;
@@ -13,6 +13,35 @@ pub const DATA_READ_SIZE: usize = 128;
 pub const MEDIUM_READ_SIZE: usize = 64;
 pub const SMALLISH_READ_SIZE: usize = 32;
 pub const SMALL_READ_SIZE: usize = 8;
+
+// Landlock constants - from uapi/linux/landlock.h
+// Landlock ruleset creation flags
+pub const LANDLOCK_CREATE_RULESET_VERSION: u32 = 1 << 0;
+
+// Landlock rule types
+pub const LANDLOCK_RULE_PATH_BENEATH: u32 = 1;
+pub const LANDLOCK_RULE_NET_PORT: u32 = 2;
+
+// Landlock file access rights
+pub const LANDLOCK_ACCESS_FS_EXECUTE: u64 = 1 << 0;
+pub const LANDLOCK_ACCESS_FS_WRITE_FILE: u64 = 1 << 1;
+pub const LANDLOCK_ACCESS_FS_READ_FILE: u64 = 1 << 2;
+pub const LANDLOCK_ACCESS_FS_READ_DIR: u64 = 1 << 3;
+pub const LANDLOCK_ACCESS_FS_REMOVE_DIR: u64 = 1 << 4;
+pub const LANDLOCK_ACCESS_FS_REMOVE_FILE: u64 = 1 << 5;
+pub const LANDLOCK_ACCESS_FS_MAKE_CHAR: u64 = 1 << 6;
+pub const LANDLOCK_ACCESS_FS_MAKE_BLOCK: u64 = 1 << 7;
+pub const LANDLOCK_ACCESS_FS_MAKE_FIFO: u64 = 1 << 8;
+pub const LANDLOCK_ACCESS_FS_MAKE_SOCK: u64 = 1 << 9;
+pub const LANDLOCK_ACCESS_FS_TRUNCATE: u64 = 1 << 10;
+pub const LANDLOCK_ACCESS_FS_REFER: u64 = 1 << 11;
+pub const LANDLOCK_ACCESS_FS_CHOWN: u64 = 1 << 12;
+pub const LANDLOCK_ACCESS_FS_CHMOD: u64 = 1 << 13;
+pub const LANDLOCK_ACCESS_FS_CHGRP: u64 = 1 << 14;
+
+// Landlock network access rights
+pub const LANDLOCK_ACCESS_NET_BIND_TCP: u64 = 1 << 0;
+pub const LANDLOCK_ACCESS_NET_CONNECT_TCP: u64 = 1 << 1;
 
 #[repr(C)]
 pub struct SyscallEvent {
@@ -282,6 +311,9 @@ pub union SyscallEventData {
     pub io_cancel: IoCancelData,
     pub io_getevents: IoGeteventsData,
     pub io_pgetevents: IoPgeteventsData,
+    pub landlock_create_ruleset: LandlockCreateRulesetData,
+    pub landlock_add_rule: LandlockAddRuleData,
+    pub landlock_restrict_self: LandlockRestrictSelfData,
 }
 
 #[repr(C)]
@@ -2714,4 +2746,29 @@ impl Default for IoPgeteventsData {
             sigset_data: kernel_types::Sigset::default(),
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LandlockCreateRulesetData {
+    pub attr: u64,   // pointer to landlock_ruleset_attr
+    pub size: usize, // size of attr
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LandlockAddRuleData {
+    pub ruleset_fd: i32,
+    pub rule_type: u32,
+    pub rule_attr: u64, // pointer to rule attribute
+    pub flags: u32,
+    pub rule_attr_data: LandlockRuleAttrUnion,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LandlockRestrictSelfData {
+    pub ruleset_fd: i32,
+    pub flags: u32,
 }

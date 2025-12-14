@@ -122,6 +122,7 @@ fn main() -> anyhow::Result<()> {
             "socket_introspection_test" => socket_introspection_test(),
             "aio_test" => aio_test(),
             "landlock_test" => landlock_test(),
+            "mempolicy_test" => mempolicy_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -208,6 +209,113 @@ fn filesystem_syscalls_test() -> anyhow::Result<()> {
     };
     // We don't assert a specific result here since failure is acceptable and
     // we're primarily testing tracing/formatting of the syscall arguments.
+
+    Ok(())
+}
+
+fn mempolicy_test() -> anyhow::Result<()> {
+    use pinchy_common::syscalls;
+    unsafe {
+        let page_size = 4096;
+
+        // Allocate a test buffer using mmap
+        let addr = libc::mmap(
+            std::ptr::null_mut(),
+            page_size * 2,
+            libc::PROT_READ | libc::PROT_WRITE,
+            libc::MAP_PRIVATE | libc::MAP_ANONYMOUS,
+            -1,
+            0,
+        );
+
+        if addr == libc::MAP_FAILED {
+            bail!("mmap failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test set_mempolicy with MPOL_DEFAULT and NULL nodemask
+        // This simply resets the policy to default
+        let _result = libc::syscall(
+            syscalls::SYS_set_mempolicy,
+            0, // MPOL_DEFAULT
+            std::ptr::null::<u64>(),
+            0, // maxnode
+        );
+
+        // Test mbind on the allocated region
+        // Use MPOL_BIND with nodemask pointing to node 0
+        let mut nodemask: u64 = 0x1; // Node 0
+        let result = libc::syscall(
+            syscalls::SYS_mbind,
+            addr as u64,
+            page_size,
+            1, // MPOL_BIND
+            &mut nodemask as *mut u64,
+            1, // maxnode = 1 (one u64)
+            0, // flags
+        );
+
+        if result != 0 {
+            // On single-node systems, mbind might fail with EINVAL
+            // This is expected behavior - we're just testing that we can trace it
+        }
+
+        // Test get_mempolicy to read the policy
+        let mut mode_out: u32 = 0;
+        let mut nodemask_out: u64 = 0;
+        let result = libc::syscall(
+            syscalls::SYS_get_mempolicy,
+            &mut mode_out as *mut u32,
+            &mut nodemask_out as *mut u64,
+            64, // maxnode
+            addr as u64,
+            1, // MPOL_F_ADDR
+        );
+
+        if result != 0 {
+            // May fail on some systems, but we're testing the tracing
+        }
+
+        // Test mincore on the mmap'd region to check page residency
+        let mut vec_buf = vec![0u8; (page_size * 2).div_ceil(4096)];
+        let result = libc::syscall(
+            syscalls::SYS_mincore,
+            addr as u64,
+            page_size * 2,
+            vec_buf.as_mut_ptr(),
+        );
+
+        if result != 0 {
+            bail!("mincore failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test migrate_pages - attempt to migrate from node 0 to node 0 (no-op)
+        let old_nodes: u64 = 0x1; // Node 0
+        let new_nodes: u64 = 0x1; // Node 0
+        let _result = libc::syscall(
+            syscalls::SYS_migrate_pages,
+            libc::getpid(),
+            64, // maxnode
+            &old_nodes as *const u64,
+            &new_nodes as *const u64,
+        );
+
+        // Test move_pages - attempt to move a page
+        let pages = [addr as u64];
+        let nodes = [0i32]; // Target node
+        let mut status = vec![0i32];
+        let _result = libc::syscall(
+            syscalls::SYS_move_pages,
+            libc::getpid(),
+            1, // count
+            pages.as_ptr(),
+            nodes.as_ptr(),
+            status.as_mut_ptr(),
+            0, // flags
+        );
+
+        // Clean up
+        libc::munmap(addr, page_size * 2);
+    }
 
     Ok(())
 }

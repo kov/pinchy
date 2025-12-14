@@ -48,6 +48,31 @@ pub const IORING_ENTER_GETEVENTS: u32 = 1 << 0;
 pub const IORING_ENTER_SQ_WAIT: u32 = 1 << 2;
 pub const IORING_REGISTER_PROBE: u32 = 8;
 
+// NUMA memory policy constants - from uapi/linux/mempolicy.h
+// Memory policy modes
+pub const MPOL_DEFAULT: i32 = 0;
+pub const MPOL_PREFERRED: i32 = 1;
+pub const MPOL_BIND: i32 = 2;
+pub const MPOL_INTERLEAVE: i32 = 3;
+pub const MPOL_LOCAL: i32 = 4;
+pub const MPOL_PREFERRED_MANY: i32 = 5;
+pub const MPOL_WEIGHTED_INTERLEAVE: i32 = 6;
+
+// Mode flags (bitwise OR'd with mode)
+pub const MPOL_F_STATIC_NODES: i32 = 1 << 15;
+pub const MPOL_F_RELATIVE_NODES: i32 = 1 << 14;
+pub const MPOL_F_NUMA_BALANCING: i32 = 1 << 13;
+
+// mbind/move_pages flags
+pub const MPOL_MF_STRICT: u32 = 1 << 0;
+pub const MPOL_MF_MOVE: u32 = 1 << 1;
+pub const MPOL_MF_MOVE_ALL: u32 = 1 << 2;
+
+// get_mempolicy flags
+pub const MPOL_F_NODE: u64 = 1 << 0;
+pub const MPOL_F_ADDR: u64 = 1 << 1;
+pub const MPOL_F_MEMS_ALLOWED: u64 = 1 << 2;
+
 #[repr(C)]
 pub struct SyscallEvent {
     pub syscall_nr: i64,
@@ -322,6 +347,13 @@ pub union SyscallEventData {
     pub landlock_create_ruleset: LandlockCreateRulesetData,
     pub landlock_add_rule: LandlockAddRuleData,
     pub landlock_restrict_self: LandlockRestrictSelfData,
+    pub mbind: MbindData,
+    pub get_mempolicy: GetMempolicyData,
+    pub set_mempolicy: SetMempolicyData,
+    pub set_mempolicy_home_node: SetMempolicyHomeNodeData,
+    pub migrate_pages: MigratePagesData,
+    pub move_pages: MovePagesData,
+    pub mincore: MincoreData,
 }
 
 #[repr(C)]
@@ -2783,6 +2815,113 @@ pub struct IoUringRegisterData {
     pub opcode: u32,
     pub arg: u64,
     pub nr_args: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MbindData {
+    pub addr: u64,
+    pub len: u64,
+    pub mode: i32,
+    pub maxnode: u64,
+    pub flags: u32,
+    pub nodemask: [u64; 2],
+    pub nodemask_read_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct GetMempolicyData {
+    pub maxnode: u64,
+    pub addr: u64,
+    pub flags: u64,
+    pub mode_out: i32,
+    pub mode_valid: bool,
+    pub nodemask_out: [u64; 2],
+    pub nodemask_read_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SetMempolicyData {
+    pub mode: i32,
+    pub maxnode: u64,
+    pub nodemask: [u64; 2],
+    pub nodemask_read_count: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SetMempolicyHomeNodeData {
+    pub start: u64,
+    pub len: u64,
+    pub home_node: u64,
+    pub flags: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MigratePagesData {
+    pub pid: i32,
+    pub maxnode: u64,
+    pub old_nodes: [u64; 2],
+    pub new_nodes: [u64; 2],
+    pub old_nodes_read_count: u32,
+    pub new_nodes_read_count: u32,
+}
+
+const PAGE_ARRAY_CAP: usize = 8;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MovePagesData {
+    pub pid: i32,
+    pub count: u64,
+    pub flags: i32,
+    pub pages: [u64; PAGE_ARRAY_CAP],
+    pub nodes: [i32; PAGE_ARRAY_CAP],
+    pub status: [i32; PAGE_ARRAY_CAP],
+    pub pages_read_count: u32,
+    pub nodes_read_count: u32,
+    pub status_read_count: u32,
+}
+
+impl Default for MovePagesData {
+    fn default() -> Self {
+        Self {
+            pid: 0,
+            count: 0,
+            flags: 0,
+            pages: [0; PAGE_ARRAY_CAP],
+            nodes: [0; PAGE_ARRAY_CAP],
+            status: [0; PAGE_ARRAY_CAP],
+            pages_read_count: 0,
+            nodes_read_count: 0,
+            status_read_count: 0,
+        }
+    }
+}
+
+const VEC_ARRAY_CAP: usize = 32;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MincoreData {
+    pub addr: u64,
+    pub length: u64,
+    pub vec: [u8; VEC_ARRAY_CAP],
+    pub vec_read_count: u32,
+}
+
+impl Default for MincoreData {
+    fn default() -> Self {
+        Self {
+            addr: 0,
+            length: 0,
+            vec: [0; VEC_ARRAY_CAP],
+            vec_read_count: 0,
+        }
+    }
 }
 
 #[repr(C)]

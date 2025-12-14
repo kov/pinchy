@@ -29,6 +29,51 @@ fn basic_output() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn memory_policy_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises memory policy syscalls
+    let handle = run_workload(
+        &[
+            "set_mempolicy",
+            "mbind",
+            "get_mempolicy",
+            "mincore",
+            "migrate_pages",
+            "move_pages",
+        ],
+        "mempolicy_test",
+    );
+
+    // Expected output - we should see memory policy syscalls being traced
+    // On single-node systems, some syscalls may fail with specific error codes
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ set_mempolicy(mode: MPOL_DEFAULT, nodemask: NULL, maxnode: 0) = 0 (success)
+        @PID@ mbind(addr: @ADDR@, len: 4096, mode: MPOL_PREFERRED, nodemask: [0], maxnode: 1, flags: 0) = @NUMBER@ (success)
+        @PID@ get_mempolicy(mode: NULL, nodemask: NULL, maxnode: 64, addr: @ADDR@, flags: 0x1 (MPOL_F_NODE)) = -@NUMBER@ (error)
+        @PID@ mincore(addr: @ADDR@, length: 8192, vec: [0,0]) = 0 (success)
+        @PID@ migrate_pages(pid: @NUMBER@, maxnode: 64, old_nodes: [0], new_nodes: [0]) = 0 (pages not migrated)
+        @PID@ move_pages(pid: @NUMBER@, count: 1, pages: [@ADDR@], nodes: [0], status: [-@NUMBER@], flags: 0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn epoll_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 

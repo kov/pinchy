@@ -589,6 +589,13 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
             | syscalls::SYS_setsid
             | syscalls::SYS_munlockall
             | syscalls::SYS_vhangup => {}
+            syscalls::SYS_set_mempolicy_home_node => {
+                let data = unsafe { &mut entry.data.set_mempolicy_home_node };
+                data.start = args[0] as u64;
+                data.len = args[1] as u64;
+                data.home_node = args[2] as u64;
+                data.flags = args[3] as u64;
+            }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
                 entry.discard();

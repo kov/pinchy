@@ -2553,10 +2553,34 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             std::borrow::Cow::Owned(format!("0x{return_value:x}"))
         }
 
+        // Page migration syscalls return page counts
+        syscalls::SYS_migrate_pages => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (pages not migrated)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        syscalls::SYS_move_pages => {
+            if return_value == 0 {
+                std::borrow::Cow::Borrowed("0 (success)")
+            } else if return_value > 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (pages not migrated)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
         // Memory/protection syscalls that return 0 on success
         syscalls::SYS_munmap
         | syscalls::SYS_mprotect
         | syscalls::SYS_madvise
+        | syscalls::SYS_mbind
+        | syscalls::SYS_set_mempolicy
+        | syscalls::SYS_set_mempolicy_home_node
+        | syscalls::SYS_get_mempolicy
+        | syscalls::SYS_mincore
         | syscalls::SYS_nanosleep
         | syscalls::SYS_clock_nanosleep => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
@@ -5104,5 +5128,129 @@ pub fn format_landlock_net_access(access: u64) -> Cow<'static, str> {
         format!("0x{:x}", access).into()
     } else {
         format!("0x{:x} ({})", access, parts.join("|")).into()
+    }
+}
+
+pub fn format_mpol_mode(mode: i32) -> Cow<'static, str> {
+    /// Memory policy mode mask: lower 8 bits are the mode, higher bits are flags.
+    const MODE_MASK: i32 = 0xFF;
+    /// Memory policy flags mask: higher bits are flags, lower 8 bits are mode.
+    const MODE_FLAGS_MASK: i32 = !MODE_MASK;
+
+    let base_mode = mode & MODE_MASK;
+    let flags = mode & MODE_FLAGS_MASK;
+
+    let mut parts = Vec::new();
+
+    let mode_str = match base_mode {
+        pinchy_common::MPOL_DEFAULT => "MPOL_DEFAULT",
+        pinchy_common::MPOL_PREFERRED => "MPOL_PREFERRED",
+        pinchy_common::MPOL_BIND => "MPOL_BIND",
+        pinchy_common::MPOL_INTERLEAVE => "MPOL_INTERLEAVE",
+        pinchy_common::MPOL_LOCAL => "MPOL_LOCAL",
+        pinchy_common::MPOL_PREFERRED_MANY => "MPOL_PREFERRED_MANY",
+        pinchy_common::MPOL_WEIGHTED_INTERLEAVE => "MPOL_WEIGHTED_INTERLEAVE",
+        _ => {
+            return format!("{}", mode).into();
+        }
+    };
+
+    parts.push(mode_str);
+
+    if flags & pinchy_common::MPOL_F_STATIC_NODES != 0 {
+        parts.push("MPOL_F_STATIC_NODES");
+    }
+    if flags & pinchy_common::MPOL_F_RELATIVE_NODES != 0 {
+        parts.push("MPOL_F_RELATIVE_NODES");
+    }
+    if flags & pinchy_common::MPOL_F_NUMA_BALANCING != 0 {
+        parts.push("MPOL_F_NUMA_BALANCING");
+    }
+
+    if parts.len() == 1 {
+        mode_str.into()
+    } else {
+        parts.join("|").into()
+    }
+}
+
+pub fn format_mpol_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & pinchy_common::MPOL_MF_STRICT != 0 {
+        parts.push("MPOL_MF_STRICT");
+    }
+    if flags & pinchy_common::MPOL_MF_MOVE != 0 {
+        parts.push("MPOL_MF_MOVE");
+    }
+    if flags & pinchy_common::MPOL_MF_MOVE_ALL != 0 {
+        parts.push("MPOL_MF_MOVE_ALL");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags).into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+pub fn format_get_mempolicy_flags(flags: u64) -> Cow<'static, str> {
+    if flags == 0 {
+        return "0".into();
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & pinchy_common::MPOL_F_NODE != 0 {
+        parts.push("MPOL_F_NODE");
+    }
+    if flags & pinchy_common::MPOL_F_ADDR != 0 {
+        parts.push("MPOL_F_ADDR");
+    }
+    if flags & pinchy_common::MPOL_F_MEMS_ALLOWED != 0 {
+        parts.push("MPOL_F_MEMS_ALLOWED");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags).into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+pub fn format_nodemask(nodemask: &[u64], count: u32) -> String {
+    if count == 0 {
+        return "NULL".to_string();
+    }
+
+    let mut nodes = Vec::new();
+
+    for (idx, &mask) in nodemask.iter().enumerate().take(count as usize) {
+        if mask == 0 {
+            continue;
+        }
+
+        for bit in 0..64 {
+            if mask & (1u64 << bit) != 0 {
+                nodes.push(idx * 64 + bit);
+            }
+        }
+    }
+
+    if nodes.is_empty() {
+        "[]".to_string()
+    } else {
+        format!(
+            "[{}]",
+            nodes
+                .iter()
+                .map(|n| n.to_string())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )
     }
 }

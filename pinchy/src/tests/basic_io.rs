@@ -949,26 +949,30 @@ syscall_test!(
 syscall_test!(
     parse_io_submit,
     {
-        let mut iocb1 = IoCb::default();
-        iocb1.aio_data = 0xdead;
-        iocb1.aio_key = 1;
-        iocb1.aio_rw_flags = libc::RWF_HIPRI as u32;
-        iocb1.aio_lio_opcode = aio_constants::IOCB_CMD_PREAD;
-        iocb1.aio_reqprio = 0;
-        iocb1.aio_fildes = 3;
-        iocb1.aio_buf = 0x7ffe87654321;
-        iocb1.aio_nbytes = 4096;
-        iocb1.aio_offset = 0;
-        iocb1.aio_flags = aio_constants::IOCB_FLAG_RESFD;
-        iocb1.aio_resfd = 4;
+        let iocb1 = IoCb {
+            aio_data: 0xdead,
+            aio_key: 1,
+            aio_rw_flags: libc::RWF_HIPRI as u32,
+            aio_lio_opcode: aio_constants::IOCB_CMD_PREAD,
+            aio_reqprio: 0,
+            aio_fildes: 3,
+            aio_buf: 0x7ffe87654321,
+            aio_nbytes: 4096,
+            aio_offset: 0,
+            aio_flags: aio_constants::IOCB_FLAG_RESFD,
+            aio_resfd: 4,
+            ..Default::default()
+        };
 
-        let mut iocb2 = IoCb::default();
-        iocb2.aio_data = 0xbeef;
-        iocb2.aio_lio_opcode = aio_constants::IOCB_CMD_PWRITE;
-        iocb2.aio_fildes = 5;
-        iocb2.aio_buf = 0x7ffe11111111;
-        iocb2.aio_nbytes = 2048;
-        iocb2.aio_offset = 1024;
+        let iocb2 = IoCb {
+            aio_data: 0xbeef,
+            aio_lio_opcode: aio_constants::IOCB_CMD_PWRITE,
+            aio_fildes: 5,
+            aio_buf: 0x7ffe11111111,
+            aio_nbytes: 2048,
+            aio_offset: 1024,
+            ..Default::default()
+        };
 
         SyscallEvent {
             syscall_nr: SYS_io_submit,

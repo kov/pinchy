@@ -440,6 +440,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_inotify_init,
         syscalls::SYS_inotify_init1,
+        syscalls::SYS_set_mempolicy_home_node,
         syscalls::SYS_inotify_rm_watch,
         syscalls::SYS_timer_delete,
         syscalls::SYS_timer_getoverrun,
@@ -654,6 +655,12 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_process_madvise,
         syscalls::SYS_process_vm_readv,
         syscalls::SYS_process_vm_writev,
+        syscalls::SYS_mbind,
+        syscalls::SYS_get_mempolicy,
+        syscalls::SYS_set_mempolicy,
+        syscalls::SYS_migrate_pages,
+        syscalls::SYS_move_pages,
+        syscalls::SYS_mincore,
     ];
     let memory_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_memory")

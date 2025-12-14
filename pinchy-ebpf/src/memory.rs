@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
-use aya_ebpf::{macros::tracepoint, programs::TracePointContext};
+use aya_ebpf::{helpers::bpf_probe_read_user, macros::tracepoint, programs::TracePointContext};
 use pinchy_common::syscalls;
 
 use crate::{
@@ -125,6 +125,240 @@ pub fn syscall_exit_memory(ctx: TracePointContext) -> u32 {
                     &mut data.remote_read_count,
                     return_value,
                 );
+            }
+            syscalls::SYS_mbind => {
+                let data = data_mut!(entry, mbind);
+                data.addr = args[0] as u64;
+                data.len = args[1] as u64;
+                data.mode = args[2] as i32;
+                data.maxnode = args[4] as u64;
+                data.flags = args[5] as u32;
+
+                let nodemask_ptr = args[3] as *const u64;
+
+                if !nodemask_ptr.is_null() && data.maxnode > 0 {
+                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+
+                    for i in 0..max_longs as usize {
+                        if i >= 2 {
+                            break;
+                        }
+
+                        unsafe {
+                            let ptr = nodemask_ptr.add(i);
+
+                            if let Ok(val) = bpf_probe_read_user(ptr) {
+                                data.nodemask[i] = val;
+                                data.nodemask_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_get_mempolicy => {
+                let data = data_mut!(entry, get_mempolicy);
+                data.maxnode = args[2] as u64;
+                data.addr = args[3] as u64;
+                data.flags = args[4] as u64;
+
+                if return_value >= 0 {
+                    let mode_ptr = args[0] as *const i32;
+
+                    if !mode_ptr.is_null() {
+                        if let Ok(mode) = unsafe { bpf_probe_read_user(mode_ptr) } {
+                            data.mode_out = mode;
+                            data.mode_valid = true;
+                        }
+                    }
+
+                    let nodemask_ptr = args[1] as *const u64;
+
+                    if !nodemask_ptr.is_null() && data.maxnode > 0 {
+                        let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+
+                        for i in 0..max_longs as usize {
+                            if i >= 2 {
+                                break;
+                            }
+
+                            unsafe {
+                                let ptr = nodemask_ptr.add(i);
+
+                                if let Ok(val) = bpf_probe_read_user(ptr) {
+                                    data.nodemask_out[i] = val;
+                                    data.nodemask_read_count += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_set_mempolicy => {
+                let data = data_mut!(entry, set_mempolicy);
+                data.mode = args[0] as i32;
+                data.maxnode = args[2] as u64;
+
+                let nodemask_ptr = args[1] as *const u64;
+
+                if !nodemask_ptr.is_null() && data.maxnode > 0 {
+                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+
+                    for i in 0..max_longs as usize {
+                        if i >= 2 {
+                            break;
+                        }
+
+                        unsafe {
+                            let ptr = nodemask_ptr.add(i);
+
+                            if let Ok(val) = bpf_probe_read_user(ptr) {
+                                data.nodemask[i] = val;
+                                data.nodemask_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_migrate_pages => {
+                let data = data_mut!(entry, migrate_pages);
+                data.pid = args[0] as i32;
+                data.maxnode = args[1] as u64;
+
+                let old_nodes_ptr = args[2] as *const u64;
+                let new_nodes_ptr = args[3] as *const u64;
+
+                if !old_nodes_ptr.is_null() && data.maxnode > 0 {
+                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+
+                    for i in 0..max_longs as usize {
+                        if i >= 2 {
+                            break;
+                        }
+
+                        unsafe {
+                            let ptr = old_nodes_ptr.add(i);
+
+                            if let Ok(val) = bpf_probe_read_user(ptr) {
+                                data.old_nodes[i] = val;
+                                data.old_nodes_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if !new_nodes_ptr.is_null() && data.maxnode > 0 {
+                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+
+                    for i in 0..max_longs as usize {
+                        if i >= 2 {
+                            break;
+                        }
+
+                        unsafe {
+                            let ptr = new_nodes_ptr.add(i);
+
+                            if let Ok(val) = bpf_probe_read_user(ptr) {
+                                data.new_nodes[i] = val;
+                                data.new_nodes_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_move_pages => {
+                let data = data_mut!(entry, move_pages);
+                data.pid = args[0] as i32;
+                data.count = args[1] as u64;
+                data.flags = args[5] as i32;
+
+                let pages_ptr = args[2] as *const *const core::ffi::c_void;
+                let nodes_ptr = args[3] as *const i32;
+                let status_ptr = args[4] as *const i32;
+
+                let max_to_read = core::cmp::min(8, data.count as usize);
+
+                if !pages_ptr.is_null() {
+                    for i in 0..max_to_read {
+                        unsafe {
+                            let ptr = pages_ptr.add(i);
+
+                            if let Ok(page_ptr) = bpf_probe_read_user(ptr) {
+                                data.pages[i] = page_ptr as u64;
+                                data.pages_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if !nodes_ptr.is_null() {
+                    for i in 0..max_to_read {
+                        unsafe {
+                            let ptr = nodes_ptr.add(i);
+
+                            if let Ok(node) = bpf_probe_read_user(ptr) {
+                                data.nodes[i] = node;
+                                data.nodes_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                if !status_ptr.is_null() && return_value >= 0 {
+                    for i in 0..max_to_read {
+                        unsafe {
+                            let ptr = status_ptr.add(i);
+
+                            if let Ok(status) = bpf_probe_read_user(ptr) {
+                                data.status[i] = status;
+                                data.status_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_mincore => {
+                let data = data_mut!(entry, mincore);
+                data.addr = args[0] as u64;
+                data.length = args[1] as u64;
+
+                if return_value >= 0 {
+                    let vec_ptr = args[2] as *const u8;
+
+                    if !vec_ptr.is_null() && data.length > 0 {
+                        const PAGE_SIZE: u64 = 4096;
+                        let num_pages = ((data.length + PAGE_SIZE - 1) / PAGE_SIZE) as usize;
+                        let max_to_read = core::cmp::min(32, num_pages);
+
+                        for i in 0..max_to_read {
+                            unsafe {
+                                let ptr = vec_ptr.add(i);
+
+                                if let Ok(byte) = bpf_probe_read_user(ptr) {
+                                    data.vec[i] = byte;
+                                    data.vec_read_count += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
             }
             _ => {
                 entry.discard();

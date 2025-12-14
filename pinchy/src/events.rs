@@ -1809,6 +1809,190 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_mbind => {
+            let data = unsafe { event.data.mbind };
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "mode: {}", format_mpol_mode(data.mode));
+            argf!(
+                sf,
+                "nodemask: {}",
+                format_nodemask(&data.nodemask, data.nodemask_read_count)
+            );
+            argf!(sf, "maxnode: {}", data.maxnode);
+            argf!(sf, "flags: {}", format_mpol_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_get_mempolicy => {
+            let data = unsafe { event.data.get_mempolicy };
+
+            if data.mode_valid {
+                argf!(sf, "mode: {}", format_mpol_mode(data.mode_out));
+            } else {
+                arg!(sf, "mode: NULL");
+            }
+
+            if data.nodemask_read_count > 0 {
+                argf!(
+                    sf,
+                    "nodemask: {}",
+                    format_nodemask(&data.nodemask_out, data.nodemask_read_count)
+                );
+            } else {
+                arg!(sf, "nodemask: NULL");
+            }
+            argf!(sf, "maxnode: {}", data.maxnode);
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "flags: {}", format_get_mempolicy_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_set_mempolicy => {
+            let data = unsafe { event.data.set_mempolicy };
+
+            argf!(sf, "mode: {}", format_mpol_mode(data.mode));
+            argf!(
+                sf,
+                "nodemask: {}",
+                format_nodemask(&data.nodemask, data.nodemask_read_count)
+            );
+            argf!(sf, "maxnode: {}", data.maxnode);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_set_mempolicy_home_node => {
+            let data = unsafe { event.data.set_mempolicy_home_node };
+
+            argf!(sf, "start: 0x{:x}", data.start);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "home_node: {}", data.home_node);
+            argf!(sf, "flags: {}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_migrate_pages => {
+            let data = unsafe { event.data.migrate_pages };
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "maxnode: {}", data.maxnode);
+            argf!(
+                sf,
+                "old_nodes: {}",
+                format_nodemask(&data.old_nodes, data.old_nodes_read_count)
+            );
+            argf!(
+                sf,
+                "new_nodes: {}",
+                format_nodemask(&data.new_nodes, data.new_nodes_read_count)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_move_pages => {
+            let data = unsafe { event.data.move_pages };
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "count: {}", data.count);
+
+            if data.pages_read_count > 0 {
+                let pages: Vec<String> = data.pages[..data.pages_read_count as usize]
+                    .iter()
+                    .map(|p| format!("0x{:x}", p))
+                    .collect();
+
+                if data.pages_read_count < data.count as u32 && data.count > 8 {
+                    argf!(
+                        sf,
+                        "pages: [{}... (showing {} of {})]",
+                        pages.join(", "),
+                        data.pages_read_count,
+                        data.count
+                    );
+                } else {
+                    argf!(sf, "pages: [{}]", pages.join(", "));
+                }
+            } else {
+                arg!(sf, "pages: NULL");
+            }
+
+            if data.nodes_read_count > 0 {
+                let nodes: Vec<String> = data.nodes[..data.nodes_read_count as usize]
+                    .iter()
+                    .map(|n| n.to_string())
+                    .collect();
+
+                if data.nodes_read_count < data.count as u32 && data.count > 8 {
+                    argf!(
+                        sf,
+                        "nodes: [{}... (showing {} of {})]",
+                        nodes.join(", "),
+                        data.nodes_read_count,
+                        data.count
+                    );
+                } else {
+                    argf!(sf, "nodes: [{}]", nodes.join(", "));
+                }
+            } else {
+                arg!(sf, "nodes: NULL");
+            }
+
+            if data.status_read_count > 0 {
+                let status: Vec<String> = data.status[..data.status_read_count as usize]
+                    .iter()
+                    .map(|s| s.to_string())
+                    .collect();
+
+                if data.status_read_count < data.count as u32 && data.count > 8 {
+                    argf!(
+                        sf,
+                        "status: [{}... (showing {} of {})]",
+                        status.join(", "),
+                        data.status_read_count,
+                        data.count
+                    );
+                } else {
+                    argf!(sf, "status: [{}]", status.join(", "));
+                }
+            } else {
+                arg!(sf, "status: NULL");
+            }
+            argf!(sf, "flags: {}", format_mpol_flags(data.flags as u32));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mincore => {
+            let data = unsafe { event.data.mincore };
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "length: {}", data.length);
+
+            if data.vec_read_count > 0 {
+                const PAGE_SIZE: u64 = 4096;
+                let num_pages = data.length.div_ceil(PAGE_SIZE) as usize;
+                let residency: Vec<String> = data.vec[..data.vec_read_count as usize]
+                    .iter()
+                    .map(|&b| (b & 1).to_string())
+                    .collect();
+
+                if data.vec_read_count < num_pages as u32 {
+                    argf!(
+                        sf,
+                        "vec: [{}... (showing {} of {} pages)]",
+                        residency.join(","),
+                        data.vec_read_count,
+                        num_pages
+                    );
+                } else {
+                    argf!(sf, "vec: [{}]", residency.join(","));
+                }
+            } else {
+                arg!(sf, "vec: NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getrandom => {
             let data = unsafe { event.data.getrandom };
 

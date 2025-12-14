@@ -4,10 +4,12 @@
 use pinchy_common::{
     kernel_types::Iovec,
     syscalls::{
-        SYS_brk, SYS_madvise, SYS_membarrier, SYS_memfd_secret, SYS_mlock, SYS_mlock2,
-        SYS_mlockall, SYS_mmap, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munlockall,
+        SYS_brk, SYS_get_mempolicy, SYS_madvise, SYS_mbind, SYS_membarrier, SYS_memfd_secret,
+        SYS_migrate_pages, SYS_mincore, SYS_mlock, SYS_mlock2, SYS_mlockall, SYS_mmap,
+        SYS_move_pages, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munlockall,
         SYS_munmap, SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_process_vm_readv,
-        SYS_process_vm_writev, SYS_readahead, SYS_userfaultfd,
+        SYS_process_vm_writev, SYS_readahead, SYS_set_mempolicy, SYS_set_mempolicy_home_node,
+        SYS_userfaultfd,
     },
     SyscallEvent, IOV_COUNT, LARGER_READ_SIZE,
 };
@@ -868,4 +870,287 @@ syscall_test!(
         }
     },
     "999 process_vm_readv(pid: 123, local_iov: [ iovec { base: 0x7f1234567000, len: 32, buf: \"\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\" } ], liovcnt: 1, remote_iov: [ iovec { base: 0x0, len: 32 } ], riovcnt: 1, flags: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_mbind_success,
+    {
+        use pinchy_common::MbindData;
+        SyscallEvent {
+            syscall_nr: SYS_mbind,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mbind: MbindData {
+                    addr: 0x7f1234567000,
+                    len: 4096,
+                    mode: pinchy_common::MPOL_BIND,
+                    maxnode: 64,
+                    flags: pinchy_common::MPOL_MF_STRICT | pinchy_common::MPOL_MF_MOVE,
+                    nodemask: [0b00000101, 0],
+                    nodemask_read_count: 1,
+                },
+            },
+        }
+    },
+    "123 mbind(addr: 0x7f1234567000, len: 4096, mode: MPOL_BIND, nodemask: [0, 2], maxnode: 64, flags: 0x3 (MPOL_MF_STRICT|MPOL_MF_MOVE)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mbind_null_nodemask,
+    {
+        use pinchy_common::MbindData;
+        SyscallEvent {
+            syscall_nr: SYS_mbind,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mbind: MbindData {
+                    addr: 0x7f1234567000,
+                    len: 8192,
+                    mode: pinchy_common::MPOL_DEFAULT,
+                    maxnode: 0,
+                    flags: 0,
+                    nodemask: [0, 0],
+                    nodemask_read_count: 0,
+                },
+            },
+        }
+    },
+    "123 mbind(addr: 0x7f1234567000, len: 8192, mode: MPOL_DEFAULT, nodemask: NULL, maxnode: 0, flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_get_mempolicy_success,
+    {
+        use pinchy_common::GetMempolicyData;
+        SyscallEvent {
+            syscall_nr: SYS_get_mempolicy,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                get_mempolicy: GetMempolicyData {
+                    maxnode: 64,
+                    addr: 0x7f1234567000,
+                    flags: pinchy_common::MPOL_F_ADDR,
+                    mode_out: pinchy_common::MPOL_INTERLEAVE,
+                    mode_valid: true,
+                    nodemask_out: [0b00001001, 0],
+                    nodemask_read_count: 1,
+                },
+            },
+        }
+    },
+    "123 get_mempolicy(mode: MPOL_INTERLEAVE, nodemask: [0, 3], maxnode: 64, addr: 0x7f1234567000, flags: 0x2 (MPOL_F_ADDR)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_get_mempolicy_null_output,
+    {
+        use pinchy_common::GetMempolicyData;
+        SyscallEvent {
+            syscall_nr: SYS_get_mempolicy,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                get_mempolicy: GetMempolicyData {
+                    maxnode: 64,
+                    addr: 0,
+                    flags: pinchy_common::MPOL_F_MEMS_ALLOWED,
+                    mode_out: 0,
+                    mode_valid: false,
+                    nodemask_out: [0, 0],
+                    nodemask_read_count: 0,
+                },
+            },
+        }
+    },
+    "123 get_mempolicy(mode: NULL, nodemask: NULL, maxnode: 64, addr: 0x0, flags: 0x4 (MPOL_F_MEMS_ALLOWED)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_set_mempolicy_success,
+    {
+        use pinchy_common::SetMempolicyData;
+        SyscallEvent {
+            syscall_nr: SYS_set_mempolicy,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                set_mempolicy: SetMempolicyData {
+                    mode: pinchy_common::MPOL_PREFERRED_MANY | pinchy_common::MPOL_F_STATIC_NODES,
+                    maxnode: 64,
+                    nodemask: [0b00000011, 0],
+                    nodemask_read_count: 1,
+                },
+            },
+        }
+    },
+    "123 set_mempolicy(mode: MPOL_PREFERRED_MANY|MPOL_F_STATIC_NODES, nodemask: [0, 1], maxnode: 64) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_set_mempolicy_home_node_success,
+    {
+        use pinchy_common::SetMempolicyHomeNodeData;
+        SyscallEvent {
+            syscall_nr: SYS_set_mempolicy_home_node,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                set_mempolicy_home_node: SetMempolicyHomeNodeData {
+                    start: 0x7f1234567000,
+                    len: 4096,
+                    home_node: 2,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "123 set_mempolicy_home_node(start: 0x7f1234567000, len: 4096, home_node: 2, flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_migrate_pages_success,
+    {
+        use pinchy_common::MigratePagesData;
+        SyscallEvent {
+            syscall_nr: SYS_migrate_pages,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                migrate_pages: MigratePagesData {
+                    pid: 456,
+                    maxnode: 64,
+                    old_nodes: [0b00000001, 0],
+                    new_nodes: [0b00000010, 0],
+                    old_nodes_read_count: 1,
+                    new_nodes_read_count: 1,
+                },
+            },
+        }
+    },
+    "123 migrate_pages(pid: 456, maxnode: 64, old_nodes: [0], new_nodes: [1]) = 0 (pages not migrated)\n"
+);
+
+syscall_test!(
+    parse_move_pages_success,
+    {
+        use pinchy_common::MovePagesData;
+        SyscallEvent {
+            syscall_nr: SYS_move_pages,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                move_pages: MovePagesData {
+                    pid: 456,
+                    count: 3,
+                    flags: pinchy_common::MPOL_MF_MOVE as i32,
+                    pages: [0x7f1234567000, 0x7f1234568000, 0x7f1234569000, 0, 0, 0, 0, 0],
+                    nodes: [0, 1, 0, 0, 0, 0, 0, 0],
+                    status: [0, 0, -14, 0, 0, 0, 0, 0],
+                    pages_read_count: 3,
+                    nodes_read_count: 3,
+                    status_read_count: 3,
+                },
+            },
+        }
+    },
+    "123 move_pages(pid: 456, count: 3, pages: [0x7f1234567000, 0x7f1234568000, 0x7f1234569000], nodes: [0, 1, 0], status: [0, 0, -14], flags: 0x2 (MPOL_MF_MOVE)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_move_pages_truncated,
+    {
+        use pinchy_common::MovePagesData;
+        SyscallEvent {
+            syscall_nr: SYS_move_pages,
+            pid: 123,
+            tid: 123,
+            return_value: 2,
+            data: pinchy_common::SyscallEventData {
+                move_pages: MovePagesData {
+                    pid: 456,
+                    count: 100,
+                    flags: 0,
+                    pages: [
+                        0x7f1234567000,
+                        0x7f1234568000,
+                        0x7f1234569000,
+                        0x7f123456a000,
+                        0x7f123456b000,
+                        0x7f123456c000,
+                        0x7f123456d000,
+                        0x7f123456e000,
+                    ],
+                    nodes: [0, 1, 0, 1, 0, 1, 0, 1],
+                    status: [0, 0, -14, 0, -12, 0, -22, 0],
+                    pages_read_count: 8,
+                    nodes_read_count: 8,
+                    status_read_count: 8,
+                },
+            },
+        }
+    },
+    "123 move_pages(pid: 456, count: 100, pages: [0x7f1234567000, 0x7f1234568000, 0x7f1234569000, 0x7f123456a000, 0x7f123456b000, 0x7f123456c000, 0x7f123456d000, 0x7f123456e000... (showing 8 of 100)], nodes: [0, 1, 0, 1, 0, 1, 0, 1... (showing 8 of 100)], status: [0, 0, -14, 0, -12, 0, -22, 0... (showing 8 of 100)], flags: 0) = 2 (pages not migrated)\n"
+);
+
+syscall_test!(
+    parse_mincore_success,
+    {
+        use pinchy_common::MincoreData;
+        SyscallEvent {
+            syscall_nr: SYS_mincore,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mincore: MincoreData {
+                    addr: 0x7f1234567000,
+                    length: 16384,
+                    vec: [
+                        1, 1, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                        0, 0, 0, 0, 0, 0, 0,
+                    ],
+                    vec_read_count: 4,
+                },
+            },
+        }
+    },
+    "123 mincore(addr: 0x7f1234567000, length: 16384, vec: [1,1,0,1]) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mincore_truncated,
+    {
+        use pinchy_common::MincoreData;
+        SyscallEvent {
+            syscall_nr: SYS_mincore,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mincore: MincoreData {
+                    addr: 0x7f1234567000,
+                    length: 200 * 4096,
+                    vec: [
+                        1, 1, 0, 1, 0, 0, 0, 0,
+                        1, 1, 1, 1, 0, 0, 0, 0,
+                        1, 0, 1, 0, 1, 0, 1, 0,
+                        0, 1, 0, 1, 0, 1, 0, 1,
+                    ],
+                    vec_read_count: 32,
+                },
+            },
+        }
+    },
+    "123 mincore(addr: 0x7f1234567000, length: 819200, vec: [1,1,0,1,0,0,0,0,1,1,1,1,0,0,0,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1... (showing 32 of 200 pages)]) = 0 (success)\n"
 );

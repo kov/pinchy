@@ -470,7 +470,12 @@ able to load the eBPF programs into the kernel. To run them you need to use
 the following command:
 
 ```bash
-cargo --config "target.'cfg(all())'.runner=['/bin/sudo', '-s']" test integration -- --ignored
+cargo --config "target.'cfg(all())'.runner=['/bin/sudo', '-s']" test --test integration -- --ignored
+```
+You can run an individual test by running:
+
+```bash
+cargo --config "target.'cfg(all())'.runner=['/bin/sudo', '-s']" test --test integration -- <test_name_here> --ignored
 ```
 
 ## Helper Functions

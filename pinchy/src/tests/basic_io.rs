@@ -5,19 +5,23 @@ use std::pin::Pin;
 
 use indoc::indoc;
 use pinchy_common::{
-    kernel_types::{AioSigset, EpollEvent, IoCb, IoEvent, Iovec, OpenHow, Sigset, Timespec},
+    kernel_types::{
+        AioSigset, EpollEvent, IoCb, IoEvent, IoUringParams, Iovec, OpenHow, Sigset, Timespec,
+    },
     syscalls::{
         SYS_close, SYS_close_range, SYS_dup, SYS_dup3, SYS_epoll_create1, SYS_epoll_pwait,
         SYS_epoll_pwait2, SYS_fcntl, SYS_flock, SYS_io_cancel, SYS_io_destroy, SYS_io_getevents,
-        SYS_io_pgetevents, SYS_io_setup, SYS_io_submit, SYS_lseek, SYS_openat, SYS_openat2,
-        SYS_pipe2, SYS_ppoll, SYS_pread64, SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv,
-        SYS_splice, SYS_tee, SYS_vmsplice, SYS_write, SYS_writev,
+        SYS_io_pgetevents, SYS_io_setup, SYS_io_submit, SYS_io_uring_enter, SYS_io_uring_register,
+        SYS_io_uring_setup, SYS_lseek, SYS_openat, SYS_openat2, SYS_pipe2, SYS_ppoll, SYS_pread64,
+        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee, SYS_vmsplice,
+        SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
     EpollPWaitData, FcntlData, FlockData, IoCancelData, IoDestroyData, IoGeteventsData,
-    IoPgeteventsData, IoSetupData, IoSubmitData, LseekData, OpenAt2Data, OpenAtData, PpollData,
-    PreadData, PwriteData, ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData,
-    VectorIOData, VmspliceData, WriteData, DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
+    IoPgeteventsData, IoSetupData, IoSubmitData, IoUringEnterData, IoUringRegisterData,
+    IoUringSetupData, LseekData, OpenAt2Data, OpenAtData, PpollData, PreadData, PwriteData,
+    ReadData, SpliceData, SyscallEvent, SyscallEventData, TeeData, VectorIOData, VmspliceData,
+    WriteData, DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -27,7 +31,7 @@ use pinchy_common::{
 
 use crate::{
     events::handle_event,
-    format_helpers::aio_constants,
+    format_helpers::{aio_constants, io_uring_constants},
     formatting::{Formatter, FormattingStyle},
     syscall_test,
 };
@@ -1104,4 +1108,81 @@ syscall_test!(
         }
     },
     "123 io_pgetevents(ctx_id: 0x12345678, min_nr: 1, nr: 2, events: 0x7ffe55555555, timeout: NULL, usig: { sigmask: 0x7ffe77777777, sigsetsize: 8, sigset: [SIGUSR1] }, events_returned: [ event { data: 0xcafe, obj: 0x55555555, res: 1024, res2: 0 } ]) = 1 (events)\n"
+);
+
+syscall_test!(
+    parse_io_uring_setup,
+    {
+        let params = IoUringParams {
+            sq_entries: 256,
+            cq_entries: 256,
+            flags: io_uring_constants::IORING_SETUP_SQPOLL | io_uring_constants::IORING_SETUP_SQE128,
+            sq_thread_cpu: 2,
+            sq_thread_idle: 20,
+            features: io_uring_constants::IORING_FEAT_SINGLE_MMAP | io_uring_constants::IORING_FEAT_FAST_POLL,
+            wq_fd: 5,
+            ..Default::default()
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_io_uring_setup,
+            pid: 321,
+            tid: 321,
+            return_value: 7,
+            data: SyscallEventData {
+                io_uring_setup: IoUringSetupData {
+                    entries: 256,
+                    params_ptr: 0x7ffeabcd1000,
+                    has_params: true,
+                    params,
+                },
+            },
+        }
+    },
+    "321 io_uring_setup(entries: 256, params_ptr: 0x7ffeabcd1000, params: { sq_entries: 256, cq_entries: 256, flags: 0x402 (IORING_SETUP_SQPOLL|IORING_SETUP_SQE128), sq_thread_cpu: 2, sq_thread_idle: 20, features: 0x21 (IORING_FEAT_SINGLE_MMAP|IORING_FEAT_FAST_POLL), wq_fd: 5 }) = 7 (fd)\n"
+);
+
+syscall_test!(
+    parse_io_uring_enter,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_io_uring_enter,
+            pid: 222,
+            tid: 222,
+            return_value: 1,
+            data: SyscallEventData {
+                io_uring_enter: IoUringEnterData {
+                    fd: 7,
+                    to_submit: 2,
+                    min_complete: 1,
+                    flags: io_uring_constants::IORING_ENTER_GETEVENTS
+                        | io_uring_constants::IORING_ENTER_SQ_WAIT,
+                    sig: 0x7ffeabcd2000,
+                    sigsz: 8,
+                },
+            },
+        }
+    },
+    "222 io_uring_enter(fd: 7, to_submit: 2, min_complete: 1, flags: 0x5 (IORING_ENTER_GETEVENTS|IORING_ENTER_SQ_WAIT), sig: 0x7ffeabcd2000, sigsz: 8) = 1 (submitted)\n"
+);
+
+syscall_test!(
+    parse_io_uring_register,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_io_uring_register,
+            pid: 444,
+            tid: 444,
+            return_value: 0,
+            data: SyscallEventData {
+                io_uring_register: IoUringRegisterData {
+                    fd: 4,
+                    opcode: io_uring_constants::IORING_REGISTER_PROBE,
+                    arg: 0x7ffeabcd3000,
+                    nr_args: 4 | io_uring_constants::IORING_REGISTER_USE_REGISTERED_RING,
+                },
+            },
+        }
+    },
+    "444 io_uring_register(fd: 4, opcode: IORING_REGISTER_PROBE, arg: 0x7ffeabcd3000, nr_args: 0x80000004 (4|IORING_REGISTER_USE_REGISTERED_RING)) = 0 (success)\n"
 );

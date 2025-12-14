@@ -3299,6 +3299,61 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_io_uring_setup => {
+            let data = unsafe { event.data.io_uring_setup };
+
+            argf!(sf, "entries: {}", data.entries);
+            argf!(sf, "params_ptr: 0x{:x}", data.params_ptr);
+
+            if data.has_params {
+                arg!(sf, "params:");
+                with_struct!(sf, {
+                    argf!(sf, "sq_entries: {}", data.params.sq_entries);
+                    argf!(sf, "cq_entries: {}", data.params.cq_entries);
+                    argf!(
+                        sf,
+                        "flags: {}",
+                        format_io_uring_setup_flags(data.params.flags)
+                    );
+                    argf!(sf, "sq_thread_cpu: {}", data.params.sq_thread_cpu);
+                    argf!(sf, "sq_thread_idle: {}", data.params.sq_thread_idle);
+                    argf!(
+                        sf,
+                        "features: {}",
+                        format_io_uring_features(data.params.features)
+                    );
+                    argf!(sf, "wq_fd: {}", data.params.wq_fd);
+                });
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_uring_enter => {
+            let data = unsafe { event.data.io_uring_enter };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "to_submit: {}", data.to_submit);
+            argf!(sf, "min_complete: {}", data.min_complete);
+            argf!(sf, "flags: {}", format_io_uring_enter_flags(data.flags));
+            argf!(sf, "sig: 0x{:x}", data.sig);
+            argf!(sf, "sigsz: {}", data.sigsz);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_io_uring_register => {
+            let data = unsafe { event.data.io_uring_register };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "opcode: {}", format_io_uring_register_op(data.opcode));
+            argf!(sf, "arg: 0x{:x}", data.arg);
+            argf!(
+                sf,
+                "nr_args: {}",
+                format_io_uring_register_nr_args(data.nr_args)
+            );
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_io_setup => {
             let data = unsafe { event.data.io_setup };
 

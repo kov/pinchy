@@ -43,6 +43,11 @@ pub const LANDLOCK_ACCESS_FS_CHGRP: u64 = 1 << 14;
 pub const LANDLOCK_ACCESS_NET_BIND_TCP: u64 = 1 << 0;
 pub const LANDLOCK_ACCESS_NET_CONNECT_TCP: u64 = 1 << 1;
 
+// io_uring constants - from uapi/linux/io_uring.h
+pub const IORING_ENTER_GETEVENTS: u32 = 1 << 0;
+pub const IORING_ENTER_SQ_WAIT: u32 = 1 << 2;
+pub const IORING_REGISTER_PROBE: u32 = 8;
+
 #[repr(C)]
 pub struct SyscallEvent {
     pub syscall_nr: i64,
@@ -311,6 +316,9 @@ pub union SyscallEventData {
     pub io_cancel: IoCancelData,
     pub io_getevents: IoGeteventsData,
     pub io_pgetevents: IoPgeteventsData,
+    pub io_uring_setup: IoUringSetupData,
+    pub io_uring_enter: IoUringEnterData,
+    pub io_uring_register: IoUringRegisterData,
     pub landlock_create_ruleset: LandlockCreateRulesetData,
     pub landlock_add_rule: LandlockAddRuleData,
     pub landlock_restrict_self: LandlockRestrictSelfData,
@@ -2746,6 +2754,35 @@ impl Default for IoPgeteventsData {
             sigset_data: kernel_types::Sigset::default(),
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct IoUringSetupData {
+    pub entries: u32,
+    pub params_ptr: u64,
+    pub has_params: bool,
+    pub params: kernel_types::IoUringParams,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct IoUringEnterData {
+    pub fd: i32,
+    pub to_submit: u32,
+    pub min_complete: u32,
+    pub flags: u32,
+    pub sig: u64,
+    pub sigsz: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct IoUringRegisterData {
+    pub fd: i32,
+    pub opcode: u32,
+    pub arg: u64,
+    pub nr_args: u32,
 }
 
 #[repr(C)]

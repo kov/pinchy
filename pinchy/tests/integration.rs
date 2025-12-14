@@ -371,6 +371,42 @@ fn pipe_operations_syscalls() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn io_uring_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(
+        &["io_uring_setup", "io_uring_enter", "io_uring_register"],
+        "io_uring_test",
+    );
+
+    #[cfg(target_arch = "x86_64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ io_uring_setup(entries: 8, params_ptr: @ADDR@, params: { sq_entries: 8, cq_entries: 16, flags: 0, sq_thread_cpu: 0, sq_thread_idle: 0, features: 0x@HEXNUMBER@ (IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING|IORING_FEAT_RECVSEND_BUNDLE|IORING_FEAT_MIN_TIMEOUT|IORING_FEAT_RW_ATTR), wq_fd: 0 }) = @NUMBER@ (fd)
+        @PID@ io_uring_enter(fd: @NUMBER@, to_submit: 0, min_complete: 0, flags: 0x5 (IORING_ENTER_GETEVENTS|IORING_ENTER_SQ_WAIT), sig: 0x0, sigsz: 0) = @NUMBER@ (submitted)
+        @PID@ io_uring_register(fd: @NUMBER@, opcode: IORING_REGISTER_PROBE, arg: @ADDR@, nr_args: 4) = -@NUMBER@ (error)
+    "#});
+
+    #[cfg(target_arch = "aarch64")]
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ io_uring_setup(entries: 8, params_ptr: @ADDR@, params: { sq_entries: 8, cq_entries: 16, flags: 0, sq_thread_cpu: 0, sq_thread_idle: 0, features: 0x@HEXNUMBER@ (IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING|IORING_FEAT_RECVSEND_BUNDLE|IORING_FEAT_MIN_TIMEOUT|IORING_FEAT_RW_ATTR|IORING_FEAT_NO_IOWAIT), wq_fd: 0 }) = @NUMBER@ (fd)
+        @PID@ io_uring_enter(fd: @NUMBER@, to_submit: 0, min_complete: 0, flags: 0x5 (IORING_ENTER_GETEVENTS|IORING_ENTER_SQ_WAIT), sig: 0x0, sigsz: 0) = @NUMBER@ (submitted)
+        @PID@ io_uring_register(fd: @NUMBER@, opcode: IORING_REGISTER_PROBE, arg: @ADDR@, nr_args: 4) = -@NUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn io_multiplexing_syscalls() {
     let pinchy = PinchyTest::new(None, None);
 

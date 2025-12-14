@@ -726,6 +726,49 @@ pub struct AioSigset {
     pub sigsetsize: u64, // size of signal set
 }
 
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct IoSqringOffsets {
+    pub head: u32,
+    pub tail: u32,
+    pub ring_mask: u32,
+    pub ring_entries: u32,
+    pub flags: u32,
+    pub dropped: u32,
+    pub array: u32,
+    pub resv1: u32,
+    pub user_addr: u64,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct IoCqringOffsets {
+    pub head: u32,
+    pub tail: u32,
+    pub ring_mask: u32,
+    pub ring_entries: u32,
+    pub overflow: u32,
+    pub cqes: u32,
+    pub flags: u32,
+    pub resv1: u32,
+    pub user_addr: u64,
+}
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct IoUringParams {
+    pub sq_entries: u32,
+    pub cq_entries: u32,
+    pub flags: u32,
+    pub sq_thread_cpu: u32,
+    pub sq_thread_idle: u32,
+    pub features: u32,
+    pub wq_fd: u32,
+    pub resv: [u32; 3],
+    pub sq_off: IoSqringOffsets,
+    pub cq_off: IoCqringOffsets,
+}
+
 /// Landlock path_beneath rule attribute
 /// Used with LANDLOCK_RULE_PATH_BENEATH rule type
 #[repr(C)]

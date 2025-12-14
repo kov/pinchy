@@ -27,6 +27,37 @@ fn find_workspace_root(mut dir: PathBuf) -> PathBuf {
     }
 }
 
+#[repr(C)]
+#[derive(Default, Copy, Clone)]
+struct IoUringProbeOp {
+    op: u8,
+    resv: u8,
+    flags: u16,
+    resv2: u32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone)]
+struct IoUringProbe<const N: usize> {
+    last_op: u8,
+    ops_len: u8,
+    resv: u16,
+    resv2: [u32; 3],
+    ops: [IoUringProbeOp; N],
+}
+
+impl<const N: usize> Default for IoUringProbe<N> {
+    fn default() -> Self {
+        IoUringProbe {
+            last_op: 0,
+            ops_len: 0,
+            resv: 0,
+            resv2: [0; 3],
+            ops: [IoUringProbeOp::default(); N],
+        }
+    }
+}
+
 fn main() -> anyhow::Result<()> {
     // Start from the crate's root
     let workspace_root = find_workspace_root(current_dir()?);
@@ -78,6 +109,7 @@ fn main() -> anyhow::Result<()> {
             "execveat_test" => execveat_test(),
             "pipe_operations_test" => pipe_operations_test(),
             "io_multiplexing_test" => io_multiplexing_test(),
+            "io_uring_test" => io_uring_test(),
             "xattr_test" => xattr_test(),
             "sysv_ipc_test" => sysv_ipc_test(),
             "socketpair_sendmmsg_test" => socketpair_sendmmsg_test(),
@@ -3331,6 +3363,65 @@ fn aio_test() -> anyhow::Result<()> {
 
     // Clean up the temp file
     std::fs::remove_file("/tmp/aio_test_file").ok();
+
+    Ok(())
+}
+
+fn io_uring_test() -> anyhow::Result<()> {
+    const ENTRIES: u32 = 8;
+    const PROBE_OPS: usize = 4;
+
+    let mut params = pinchy_common::kernel_types::IoUringParams::default();
+
+    let ring_fd = unsafe { libc::syscall(libc::SYS_io_uring_setup, ENTRIES, &mut params) } as i32;
+
+    if ring_fd < 0 {
+        bail!("io_uring_setup failed: {ring_fd}");
+    }
+
+    let enter_flags = pinchy_common::IORING_ENTER_GETEVENTS | pinchy_common::IORING_ENTER_SQ_WAIT;
+
+    let enter_res = unsafe {
+        libc::syscall(
+            libc::SYS_io_uring_enter,
+            ring_fd,
+            0,
+            0,
+            enter_flags,
+            std::ptr::null::<libc::sigset_t>(),
+            0usize,
+        )
+    };
+
+    if enter_res < 0 {
+        unsafe {
+            libc::close(ring_fd);
+        }
+
+        bail!("io_uring_enter failed: {enter_res}");
+    }
+
+    let mut probe = IoUringProbe::<PROBE_OPS> {
+        ops_len: PROBE_OPS as u8,
+        ..Default::default()
+    };
+
+    let register_res = unsafe {
+        libc::syscall(
+            libc::SYS_io_uring_register,
+            ring_fd,
+            pinchy_common::IORING_REGISTER_PROBE,
+            &mut probe as *mut _ as *const c_void,
+            PROBE_OPS as u32,
+        )
+    };
+
+    // Probe registration may fail on some kernels or configurations; we still keep the trace.
+    let _ = register_res;
+
+    unsafe {
+        libc::close(ring_fd);
+    }
 
     Ok(())
 }

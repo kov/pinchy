@@ -9,7 +9,9 @@ use aya_ebpf::{
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 use pinchy_common::{
-    kernel_types::{AioSigset, FdSet, IoCb, IoEvent, OpenHow, Pollfd, Sigset, Timespec},
+    kernel_types::{
+        AioSigset, FdSet, IoCb, IoEvent, IoUringParams, OpenHow, Pollfd, Sigset, Timespec,
+    },
     syscalls,
 };
 
@@ -543,6 +545,37 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     }
                 }
+            }
+            syscalls::SYS_io_uring_setup => {
+                let data = data_mut!(entry, io_uring_setup);
+                data.entries = args[0] as u32;
+                data.params_ptr = args[1] as u64;
+
+                let params_ptr = args[1] as *const IoUringParams;
+                if !params_ptr.is_null() {
+                    unsafe {
+                        if let Ok(params) = bpf_probe_read_user(params_ptr) {
+                            data.params = params;
+                            data.has_params = true;
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_io_uring_enter => {
+                let data = data_mut!(entry, io_uring_enter);
+                data.fd = args[0] as i32;
+                data.to_submit = args[1] as u32;
+                data.min_complete = args[2] as u32;
+                data.flags = args[3] as u32;
+                data.sig = args[4] as u64;
+                data.sigsz = args[5] as usize;
+            }
+            syscalls::SYS_io_uring_register => {
+                let data = data_mut!(entry, io_uring_register);
+                data.fd = args[0] as i32;
+                data.opcode = args[1] as u32;
+                data.arg = args[2] as u64;
+                data.nr_args = args[3] as u32;
             }
             _ => {
                 entry.discard();

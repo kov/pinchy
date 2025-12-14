@@ -50,6 +50,98 @@ pub mod aio_constants {
     pub const IOCB_FLAG_IOPRIO: u32 = 1 << 1; // aio_reqprio is valid
 }
 
+// io_uring constants - from uapi/linux/io_uring.h
+pub mod io_uring_constants {
+    // io_uring_setup flags
+    pub const IORING_SETUP_IOPOLL: u32 = 1 << 0;
+    pub const IORING_SETUP_SQPOLL: u32 = 1 << 1;
+    pub const IORING_SETUP_SQ_AFF: u32 = 1 << 2;
+    pub const IORING_SETUP_CQSIZE: u32 = 1 << 3;
+    pub const IORING_SETUP_CLAMP: u32 = 1 << 4;
+    pub const IORING_SETUP_ATTACH_WQ: u32 = 1 << 5;
+    pub const IORING_SETUP_R_DISABLED: u32 = 1 << 6;
+    pub const IORING_SETUP_SUBMIT_ALL: u32 = 1 << 7;
+    pub const IORING_SETUP_COOP_TASKRUN: u32 = 1 << 8;
+    pub const IORING_SETUP_TASKRUN_FLAG: u32 = 1 << 9;
+    pub const IORING_SETUP_SQE128: u32 = 1 << 10;
+    pub const IORING_SETUP_CQE32: u32 = 1 << 11;
+    pub const IORING_SETUP_SINGLE_ISSUER: u32 = 1 << 12;
+    pub const IORING_SETUP_DEFER_TASKRUN: u32 = 1 << 13;
+    pub const IORING_SETUP_NO_MMAP: u32 = 1 << 14;
+    pub const IORING_SETUP_REGISTERED_FD_ONLY: u32 = 1 << 15;
+    pub const IORING_SETUP_NO_SQARRAY: u32 = 1 << 16;
+    pub const IORING_SETUP_HYBRID_IOPOLL: u32 = 1 << 17;
+
+    // io_uring features
+    pub const IORING_FEAT_SINGLE_MMAP: u32 = 1 << 0;
+    pub const IORING_FEAT_NODROP: u32 = 1 << 1;
+    pub const IORING_FEAT_SUBMIT_STABLE: u32 = 1 << 2;
+    pub const IORING_FEAT_RW_CUR_POS: u32 = 1 << 3;
+    pub const IORING_FEAT_CUR_PERSONALITY: u32 = 1 << 4;
+    pub const IORING_FEAT_FAST_POLL: u32 = 1 << 5;
+    pub const IORING_FEAT_POLL_32BITS: u32 = 1 << 6;
+    pub const IORING_FEAT_SQPOLL_NONFIXED: u32 = 1 << 7;
+    pub const IORING_FEAT_EXT_ARG: u32 = 1 << 8;
+    pub const IORING_FEAT_NATIVE_WORKERS: u32 = 1 << 9;
+    pub const IORING_FEAT_RSRC_TAGS: u32 = 1 << 10;
+    pub const IORING_FEAT_CQE_SKIP: u32 = 1 << 11;
+    pub const IORING_FEAT_LINKED_FILE: u32 = 1 << 12;
+    pub const IORING_FEAT_REG_REG_RING: u32 = 1 << 13;
+    pub const IORING_FEAT_RECVSEND_BUNDLE: u32 = 1 << 14;
+    pub const IORING_FEAT_MIN_TIMEOUT: u32 = 1 << 15;
+    pub const IORING_FEAT_RW_ATTR: u32 = 1 << 16;
+    pub const IORING_FEAT_NO_IOWAIT: u32 = 1 << 17;
+
+    // io_uring_enter flags
+    pub const IORING_ENTER_GETEVENTS: u32 = 1 << 0;
+    pub const IORING_ENTER_SQ_WAKEUP: u32 = 1 << 1;
+    pub const IORING_ENTER_SQ_WAIT: u32 = 1 << 2;
+    pub const IORING_ENTER_EXT_ARG: u32 = 1 << 3;
+    pub const IORING_ENTER_REGISTERED_RING: u32 = 1 << 4;
+    pub const IORING_ENTER_ABS_TIMER: u32 = 1 << 5;
+    pub const IORING_ENTER_EXT_ARG_REG: u32 = 1 << 6;
+    pub const IORING_ENTER_NO_IOWAIT: u32 = 1 << 7;
+
+    // io_uring register opcodes and flags
+    pub const IORING_REGISTER_BUFFERS: u32 = 0;
+    pub const IORING_UNREGISTER_BUFFERS: u32 = 1;
+    pub const IORING_REGISTER_FILES: u32 = 2;
+    pub const IORING_UNREGISTER_FILES: u32 = 3;
+    pub const IORING_REGISTER_EVENTFD: u32 = 4;
+    pub const IORING_UNREGISTER_EVENTFD: u32 = 5;
+    pub const IORING_REGISTER_FILES_UPDATE: u32 = 6;
+    pub const IORING_REGISTER_EVENTFD_ASYNC: u32 = 7;
+    pub const IORING_REGISTER_PROBE: u32 = 8;
+    pub const IORING_REGISTER_PERSONALITY: u32 = 9;
+    pub const IORING_UNREGISTER_PERSONALITY: u32 = 10;
+    pub const IORING_REGISTER_RESTRICTIONS: u32 = 11;
+    pub const IORING_REGISTER_ENABLE_RINGS: u32 = 12;
+    pub const IORING_REGISTER_FILES2: u32 = 13;
+    pub const IORING_REGISTER_FILES_UPDATE2: u32 = 14;
+    pub const IORING_REGISTER_BUFFERS2: u32 = 15;
+    pub const IORING_REGISTER_BUFFERS_UPDATE: u32 = 16;
+    pub const IORING_REGISTER_IOWQ_AFF: u32 = 17;
+    pub const IORING_UNREGISTER_IOWQ_AFF: u32 = 18;
+    pub const IORING_REGISTER_IOWQ_MAX_WORKERS: u32 = 19;
+    pub const IORING_REGISTER_RING_FDS: u32 = 20;
+    pub const IORING_UNREGISTER_RING_FDS: u32 = 21;
+    pub const IORING_REGISTER_PBUF_RING: u32 = 22;
+    pub const IORING_UNREGISTER_PBUF_RING: u32 = 23;
+    pub const IORING_REGISTER_SYNC_CANCEL: u32 = 24;
+    pub const IORING_REGISTER_FILE_ALLOC_RANGE: u32 = 25;
+    pub const IORING_REGISTER_PBUF_STATUS: u32 = 26;
+    pub const IORING_REGISTER_NAPI: u32 = 27;
+    pub const IORING_UNREGISTER_NAPI: u32 = 28;
+    pub const IORING_REGISTER_CLOCK: u32 = 29;
+    pub const IORING_REGISTER_CLONE_BUFFERS: u32 = 30;
+    pub const IORING_REGISTER_SEND_MSG_RING: u32 = 31;
+    pub const IORING_REGISTER_ZCRX_IFQ: u32 = 32;
+    pub const IORING_REGISTER_RESIZE_RINGS: u32 = 33;
+    pub const IORING_REGISTER_MEM_REGION: u32 = 34;
+    pub const IORING_REGISTER_LAST: u32 = 35;
+    pub const IORING_REGISTER_USE_REGISTERED_RING: u32 = 1 << 31;
+}
+
 // Landlock constants are defined in pinchy-common
 
 pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
@@ -2151,7 +2243,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_fsopen
         | syscalls::SYS_fsmount
         | syscalls::SYS_fspick
-        | syscalls::SYS_landlock_create_ruleset => {
+        | syscalls::SYS_landlock_create_ruleset
+        | syscalls::SYS_io_uring_setup => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
             } else {
@@ -2230,6 +2323,14 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_io_setup | syscalls::SYS_io_destroy | syscalls::SYS_io_cancel => {
             if return_value == 0 {
                 std::borrow::Cow::Borrowed("0 (success)")
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
+        syscalls::SYS_io_uring_enter => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (submitted)"))
             } else {
                 std::borrow::Cow::Owned(format!("{return_value} (error)"))
             }
@@ -2336,6 +2437,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_swapon
         | syscalls::SYS_swapoff
         | syscalls::SYS_timer_delete
+        | syscalls::SYS_io_uring_register
         | syscalls::SYS_sethostname
         | syscalls::SYS_setdomainname => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
@@ -4453,6 +4555,364 @@ pub fn format_resolve_flags(flags: u64) -> Cow<'static, str> {
     } else {
         Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
     }
+}
+
+pub fn format_io_uring_setup_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & io_uring_constants::IORING_SETUP_IOPOLL != 0 {
+        parts.push("IORING_SETUP_IOPOLL");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_SQPOLL != 0 {
+        parts.push("IORING_SETUP_SQPOLL");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_SQ_AFF != 0 {
+        parts.push("IORING_SETUP_SQ_AFF");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_CQSIZE != 0 {
+        parts.push("IORING_SETUP_CQSIZE");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_CLAMP != 0 {
+        parts.push("IORING_SETUP_CLAMP");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_ATTACH_WQ != 0 {
+        parts.push("IORING_SETUP_ATTACH_WQ");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_R_DISABLED != 0 {
+        parts.push("IORING_SETUP_R_DISABLED");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_SUBMIT_ALL != 0 {
+        parts.push("IORING_SETUP_SUBMIT_ALL");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_COOP_TASKRUN != 0 {
+        parts.push("IORING_SETUP_COOP_TASKRUN");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_TASKRUN_FLAG != 0 {
+        parts.push("IORING_SETUP_TASKRUN_FLAG");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_SQE128 != 0 {
+        parts.push("IORING_SETUP_SQE128");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_CQE32 != 0 {
+        parts.push("IORING_SETUP_CQE32");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_SINGLE_ISSUER != 0 {
+        parts.push("IORING_SETUP_SINGLE_ISSUER");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_DEFER_TASKRUN != 0 {
+        parts.push("IORING_SETUP_DEFER_TASKRUN");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_NO_MMAP != 0 {
+        parts.push("IORING_SETUP_NO_MMAP");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_REGISTERED_FD_ONLY != 0 {
+        parts.push("IORING_SETUP_REGISTERED_FD_ONLY");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_NO_SQARRAY != 0 {
+        parts.push("IORING_SETUP_NO_SQARRAY");
+    }
+
+    if flags & io_uring_constants::IORING_SETUP_HYBRID_IOPOLL != 0 {
+        parts.push("IORING_SETUP_HYBRID_IOPOLL");
+    }
+
+    let known_flags = io_uring_constants::IORING_SETUP_IOPOLL
+        | io_uring_constants::IORING_SETUP_SQPOLL
+        | io_uring_constants::IORING_SETUP_SQ_AFF
+        | io_uring_constants::IORING_SETUP_CQSIZE
+        | io_uring_constants::IORING_SETUP_CLAMP
+        | io_uring_constants::IORING_SETUP_ATTACH_WQ
+        | io_uring_constants::IORING_SETUP_R_DISABLED
+        | io_uring_constants::IORING_SETUP_SUBMIT_ALL
+        | io_uring_constants::IORING_SETUP_COOP_TASKRUN
+        | io_uring_constants::IORING_SETUP_TASKRUN_FLAG
+        | io_uring_constants::IORING_SETUP_SQE128
+        | io_uring_constants::IORING_SETUP_CQE32
+        | io_uring_constants::IORING_SETUP_SINGLE_ISSUER
+        | io_uring_constants::IORING_SETUP_DEFER_TASKRUN
+        | io_uring_constants::IORING_SETUP_NO_MMAP
+        | io_uring_constants::IORING_SETUP_REGISTERED_FD_ONLY
+        | io_uring_constants::IORING_SETUP_NO_SQARRAY
+        | io_uring_constants::IORING_SETUP_HYBRID_IOPOLL;
+
+    if flags & !known_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+}
+
+pub fn format_io_uring_features(features: u32) -> Cow<'static, str> {
+    if features == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if features & io_uring_constants::IORING_FEAT_SINGLE_MMAP != 0 {
+        parts.push("IORING_FEAT_SINGLE_MMAP");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_NODROP != 0 {
+        parts.push("IORING_FEAT_NODROP");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_SUBMIT_STABLE != 0 {
+        parts.push("IORING_FEAT_SUBMIT_STABLE");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_RW_CUR_POS != 0 {
+        parts.push("IORING_FEAT_RW_CUR_POS");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_CUR_PERSONALITY != 0 {
+        parts.push("IORING_FEAT_CUR_PERSONALITY");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_FAST_POLL != 0 {
+        parts.push("IORING_FEAT_FAST_POLL");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_POLL_32BITS != 0 {
+        parts.push("IORING_FEAT_POLL_32BITS");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_SQPOLL_NONFIXED != 0 {
+        parts.push("IORING_FEAT_SQPOLL_NONFIXED");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_EXT_ARG != 0 {
+        parts.push("IORING_FEAT_EXT_ARG");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_NATIVE_WORKERS != 0 {
+        parts.push("IORING_FEAT_NATIVE_WORKERS");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_RSRC_TAGS != 0 {
+        parts.push("IORING_FEAT_RSRC_TAGS");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_CQE_SKIP != 0 {
+        parts.push("IORING_FEAT_CQE_SKIP");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_LINKED_FILE != 0 {
+        parts.push("IORING_FEAT_LINKED_FILE");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_REG_REG_RING != 0 {
+        parts.push("IORING_FEAT_REG_REG_RING");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_RECVSEND_BUNDLE != 0 {
+        parts.push("IORING_FEAT_RECVSEND_BUNDLE");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_MIN_TIMEOUT != 0 {
+        parts.push("IORING_FEAT_MIN_TIMEOUT");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_RW_ATTR != 0 {
+        parts.push("IORING_FEAT_RW_ATTR");
+    }
+
+    if features & io_uring_constants::IORING_FEAT_NO_IOWAIT != 0 {
+        parts.push("IORING_FEAT_NO_IOWAIT");
+    }
+
+    let known_features = io_uring_constants::IORING_FEAT_SINGLE_MMAP
+        | io_uring_constants::IORING_FEAT_NODROP
+        | io_uring_constants::IORING_FEAT_SUBMIT_STABLE
+        | io_uring_constants::IORING_FEAT_RW_CUR_POS
+        | io_uring_constants::IORING_FEAT_CUR_PERSONALITY
+        | io_uring_constants::IORING_FEAT_FAST_POLL
+        | io_uring_constants::IORING_FEAT_POLL_32BITS
+        | io_uring_constants::IORING_FEAT_SQPOLL_NONFIXED
+        | io_uring_constants::IORING_FEAT_EXT_ARG
+        | io_uring_constants::IORING_FEAT_NATIVE_WORKERS
+        | io_uring_constants::IORING_FEAT_RSRC_TAGS
+        | io_uring_constants::IORING_FEAT_CQE_SKIP
+        | io_uring_constants::IORING_FEAT_LINKED_FILE
+        | io_uring_constants::IORING_FEAT_REG_REG_RING
+        | io_uring_constants::IORING_FEAT_RECVSEND_BUNDLE
+        | io_uring_constants::IORING_FEAT_MIN_TIMEOUT
+        | io_uring_constants::IORING_FEAT_RW_ATTR
+        | io_uring_constants::IORING_FEAT_NO_IOWAIT;
+
+    if features & !known_features != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    Cow::Owned(format!("0x{:x} ({})", features, parts.join("|")))
+}
+
+pub fn format_io_uring_enter_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & io_uring_constants::IORING_ENTER_GETEVENTS != 0 {
+        parts.push("IORING_ENTER_GETEVENTS");
+    }
+
+    if flags & io_uring_constants::IORING_ENTER_SQ_WAKEUP != 0 {
+        parts.push("IORING_ENTER_SQ_WAKEUP");
+    }
+
+    if flags & io_uring_constants::IORING_ENTER_SQ_WAIT != 0 {
+        parts.push("IORING_ENTER_SQ_WAIT");
+    }
+
+    if flags & io_uring_constants::IORING_ENTER_EXT_ARG != 0 {
+        parts.push("IORING_ENTER_EXT_ARG");
+    }
+
+    if flags & io_uring_constants::IORING_ENTER_REGISTERED_RING != 0 {
+        parts.push("IORING_ENTER_REGISTERED_RING");
+    }
+
+    if flags & io_uring_constants::IORING_ENTER_ABS_TIMER != 0 {
+        parts.push("IORING_ENTER_ABS_TIMER");
+    }
+
+    if flags & io_uring_constants::IORING_ENTER_EXT_ARG_REG != 0 {
+        parts.push("IORING_ENTER_EXT_ARG_REG");
+    }
+
+    if flags & io_uring_constants::IORING_ENTER_NO_IOWAIT != 0 {
+        parts.push("IORING_ENTER_NO_IOWAIT");
+    }
+
+    let known_flags = io_uring_constants::IORING_ENTER_GETEVENTS
+        | io_uring_constants::IORING_ENTER_SQ_WAKEUP
+        | io_uring_constants::IORING_ENTER_SQ_WAIT
+        | io_uring_constants::IORING_ENTER_EXT_ARG
+        | io_uring_constants::IORING_ENTER_REGISTERED_RING
+        | io_uring_constants::IORING_ENTER_ABS_TIMER
+        | io_uring_constants::IORING_ENTER_EXT_ARG_REG
+        | io_uring_constants::IORING_ENTER_NO_IOWAIT;
+
+    if flags & !known_flags != 0 {
+        parts.push("UNKNOWN");
+    }
+
+    Cow::Owned(format!("0x{:x} ({})", flags, parts.join("|")))
+}
+
+pub fn format_io_uring_register_op(opcode: u32) -> Cow<'static, str> {
+    match opcode {
+        io_uring_constants::IORING_REGISTER_BUFFERS => Cow::Borrowed("IORING_REGISTER_BUFFERS"),
+        io_uring_constants::IORING_UNREGISTER_BUFFERS => Cow::Borrowed("IORING_UNREGISTER_BUFFERS"),
+        io_uring_constants::IORING_REGISTER_FILES => Cow::Borrowed("IORING_REGISTER_FILES"),
+        io_uring_constants::IORING_UNREGISTER_FILES => Cow::Borrowed("IORING_UNREGISTER_FILES"),
+        io_uring_constants::IORING_REGISTER_EVENTFD => Cow::Borrowed("IORING_REGISTER_EVENTFD"),
+        io_uring_constants::IORING_UNREGISTER_EVENTFD => Cow::Borrowed("IORING_UNREGISTER_EVENTFD"),
+        io_uring_constants::IORING_REGISTER_FILES_UPDATE => {
+            Cow::Borrowed("IORING_REGISTER_FILES_UPDATE")
+        }
+        io_uring_constants::IORING_REGISTER_EVENTFD_ASYNC => {
+            Cow::Borrowed("IORING_REGISTER_EVENTFD_ASYNC")
+        }
+        io_uring_constants::IORING_REGISTER_PROBE => Cow::Borrowed("IORING_REGISTER_PROBE"),
+        io_uring_constants::IORING_REGISTER_PERSONALITY => {
+            Cow::Borrowed("IORING_REGISTER_PERSONALITY")
+        }
+        io_uring_constants::IORING_UNREGISTER_PERSONALITY => {
+            Cow::Borrowed("IORING_UNREGISTER_PERSONALITY")
+        }
+        io_uring_constants::IORING_REGISTER_RESTRICTIONS => {
+            Cow::Borrowed("IORING_REGISTER_RESTRICTIONS")
+        }
+        io_uring_constants::IORING_REGISTER_ENABLE_RINGS => {
+            Cow::Borrowed("IORING_REGISTER_ENABLE_RINGS")
+        }
+        io_uring_constants::IORING_REGISTER_FILES2 => Cow::Borrowed("IORING_REGISTER_FILES2"),
+        io_uring_constants::IORING_REGISTER_FILES_UPDATE2 => {
+            Cow::Borrowed("IORING_REGISTER_FILES_UPDATE2")
+        }
+        io_uring_constants::IORING_REGISTER_BUFFERS2 => Cow::Borrowed("IORING_REGISTER_BUFFERS2"),
+        io_uring_constants::IORING_REGISTER_BUFFERS_UPDATE => {
+            Cow::Borrowed("IORING_REGISTER_BUFFERS_UPDATE")
+        }
+        io_uring_constants::IORING_REGISTER_IOWQ_AFF => Cow::Borrowed("IORING_REGISTER_IOWQ_AFF"),
+        io_uring_constants::IORING_UNREGISTER_IOWQ_AFF => {
+            Cow::Borrowed("IORING_UNREGISTER_IOWQ_AFF")
+        }
+        io_uring_constants::IORING_REGISTER_IOWQ_MAX_WORKERS => {
+            Cow::Borrowed("IORING_REGISTER_IOWQ_MAX_WORKERS")
+        }
+        io_uring_constants::IORING_REGISTER_RING_FDS => Cow::Borrowed("IORING_REGISTER_RING_FDS"),
+        io_uring_constants::IORING_UNREGISTER_RING_FDS => {
+            Cow::Borrowed("IORING_UNREGISTER_RING_FDS")
+        }
+        io_uring_constants::IORING_REGISTER_PBUF_RING => Cow::Borrowed("IORING_REGISTER_PBUF_RING"),
+        io_uring_constants::IORING_UNREGISTER_PBUF_RING => {
+            Cow::Borrowed("IORING_UNREGISTER_PBUF_RING")
+        }
+        io_uring_constants::IORING_REGISTER_SYNC_CANCEL => {
+            Cow::Borrowed("IORING_REGISTER_SYNC_CANCEL")
+        }
+        io_uring_constants::IORING_REGISTER_FILE_ALLOC_RANGE => {
+            Cow::Borrowed("IORING_REGISTER_FILE_ALLOC_RANGE")
+        }
+        io_uring_constants::IORING_REGISTER_PBUF_STATUS => {
+            Cow::Borrowed("IORING_REGISTER_PBUF_STATUS")
+        }
+        io_uring_constants::IORING_REGISTER_NAPI => Cow::Borrowed("IORING_REGISTER_NAPI"),
+        io_uring_constants::IORING_UNREGISTER_NAPI => Cow::Borrowed("IORING_UNREGISTER_NAPI"),
+        io_uring_constants::IORING_REGISTER_CLOCK => Cow::Borrowed("IORING_REGISTER_CLOCK"),
+        io_uring_constants::IORING_REGISTER_CLONE_BUFFERS => {
+            Cow::Borrowed("IORING_REGISTER_CLONE_BUFFERS")
+        }
+        io_uring_constants::IORING_REGISTER_SEND_MSG_RING => {
+            Cow::Borrowed("IORING_REGISTER_SEND_MSG_RING")
+        }
+        io_uring_constants::IORING_REGISTER_ZCRX_IFQ => Cow::Borrowed("IORING_REGISTER_ZCRX_IFQ"),
+        io_uring_constants::IORING_REGISTER_RESIZE_RINGS => {
+            Cow::Borrowed("IORING_REGISTER_RESIZE_RINGS")
+        }
+        io_uring_constants::IORING_REGISTER_MEM_REGION => {
+            Cow::Borrowed("IORING_REGISTER_MEM_REGION")
+        }
+        io_uring_constants::IORING_REGISTER_LAST => Cow::Borrowed("IORING_REGISTER_LAST"),
+        _ => Cow::Owned(opcode.to_string()),
+    }
+}
+
+pub fn format_io_uring_register_nr_args(nr_args: u32) -> Cow<'static, str> {
+    let masked = nr_args & !io_uring_constants::IORING_REGISTER_USE_REGISTERED_RING;
+
+    if nr_args & io_uring_constants::IORING_REGISTER_USE_REGISTERED_RING == 0 {
+        return Cow::Owned(masked.to_string());
+    }
+
+    Cow::Owned(format!(
+        "0x{:x} ({}|IORING_REGISTER_USE_REGISTERED_RING)",
+        nr_args, masked
+    ))
 }
 
 /// Format IOCB command opcode

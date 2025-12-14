@@ -630,6 +630,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_io_cancel,
         syscalls::SYS_io_getevents,
         syscalls::SYS_io_pgetevents,
+        syscalls::SYS_io_uring_setup,
+        syscalls::SYS_io_uring_enter,
+        syscalls::SYS_io_uring_register,
     ];
     let basic_io_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_basic_io")

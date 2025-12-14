@@ -16,12 +16,12 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-    - name: Ensure Rust 1.87.0 version
-      run: rustup install 1.87.0 && rustup default 1.87.0
+    - name: Ensure Rust 1.92.0 version
+      run: rustup install 1.92.0 && rustup default 1.92.0
     - name: Install fixed nightly version for reproducible builds (see pinchy/build.rs)
-      run: rustup install nightly-2025-06-13
+      run: rustup install nightly-2025-12-12
     - name: Add rust-src component to nightly
-      run: rustup component add rust-src --toolchain nightly-2025-06-13-x86_64-unknown-linux-gnu
+      run: rustup component add rust-src --toolchain nightly-2025-12-12-x86_64-unknown-linux-gnu
     - name: Install bpf-linker
       run: cargo install bpf-linker
     - name: Build

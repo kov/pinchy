@@ -9,6 +9,6 @@ fn main() -> anyhow::Result<()> {
             no_default_features: false,
             features: &[],
         }],
-        aya_build::Toolchain::Custom("nightly-2025-06-13"),
+        aya_build::Toolchain::Custom("nightly-2025-12-12"),
     )
 }

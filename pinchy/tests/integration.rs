@@ -9,7 +9,7 @@ use std::{
     thread::JoinHandle,
 };
 
-use assert_cmd::{assert::Assert, cargo::cargo_bin};
+use assert_cmd::assert::Assert;
 use common::PinchyTest;
 use indoc::indoc;
 use predicates::prelude::*;
@@ -419,7 +419,7 @@ fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
     let events: Vec<String> = events.iter().map(|&s| s.to_owned()).collect();
     let test_name = test_name.to_owned();
     std::thread::spawn(move || {
-        let mut cmd = Command::new(cargo_bin("pinchy"));
+        let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("pinchy"));
 
         // Add event filters
         for event in events {
@@ -428,7 +428,7 @@ fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
 
         // Add the test helper command
         cmd.arg("--")
-            .arg(cargo_bin("test-helper"))
+            .arg(assert_cmd::cargo::cargo_bin!("test-helper"))
             .arg(&test_name)
             .output()
             .expect("Failed to run pinchy")

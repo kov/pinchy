@@ -10,13 +10,12 @@ use std::{
 };
 
 use anyhow::bail;
-use assert_cmd::cargo::cargo_bin;
 use futures::StreamExt;
 use once_cell::sync::Lazy;
 use zbus::{fdo::DBusProxy, names::BusName, Connection};
 
 pub fn run_pinchyd(pid: Option<u32>) -> (PipeReader, Child) {
-    let mut cmd = process::Command::new(cargo_bin("pinchyd"));
+    let mut cmd = process::Command::new(assert_cmd::cargo::cargo_bin!("pinchyd"));
 
     let (reader, writer) = std::io::pipe().unwrap();
 

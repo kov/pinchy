@@ -8,7 +8,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use assert_cmd::{assert::Assert, cargo::cargo_bin};
+use assert_cmd::assert::Assert;
 use common::PinchyTest;
 use predicates::prelude::*;
 use serial_test::serial;
@@ -43,9 +43,9 @@ fn auto_quit_after_client() {
     let pinchy = PinchyTest::new(None, Some("Currently serving: 1".to_string()));
 
     // Start pinchy client to monitor our own PID.
-    let mut child = Command::new(cargo_bin("pinchy"))
+    let mut child = Command::new(assert_cmd::cargo::cargo_bin!("pinchy"))
         //.env("RUST_LOG", "trace")
-        .arg(cargo_bin("test-helper"))
+        .arg(assert_cmd::cargo::cargo_bin!("test-helper"))
         .arg("pinchy_reads")
         .stdout(Stdio::null())
         .spawn()

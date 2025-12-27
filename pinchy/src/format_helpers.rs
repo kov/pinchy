@@ -5301,3 +5301,62 @@ pub fn format_nodemask(nodemask: &[u64], count: u32) -> String {
         )
     }
 }
+// Key management constants - from uapi/linux/keyctl.h
+// Not all keyctl constants are available in libc yet
+pub const KEYCTL_WATCH_KEY: u32 = 32;
+
+pub fn format_keyctl_operation(op: i32) -> Cow<'static, str> {
+    let op_u32 = op as u32;
+
+    match op_u32 {
+        libc::KEYCTL_GET_KEYRING_ID => Cow::Borrowed("GET_KEYRING_ID"),
+        libc::KEYCTL_JOIN_SESSION_KEYRING => Cow::Borrowed("JOIN_SESSION_KEYRING"),
+        libc::KEYCTL_UPDATE => Cow::Borrowed("UPDATE"),
+        libc::KEYCTL_REVOKE => Cow::Borrowed("REVOKE"),
+        libc::KEYCTL_CHOWN => Cow::Borrowed("CHOWN"),
+        libc::KEYCTL_SETPERM => Cow::Borrowed("SETPERM"),
+        libc::KEYCTL_DESCRIBE => Cow::Borrowed("DESCRIBE"),
+        libc::KEYCTL_CLEAR => Cow::Borrowed("CLEAR"),
+        libc::KEYCTL_LINK => Cow::Borrowed("LINK"),
+        libc::KEYCTL_UNLINK => Cow::Borrowed("UNLINK"),
+        libc::KEYCTL_SEARCH => Cow::Borrowed("SEARCH"),
+        libc::KEYCTL_READ => Cow::Borrowed("READ"),
+        libc::KEYCTL_INSTANTIATE => Cow::Borrowed("INSTANTIATE"),
+        libc::KEYCTL_NEGATE => Cow::Borrowed("NEGATE"),
+        libc::KEYCTL_SET_REQKEY_KEYRING => Cow::Borrowed("SET_REQKEY_KEYRING"),
+        libc::KEYCTL_SET_TIMEOUT => Cow::Borrowed("SET_TIMEOUT"),
+        libc::KEYCTL_ASSUME_AUTHORITY => Cow::Borrowed("ASSUME_AUTHORITY"),
+        libc::KEYCTL_GET_SECURITY => Cow::Borrowed("GET_SECURITY"),
+        libc::KEYCTL_SESSION_TO_PARENT => Cow::Borrowed("SESSION_TO_PARENT"),
+        libc::KEYCTL_REJECT => Cow::Borrowed("REJECT"),
+        libc::KEYCTL_INSTANTIATE_IOV => Cow::Borrowed("INSTANTIATE_IOV"),
+        libc::KEYCTL_INVALIDATE => Cow::Borrowed("INVALIDATE"),
+        libc::KEYCTL_GET_PERSISTENT => Cow::Borrowed("GET_PERSISTENT"),
+        libc::KEYCTL_DH_COMPUTE => Cow::Borrowed("DH_COMPUTE"),
+        libc::KEYCTL_PKEY_QUERY => Cow::Borrowed("PKEY_QUERY"),
+        libc::KEYCTL_PKEY_ENCRYPT => Cow::Borrowed("PKEY_ENCRYPT"),
+        libc::KEYCTL_PKEY_DECRYPT => Cow::Borrowed("PKEY_DECRYPT"),
+        libc::KEYCTL_PKEY_SIGN => Cow::Borrowed("PKEY_SIGN"),
+        libc::KEYCTL_PKEY_VERIFY => Cow::Borrowed("PKEY_VERIFY"),
+        libc::KEYCTL_RESTRICT_KEYRING => Cow::Borrowed("RESTRICT_KEYRING"),
+        libc::KEYCTL_MOVE => Cow::Borrowed("MOVE"),
+        libc::KEYCTL_CAPABILITIES => Cow::Borrowed("CAPABILITIES"),
+        KEYCTL_WATCH_KEY => Cow::Borrowed("WATCH_KEY"),
+        _ => format!("UNKNOWN({})", op).into(),
+    }
+}
+
+pub fn format_key_spec_id(id: i32) -> Cow<'static, str> {
+    match id {
+        -1 => Cow::Borrowed("KEY_SPEC_THREAD_KEYRING"),
+        -2 => Cow::Borrowed("KEY_SPEC_PROCESS_KEYRING"),
+        -3 => Cow::Borrowed("KEY_SPEC_SESSION_KEYRING"),
+        -4 => Cow::Borrowed("KEY_SPEC_USER_KEYRING"),
+        -5 => Cow::Borrowed("KEY_SPEC_USER_SESSION_KEYRING"),
+        -6 => Cow::Borrowed("KEY_SPEC_GROUP_KEYRING"),
+        -7 => Cow::Borrowed("KEY_SPEC_REQKEY_AUTH_KEY"),
+        -8 => Cow::Borrowed("KEY_SPEC_REQUESTOR_KEYRING"),
+        _ if id < 0 => format!("KEY_SPEC_UNKNOWN({})", id).into(),
+        _ => format!("{}", id).into(),
+    }
+}

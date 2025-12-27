@@ -124,6 +124,7 @@ fn main() -> anyhow::Result<()> {
             "aio_test" => aio_test(),
             "landlock_test" => landlock_test(),
             "mempolicy_test" => mempolicy_test(),
+            "key_management_test" => key_management_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -3787,6 +3788,119 @@ fn landlock_test() -> anyhow::Result<()> {
         // Close the file descriptor if it was created
         if ruleset_fd >= 0 {
             libc::close(ruleset_fd as i32);
+        }
+    }
+
+    Ok(())
+}
+fn key_management_test() -> anyhow::Result<()> {
+    use std::ffi::CString;
+
+    unsafe {
+        // Ensure we have a usable session keyring; ignore errors but prefer success
+        let _ = libc::syscall(
+            syscalls::SYS_keyctl,
+            libc::KEYCTL_JOIN_SESSION_KEYRING,
+            std::ptr::null::<libc::c_char>(),
+        );
+
+        // Test add_key with "user" key type
+        let key_type = CString::new("user")?;
+        let description = CString::new("test_key_1")?;
+        let payload = b"test_payload_data";
+
+        let key_id = libc::syscall(
+            syscalls::SYS_add_key,
+            key_type.as_ptr(),
+            description.as_ptr(),
+            payload.as_ptr(),
+            payload.len(),
+            libc::KEY_SPEC_SESSION_KEYRING,
+        );
+
+        // Test add_key with "keyring" type (no payload)
+        let keyring_type = CString::new("keyring")?;
+        let keyring_desc = CString::new("test_keyring")?;
+
+        let _keyring_id = libc::syscall(
+            syscalls::SYS_add_key,
+            keyring_type.as_ptr(),
+            keyring_desc.as_ptr(),
+            std::ptr::null::<u8>(),
+            0,
+            libc::KEY_SPEC_SESSION_KEYRING,
+        );
+
+        // Test request_key
+        let req_type = CString::new("user")?;
+        let req_desc = CString::new("test_key_1")?;
+        let req_info = CString::new("test_call_info")?;
+
+        let _req_key = libc::syscall(
+            syscalls::SYS_request_key,
+            req_type.as_ptr(),
+            req_desc.as_ptr(),
+            req_info.as_ptr(),
+            libc::KEY_SPEC_THREAD_KEYRING,
+        );
+
+        // Test keyctl operations
+        if key_id >= 0 {
+            // KEYCTL_DESCRIBE
+            let desc_buf = vec![0u8; 256];
+            let _desc = libc::syscall(
+                syscalls::SYS_keyctl,
+                6, // KEYCTL_DESCRIBE
+                key_id as usize,
+                desc_buf.as_ptr(),
+                desc_buf.len(),
+            );
+
+            // KEYCTL_READ
+            let read_buf = vec![0u8; 256];
+            let _read = libc::syscall(
+                syscalls::SYS_keyctl,
+                11, // KEYCTL_READ
+                key_id as usize,
+                read_buf.as_ptr(),
+                read_buf.len(),
+            );
+
+            // KEYCTL_SETPERM
+            let _setperm = libc::syscall(
+                syscalls::SYS_keyctl,
+                5, // KEYCTL_SETPERM
+                key_id as usize,
+                0x3f010000u64, // Standard permissions
+            );
+
+            // KEYCTL_GET_KEYRING_ID with session keyring
+            let _get_kr = libc::syscall(
+                syscalls::SYS_keyctl,
+                0, // KEYCTL_GET_KEYRING_ID
+                libc::KEY_SPEC_SESSION_KEYRING as usize,
+                1, // create = true
+            );
+
+            // KEYCTL_SEARCH to find our key in session keyring
+            let search_type = CString::new("user")?;
+            let search_desc = CString::new("test_key_1")?;
+
+            let _search = libc::syscall(
+                syscalls::SYS_keyctl,
+                10, // KEYCTL_SEARCH
+                libc::KEY_SPEC_SESSION_KEYRING as usize,
+                search_type.as_ptr(),
+                search_desc.as_ptr(),
+                0,
+            );
+
+            // KEYCTL_REVOKE to revoke the key
+            let _revoke = libc::syscall(
+                syscalls::SYS_keyctl,
+                3, // KEYCTL_REVOKE
+                key_id as usize,
+            );
         }
     }
 

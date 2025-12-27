@@ -4,19 +4,19 @@
 use pinchy_common::{
     kernel_types::{CapUserData, CapUserHeader, LandlockRuleAttrUnion, Rlimit, Utsname},
     syscalls::{
-        SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module, SYS_finit_module,
-        SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_init_module, SYS_ioctl, SYS_ioprio_get,
-        SYS_ioprio_set, SYS_landlock_add_rule, SYS_landlock_create_ruleset,
-        SYS_landlock_restrict_self, SYS_nanosleep, SYS_personality, SYS_reboot, SYS_setdomainname,
-        SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname,
-        SYS_vhangup,
+        SYS_add_key, SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module,
+        SYS_finit_module, SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_init_module, SYS_ioctl,
+        SYS_ioprio_get, SYS_ioprio_set, SYS_keyctl, SYS_landlock_add_rule,
+        SYS_landlock_create_ruleset, SYS_landlock_restrict_self, SYS_nanosleep, SYS_personality,
+        SYS_reboot, SYS_request_key, SYS_setdomainname, SYS_sethostname, SYS_settimeofday,
+        SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
     },
-    CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData, FinitModuleData,
-    GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData, IoprioGetData,
-    IoprioSetData, LandlockAddRuleData, LandlockCreateRulesetData, LandlockRestrictSelfData,
-    NanosleepData, PersonalityData, RebootData, RtSigreturnData, SetdomainnameData,
-    SethostnameData, SettimeofdayData, SyncData, SyscallEvent, SyscallEventData, SysinfoData,
-    TimesData, UmaskData, UnameData, VhangupData,
+    AddKeyData, CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData,
+    FinitModuleData, GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData,
+    IoprioGetData, IoprioSetData, KeyctlData, LandlockAddRuleData, LandlockCreateRulesetData,
+    LandlockRestrictSelfData, NanosleepData, PersonalityData, RebootData, RequestKeyData,
+    RtSigreturnData, SetdomainnameData, SethostnameData, SettimeofdayData, SyncData, SyscallEvent,
+    SyscallEventData, SysinfoData, TimesData, UmaskData, UnameData, VhangupData,
 };
 
 use crate::syscall_test;
@@ -1425,4 +1425,253 @@ syscall_test!(
         }
     },
     "6006 landlock_restrict_self(ruleset_fd: -1, flags: 0) = -22 (error)\n"
+);
+syscall_test!(
+    parse_add_key_user_type,
+    {
+        let mut key_type_buf = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let mut desc_buf = [0u8; pinchy_common::LARGER_READ_SIZE];
+        let mut payload_buf = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+
+        let key_type = b"user\0";
+        let description = b"my_secret_key\0";
+        let payload_data = b"super_secret_data";
+        let payload = b"super_secret_data\0";
+
+        key_type_buf[..key_type.len()].copy_from_slice(key_type);
+        desc_buf[..description.len()].copy_from_slice(description);
+        payload_buf[..payload.len()].copy_from_slice(payload);
+
+        SyscallEvent {
+            syscall_nr: SYS_add_key,
+            pid: 7000,
+            tid: 7000,
+            return_value: 512000001,
+            data: SyscallEventData {
+                add_key: AddKeyData {
+                    key_type: key_type_buf,
+                    description: desc_buf,
+                    payload: payload_buf,
+                    payload_len: payload_data.len(),
+                    keyring: libc::KEY_SPEC_SESSION_KEYRING,
+                },
+            },
+        }
+    },
+    "7000 add_key(type: \"user\", description: \"my_secret_key\", payload: \"super_secret_data\", keyring: KEY_SPEC_SESSION_KEYRING) = 512000001\n"
+);
+
+syscall_test!(
+    parse_add_key_empty_payload,
+    {
+        let mut key_type_buf = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let mut desc_buf = [0u8; pinchy_common::LARGER_READ_SIZE];
+        let payload_buf = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+
+        let key_type = b"keyring\0";
+        let description = b"temp_keyring\0";
+
+        key_type_buf[..key_type.len()].copy_from_slice(key_type);
+        desc_buf[..description.len()].copy_from_slice(description);
+
+        SyscallEvent {
+            syscall_nr: SYS_add_key,
+            pid: 7001,
+            tid: 7001,
+            return_value: 512000002,
+            data: SyscallEventData {
+                add_key: AddKeyData {
+                    key_type: key_type_buf,
+                    description: desc_buf,
+                    payload: payload_buf,
+                    payload_len: 0,
+                    keyring: libc::KEY_SPEC_PROCESS_KEYRING,
+                },
+            },
+        }
+    },
+    "7001 add_key(type: \"keyring\", description: \"temp_keyring\", payload: (empty), keyring: KEY_SPEC_PROCESS_KEYRING) = 512000002\n"
+);
+
+syscall_test!(
+    parse_add_key_error,
+    {
+        let mut key_type_buf = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let desc_buf = [0u8; pinchy_common::LARGER_READ_SIZE];
+        let payload_buf = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+
+        let key_type = b"unknown\0";
+        key_type_buf[..key_type.len()].copy_from_slice(key_type);
+
+        SyscallEvent {
+            syscall_nr: SYS_add_key,
+            pid: 7002,
+            tid: 7002,
+            return_value: -22, // EINVAL
+            data: SyscallEventData {
+                add_key: AddKeyData {
+                    key_type: key_type_buf,
+                    description: desc_buf,
+                    payload: payload_buf,
+                    payload_len: 0,
+                    keyring: libc::KEY_SPEC_THREAD_KEYRING,
+                },
+            },
+        }
+    },
+    "7002 add_key(type: \"unknown\", description: \"\", payload: (empty), keyring: KEY_SPEC_THREAD_KEYRING) = -22 (error)\n"
+);
+
+syscall_test!(
+    parse_request_key_success,
+    {
+        let mut key_type_buf = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let mut desc_buf = [0u8; pinchy_common::LARGER_READ_SIZE];
+        let mut info_buf = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+
+        let key_type = b"user\0";
+        let description = b"api_token\0";
+        let callout_info = b"service:web\0";
+
+        key_type_buf[..key_type.len()].copy_from_slice(key_type);
+        desc_buf[..description.len()].copy_from_slice(description);
+        info_buf[..callout_info.len()].copy_from_slice(callout_info);
+
+        SyscallEvent {
+            syscall_nr: SYS_request_key,
+            pid: 7010,
+            tid: 7010,
+            return_value: 512000010,
+            data: SyscallEventData {
+                request_key: RequestKeyData {
+                    key_type: key_type_buf,
+                    description: desc_buf,
+                    callout_info: info_buf,
+                    callout_info_len: callout_info.len(),
+                    dest_keyring: libc::KEY_SPEC_SESSION_KEYRING,
+                },
+            },
+        }
+    },
+    "7010 request_key(type: \"user\", description: \"api_token\", callout_info: \"service:web\", dest_keyring: KEY_SPEC_SESSION_KEYRING) = 512000010\n"
+);
+
+syscall_test!(
+    parse_request_key_no_callout,
+    {
+        let mut key_type_buf = [0u8; pinchy_common::SMALLISH_READ_SIZE];
+        let mut desc_buf = [0u8; pinchy_common::LARGER_READ_SIZE];
+        let info_buf = [0u8; pinchy_common::MEDIUM_READ_SIZE];
+
+        let key_type = b"user\0";
+        let description = b"password\0";
+
+        key_type_buf[..key_type.len()].copy_from_slice(key_type);
+        desc_buf[..description.len()].copy_from_slice(description);
+
+        SyscallEvent {
+            syscall_nr: SYS_request_key,
+            pid: 7011,
+            tid: 7011,
+            return_value: 512000011,
+            data: SyscallEventData {
+                request_key: RequestKeyData {
+                    key_type: key_type_buf,
+                    description: desc_buf,
+                    callout_info: info_buf,
+                    callout_info_len: 0,
+                    dest_keyring: 0,
+                },
+            },
+        }
+    },
+    "7011 request_key(type: \"user\", description: \"password\", callout_info: (null), dest_keyring: 0) = 512000011\n"
+);
+
+syscall_test!(
+    parse_keyctl_get_keyring_id,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_keyctl,
+            pid: 7020,
+            tid: 7020,
+            return_value: 512000020,
+            data: SyscallEventData {
+                keyctl: KeyctlData {
+                    operation: libc::KEYCTL_GET_KEYRING_ID as i32,
+                    arg1: libc::KEY_SPEC_SESSION_KEYRING as u64,
+                    arg2: 0,
+                    arg3: 0,
+                    arg4: 0,
+                },
+            },
+        }
+    },
+    "7020 keyctl(operation: GET_KEYRING_ID, keyring: KEY_SPEC_SESSION_KEYRING, create: 0x0) = 512000020 (key)\n"
+);
+
+syscall_test!(
+    parse_keyctl_update,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_keyctl,
+            pid: 7021,
+            tid: 7021,
+            return_value: 0,
+            data: SyscallEventData {
+                keyctl: KeyctlData {
+                    operation: libc::KEYCTL_UPDATE as i32,
+                    arg1: 512000001, // key_id
+                    arg2: 0xdeadbeef, // payload pointer
+                    arg3: 32,        // size
+                    arg4: 0,
+                },
+            },
+        }
+    },
+    "7021 keyctl(operation: UPDATE, key: 512000001, payload: 0xdeadbeef, length: 0x20) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_keyctl_revoke,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_keyctl,
+            pid: 7022,
+            tid: 7022,
+            return_value: 0,
+            data: SyscallEventData {
+                keyctl: KeyctlData {
+                    operation: libc::KEYCTL_REVOKE as i32,
+                    arg1: 512000001,
+                    arg2: 0,
+                    arg3: 0,
+                    arg4: 0,
+                },
+            },
+        }
+    },
+    "7022 keyctl(operation: REVOKE, key: 512000001) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_keyctl_search,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_keyctl,
+            pid: 7023,
+            tid: 7023,
+            return_value: 512000023,
+            data: SyscallEventData {
+                keyctl: KeyctlData {
+                    operation: libc::KEYCTL_SEARCH as i32,
+                    arg1: libc::KEY_SPEC_SESSION_KEYRING as u64,
+                    arg2: 0xaabbccdd,
+                    arg3: 0xddeeffaa,
+                    arg4: libc::KEY_SPEC_PROCESS_KEYRING as u64,
+                },
+            },
+        }
+    },
+    "7023 keyctl(operation: SEARCH, keyring: KEY_SPEC_SESSION_KEYRING, type: 0xaabbccdd, description: 0xddeeffaa, dest_keyring: KEY_SPEC_PROCESS_KEYRING) = 512000023 (key)\n"
 );

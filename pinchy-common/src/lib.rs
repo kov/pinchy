@@ -353,6 +353,9 @@ pub union SyscallEventData {
     pub landlock_create_ruleset: LandlockCreateRulesetData,
     pub landlock_add_rule: LandlockAddRuleData,
     pub landlock_restrict_self: LandlockRestrictSelfData,
+    pub add_key: AddKeyData,
+    pub request_key: RequestKeyData,
+    pub keyctl: KeyctlData,
     pub mbind: MbindData,
     pub get_mempolicy: GetMempolicyData,
     pub set_mempolicy: SetMempolicyData,
@@ -3006,4 +3009,34 @@ pub struct LandlockAddRuleData {
 pub struct LandlockRestrictSelfData {
     pub ruleset_fd: i32,
     pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AddKeyData {
+    pub key_type: [u8; SMALLISH_READ_SIZE],
+    pub description: [u8; LARGER_READ_SIZE],
+    pub payload: [u8; MEDIUM_READ_SIZE],
+    pub payload_len: usize,
+    pub keyring: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RequestKeyData {
+    pub key_type: [u8; SMALLISH_READ_SIZE],
+    pub description: [u8; LARGER_READ_SIZE],
+    pub callout_info: [u8; MEDIUM_READ_SIZE],
+    pub callout_info_len: usize,
+    pub dest_keyring: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KeyctlData {
+    pub operation: i32,
+    pub arg1: u64,
+    pub arg2: u64,
+    pub arg3: u64,
+    pub arg4: u64,
 }

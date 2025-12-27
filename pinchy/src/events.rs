@@ -1868,6 +1868,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "start: 0x{:x}", data.start);
             argf!(sf, "len: {}", data.len);
             argf!(sf, "home_node: {}", data.home_node);
+            // Note: kernel requires flags == 0, reserved for future use
             argf!(sf, "flags: {}", data.flags);
 
             finish!(sf, event.return_value);

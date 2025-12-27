@@ -50,6 +50,9 @@ current and can determine from a cursory look whether the version you remember
 is quite different from current, so it makes sense to double check docs for
 that crate as well (suggest a change to this file in that case).
 
+When looking at documentation, always prefer the online URLs, as you cannot
+see the output of cargo doc yourself.
+
 # Syscall Reference Information
 
 All syscalls have manpages that provide detailed information, associated
@@ -500,6 +503,7 @@ To avoid common issues and ensure consistency:
 
 2. **Never use magic values anywhere**:
    - Check `libc` crate docs first for existing constants
+   + see here https://docs.rs/libc/latest/libc/#constants
    - Declare missing constants in dedicated modules with documentation
    - Use constants in both format helpers and tests
 

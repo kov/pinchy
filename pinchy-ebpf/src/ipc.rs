@@ -167,6 +167,84 @@ pub fn syscall_exit_ipc(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
+            syscalls::SYS_mq_open => {
+                let data = data_mut!(entry, mq_open);
+                data.name = args[0];
+                data.flags = args[1] as i32;
+                data.mode = args[2] as u32;
+
+                let attr_ptr = args[3] as *const kernel_types::MqAttr;
+                if !attr_ptr.is_null() {
+                    data.has_attr = true;
+                    data.attr = unsafe {
+                        bpf_probe_read_user::<kernel_types::MqAttr>(attr_ptr)
+                            .unwrap_or(kernel_types::MqAttr::default())
+                    };
+                } else {
+                    data.has_attr = false;
+                }
+            }
+            syscalls::SYS_mq_unlink => {
+                let data = data_mut!(entry, mq_unlink);
+                data.name = args[0];
+            }
+            syscalls::SYS_mq_timedsend => {
+                let data = data_mut!(entry, mq_timedsend);
+                data.mqdes = args[0] as i32;
+                data.msg_ptr = args[1];
+                data.msg_len = args[2] as usize;
+                data.msg_prio = args[3] as u32;
+                data.abs_timeout = args[4];
+            }
+            syscalls::SYS_mq_timedreceive => {
+                let data = data_mut!(entry, mq_timedreceive);
+                data.mqdes = args[0] as i32;
+                data.msg_ptr = args[1];
+                data.msg_len = args[2] as usize;
+
+                // msg_prio is an output parameter (pointer to unsigned int)
+                // Read the actual priority value that was written by the kernel
+                let msg_prio_ptr = args[3] as *const u32;
+                if !msg_prio_ptr.is_null() {
+                    data.msg_prio =
+                        unsafe { bpf_probe_read_user::<u32>(msg_prio_ptr).unwrap_or(0) };
+                } else {
+                    data.msg_prio = 0;
+                }
+
+                data.abs_timeout = args[4];
+            }
+            syscalls::SYS_mq_notify => {
+                let data = data_mut!(entry, mq_notify);
+                data.mqdes = args[0] as i32;
+                data.sevp = args[1];
+            }
+            syscalls::SYS_mq_getsetattr => {
+                let data = data_mut!(entry, mq_getsetattr);
+                data.mqdes = args[0] as i32;
+
+                let newattr_ptr = args[1] as *const kernel_types::MqAttr;
+                if !newattr_ptr.is_null() {
+                    data.has_newattr = true;
+                    data.newattr = unsafe {
+                        bpf_probe_read_user::<kernel_types::MqAttr>(newattr_ptr)
+                            .unwrap_or(kernel_types::MqAttr::default())
+                    };
+                } else {
+                    data.has_newattr = false;
+                }
+
+                let oldattr_ptr = args[2] as *const kernel_types::MqAttr;
+                if !oldattr_ptr.is_null() {
+                    data.has_oldattr = true;
+                    data.oldattr = unsafe {
+                        bpf_probe_read_user::<kernel_types::MqAttr>(oldattr_ptr)
+                            .unwrap_or(kernel_types::MqAttr::default())
+                    };
+                } else {
+                    data.has_oldattr = false;
+                }
+            }
             _ => {
                 entry.discard();
                 return Ok(());

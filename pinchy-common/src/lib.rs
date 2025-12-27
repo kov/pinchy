@@ -270,6 +270,12 @@ pub union SyscallEventData {
     pub semget: SemgetData,
     pub semop: SemopData,
     pub semctl: SemctlData,
+    pub mq_open: MqOpenData,
+    pub mq_unlink: MqUnlinkData,
+    pub mq_timedsend: MqTimedsendData,
+    pub mq_timedreceive: MqTimedreceiveData,
+    pub mq_notify: MqNotifyData,
+    pub mq_getsetattr: MqGetsetattrData,
     pub acct: AcctData,
     pub getcpu: GetcpuData,
     pub pidfd_open: PidfdOpenData,
@@ -2922,6 +2928,59 @@ impl Default for MincoreData {
             vec_read_count: 0,
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MqOpenData {
+    pub name: usize,
+    pub flags: i32,
+    pub mode: u32,
+    pub attr: kernel_types::MqAttr,
+    pub has_attr: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MqUnlinkData {
+    pub name: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MqTimedsendData {
+    pub mqdes: i32,
+    pub msg_ptr: usize,
+    pub msg_len: usize,
+    pub msg_prio: u32,
+    pub abs_timeout: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MqTimedreceiveData {
+    pub mqdes: i32,
+    pub msg_ptr: usize,
+    pub msg_len: usize,
+    pub msg_prio: u32,
+    pub abs_timeout: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MqNotifyData {
+    pub mqdes: i32,
+    pub sevp: usize,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MqGetsetattrData {
+    pub mqdes: i32,
+    pub newattr: kernel_types::MqAttr,
+    pub oldattr: kernel_types::MqAttr,
+    pub has_newattr: bool,
+    pub has_oldattr: bool,
 }
 
 #[repr(C)]

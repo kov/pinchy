@@ -112,6 +112,7 @@ fn main() -> anyhow::Result<()> {
             "io_uring_test" => io_uring_test(),
             "xattr_test" => xattr_test(),
             "sysv_ipc_test" => sysv_ipc_test(),
+            "posix_mq_test" => posix_mq_test(),
             "socketpair_sendmmsg_test" => socketpair_sendmmsg_test(),
             "system_info_test" => system_info_test(),
             "prctl_test" => prctl_test(),
@@ -2812,6 +2813,154 @@ fn sysv_ipc_test() -> anyhow::Result<()> {
                 "semctl IPC_RMID failed: {}",
                 std::io::Error::last_os_error()
             );
+        }
+    }
+
+    Ok(())
+}
+
+fn posix_mq_test() -> anyhow::Result<()> {
+    unsafe {
+        // Declare the foreign POSIX MQ functions from libc
+        // On modern glibc (2.34+), these are in libc, not a separate librt
+        #[link(name = "c")]
+        extern "C" {
+            fn mq_open(name: *const libc::c_char, oflag: libc::c_int, ...) -> libc::c_int;
+            fn mq_unlink(name: *const libc::c_char) -> libc::c_int;
+            fn mq_timedsend(
+                mqdes: libc::c_int,
+                msg_ptr: *const libc::c_char,
+                msg_len: libc::size_t,
+                msg_prio: libc::c_uint,
+                abs_timeout: *const libc::timespec,
+            ) -> libc::c_int;
+            fn mq_timedreceive(
+                mqdes: libc::c_int,
+                msg_ptr: *mut libc::c_char,
+                msg_len: libc::size_t,
+                msg_prio: *mut libc::c_uint,
+                abs_timeout: *const libc::timespec,
+            ) -> libc::ssize_t;
+            fn mq_setattr(
+                mqdes: libc::c_int,
+                newattr: *const libc::mq_attr,
+                oldattr: *mut libc::mq_attr,
+            ) -> libc::c_int;
+            fn mq_notify(mqdes: libc::c_int, notification: *const libc::sigevent) -> libc::c_int;
+        }
+
+        // Create a unique message queue name based on process ID
+        let mq_name = CString::new(format!("/test_mq_{}", libc::getpid()))?;
+
+        // Test 1: mq_open with O_CREAT to create a new message queue
+        let mut attr: libc::mq_attr = std::mem::zeroed();
+        attr.mq_flags = 0;
+        attr.mq_maxmsg = 10;
+        attr.mq_msgsize = 1024;
+
+        let mqdes = mq_open(
+            mq_name.as_ptr(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_EXCL,
+            0o666,
+            &attr as *const libc::mq_attr,
+        );
+
+        if mqdes < 0 {
+            bail!("mq_open create failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: mq_timedsend - send a message with timeout
+        let test_msg = b"Hello POSIX MQ!";
+        let timeout = libc::timespec {
+            tv_sec: 5,
+            tv_nsec: 0,
+        };
+
+        let result = mq_timedsend(
+            mqdes,
+            test_msg.as_ptr() as *const libc::c_char,
+            test_msg.len(),
+            10,
+            &timeout as *const libc::timespec,
+        );
+
+        if result != 0 {
+            let _cleanup = mq_unlink(mq_name.as_ptr());
+            bail!("mq_timedsend failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 3: mq_setattr - set O_NONBLOCK flag (syscall name is mq_getsetattr)
+        let mut oldattr: libc::mq_attr = std::mem::zeroed();
+        let mut newattr: libc::mq_attr = std::mem::zeroed();
+        newattr.mq_flags = libc::O_NONBLOCK as libc::c_long;
+
+        let result = mq_setattr(
+            mqdes,
+            &newattr as *const libc::mq_attr,
+            &mut oldattr as *mut libc::mq_attr,
+        );
+
+        if result != 0 {
+            let _cleanup = mq_unlink(mq_name.as_ptr());
+            bail!("mq_setattr failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 4: mq_timedreceive - receive the message
+        let mut recv_buf = vec![0u8; 8192];
+        let mut msg_prio: libc::c_uint = 0;
+
+        let result = mq_timedreceive(
+            mqdes,
+            recv_buf.as_mut_ptr() as *mut libc::c_char,
+            recv_buf.len(),
+            &mut msg_prio as *mut libc::c_uint,
+            &timeout as *const libc::timespec,
+        );
+
+        if result < 0 {
+            let _cleanup = mq_unlink(mq_name.as_ptr());
+            bail!(
+                "mq_timedreceive failed: {}",
+                std::io::Error::last_os_error()
+            );
+        }
+
+        // Test 5: mq_notify - register for notification (then unregister with NULL)
+        let mut sevp: libc::sigevent = std::mem::zeroed();
+        sevp.sigev_notify = 0; // SIGEV_SIGNAL
+        sevp.sigev_signo = libc::SIGUSR1;
+
+        let result = mq_notify(mqdes, &sevp as *const libc::sigevent);
+
+        if result != 0 {
+            // Non-fatal - just testing tracing
+        }
+
+        // Unregister notification
+        let _result = mq_notify(mqdes, std::ptr::null());
+
+        // Test 6: Close the message queue descriptor
+        libc::close(mqdes);
+
+        // Test 7: mq_unlink - remove the message queue
+        let result = mq_unlink(mq_name.as_ptr());
+        if result != 0 {
+            bail!("mq_unlink failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 8: mq_open to open non-existent queue (should fail)
+        let mqdes = mq_open(
+            mq_name.as_ptr(),
+            libc::O_RDONLY,
+            0,
+            std::ptr::null::<libc::mq_attr>(),
+        );
+
+        if mqdes >= 0 {
+            // Should have failed, but clean up if it didn't
+            libc::close(mqdes);
+            let _cleanup = mq_unlink(mq_name.as_ptr());
+            bail!("mq_open of non-existent queue unexpectedly succeeded");
         }
     }
 

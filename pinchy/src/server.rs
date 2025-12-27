@@ -725,6 +725,12 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_semget,
         syscalls::SYS_semop,
         syscalls::SYS_semctl,
+        syscalls::SYS_mq_open,
+        syscalls::SYS_mq_unlink,
+        syscalls::SYS_mq_timedsend,
+        syscalls::SYS_mq_timedreceive,
+        syscalls::SYS_mq_notify,
+        syscalls::SYS_mq_getsetattr,
     ];
     let ipc_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_ipc")

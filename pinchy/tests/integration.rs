@@ -1771,3 +1771,58 @@ fn landlock_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn posix_mq_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises POSIX message queue syscalls
+    let handle = run_workload(
+        &[
+            "mq_open",
+            "mq_timedsend",
+            "mq_getsetattr",
+            "mq_timedreceive",
+            "mq_notify",
+            "mq_unlink",
+        ],
+        "posix_mq_test",
+    );
+
+    // Expected output:
+    // 1. mq_open with O_CREAT to create new queue
+    // 2. mq_timedsend to send a message
+    // 3. mq_getsetattr to change flags to O_NONBLOCK
+    // 4. mq_timedreceive to receive the message
+    // 5. mq_notify to register notification
+    // 6. mq_notify with NULL to unregister
+    // 7. mq_unlink to remove the queue
+    // 8. mq_open attempting to open non-existent queue (should fail)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ mq_open(name: @ADDR@, flags: 0xc2 (O_RDWR|O_CREAT|O_EXCL), mode: 0o666 (rw-rw-rw-), attr: { mq_flags: 0, mq_maxmsg: 10, mq_msgsize: 1024, mq_curmsgs: 0 }) = @NUMBER@
+        @PID@ mq_timedsend(mqdes: @NUMBER@, msg_ptr: @ADDR@, msg_len: 15, msg_prio: 10, abs_timeout: @ADDR@) = 0 (success)
+        @PID@ mq_getsetattr(mqdes: @NUMBER@, newattr: { mq_flags: 2048, mq_maxmsg: 0, mq_msgsize: 0, mq_curmsgs: 0 }, oldattr: { mq_flags: 0, mq_maxmsg: 10, mq_msgsize: 1024, mq_curmsgs: 1 }) = 0 (success)
+        @PID@ mq_timedreceive(mqdes: @NUMBER@, msg_ptr: @ADDR@, msg_len: 8192, msg_prio: 10, abs_timeout: @ADDR@) = 15
+        @PID@ mq_notify(mqdes: @NUMBER@, sevp: @ADDR@) = 0 (success)
+        @PID@ mq_notify(mqdes: @NUMBER@, sevp: 0x0) = 0 (success)
+        @PID@ mq_unlink(name: @ADDR@) = 0 (success)
+        @PID@ mq_open(name: @ADDR@, flags: 0x0 (O_RDONLY), mode: 0, attr: NULL) = -@NUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

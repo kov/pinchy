@@ -803,3 +803,12 @@ impl Default for LandlockRuleAttrUnion {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct MqAttr {
+    pub mq_flags: i64,
+    pub mq_maxmsg: i64,
+    pub mq_msgsize: i64,
+    pub mq_curmsgs: i64,
+}

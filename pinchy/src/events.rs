@@ -8,7 +8,7 @@ use pinchy_common::{kernel_types, syscalls, SyscallEvent};
 
 use crate::{
     arg, argf, finish,
-    format_helpers::{aio_constants, format_futex_waitv_flags, *},
+    format_helpers::{aio_constants, format_futex_waitv_flags, KEYCTL_WATCH_KEY, *},
     formatting::Formatter,
     ioctls::format_ioctl_request,
     raw, with_array, with_struct,
@@ -3818,6 +3818,233 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "flags: {}", data.flags);
 
             finish!(sf, event.return_value);
+        }
+        syscalls::SYS_add_key => {
+            let data = unsafe { event.data.add_key };
+
+            let key_type = crate::format_helpers::extract_cstring_with_truncation(&data.key_type);
+            let description =
+                crate::format_helpers::extract_cstring_with_truncation(&data.description);
+
+            argf!(sf, "type: \"{}\"", key_type);
+            argf!(sf, "description: \"{}\"", description);
+
+            if data.payload_len > 0 {
+                let payload_bytes =
+                    crate::format_helpers::format_bytes(&data.payload[..data.payload_len]);
+                argf!(sf, "payload: {}", payload_bytes);
+            } else {
+                argf!(sf, "payload: (empty)");
+            }
+
+            argf!(
+                sf,
+                "keyring: {}",
+                crate::format_helpers::format_key_spec_id(data.keyring)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_request_key => {
+            let data = unsafe { event.data.request_key };
+
+            let key_type = crate::format_helpers::extract_cstring_with_truncation(&data.key_type);
+            let description =
+                crate::format_helpers::extract_cstring_with_truncation(&data.description);
+
+            argf!(sf, "type: \"{}\"", key_type);
+            argf!(sf, "description: \"{}\"", description);
+
+            if data.callout_info_len > 0 {
+                let info = crate::format_helpers::extract_cstring_with_truncation(
+                    &data.callout_info[..data.callout_info_len],
+                );
+                argf!(sf, "callout_info: \"{}\"", info);
+            } else {
+                argf!(sf, "callout_info: (null)");
+            }
+
+            argf!(
+                sf,
+                "dest_keyring: {}",
+                crate::format_helpers::format_key_spec_id(data.dest_keyring)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_keyctl => {
+            let data = unsafe { event.data.keyctl };
+
+            let operation = data.operation;
+
+            argf!(
+                sf,
+                "operation: {}",
+                crate::format_helpers::format_keyctl_operation(operation)
+            );
+
+            let suffix: Option<&'static [u8]> = if event.return_value < 0 {
+                Some(b" (error)")
+            } else {
+                let op_u32 = operation as u32;
+
+                match op_u32 {
+                    libc::KEYCTL_GET_KEYRING_ID
+                    | libc::KEYCTL_JOIN_SESSION_KEYRING
+                    | libc::KEYCTL_SEARCH
+                    | libc::KEYCTL_GET_PERSISTENT
+                    | libc::KEYCTL_ASSUME_AUTHORITY => Some(b" (key)"),
+                    libc::KEYCTL_DESCRIBE
+                    | libc::KEYCTL_READ
+                    | libc::KEYCTL_GET_SECURITY
+                    | libc::KEYCTL_DH_COMPUTE
+                    | libc::KEYCTL_PKEY_QUERY
+                    | libc::KEYCTL_PKEY_ENCRYPT
+                    | libc::KEYCTL_PKEY_DECRYPT
+                    | libc::KEYCTL_PKEY_SIGN
+                    | libc::KEYCTL_PKEY_VERIFY
+                    | libc::KEYCTL_CAPABILITIES => Some(b" (bytes)"),
+                    _ => None,
+                }
+            };
+
+            let op_u32 = operation as u32;
+
+            match op_u32 {
+                libc::KEYCTL_GET_KEYRING_ID => {
+                    argf!(sf, "keyring: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "create: 0x{:x}", data.arg2);
+                }
+                libc::KEYCTL_JOIN_SESSION_KEYRING => {
+                    argf!(sf, "name: 0x{:x}", data.arg1);
+                }
+                libc::KEYCTL_UPDATE => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "payload: 0x{:x}", data.arg2);
+                    argf!(sf, "length: 0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_REVOKE => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                }
+                libc::KEYCTL_CHOWN => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "uid: 0x{:x}", data.arg2);
+                    argf!(sf, "gid: 0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_SETPERM => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "permissions: 0x{:x}", data.arg2);
+                }
+                libc::KEYCTL_DESCRIBE => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "buffer: 0x{:x}", data.arg2);
+                    argf!(sf, "buflen: 0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_CLEAR => {
+                    argf!(sf, "keyring: {}", format_key_spec_id(data.arg1 as i32));
+                }
+                libc::KEYCTL_LINK | libc::KEYCTL_UNLINK => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "keyring: {}", format_key_spec_id(data.arg2 as i32));
+                }
+                libc::KEYCTL_SEARCH => {
+                    argf!(sf, "keyring: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "type: 0x{:x}", data.arg2);
+                    argf!(sf, "description: 0x{:x}", data.arg3);
+                    argf!(sf, "dest_keyring: {}", format_key_spec_id(data.arg4 as i32));
+                }
+                libc::KEYCTL_READ => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "buffer: 0x{:x}", data.arg2);
+                    argf!(sf, "buflen: 0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_SET_REQKEY_KEYRING => {
+                    argf!(
+                        sf,
+                        "reqkey_keyring: {}",
+                        format_key_spec_id(data.arg1 as i32)
+                    );
+                }
+                libc::KEYCTL_SET_TIMEOUT => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "timeout: 0x{:x}", data.arg2);
+                }
+                libc::KEYCTL_ASSUME_AUTHORITY => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                }
+                libc::KEYCTL_GET_SECURITY => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "buffer: 0x{:x}", data.arg2);
+                    argf!(sf, "buflen: 0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_SESSION_TO_PARENT => {}
+                libc::KEYCTL_REJECT => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "timeout: 0x{:x}", data.arg2);
+                    argf!(sf, "error: -0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_INSTANTIATE_IOV => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "iov: 0x{:x}", data.arg2);
+                    argf!(sf, "iovlen: 0x{:x}", data.arg3);
+                    argf!(sf, "keyring: {}", format_key_spec_id(data.arg4 as i32));
+                }
+                libc::KEYCTL_INVALIDATE => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                }
+                libc::KEYCTL_GET_PERSISTENT => {
+                    argf!(sf, "uid: 0x{:x}", data.arg1);
+                    argf!(sf, "keyring: {}", format_key_spec_id(data.arg2 as i32));
+                }
+                libc::KEYCTL_DH_COMPUTE => {
+                    argf!(sf, "params: 0x{:x}", data.arg1);
+                    argf!(sf, "buffer: 0x{:x}", data.arg2);
+                    argf!(sf, "buflen: 0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_PKEY_QUERY
+                | libc::KEYCTL_PKEY_ENCRYPT
+                | libc::KEYCTL_PKEY_DECRYPT
+                | libc::KEYCTL_PKEY_SIGN
+                | libc::KEYCTL_PKEY_VERIFY => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "info: 0x{:x}", data.arg2);
+                    argf!(sf, "buffer: 0x{:x}", data.arg3);
+                    argf!(sf, "buflen: 0x{:x}", data.arg4);
+                }
+                libc::KEYCTL_RESTRICT_KEYRING => {
+                    argf!(sf, "keyring: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "type: 0x{:x}", data.arg2);
+                    argf!(sf, "restriction: 0x{:x}", data.arg3);
+                }
+                libc::KEYCTL_MOVE => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "from_keyring: {}", format_key_spec_id(data.arg2 as i32));
+                    argf!(sf, "to_keyring: {}", format_key_spec_id(data.arg3 as i32));
+                    argf!(sf, "flags: 0x{:x}", data.arg4);
+                }
+                libc::KEYCTL_CAPABILITIES => {
+                    argf!(sf, "buffer: 0x{:x}", data.arg1);
+                    argf!(sf, "buflen: 0x{:x}", data.arg2);
+                }
+                op_u32 if op_u32 == KEYCTL_WATCH_KEY => {
+                    argf!(sf, "key: {}", format_key_spec_id(data.arg1 as i32));
+                    argf!(sf, "watch_queue: 0x{:x}", data.arg2);
+                    argf!(sf, "filter: 0x{:x}", data.arg3);
+                    argf!(sf, "filter_len: 0x{:x}", data.arg4);
+                }
+                _ => {
+                    argf!(sf, "arg1: 0x{:x}", data.arg1);
+                    argf!(sf, "arg2: 0x{:x}", data.arg2);
+                    argf!(sf, "arg3: 0x{:x}", data.arg3);
+                    argf!(sf, "arg4: 0x{:x}", data.arg4);
+                }
+            }
+
+            if let Some(suffix) = suffix {
+                finish!(sf, event.return_value, suffix);
+            } else {
+                finish!(sf, event.return_value);
+            }
         }
         _ => {
             let data = unsafe { event.data.generic };

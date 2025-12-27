@@ -529,6 +529,7 @@ fn escaped_regex(expected_output: &str) -> String {
     escaped = escaped.replace("@QUOTEDSTRING@", "\"[^\"]*\"");
     escaped = escaped.replace("@MAYBEITEM_@", "([^ \"]+ )?");
     escaped = escaped.replace("@MAYBETRUNCATED@", r"( ... \(truncated\))?");
+    escaped = escaped.replace("@ANY@", ".+");
     escaped
 }
 
@@ -1809,6 +1810,45 @@ fn posix_mq_syscalls() {
         @PID@ mq_notify(mqdes: @NUMBER@, sevp: 0x0) = 0 (success)
         @PID@ mq_unlink(name: @ADDR@) = 0 (success)
         @PID@ mq_open(name: @ADDR@, flags: 0x0 (O_RDONLY), mode: 0, attr: NULL) = -@NUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn key_management_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises key management syscalls
+    let handle = run_workload(&["add_key", "request_key", "keyctl"], "key_management_test");
+
+    // Expected output - we should see key management syscalls being traced
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ keyctl(operation: JOIN_SESSION_KEYRING, name: @ADDR@) = @SIGNEDNUMBER@ (key)
+        @PID@ add_key(type: "user", description: "test_key_1", payload: @ANY@, keyring: KEY_SPEC_SESSION_KEYRING) = @SIGNEDNUMBER@
+        @PID@ add_key(type: "keyring", description: "test_keyring", payload: (empty), keyring: KEY_SPEC_SESSION_KEYRING) = @SIGNEDNUMBER@
+        @PID@ request_key(type: "user", description: "test_key_1", callout_info: "test_call_info", dest_keyring: KEY_SPEC_THREAD_KEYRING) = @SIGNEDNUMBER@
+        @PID@ keyctl(operation: DESCRIBE, key: @SIGNEDNUMBER@, buffer: @ADDR@, buflen: @ADDR@) = @SIGNEDNUMBER@ (bytes)
+        @PID@ keyctl(operation: READ, key: @SIGNEDNUMBER@, buffer: @ADDR@, buflen: @ADDR@) = @SIGNEDNUMBER@ (bytes)
+        @PID@ keyctl(operation: SETPERM, key: @SIGNEDNUMBER@, permissions: @ADDR@) = @SIGNEDNUMBER@ (success)
+        @PID@ keyctl(operation: GET_KEYRING_ID, keyring: @ALPHANUM@, create: @ADDR@) = @SIGNEDNUMBER@ (key)
+        @PID@ keyctl(operation: SEARCH, keyring: @ALPHANUM@, type: @ADDR@, description: @ADDR@, dest_keyring: @ALPHANUM@) = @SIGNEDNUMBER@ (key)
+        @PID@ keyctl(operation: REVOKE, key: @SIGNEDNUMBER@) = @SIGNEDNUMBER@ (success)
     "#});
 
     let output = handle.join().unwrap();

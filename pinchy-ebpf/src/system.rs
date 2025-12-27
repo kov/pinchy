@@ -331,6 +331,73 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                 data.ruleset_fd = args[0] as i32;
                 data.flags = args[1] as u32;
             }
+            syscalls::SYS_add_key => {
+                let data = data_mut!(entry, add_key);
+                data.keyring = args[4] as i32;
+
+                let type_ptr = args[0] as *const u8;
+                let desc_ptr = args[1] as *const u8;
+                let payload_ptr = args[2] as *const u8;
+                let payload_len = args[3];
+
+                if !type_ptr.is_null() {
+                    let _ = unsafe { bpf_probe_read_buf(type_ptr, &mut data.key_type) };
+                }
+
+                if !desc_ptr.is_null() {
+                    let _ = unsafe { bpf_probe_read_buf(desc_ptr, &mut data.description) };
+                }
+
+                if !payload_ptr.is_null() && payload_len > 0 {
+                    data.payload_len = if payload_len > pinchy_common::MEDIUM_READ_SIZE {
+                        pinchy_common::MEDIUM_READ_SIZE
+                    } else {
+                        payload_len
+                    };
+                    let _ = unsafe {
+                        bpf_probe_read_buf(
+                            payload_ptr,
+                            core::slice::from_raw_parts_mut(
+                                data.payload.as_mut_ptr(),
+                                data.payload_len,
+                            ),
+                        )
+                    };
+                } else {
+                    data.payload_len = 0;
+                }
+            }
+            syscalls::SYS_request_key => {
+                let data = data_mut!(entry, request_key);
+                data.dest_keyring = args[3] as i32;
+
+                let type_ptr = args[0] as *const u8;
+                let desc_ptr = args[1] as *const u8;
+                let info_ptr = args[2] as *const u8;
+
+                if !type_ptr.is_null() {
+                    let _ = unsafe { bpf_probe_read_buf(type_ptr, &mut data.key_type) };
+                }
+
+                if !desc_ptr.is_null() {
+                    let _ = unsafe { bpf_probe_read_buf(desc_ptr, &mut data.description) };
+                }
+
+                if !info_ptr.is_null() {
+                    let _ = unsafe { bpf_probe_read_buf(info_ptr, &mut data.callout_info) };
+                    data.callout_info_len = pinchy_common::MEDIUM_READ_SIZE;
+                } else {
+                    data.callout_info_len = 0;
+                }
+            }
+            syscalls::SYS_keyctl => {
+                let data = data_mut!(entry, keyctl);
+                data.operation = args[0] as i32;
+                data.arg1 = args[1] as u64;
+                data.arg2 = args[2] as u64;
+                data.arg3 = args[3] as u64;
+                data.arg4 = args[4] as u64;
+            }
             _ => {
                 entry.discard();
                 return Ok(());

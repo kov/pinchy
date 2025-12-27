@@ -3327,6 +3327,80 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_mq_open => {
+            let data = unsafe { event.data.mq_open };
+
+            argf!(sf, "name: 0x{:x}", data.name);
+            argf!(sf, "flags: {}", format_mq_open_flags(data.flags));
+            argf!(sf, "mode: {}", format_mode(data.mode));
+
+            arg!(sf, "attr:");
+            if data.has_attr {
+                format_mq_attr(&mut sf, &data.attr).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mq_unlink => {
+            let data = unsafe { event.data.mq_unlink };
+
+            argf!(sf, "name: 0x{:x}", data.name);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mq_timedsend => {
+            let data = unsafe { event.data.mq_timedsend };
+
+            argf!(sf, "mqdes: {}", data.mqdes);
+            argf!(sf, "msg_ptr: 0x{:x}", data.msg_ptr);
+            argf!(sf, "msg_len: {}", data.msg_len);
+            argf!(sf, "msg_prio: {}", data.msg_prio);
+            argf!(sf, "abs_timeout: 0x{:x}", data.abs_timeout);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mq_timedreceive => {
+            let data = unsafe { event.data.mq_timedreceive };
+
+            argf!(sf, "mqdes: {}", data.mqdes);
+            argf!(sf, "msg_ptr: 0x{:x}", data.msg_ptr);
+            argf!(sf, "msg_len: {}", data.msg_len);
+            argf!(sf, "msg_prio: {}", data.msg_prio);
+            argf!(sf, "abs_timeout: 0x{:x}", data.abs_timeout);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mq_notify => {
+            let data = unsafe { event.data.mq_notify };
+
+            argf!(sf, "mqdes: {}", data.mqdes);
+            argf!(sf, "sevp: 0x{:x}", data.sevp);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mq_getsetattr => {
+            let data = unsafe { event.data.mq_getsetattr };
+
+            argf!(sf, "mqdes: {}", data.mqdes);
+
+            arg!(sf, "newattr:");
+            if data.has_newattr {
+                format_mq_attr(&mut sf, &data.newattr).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "oldattr:");
+            if data.has_oldattr {
+                format_mq_attr(&mut sf, &data.oldattr).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_acct => {
             let data = unsafe { event.data.acct };
             argf!(sf, "filename: {}", format_path(&data.filename, false));

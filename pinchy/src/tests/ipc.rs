@@ -586,3 +586,283 @@ syscall_test!(
     },
     "9999 eventfd2(initval: 42, flags: 0xf423f (EFD_CLOEXEC|UNKNOWN)) = -1 (error)\n"
 );
+
+syscall_test!(
+    parse_mq_open_success_no_attr,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_open,
+            pid: 1234,
+            tid: 1234,
+            return_value: 3,
+            data: SyscallEventData {
+                mq_open: pinchy_common::MqOpenData {
+                    name: 0x7fff1234,
+                    flags: libc::O_RDONLY,
+                    mode: 0,
+                    attr: pinchy_common::kernel_types::MqAttr::default(),
+                    has_attr: false,
+                },
+            },
+        }
+    },
+    "1234 mq_open(name: 0x7fff1234, flags: 0x0 (O_RDONLY), mode: 0, attr: NULL) = 3\n"
+);
+
+syscall_test!(
+    parse_mq_open_success_with_attr,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_open,
+            pid: 1234,
+            tid: 1234,
+            return_value: 4,
+            data: SyscallEventData {
+                mq_open: pinchy_common::MqOpenData {
+                    name: 0x7fff5678,
+                    flags: libc::O_RDWR | libc::O_CREAT | libc::O_EXCL,
+                    mode: 0o644,
+                    attr: pinchy_common::kernel_types::MqAttr {
+                        mq_flags: 0,
+                        mq_maxmsg: 10,
+                        mq_msgsize: 8192,
+                        mq_curmsgs: 0,
+                    },
+                    has_attr: true,
+                },
+            },
+        }
+    },
+    "1234 mq_open(name: 0x7fff5678, flags: 0xc2 (O_RDWR|O_CREAT|O_EXCL), mode: 0o644 (rw-r--r--), attr: { mq_flags: 0, mq_maxmsg: 10, mq_msgsize: 8192, mq_curmsgs: 0 }) = 4\n"
+);
+
+syscall_test!(
+    parse_mq_open_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_open,
+            pid: 5678,
+            tid: 5678,
+            return_value: -1,
+            data: SyscallEventData {
+                mq_open: pinchy_common::MqOpenData {
+                    name: 0x7fff9abc,
+                    flags: libc::O_WRONLY | libc::O_NONBLOCK,
+                    mode: 0o600,
+                    attr: pinchy_common::kernel_types::MqAttr::default(),
+                    has_attr: false,
+                },
+            },
+        }
+    },
+    "5678 mq_open(name: 0x7fff9abc, flags: 0x801 (O_WRONLY|O_NONBLOCK), mode: 0o600 (rw-------), attr: NULL) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_mq_unlink_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_unlink,
+            pid: 2345,
+            tid: 2345,
+            return_value: 0,
+            data: SyscallEventData {
+                mq_unlink: pinchy_common::MqUnlinkData { name: 0x7fff2345 },
+            },
+        }
+    },
+    "2345 mq_unlink(name: 0x7fff2345) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mq_unlink_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_unlink,
+            pid: 3456,
+            tid: 3456,
+            return_value: -1,
+            data: SyscallEventData {
+                mq_unlink: pinchy_common::MqUnlinkData { name: 0x7fff3456 },
+            },
+        }
+    },
+    "3456 mq_unlink(name: 0x7fff3456) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_mq_timedsend_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_timedsend,
+            pid: 4567,
+            tid: 4567,
+            return_value: 0,
+            data: SyscallEventData {
+                mq_timedsend: pinchy_common::MqTimedsendData {
+                    mqdes: 3,
+                    msg_ptr: 0x7fff4567,
+                    msg_len: 1024,
+                    msg_prio: 5,
+                    abs_timeout: 0x7fff5678,
+                },
+            },
+        }
+    },
+    "4567 mq_timedsend(mqdes: 3, msg_ptr: 0x7fff4567, msg_len: 1024, msg_prio: 5, abs_timeout: 0x7fff5678) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mq_timedsend_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_timedsend,
+            pid: 5678,
+            tid: 5678,
+            return_value: -1,
+            data: SyscallEventData {
+                mq_timedsend: pinchy_common::MqTimedsendData {
+                    mqdes: 4,
+                    msg_ptr: 0x7fff6789,
+                    msg_len: 2048,
+                    msg_prio: 10,
+                    abs_timeout: 0,
+                },
+            },
+        }
+    },
+    "5678 mq_timedsend(mqdes: 4, msg_ptr: 0x7fff6789, msg_len: 2048, msg_prio: 10, abs_timeout: 0x0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_mq_timedreceive_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_timedreceive,
+            pid: 6789,
+            tid: 6789,
+            return_value: 512,
+            data: SyscallEventData {
+                mq_timedreceive: pinchy_common::MqTimedreceiveData {
+                    mqdes: 3,
+                    msg_ptr: 0x7fff789a,
+                    msg_len: 8192,
+                    msg_prio: 0,
+                    abs_timeout: 0x7fff89ab,
+                },
+            },
+        }
+    },
+    "6789 mq_timedreceive(mqdes: 3, msg_ptr: 0x7fff789a, msg_len: 8192, msg_prio: 0, abs_timeout: 0x7fff89ab) = 512\n"
+);
+
+syscall_test!(
+    parse_mq_timedreceive_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_timedreceive,
+            pid: 7890,
+            tid: 7890,
+            return_value: -1,
+            data: SyscallEventData {
+                mq_timedreceive: pinchy_common::MqTimedreceiveData {
+                    mqdes: 5,
+                    msg_ptr: 0x7fff9abc,
+                    msg_len: 4096,
+                    msg_prio: 1,
+                    abs_timeout: 0,
+                },
+            },
+        }
+    },
+    "7890 mq_timedreceive(mqdes: 5, msg_ptr: 0x7fff9abc, msg_len: 4096, msg_prio: 1, abs_timeout: 0x0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_mq_notify_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_notify,
+            pid: 8901,
+            tid: 8901,
+            return_value: 0,
+            data: SyscallEventData {
+                mq_notify: pinchy_common::MqNotifyData {
+                    mqdes: 3,
+                    sevp: 0x7fffabcd,
+                },
+            },
+        }
+    },
+    "8901 mq_notify(mqdes: 3, sevp: 0x7fffabcd) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mq_notify_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_notify,
+            pid: 9012,
+            tid: 9012,
+            return_value: -1,
+            data: SyscallEventData {
+                mq_notify: pinchy_common::MqNotifyData { mqdes: 4, sevp: 0 },
+            },
+        }
+    },
+    "9012 mq_notify(mqdes: 4, sevp: 0x0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_mq_getsetattr_success,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_getsetattr,
+            pid: 1357,
+            tid: 1357,
+            return_value: 0,
+            data: SyscallEventData {
+                mq_getsetattr: pinchy_common::MqGetsetattrData {
+                    mqdes: 3,
+                    newattr: pinchy_common::kernel_types::MqAttr {
+                        mq_flags: libc::O_NONBLOCK as i64,
+                        mq_maxmsg: 0,
+                        mq_msgsize: 0,
+                        mq_curmsgs: 0,
+                    },
+                    oldattr: pinchy_common::kernel_types::MqAttr {
+                        mq_flags: 0,
+                        mq_maxmsg: 10,
+                        mq_msgsize: 8192,
+                        mq_curmsgs: 2,
+                    },
+                    has_newattr: true,
+                    has_oldattr: true,
+                },
+            },
+        }
+    },
+    "1357 mq_getsetattr(mqdes: 3, newattr: { mq_flags: 2048, mq_maxmsg: 0, mq_msgsize: 0, mq_curmsgs: 0 }, oldattr: { mq_flags: 0, mq_maxmsg: 10, mq_msgsize: 8192, mq_curmsgs: 2 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mq_getsetattr_error,
+    {
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_mq_getsetattr,
+            pid: 2468,
+            tid: 2468,
+            return_value: -1,
+            data: SyscallEventData {
+                mq_getsetattr: pinchy_common::MqGetsetattrData {
+                    mqdes: 99,
+                    newattr: pinchy_common::kernel_types::MqAttr::default(),
+                    oldattr: pinchy_common::kernel_types::MqAttr::default(),
+                    has_newattr: false,
+                    has_oldattr: false,
+                },
+            },
+        }
+    },
+    "2468 mq_getsetattr(mqdes: 99, newattr: NULL, oldattr: NULL) = -1 (error)\n"
+);

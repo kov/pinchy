@@ -3176,6 +3176,53 @@ pub async fn format_seminfo(
     Ok(())
 }
 
+pub fn format_mq_open_flags(flags: i32) -> String {
+    let mut parts = Vec::new();
+
+    let access_mode = flags & libc::O_ACCMODE;
+    match access_mode {
+        libc::O_RDONLY => parts.push("O_RDONLY"),
+        libc::O_WRONLY => parts.push("O_WRONLY"),
+        libc::O_RDWR => parts.push("O_RDWR"),
+        _ => {}
+    }
+
+    if flags & libc::O_CREAT != 0 {
+        parts.push("O_CREAT");
+    }
+
+    if flags & libc::O_EXCL != 0 {
+        parts.push("O_EXCL");
+    }
+
+    if flags & libc::O_NONBLOCK != 0 {
+        parts.push("O_NONBLOCK");
+    }
+
+    if flags & libc::O_CLOEXEC != 0 {
+        parts.push("O_CLOEXEC");
+    }
+
+    if parts.is_empty() {
+        format!("0x{flags:x}")
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|"))
+    }
+}
+
+pub async fn format_mq_attr(
+    sf: &mut SyscallFormatter<'_>,
+    attr: &pinchy_common::kernel_types::MqAttr,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        argf!(sf, "mq_flags: {}", attr.mq_flags);
+        argf!(sf, "mq_maxmsg: {}", attr.mq_maxmsg);
+        argf!(sf, "mq_msgsize: {}", attr.mq_msgsize);
+        argf!(sf, "mq_curmsgs: {}", attr.mq_curmsgs);
+    });
+    Ok(())
+}
+
 pub fn format_pidfd_open_flags(flags: u32) -> Cow<'static, str> {
     let mut parts = Vec::new();
 

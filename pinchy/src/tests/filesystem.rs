@@ -23,7 +23,6 @@ use pinchy_common::{
     MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
-
 use crate::syscall_test;
 
 syscall_test!(

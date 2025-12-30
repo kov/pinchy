@@ -1,3 +1,13 @@
+mod syslog_constants {
+    pub const SYSLOG_ACTION_READ_ALL: i32 = 3;
+    pub const SYSLOG_ACTION_CLEAR: i32 = 5;
+    pub const SYSLOG_ACTION_CONSOLE_OFF: i32 = 6;
+    pub const SYSLOG_ACTION_CONSOLE_ON: i32 = 7;
+    pub const SYSLOG_ACTION_CONSOLE_LEVEL: i32 = 8;
+    pub const SYSLOG_ACTION_SIZE_UNREAD: i32 = 9;
+    pub const SYSLOG_ACTION_SIZE_BUFFER: i32 = 10;
+}
+
 use std::{
     env::{current_dir, set_current_dir},
     ffi::{c_void, CString},
@@ -106,6 +116,8 @@ fn main() -> anyhow::Result<()> {
             "eventfd_test" => eventfd_test(),
             "timer_test" => timer_test(),
             "timerfd_test" => timerfd_test(),
+            "itimer_test" => itimer_test(),
+            "syslog_test" => syslog_test(),
             "execveat_test" => execveat_test(),
             "pipe_operations_test" => pipe_operations_test(),
             "io_multiplexing_test" => io_multiplexing_test(),
@@ -4270,6 +4282,148 @@ fn file_handles_test() -> anyhow::Result<()> {
     // Cleanup
     let _ = std::fs::remove_file("/tmp/pinchy_file_handles_test.txt");
     let _ = std::fs::remove_file("/tmp/pinchy_file_handles_test_copy.txt");
+
+    Ok(())
+}
+
+fn itimer_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test getitimer and setitimer with ITIMER_REAL
+        let mut curr_value: libc::itimerval = std::mem::zeroed();
+
+        // Test 1: getitimer with ITIMER_REAL
+        let result = libc::syscall(
+            libc::SYS_getitimer,
+            libc::ITIMER_REAL,
+            &mut curr_value as *mut libc::itimerval,
+        );
+
+        if result != 0 {
+            bail!("getitimer failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: setitimer with ITIMER_VIRTUAL
+        let new_value = libc::itimerval {
+            it_interval: libc::timeval {
+                tv_sec: 0,
+                tv_usec: 0,
+            }, // No repeat
+            it_value: libc::timeval {
+                tv_sec: 0,
+                tv_usec: 100000,
+            }, // 100ms
+        };
+
+        let mut old_value: libc::itimerval = std::mem::zeroed();
+
+        let result = libc::syscall(
+            libc::SYS_setitimer,
+            libc::ITIMER_VIRTUAL,
+            &new_value as *const libc::itimerval,
+            &mut old_value as *mut libc::itimerval,
+        );
+
+        if result != 0 {
+            bail!("setitimer failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 3: getitimer with ITIMER_VIRTUAL to see the value we just set
+        let result = libc::syscall(
+            libc::SYS_getitimer,
+            libc::ITIMER_VIRTUAL,
+            &mut curr_value as *mut libc::itimerval,
+        );
+
+        if result != 0 {
+            bail!("getitimer failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Clear the timer
+        let zero_value: libc::itimerval = std::mem::zeroed();
+        let _ = libc::syscall(
+            libc::SYS_setitimer,
+            libc::ITIMER_VIRTUAL,
+            &zero_value as *const libc::itimerval,
+            std::ptr::null_mut::<libc::itimerval>(),
+        );
+    }
+
+    Ok(())
+}
+
+fn syslog_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test syslog syscall with different actions
+        // Integration tests run as root, so we can test privileged operations
+
+        // Test 1: SYSLOG_ACTION_SIZE_BUFFER
+        let result = libc::syscall(
+            libc::SYS_syslog,
+            syslog_constants::SYSLOG_ACTION_SIZE_BUFFER,
+            std::ptr::null_mut::<u8>(),
+            0i32,
+        );
+
+        if result < 0 {
+            eprintln!("syslog SIZE_BUFFER returned: {}", result);
+        }
+
+        // Test 2: SYSLOG_ACTION_SIZE_UNREAD
+        let result = libc::syscall(
+            libc::SYS_syslog,
+            syslog_constants::SYSLOG_ACTION_SIZE_UNREAD,
+            std::ptr::null_mut::<u8>(),
+            0i32,
+        );
+
+        if result < 0 {
+            eprintln!("syslog SIZE_UNREAD returned: {}", result);
+        }
+
+        // Test 3: SYSLOG_ACTION_READ_ALL
+        let mut buffer = [0u8; 1024];
+        let _result = libc::syscall(
+            libc::SYS_syslog,
+            syslog_constants::SYSLOG_ACTION_READ_ALL,
+            buffer.as_mut_ptr(),
+            buffer.len() as i32,
+        );
+
+        // Test 4: SYSLOG_ACTION_CONSOLE_LEVEL (privileged)
+        // Get current console level first
+        let _result = libc::syscall(
+            libc::SYS_syslog,
+            syslog_constants::SYSLOG_ACTION_CONSOLE_LEVEL,
+            std::ptr::null_mut::<u8>(),
+            7i32, // Set to KERN_DEBUG level
+        );
+
+        // Test 5: SYSLOG_ACTION_CONSOLE_OFF (privileged)
+        let _result = libc::syscall(
+            libc::SYS_syslog,
+            syslog_constants::SYSLOG_ACTION_CONSOLE_OFF,
+            std::ptr::null_mut::<u8>(),
+            0i32,
+        );
+
+        // Test 6: SYSLOG_ACTION_CONSOLE_ON (privileged)
+        // Turn it back on immediately
+        let _result = libc::syscall(
+            libc::SYS_syslog,
+            syslog_constants::SYSLOG_ACTION_CONSOLE_ON,
+            std::ptr::null_mut::<u8>(),
+            0i32,
+        );
+
+        // Test 7: SYSLOG_ACTION_CLEAR (privileged)
+        // Note: This actually clears the ring buffer, but we're root in tests
+        let _result = libc::syscall(
+            libc::SYS_syslog,
+            syslog_constants::SYSLOG_ACTION_CLEAR,
+            std::ptr::null_mut::<u8>(),
+            0i32,
+        );
+    }
 
     Ok(())
 }

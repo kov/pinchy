@@ -712,6 +712,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_keyctl,
         syscalls::SYS_perf_event_open,
         syscalls::SYS_bpf,
+        syscalls::SYS_syslog,
     ];
     let system_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_system")
@@ -788,6 +789,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_timerfd_create,
         syscalls::SYS_timerfd_gettime,
         syscalls::SYS_timerfd_settime,
+        syscalls::SYS_getitimer,
+        syscalls::SYS_setitimer,
     ];
     let time_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_time")

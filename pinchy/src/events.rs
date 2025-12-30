@@ -2017,6 +2017,46 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_memfd_create => {
+            let data = unsafe { event.data.memfd_create };
+
+            let name = format_path(&data.name, false);
+
+            argf!(sf, "name: {}", name);
+            argf!(sf, "flags: {}", format_memfd_create_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_pkey_mprotect => {
+            let data = unsafe { event.data.pkey_mprotect };
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "prot: {}", format_mmap_prot(data.prot));
+            argf!(sf, "pkey: {}", data.pkey);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_mseal => {
+            let data = unsafe { event.data.mseal };
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "flags: {}", format_mseal_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_remap_file_pages => {
+            let data = unsafe { event.data.remap_file_pages };
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "prot: {}", format_mmap_prot(data.prot));
+            argf!(sf, "pgoff: {}", data.pgoff);
+            argf!(sf, "flags: {}", format_mmap_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getrandom => {
             let data = unsafe { event.data.getrandom };
 

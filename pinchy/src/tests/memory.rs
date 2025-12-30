@@ -4,12 +4,12 @@
 use pinchy_common::{
     kernel_types::Iovec,
     syscalls::{
-        SYS_brk, SYS_get_mempolicy, SYS_madvise, SYS_mbind, SYS_membarrier, SYS_memfd_secret,
-        SYS_migrate_pages, SYS_mincore, SYS_mlock, SYS_mlock2, SYS_mlockall, SYS_mmap,
-        SYS_move_pages, SYS_mprotect, SYS_mremap, SYS_msync, SYS_munlock, SYS_munlockall,
-        SYS_munmap, SYS_pkey_alloc, SYS_pkey_free, SYS_process_madvise, SYS_process_vm_readv,
-        SYS_process_vm_writev, SYS_readahead, SYS_set_mempolicy, SYS_set_mempolicy_home_node,
-        SYS_userfaultfd,
+        SYS_brk, SYS_get_mempolicy, SYS_madvise, SYS_mbind, SYS_membarrier, SYS_memfd_create,
+        SYS_memfd_secret, SYS_migrate_pages, SYS_mincore, SYS_mlock, SYS_mlock2, SYS_mlockall,
+        SYS_mmap, SYS_move_pages, SYS_mprotect, SYS_mremap, SYS_mseal, SYS_msync, SYS_munlock,
+        SYS_munlockall, SYS_munmap, SYS_pkey_alloc, SYS_pkey_free, SYS_pkey_mprotect,
+        SYS_process_madvise, SYS_process_vm_readv, SYS_process_vm_writev, SYS_readahead,
+        SYS_remap_file_pages, SYS_set_mempolicy, SYS_set_mempolicy_home_node, SYS_userfaultfd,
     },
     SyscallEvent, IOV_COUNT, LARGER_READ_SIZE,
 };
@@ -1153,4 +1153,111 @@ syscall_test!(
         }
     },
     "123 mincore(addr: 0x7f1234567000, length: 819200, vec: [1,1,0,1,0,0,0,0,1,1,1,1,0,0,0,0,1,0,1,0,1,0,1,0,0,1,0,1,0,1,0,1... (showing 32 of 200 pages)]) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_memfd_create_basic,
+    {
+        use pinchy_common::MemfdCreateData;
+        SyscallEvent {
+            syscall_nr: SYS_memfd_create,
+            pid: 123,
+            tid: 123,
+            return_value: 3,
+            data: pinchy_common::SyscallEventData {
+                memfd_create: MemfdCreateData {
+                    name: *b"myfile\0\0",
+                    flags: crate::format_helpers::memfd_constants::MFD_CLOEXEC,
+                },
+            },
+        }
+    },
+    "123 memfd_create(name: \"myfile\", flags: 0x1 (MFD_CLOEXEC)) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_memfd_create_hugetlb,
+    {
+        use pinchy_common::MemfdCreateData;
+        SyscallEvent {
+            syscall_nr: SYS_memfd_create,
+            pid: 123,
+            tid: 123,
+            return_value: 4,
+            data: pinchy_common::SyscallEventData {
+                memfd_create: MemfdCreateData {
+                    name: *b"huge\0\0\0\0",
+                    flags: crate::format_helpers::memfd_constants::MFD_HUGETLB
+                        | crate::format_helpers::memfd_constants::MFD_HUGE_2MB,
+                },
+            },
+        }
+    },
+    "123 memfd_create(name: \"huge\", flags: 0x54000004 (MFD_HUGETLB|MFD_HUGE_2MB)) = 4 (fd)\n"
+);
+
+syscall_test!(
+    parse_pkey_mprotect_success,
+    {
+        use pinchy_common::PkeyMprotectData;
+        SyscallEvent {
+            syscall_nr: SYS_pkey_mprotect,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                pkey_mprotect: PkeyMprotectData {
+                    addr: 0x7f1234567000,
+                    len: 4096,
+                    prot: libc::PROT_READ | libc::PROT_WRITE,
+                    pkey: 1,
+                },
+            },
+        }
+    },
+    "123 pkey_mprotect(addr: 0x7f1234567000, len: 4096, prot: 0x3 (PROT_READ|PROT_WRITE), pkey: 1) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_mseal_success,
+    {
+        use pinchy_common::MsealData;
+        SyscallEvent {
+            syscall_nr: SYS_mseal,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                mseal: MsealData {
+                    addr: 0x7f1234567000,
+                    len: 8192,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "123 mseal(addr: 0x7f1234567000, len: 8192, flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_remap_file_pages_success,
+    {
+        use pinchy_common::RemapFilePagesData;
+        SyscallEvent {
+            syscall_nr: SYS_remap_file_pages,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: pinchy_common::SyscallEventData {
+                remap_file_pages: RemapFilePagesData {
+                    addr: 0x7f1234567000,
+                    size: 4096,
+                    prot: libc::PROT_READ,
+                    pgoff: 0,
+                    flags: libc::MAP_SHARED,
+                },
+            },
+        }
+    },
+    "123 remap_file_pages(addr: 0x7f1234567000, size: 4096, prot: 0x1 (PROT_READ), pgoff: 0, flags: 0x1 (MAP_SHARED)) = 0 (success)\n"
 );

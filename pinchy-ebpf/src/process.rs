@@ -472,6 +472,111 @@ pub fn syscall_exit_process(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
+            syscalls::SYS_kcmp => {
+                let data = data_mut!(entry, kcmp);
+                data.pid1 = args[0] as i32;
+                data.pid2 = args[1] as i32;
+                data.type_ = args[2] as i32;
+                data.idx1 = args[3] as u64;
+                data.idx2 = args[4] as u64;
+            }
+            syscalls::SYS_getgroups => {
+                let data = data_mut!(entry, getgroups);
+                data.size = args[0] as i32;
+
+                let list_ptr = args[1] as *const u32;
+
+                if return_value >= 0 && !list_ptr.is_null() && data.size > 0 {
+                    let max_to_read = core::cmp::min(
+                        pinchy_common::GROUP_ARRAY_CAP,
+                        core::cmp::min(data.size as usize, return_value as usize),
+                    );
+
+                    for i in 0..max_to_read {
+                        unsafe {
+                            let ptr = list_ptr.add(i);
+
+                            if let Ok(gid) = bpf_probe_read_user(ptr) {
+                                data.groups[i] = gid;
+                                data.groups_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_setgroups => {
+                let data = data_mut!(entry, setgroups);
+                data.size = args[0] as usize;
+
+                let list_ptr = args[1] as *const u32;
+
+                if !list_ptr.is_null() && data.size > 0 {
+                    let max_to_read = core::cmp::min(pinchy_common::GROUP_ARRAY_CAP, data.size);
+
+                    for i in 0..max_to_read {
+                        unsafe {
+                            let ptr = list_ptr.add(i);
+
+                            if let Ok(gid) = bpf_probe_read_user(ptr) {
+                                data.groups[i] = gid;
+                                data.groups_read_count += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_getresuid => {
+                let data = data_mut!(entry, getresuid);
+                let ruid_ptr = args[0] as *const u32;
+                let euid_ptr = args[1] as *const u32;
+                let suid_ptr = args[2] as *const u32;
+
+                data.ruid = if return_value >= 0 && !ruid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(ruid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+
+                data.euid = if return_value >= 0 && !euid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(euid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+
+                data.suid = if return_value >= 0 && !suid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(suid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+            }
+            syscalls::SYS_getresgid => {
+                let data = data_mut!(entry, getresgid);
+                let rgid_ptr = args[0] as *const u32;
+                let egid_ptr = args[1] as *const u32;
+                let sgid_ptr = args[2] as *const u32;
+
+                data.rgid = if return_value >= 0 && !rgid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(rgid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+
+                data.egid = if return_value >= 0 && !egid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(egid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+
+                data.sgid = if return_value >= 0 && !sgid_ptr.is_null() {
+                    unsafe { bpf_probe_read_user(sgid_ptr).unwrap_or(0) }
+                } else {
+                    0
+                };
+            }
 
             _ => {
                 entry.discard();

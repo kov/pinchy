@@ -104,6 +104,7 @@ fn main() -> anyhow::Result<()> {
             "file_descriptor_test" => file_descriptor_test(),
             "session_process_test" => session_process_test(),
             "uid_gid_test" => uid_gid_test(),
+            "process_identity_test" => process_identity_test(),
             "system_operations_test" => system_operations_test(),
             "ioprio_test" => ioprio_test(),
             "scheduler_test" => scheduler_test(),
@@ -1411,6 +1412,61 @@ fn uid_gid_test() -> anyhow::Result<()> {
 
     Ok(())
 }
+
+fn process_identity_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test getresuid - get real, effective, and saved user IDs
+        let mut ruid: libc::uid_t = 0;
+        let mut euid: libc::uid_t = 0;
+        let mut suid: libc::uid_t = 0;
+
+        let result = libc::syscall(
+            libc::SYS_getresuid,
+            &mut ruid as *mut libc::uid_t,
+            &mut euid as *mut libc::uid_t,
+            &mut suid as *mut libc::uid_t,
+        );
+
+        if result != 0 {
+            bail!("getresuid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test getresgid - get real, effective, and saved group IDs
+        let mut rgid: libc::gid_t = 0;
+        let mut egid: libc::gid_t = 0;
+        let mut sgid: libc::gid_t = 0;
+
+        let result = libc::syscall(
+            libc::SYS_getresgid,
+            &mut rgid as *mut libc::gid_t,
+            &mut egid as *mut libc::gid_t,
+            &mut sgid as *mut libc::gid_t,
+        );
+
+        if result != 0 {
+            bail!("getresgid failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test getgroups - get supplementary group IDs
+        let mut groups: [libc::gid_t; 32] = [0; 32];
+        let ngroups = libc::getgroups(32, groups.as_mut_ptr());
+
+        if ngroups < 0 {
+            bail!("getgroups failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test setgroups - set supplementary group IDs to the same values
+        // (should work with root privileges)
+        let result = libc::setgroups(ngroups as usize, groups.as_ptr());
+
+        if result != 0 {
+            bail!("setgroups failed: {}", std::io::Error::last_os_error());
+        }
+    }
+
+    Ok(())
+}
+
 fn system_operations_test() -> anyhow::Result<()> {
     unsafe {
         // Test umask - get current mask and set it to 0o22, then back

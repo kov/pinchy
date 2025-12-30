@@ -8,20 +8,20 @@ use pinchy_common::GetpgrpData;
 use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
-        SYS_clone3, SYS_execve, SYS_execveat, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getpgid,
-        SYS_getpid, SYS_getppid, SYS_getsid, SYS_gettid, SYS_getuid, SYS_pidfd_getfd,
-        SYS_pidfd_open, SYS_prctl, SYS_set_tid_address, SYS_setgid, SYS_setns, SYS_setpgid,
-        SYS_setregid, SYS_setresgid, SYS_setresuid, SYS_setreuid, SYS_setsid, SYS_setuid,
-        SYS_unshare,
+        SYS_clone3, SYS_execve, SYS_execveat, SYS_getegid, SYS_geteuid, SYS_getgid, SYS_getgroups,
+        SYS_getpgid, SYS_getpid, SYS_getppid, SYS_getresgid, SYS_getresuid, SYS_getsid, SYS_gettid,
+        SYS_getuid, SYS_kcmp, SYS_pidfd_getfd, SYS_pidfd_open, SYS_prctl, SYS_set_tid_address,
+        SYS_setgid, SYS_setgroups, SYS_setns, SYS_setpgid, SYS_setregid, SYS_setresgid,
+        SYS_setresuid, SYS_setreuid, SYS_setsid, SYS_setuid, SYS_unshare,
     },
     Clone3Data, ExecveData, ExecveatData, GenericSyscallData, GetegidData, GeteuidData, GetgidData,
-    GetpgidData, GetpidData, GetppidData, GetsidData, GettidData, GetuidData, PidfdOpenData,
-    SetTidAddressData, SetgidData, SetnsData, SetpgidData, SetregidData, SetresgidData,
-    SetresuidData, SetreuidData, SetsidData, SetuidData, SyscallEvent, UnshareData,
-    SMALL_READ_SIZE,
+    GetgroupsData, GetpgidData, GetpidData, GetppidData, GetresgidData, GetresuidData, GetsidData,
+    GettidData, GetuidData, KcmpData, PidfdOpenData, SetTidAddressData, SetgidData, SetgroupsData,
+    SetnsData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData, SetsidData,
+    SetuidData, SyscallEvent, SyscallEventData, UnshareData, SMALL_READ_SIZE,
 };
 
-use crate::syscall_test;
+use crate::{format_helpers::kcmp_constants, syscall_test};
 
 #[cfg(target_arch = "x86_64")]
 syscall_test!(
@@ -1168,4 +1168,108 @@ syscall_test!(
         }
     },
     "123 unshare(flags: 0x600 (CLONE_FS|CLONE_FILES)) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_kcmp_equal,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_kcmp,
+            pid: 1000,
+            tid: 1000,
+            return_value: 0,
+            data: SyscallEventData {
+                kcmp: KcmpData {
+                    pid1: 1000,
+                    pid2: 1001,
+                    type_: kcmp_constants::KCMP_FILE,
+                    idx1: 3,
+                    idx2: 3,
+                },
+            },
+        }
+    },
+    "1000 kcmp(pid1: 1000, pid2: 1001, type: KCMP_FILE, idx1: 3, idx2: 3) = 0 (equal)\n"
+);
+
+syscall_test!(
+    test_getgroups,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getgroups,
+            pid: 2000,
+            tid: 2000,
+            return_value: 5,
+            data: SyscallEventData {
+                getgroups: GetgroupsData {
+                    size: 10,
+                    groups: [
+                        1000, 1001, 1002, 1003, 1004, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+                    ],
+                    groups_read_count: 5,
+                },
+            },
+        }
+    },
+    "2000 getgroups(size: 10, list: [1000, 1001, 1002, 1003, 1004]) = 5 (groups)\n"
+);
+
+syscall_test!(
+    test_setgroups,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_setgroups,
+            pid: 3000,
+            tid: 3000,
+            return_value: 0,
+            data: SyscallEventData {
+                setgroups: SetgroupsData {
+                    size: 3,
+                    groups: [1000, 1001, 1002, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                    groups_read_count: 3,
+                },
+            },
+        }
+    },
+    "3000 setgroups(size: 3, list: [1000, 1001, 1002]) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_getresuid,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getresuid,
+            pid: 4000,
+            tid: 4000,
+            return_value: 0,
+            data: SyscallEventData {
+                getresuid: GetresuidData {
+                    ruid: 1000,
+                    euid: 1000,
+                    suid: 1000,
+                },
+            },
+        }
+    },
+    "4000 getresuid(ruid: 1000, euid: 1000, suid: 1000) = 0 (success)\n"
+);
+
+syscall_test!(
+    test_getresgid,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getresgid,
+            pid: 5000,
+            tid: 5000,
+            return_value: 0,
+            data: SyscallEventData {
+                getresgid: GetresgidData {
+                    rgid: 1000,
+                    egid: 1000,
+                    sgid: 1000,
+                },
+            },
+        }
+    },
+    "5000 getresgid(rgid: 1000, egid: 1000, sgid: 1000) = 0 (success)\n"
 );

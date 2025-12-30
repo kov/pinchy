@@ -2487,10 +2487,29 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_ptrace
         | syscalls::SYS_seccomp
         | syscalls::SYS_quotactl
-        | syscalls::SYS_quotactl_fd => match return_value {
+        | syscalls::SYS_quotactl_fd
+        | syscalls::SYS_setgroups
+        | syscalls::SYS_getresuid
+        | syscalls::SYS_getresgid => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
+
+        syscalls::SYS_kcmp => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (equal)"),
+            1 => std::borrow::Cow::Borrowed("1 (less than)"),
+            2 => std::borrow::Cow::Borrowed("2 (greater than)"),
+            3 => std::borrow::Cow::Borrowed("3 (not equal)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        syscalls::SYS_getgroups => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (groups)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
 
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_pause => match return_value {
@@ -6066,5 +6085,29 @@ pub fn format_quotactl_op(op: i32) -> Cow<'static, str> {
         quota_constants::Q_XGETQSTATV => Cow::Borrowed("0x5808 (Q_XGETQSTATV)"),
         quota_constants::Q_XGETNEXTQUOTA => Cow::Borrowed("0x5809 (Q_XGETNEXTQUOTA)"),
         _ => format!("0x{:x}", op).into(),
+    }
+}
+
+pub fn format_kcmp_type(type_: i32) -> Cow<'static, str> {
+    // KCMP type constants from linux/kcmp.h
+    const KCMP_FILE: i32 = 0;
+    const KCMP_VM: i32 = 1;
+    const KCMP_FILES: i32 = 2;
+    const KCMP_FS: i32 = 3;
+    const KCMP_SIGHAND: i32 = 4;
+    const KCMP_IO: i32 = 5;
+    const KCMP_SYSVSEM: i32 = 6;
+    const KCMP_EPOLL_TFD: i32 = 7;
+
+    match type_ {
+        KCMP_FILE => Cow::Borrowed("KCMP_FILE"),
+        KCMP_VM => Cow::Borrowed("KCMP_VM"),
+        KCMP_FILES => Cow::Borrowed("KCMP_FILES"),
+        KCMP_FS => Cow::Borrowed("KCMP_FS"),
+        KCMP_SIGHAND => Cow::Borrowed("KCMP_SIGHAND"),
+        KCMP_IO => Cow::Borrowed("KCMP_IO"),
+        KCMP_SYSVSEM => Cow::Borrowed("KCMP_SYSVSEM"),
+        KCMP_EPOLL_TFD => Cow::Borrowed("KCMP_EPOLL_TFD"),
+        _ => format!("{}", type_).into(),
     }
 }

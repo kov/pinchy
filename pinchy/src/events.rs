@@ -2330,6 +2330,101 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_kcmp => {
+            let data = unsafe { event.data.kcmp };
+
+            argf!(sf, "pid1: {}", data.pid1);
+            argf!(sf, "pid2: {}", data.pid2);
+            argf!(
+                sf,
+                "type: {}",
+                crate::format_helpers::format_kcmp_type(data.type_)
+            );
+            argf!(sf, "idx1: {}", data.idx1);
+            argf!(sf, "idx2: {}", data.idx2);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getgroups => {
+            let data = unsafe { event.data.getgroups };
+
+            argf!(sf, "size: {}", data.size);
+
+            if data.groups_read_count > 0 {
+                let groups: Vec<String> = data.groups[..data.groups_read_count as usize]
+                    .iter()
+                    .map(|g| g.to_string())
+                    .collect();
+
+                if data.groups_read_count < event.return_value as u32
+                    && event.return_value > pinchy_common::GROUP_ARRAY_CAP as i64
+                {
+                    argf!(
+                        sf,
+                        "list: [{}... (showing {} of {})]",
+                        groups.join(", "),
+                        data.groups_read_count,
+                        event.return_value
+                    );
+                } else {
+                    argf!(sf, "list: [{}]", groups.join(", "));
+                }
+            } else if data.size == 0 {
+                arg!(sf, "list: NULL");
+            } else {
+                argf!(sf, "list: []");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setgroups => {
+            let data = unsafe { event.data.setgroups };
+
+            argf!(sf, "size: {}", data.size);
+
+            if data.groups_read_count > 0 {
+                let groups: Vec<String> = data.groups[..data.groups_read_count as usize]
+                    .iter()
+                    .map(|g| g.to_string())
+                    .collect();
+
+                if data.groups_read_count < data.size as u32
+                    && data.size > pinchy_common::GROUP_ARRAY_CAP
+                {
+                    argf!(
+                        sf,
+                        "list: [{}... (showing {} of {})]",
+                        groups.join(", "),
+                        data.groups_read_count,
+                        data.size
+                    );
+                } else {
+                    argf!(sf, "list: [{}]", groups.join(", "));
+                }
+            } else {
+                argf!(sf, "list: []");
+            }
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getresuid => {
+            let data = unsafe { event.data.getresuid };
+
+            argf!(sf, "ruid: {}", data.ruid);
+            argf!(sf, "euid: {}", data.euid);
+            argf!(sf, "suid: {}", data.suid);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_getresgid => {
+            let data = unsafe { event.data.getresgid };
+
+            argf!(sf, "rgid: {}", data.rgid);
+            argf!(sf, "egid: {}", data.egid);
+            argf!(sf, "sgid: {}", data.sgid);
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_rseq => {
             let data = unsafe { event.data.rseq };
 

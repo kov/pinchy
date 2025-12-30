@@ -403,6 +403,11 @@ pub union SyscallEventData {
     pub seccomp: SeccompData,
     pub quotactl: QuotactlData,
     pub quotactl_fd: QuotactlFdData,
+    pub kcmp: KcmpData,
+    pub getgroups: GetgroupsData,
+    pub setgroups: SetgroupsData,
+    pub getresuid: GetresuidData,
+    pub getresgid: GetresgidData,
 }
 
 #[repr(C)]
@@ -3288,4 +3293,68 @@ pub struct QuotactlFdData {
     pub cmd: u32,
     pub id: i32,
     pub addr: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct KcmpData {
+    pub pid1: i32,
+    pub pid2: i32,
+    pub type_: i32,
+    pub idx1: u64,
+    pub idx2: u64,
+}
+
+pub const GROUP_ARRAY_CAP: usize = 16;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetgroupsData {
+    pub size: i32,
+    pub groups: [u32; GROUP_ARRAY_CAP],
+    pub groups_read_count: u32,
+}
+
+impl Default for GetgroupsData {
+    fn default() -> Self {
+        Self {
+            size: 0,
+            groups: [0; GROUP_ARRAY_CAP],
+            groups_read_count: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetgroupsData {
+    pub size: usize,
+    pub groups: [u32; GROUP_ARRAY_CAP],
+    pub groups_read_count: u32,
+}
+
+impl Default for SetgroupsData {
+    fn default() -> Self {
+        Self {
+            size: 0,
+            groups: [0; GROUP_ARRAY_CAP],
+            groups_read_count: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct GetresuidData {
+    pub ruid: u32,
+    pub euid: u32,
+    pub suid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct GetresgidData {
+    pub rgid: u32,
+    pub egid: u32,
+    pub sgid: u32,
 }

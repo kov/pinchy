@@ -2487,10 +2487,29 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_ptrace
         | syscalls::SYS_seccomp
         | syscalls::SYS_quotactl
-        | syscalls::SYS_quotactl_fd => match return_value {
+        | syscalls::SYS_quotactl_fd
+        | syscalls::SYS_setgroups
+        | syscalls::SYS_getresuid
+        | syscalls::SYS_getresgid => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
+
+        syscalls::SYS_kcmp => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (equal)"),
+            1 => std::borrow::Cow::Borrowed("1 (less than)"),
+            2 => std::borrow::Cow::Borrowed("2 (greater than)"),
+            3 => std::borrow::Cow::Borrowed("3 (not equal)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        syscalls::SYS_getgroups => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (groups)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
 
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_pause => match return_value {
@@ -6109,5 +6128,40 @@ pub fn format_quotactl_op(op: i32) -> Cow<'static, str> {
         format!("0x{:x} ({})", op_unsigned, cmd_name).into()
     } else {
         format!("0x{:x} (QCMD({}, {}))", op_unsigned, cmd_name, qtype_str).into()
+    }
+}
+
+pub mod kcmp_constants {
+    /// Compare file descriptor table entries
+    pub const KCMP_FILE: i32 = 0;
+    /// Compare virtual memory address spaces
+    pub const KCMP_VM: i32 = 1;
+    /// Compare file descriptor table
+    pub const KCMP_FILES: i32 = 2;
+    /// Compare filesystem information
+    pub const KCMP_FS: i32 = 3;
+    /// Compare signal handlers
+    pub const KCMP_SIGHAND: i32 = 4;
+    /// Compare I/O context
+    pub const KCMP_IO: i32 = 5;
+    /// Compare System V semaphore undo lists
+    pub const KCMP_SYSVSEM: i32 = 6;
+    /// Compare epoll_ctl targets
+    pub const KCMP_EPOLL_TFD: i32 = 7;
+}
+
+pub fn format_kcmp_type(type_: i32) -> Cow<'static, str> {
+    use kcmp_constants::*;
+
+    match type_ {
+        KCMP_FILE => Cow::Borrowed("KCMP_FILE"),
+        KCMP_VM => Cow::Borrowed("KCMP_VM"),
+        KCMP_FILES => Cow::Borrowed("KCMP_FILES"),
+        KCMP_FS => Cow::Borrowed("KCMP_FS"),
+        KCMP_SIGHAND => Cow::Borrowed("KCMP_SIGHAND"),
+        KCMP_IO => Cow::Borrowed("KCMP_IO"),
+        KCMP_SYSVSEM => Cow::Borrowed("KCMP_SYSVSEM"),
+        KCMP_EPOLL_TFD => Cow::Borrowed("KCMP_EPOLL_TFD"),
+        _ => format!("{}", type_).into(),
     }
 }

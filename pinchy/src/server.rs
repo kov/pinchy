@@ -829,6 +829,11 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_clone,
         syscalls::SYS_pidfd_send_signal,
         syscalls::SYS_prlimit64,
+        syscalls::SYS_kcmp,
+        syscalls::SYS_getgroups,
+        syscalls::SYS_setgroups,
+        syscalls::SYS_getresuid,
+        syscalls::SYS_getresgid,
     ];
     let process_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_process")

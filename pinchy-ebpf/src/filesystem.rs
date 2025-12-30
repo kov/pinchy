@@ -705,6 +705,99 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
+            syscalls::SYS_name_to_handle_at => {
+                let data = data_mut!(entry, name_to_handle_at);
+                data.dirfd = args[0] as i32;
+                let pathname_ptr = args[1] as *const u8;
+                data.handle = args[2] as u64;
+                data.mount_id = args[3] as u64;
+                data.flags = args[4] as i32;
+                unsafe {
+                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                }
+            }
+            syscalls::SYS_open_by_handle_at => {
+                let data = data_mut!(entry, open_by_handle_at);
+                data.mount_fd = args[0] as i32;
+                data.handle = args[1] as u64;
+                data.flags = args[2] as i32;
+            }
+            syscalls::SYS_copy_file_range => {
+                let data = data_mut!(entry, copy_file_range);
+                data.fd_in = args[0] as i32;
+
+                let off_in_ptr = args[1] as *const i64;
+
+                if off_in_ptr.is_null() {
+                    data.off_in_is_null = 1;
+                } else {
+                    data.off_in_is_null = 0;
+
+                    unsafe {
+                        if let Ok(off) = bpf_probe_read_user(off_in_ptr) {
+                            data.off_in = off as u64;
+                        }
+                    }
+                }
+
+                data.fd_out = args[2] as i32;
+
+                let off_out_ptr = args[3] as *const i64;
+
+                if off_out_ptr.is_null() {
+                    data.off_out_is_null = 1;
+                } else {
+                    data.off_out_is_null = 0;
+
+                    unsafe {
+                        if let Ok(off) = bpf_probe_read_user(off_out_ptr) {
+                            data.off_out = off as u64;
+                        }
+                    }
+                }
+
+                data.len = args[4] as usize;
+                data.flags = args[5] as u32;
+            }
+            syscalls::SYS_sync_file_range => {
+                let data = data_mut!(entry, sync_file_range);
+                data.fd = args[0] as i32;
+                data.offset = args[1] as i64;
+                data.nbytes = args[2] as i64;
+                data.flags = args[3] as u32;
+            }
+            syscalls::SYS_syncfs => {
+                let data = data_mut!(entry, syncfs);
+                data.fd = args[0] as i32;
+            }
+            syscalls::SYS_utimensat => {
+                let data = data_mut!(entry, utimensat);
+                data.dirfd = args[0] as i32;
+
+                let pathname_ptr = args[1] as *const u8;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+
+                let times_ptr = args[2] as *const [pinchy_common::kernel_types::Timespec; 2];
+
+                if times_ptr.is_null() {
+                    data.times_is_null = 1;
+                } else {
+                    data.times_is_null = 0;
+
+                    unsafe {
+                        if let Ok(times) = bpf_probe_read_user(times_ptr) {
+                            data.times = times;
+                        }
+                    }
+                }
+
+                data.flags = args[3] as i32;
+            }
             _ => {
                 entry.discard();
                 return Ok(());

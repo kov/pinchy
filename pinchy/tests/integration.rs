@@ -1948,3 +1948,49 @@ fn fanotify_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn file_handles_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises file handle and range operations
+    let handle = run_workload(
+        &[
+            "copy_file_range",
+            "sync_file_range",
+            "syncfs",
+            "utimensat",
+            "name_to_handle_at",
+            "open_by_handle_at",
+        ],
+        "file_handles_test",
+    );
+
+    // Expected output - file handle/range syscalls
+    // Note: name_to_handle_at and open_by_handle_at may fail without CAP_DAC_READ_SEARCH
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ copy_file_range(fd_in: @NUMBER@, off_in: @NUMBER@, fd_out: @NUMBER@, off_out: @NUMBER@, len: 1024, flags: 0) = @SIGNEDNUMBER@ (bytes)
+        @PID@ sync_file_range(fd: @NUMBER@, offset: 0, nbytes: 0, flags: 0x2 (SYNC_FILE_RANGE_WRITE)) = 0 (success)
+        @PID@ syncfs(fd: @NUMBER@) = 0 (success)
+        @PID@ utimensat(dirfd: AT_FDCWD, pathname: "/tmp/pinchy_file_handles_test.txt", times: @ANY@, flags: 0) = 0 (success)
+        @PID@ utimensat(dirfd: AT_FDCWD, pathname: "/tmp/pinchy_file_handles_test.txt", times: NULL, flags: 0) = 0 (success)
+        @PID@ name_to_handle_at(dirfd: AT_FDCWD, pathname: "/tmp/pinchy_file_handles_test.txt", handle: @ADDR@, mount_id: @ADDR@, flags: 0) = 0 (success)
+        @PID@ open_by_handle_at(mount_fd: AT_FDCWD, handle: @ADDR@, flags: @ANY@) = @SIGNEDNUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

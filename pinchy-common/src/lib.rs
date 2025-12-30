@@ -367,6 +367,12 @@ pub union SyscallEventData {
     pub bpf: BpfData,
     pub fanotify_init: FanotifyInitData,
     pub fanotify_mark: FanotifyMarkData,
+    pub name_to_handle_at: NameToHandleAtData,
+    pub open_by_handle_at: OpenByHandleAtData,
+    pub copy_file_range: CopyFileRangeData,
+    pub sync_file_range: SyncFileRangeData,
+    pub syncfs: SyncfsData,
+    pub utimensat: UtimensatData,
 }
 
 #[repr(C)]
@@ -3092,6 +3098,86 @@ impl Default for FanotifyMarkData {
             mask: 0,
             dirfd: 0,
             pathname: [0; DATA_READ_SIZE],
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct NameToHandleAtData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub handle: u64,
+    pub mount_id: u64,
+    pub flags: i32,
+}
+
+impl Default for NameToHandleAtData {
+    fn default() -> Self {
+        Self {
+            dirfd: 0,
+            pathname: [0; DATA_READ_SIZE],
+            handle: 0,
+            mount_id: 0,
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct OpenByHandleAtData {
+    pub mount_fd: i32,
+    pub handle: u64,
+    pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct CopyFileRangeData {
+    pub fd_in: i32,
+    pub off_in: u64,
+    pub off_in_is_null: u8,
+    pub fd_out: i32,
+    pub off_out: u64,
+    pub off_out_is_null: u8,
+    pub len: usize,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SyncFileRangeData {
+    pub fd: i32,
+    pub offset: i64,
+    pub nbytes: i64,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SyncfsData {
+    pub fd: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UtimensatData {
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub times: [kernel_types::Timespec; 2],
+    pub times_is_null: u8,
+    pub flags: i32,
+}
+
+impl Default for UtimensatData {
+    fn default() -> Self {
+        Self {
+            dirfd: 0,
+            pathname: [0; DATA_READ_SIZE],
+            times: [kernel_types::Timespec::default(); 2],
+            times_is_null: 0,
+            flags: 0,
         }
     }
 }

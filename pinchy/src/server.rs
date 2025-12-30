@@ -584,6 +584,12 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_mknod,
         syscalls::SYS_truncate,
+        syscalls::SYS_name_to_handle_at,
+        syscalls::SYS_open_by_handle_at,
+        syscalls::SYS_copy_file_range,
+        syscalls::SYS_sync_file_range,
+        syscalls::SYS_syncfs,
+        syscalls::SYS_utimensat,
     ];
     let filesystem_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_filesystem")

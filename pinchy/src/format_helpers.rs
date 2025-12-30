@@ -33,6 +33,12 @@ pub mod fs_constants {
     pub const FSPICK_EMPTY_PATH: u32 = 0x00000008;
 }
 
+// Time constants - for utimensat special values
+pub mod time_constants {
+    pub const UTIME_NOW: i64 = (1i64 << 30) - 1;
+    pub const UTIME_OMIT: i64 = (1i64 << 30) - 2;
+}
+
 // AIO constants - these are not available in libc, defined from uapi/linux/aio_abi.h
 pub mod aio_constants {
     // IOCB command opcodes
@@ -296,6 +302,16 @@ pub async fn format_timespec(
         argf!(sf, "nanos: {}", timespec.nanos);
     });
     Ok(())
+}
+
+pub fn format_timespec_with_special(timespec: &Timespec) -> String {
+    if timespec.nanos == time_constants::UTIME_NOW {
+        "UTIME_NOW".to_string()
+    } else if timespec.nanos == time_constants::UTIME_OMIT {
+        "UTIME_OMIT".to_string()
+    } else {
+        format!("{{secs: {}, nanos: {}}}", timespec.seconds, timespec.nanos)
+    }
 }
 
 pub fn format_bytes(bytes: &[u8]) -> String {
@@ -2246,7 +2262,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_landlock_create_ruleset
         | syscalls::SYS_io_uring_setup
         | syscalls::SYS_perf_event_open
-        | syscalls::SYS_fanotify_init => {
+        | syscalls::SYS_fanotify_init
+        | syscalls::SYS_open_by_handle_at => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
             } else {
@@ -2290,7 +2307,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_process_madvise
         | syscalls::SYS_process_vm_readv
         | syscalls::SYS_process_vm_writev
-        | syscalls::SYS_sched_getaffinity => {
+        | syscalls::SYS_sched_getaffinity
+        | syscalls::SYS_copy_file_range => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
             } else {
@@ -2360,7 +2378,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_fdatasync
         | syscalls::SYS_sync
         | syscalls::SYS_syncfs
+        | syscalls::SYS_sync_file_range
         | syscalls::SYS_truncate
+        | syscalls::SYS_name_to_handle_at
+        | syscalls::SYS_utimensat
         | syscalls::SYS_ftruncate
         | syscalls::SYS_reboot
         | syscalls::SYS_mkdirat
@@ -5750,5 +5771,31 @@ pub fn format_fanotify_mark_mask(mask: u64) -> Cow<'static, str> {
         format!("{:#x}", mask).into()
     } else {
         format!("{:#x} ({})", mask, parts.join("|")).into()
+    }
+}
+
+pub fn format_sync_file_range_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & libc::SYNC_FILE_RANGE_WAIT_BEFORE != 0 {
+        parts.push("SYNC_FILE_RANGE_WAIT_BEFORE");
+    }
+
+    if flags & libc::SYNC_FILE_RANGE_WRITE != 0 {
+        parts.push("SYNC_FILE_RANGE_WRITE");
+    }
+
+    if flags & libc::SYNC_FILE_RANGE_WAIT_AFTER != 0 {
+        parts.push("SYNC_FILE_RANGE_WAIT_AFTER");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags).into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
     }
 }

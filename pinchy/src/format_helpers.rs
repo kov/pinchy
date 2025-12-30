@@ -2244,7 +2244,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_fsmount
         | syscalls::SYS_fspick
         | syscalls::SYS_landlock_create_ruleset
-        | syscalls::SYS_io_uring_setup => {
+        | syscalls::SYS_io_uring_setup
+        | syscalls::SYS_perf_event_open
+        | syscalls::SYS_fanotify_init => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
             } else {
@@ -5358,5 +5360,403 @@ pub fn format_key_spec_id(id: i32) -> Cow<'static, str> {
         -8 => Cow::Borrowed("KEY_SPEC_REQUESTOR_KEYRING"),
         _ if id < 0 => format!("KEY_SPEC_UNKNOWN({})", id).into(),
         _ => format!("{}", id).into(),
+    }
+}
+
+// Batch 6: Observability & Notifications formatters
+
+/// perf_event_open constants - from uapi/linux/perf_event.h
+/// Note: these are not available in libc crate
+pub mod perf_constants {
+    pub const PERF_FLAG_FD_NO_GROUP: u64 = 1 << 0;
+    pub const PERF_FLAG_FD_OUTPUT: u64 = 1 << 1;
+    pub const PERF_FLAG_PID_CGROUP: u64 = 1 << 2;
+    pub const PERF_FLAG_FD_CLOEXEC: u64 = 1 << 3;
+
+    // Perf event types
+    pub const PERF_TYPE_HARDWARE: u32 = 0;
+    pub const PERF_TYPE_SOFTWARE: u32 = 1;
+    pub const PERF_TYPE_TRACEPOINT: u32 = 2;
+    pub const PERF_TYPE_HW_CACHE: u32 = 3;
+    pub const PERF_TYPE_RAW: u32 = 4;
+    pub const PERF_TYPE_BREAKPOINT: u32 = 5;
+
+    // Software event types
+    #[cfg(test)]
+    pub const PERF_COUNT_SW_CPU_CLOCK: u64 = 0;
+}
+
+pub fn format_perf_event_open_flags(flags: u64) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & perf_constants::PERF_FLAG_FD_NO_GROUP != 0 {
+        parts.push("FD_NO_GROUP");
+    }
+    if flags & perf_constants::PERF_FLAG_FD_OUTPUT != 0 {
+        parts.push("FD_OUTPUT");
+    }
+    if flags & perf_constants::PERF_FLAG_PID_CGROUP != 0 {
+        parts.push("PID_CGROUP");
+    }
+    if flags & perf_constants::PERF_FLAG_FD_CLOEXEC != 0 {
+        parts.push("FD_CLOEXEC");
+    }
+
+    if parts.is_empty() {
+        format!("{:#x}", flags).into()
+    } else {
+        format!("{:#x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+pub fn format_perf_event_type(type_: u32) -> Cow<'static, str> {
+    match type_ {
+        perf_constants::PERF_TYPE_HARDWARE => Cow::Borrowed("PERF_TYPE_HARDWARE"),
+        perf_constants::PERF_TYPE_SOFTWARE => Cow::Borrowed("PERF_TYPE_SOFTWARE"),
+        perf_constants::PERF_TYPE_TRACEPOINT => Cow::Borrowed("PERF_TYPE_TRACEPOINT"),
+        perf_constants::PERF_TYPE_HW_CACHE => Cow::Borrowed("PERF_TYPE_HW_CACHE"),
+        perf_constants::PERF_TYPE_RAW => Cow::Borrowed("PERF_TYPE_RAW"),
+        perf_constants::PERF_TYPE_BREAKPOINT => Cow::Borrowed("PERF_TYPE_BREAKPOINT"),
+        _ => format!("UNKNOWN({})", type_).into(),
+    }
+}
+
+pub async fn format_perf_event_attr(
+    sf: &mut SyscallFormatter<'_>,
+    attr: &pinchy_common::kernel_types::PerfEventAttr,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        argf!(sf, "type: {}", format_perf_event_type(attr.type_));
+        argf!(sf, "size: {}", attr.size);
+        argf!(sf, "config: {:#x}", attr.config);
+        argf!(sf, "sample_period: {}", attr.sample_period);
+    });
+    Ok(())
+}
+
+/// fanotify constants - masks for flag parsing
+pub mod fanotify_constants {
+    /// Class mask for extracting class bits from fanotify_init flags
+    pub const FAN_CLASS_MASK: u32 = 0x0000000C;
+
+    /// Type mask for extracting mark type from fanotify_mark flags
+    pub const FAN_MARK_TYPE_MASK: u32 = 0x00000110;
+}
+
+/// bpf command constants - from uapi/linux/bpf.h
+/// Note: these are not available in libc crate
+pub mod bpf_constants {
+    pub const BPF_MAP_CREATE: i32 = 0;
+    pub const BPF_MAP_LOOKUP_ELEM: i32 = 1;
+    pub const BPF_MAP_UPDATE_ELEM: i32 = 2;
+    pub const BPF_MAP_DELETE_ELEM: i32 = 3;
+    pub const BPF_MAP_GET_NEXT_KEY: i32 = 4;
+    pub const BPF_PROG_LOAD: i32 = 5;
+    pub const BPF_OBJ_PIN: i32 = 6;
+    pub const BPF_OBJ_GET: i32 = 7;
+    pub const BPF_PROG_ATTACH: i32 = 8;
+    pub const BPF_PROG_DETACH: i32 = 9;
+    pub const BPF_PROG_TEST_RUN: i32 = 10;
+    pub const BPF_PROG_GET_NEXT_ID: i32 = 11;
+    pub const BPF_MAP_GET_NEXT_ID: i32 = 12;
+    pub const BPF_PROG_GET_FD_BY_ID: i32 = 13;
+    pub const BPF_MAP_GET_FD_BY_ID: i32 = 14;
+    pub const BPF_OBJ_GET_INFO_BY_FD: i32 = 15;
+    pub const BPF_PROG_QUERY: i32 = 16;
+    pub const BPF_RAW_TRACEPOINT_OPEN: i32 = 17;
+    pub const BPF_BTF_LOAD: i32 = 18;
+    pub const BPF_BTF_GET_FD_BY_ID: i32 = 19;
+    pub const BPF_TASK_FD_QUERY: i32 = 20;
+    pub const BPF_MAP_LOOKUP_AND_DELETE_ELEM: i32 = 21;
+    pub const BPF_MAP_FREEZE: i32 = 22;
+    pub const BPF_BTF_GET_NEXT_ID: i32 = 23;
+    pub const BPF_MAP_LOOKUP_BATCH: i32 = 24;
+    pub const BPF_MAP_LOOKUP_AND_DELETE_BATCH: i32 = 25;
+    pub const BPF_MAP_UPDATE_BATCH: i32 = 26;
+    pub const BPF_MAP_DELETE_BATCH: i32 = 27;
+    pub const BPF_LINK_CREATE: i32 = 28;
+    pub const BPF_LINK_UPDATE: i32 = 29;
+    pub const BPF_LINK_GET_FD_BY_ID: i32 = 30;
+    pub const BPF_LINK_GET_NEXT_ID: i32 = 31;
+    pub const BPF_ENABLE_STATS: i32 = 32;
+    pub const BPF_ITER_CREATE: i32 = 33;
+    pub const BPF_LINK_DETACH: i32 = 34;
+    pub const BPF_PROG_BIND_MAP: i32 = 35;
+
+    // BPF map types
+    pub const BPF_MAP_TYPE_UNSPEC: u32 = 0;
+    pub const BPF_MAP_TYPE_HASH: u32 = 1;
+    pub const BPF_MAP_TYPE_ARRAY: u32 = 2;
+    pub const BPF_MAP_TYPE_PROG_ARRAY: u32 = 3;
+    pub const BPF_MAP_TYPE_PERF_EVENT_ARRAY: u32 = 4;
+    pub const BPF_MAP_TYPE_PERCPU_HASH: u32 = 5;
+    pub const BPF_MAP_TYPE_PERCPU_ARRAY: u32 = 6;
+    pub const BPF_MAP_TYPE_STACK_TRACE: u32 = 7;
+    pub const BPF_MAP_TYPE_CGROUP_ARRAY: u32 = 8;
+    pub const BPF_MAP_TYPE_LRU_HASH: u32 = 9;
+    pub const BPF_MAP_TYPE_LRU_PERCPU_HASH: u32 = 10;
+    pub const BPF_MAP_TYPE_LPM_TRIE: u32 = 11;
+    pub const BPF_MAP_TYPE_ARRAY_OF_MAPS: u32 = 12;
+    pub const BPF_MAP_TYPE_HASH_OF_MAPS: u32 = 13;
+    pub const BPF_MAP_TYPE_RINGBUF: u32 = 27;
+
+    // BPF program types
+    pub const BPF_PROG_TYPE_UNSPEC: u32 = 0;
+    pub const BPF_PROG_TYPE_SOCKET_FILTER: u32 = 1;
+    pub const BPF_PROG_TYPE_KPROBE: u32 = 2;
+    pub const BPF_PROG_TYPE_SCHED_CLS: u32 = 3;
+    pub const BPF_PROG_TYPE_SCHED_ACT: u32 = 4;
+    pub const BPF_PROG_TYPE_TRACEPOINT: u32 = 5;
+    pub const BPF_PROG_TYPE_XDP: u32 = 6;
+    pub const BPF_PROG_TYPE_PERF_EVENT: u32 = 7;
+    pub const BPF_PROG_TYPE_CGROUP_SKB: u32 = 8;
+    pub const BPF_PROG_TYPE_CGROUP_SOCK: u32 = 9;
+}
+
+pub fn format_bpf_cmd(cmd: i32) -> Cow<'static, str> {
+    match cmd {
+        bpf_constants::BPF_MAP_CREATE => Cow::Borrowed("BPF_MAP_CREATE"),
+        bpf_constants::BPF_MAP_LOOKUP_ELEM => Cow::Borrowed("BPF_MAP_LOOKUP_ELEM"),
+        bpf_constants::BPF_MAP_UPDATE_ELEM => Cow::Borrowed("BPF_MAP_UPDATE_ELEM"),
+        bpf_constants::BPF_MAP_DELETE_ELEM => Cow::Borrowed("BPF_MAP_DELETE_ELEM"),
+        bpf_constants::BPF_MAP_GET_NEXT_KEY => Cow::Borrowed("BPF_MAP_GET_NEXT_KEY"),
+        bpf_constants::BPF_PROG_LOAD => Cow::Borrowed("BPF_PROG_LOAD"),
+        bpf_constants::BPF_OBJ_PIN => Cow::Borrowed("BPF_OBJ_PIN"),
+        bpf_constants::BPF_OBJ_GET => Cow::Borrowed("BPF_OBJ_GET"),
+        bpf_constants::BPF_PROG_ATTACH => Cow::Borrowed("BPF_PROG_ATTACH"),
+        bpf_constants::BPF_PROG_DETACH => Cow::Borrowed("BPF_PROG_DETACH"),
+        bpf_constants::BPF_PROG_TEST_RUN => Cow::Borrowed("BPF_PROG_TEST_RUN"),
+        bpf_constants::BPF_PROG_GET_NEXT_ID => Cow::Borrowed("BPF_PROG_GET_NEXT_ID"),
+        bpf_constants::BPF_MAP_GET_NEXT_ID => Cow::Borrowed("BPF_MAP_GET_NEXT_ID"),
+        bpf_constants::BPF_PROG_GET_FD_BY_ID => Cow::Borrowed("BPF_PROG_GET_FD_BY_ID"),
+        bpf_constants::BPF_MAP_GET_FD_BY_ID => Cow::Borrowed("BPF_MAP_GET_FD_BY_ID"),
+        bpf_constants::BPF_OBJ_GET_INFO_BY_FD => Cow::Borrowed("BPF_OBJ_GET_INFO_BY_FD"),
+        bpf_constants::BPF_PROG_QUERY => Cow::Borrowed("BPF_PROG_QUERY"),
+        bpf_constants::BPF_RAW_TRACEPOINT_OPEN => Cow::Borrowed("BPF_RAW_TRACEPOINT_OPEN"),
+        bpf_constants::BPF_BTF_LOAD => Cow::Borrowed("BPF_BTF_LOAD"),
+        bpf_constants::BPF_BTF_GET_FD_BY_ID => Cow::Borrowed("BPF_BTF_GET_FD_BY_ID"),
+        bpf_constants::BPF_TASK_FD_QUERY => Cow::Borrowed("BPF_TASK_FD_QUERY"),
+        bpf_constants::BPF_MAP_LOOKUP_AND_DELETE_ELEM => {
+            Cow::Borrowed("BPF_MAP_LOOKUP_AND_DELETE_ELEM")
+        }
+        bpf_constants::BPF_MAP_FREEZE => Cow::Borrowed("BPF_MAP_FREEZE"),
+        bpf_constants::BPF_BTF_GET_NEXT_ID => Cow::Borrowed("BPF_BTF_GET_NEXT_ID"),
+        bpf_constants::BPF_MAP_LOOKUP_BATCH => Cow::Borrowed("BPF_MAP_LOOKUP_BATCH"),
+        bpf_constants::BPF_MAP_LOOKUP_AND_DELETE_BATCH => {
+            Cow::Borrowed("BPF_MAP_LOOKUP_AND_DELETE_BATCH")
+        }
+        bpf_constants::BPF_MAP_UPDATE_BATCH => Cow::Borrowed("BPF_MAP_UPDATE_BATCH"),
+        bpf_constants::BPF_MAP_DELETE_BATCH => Cow::Borrowed("BPF_MAP_DELETE_BATCH"),
+        bpf_constants::BPF_LINK_CREATE => Cow::Borrowed("BPF_LINK_CREATE"),
+        bpf_constants::BPF_LINK_UPDATE => Cow::Borrowed("BPF_LINK_UPDATE"),
+        bpf_constants::BPF_LINK_GET_FD_BY_ID => Cow::Borrowed("BPF_LINK_GET_FD_BY_ID"),
+        bpf_constants::BPF_LINK_GET_NEXT_ID => Cow::Borrowed("BPF_LINK_GET_NEXT_ID"),
+        bpf_constants::BPF_ENABLE_STATS => Cow::Borrowed("BPF_ENABLE_STATS"),
+        bpf_constants::BPF_ITER_CREATE => Cow::Borrowed("BPF_ITER_CREATE"),
+        bpf_constants::BPF_LINK_DETACH => Cow::Borrowed("BPF_LINK_DETACH"),
+        bpf_constants::BPF_PROG_BIND_MAP => Cow::Borrowed("BPF_PROG_BIND_MAP"),
+        _ => format!("UNKNOWN({})", cmd).into(),
+    }
+}
+
+pub fn format_bpf_map_type(map_type: u32) -> Cow<'static, str> {
+    match map_type {
+        bpf_constants::BPF_MAP_TYPE_UNSPEC => Cow::Borrowed("BPF_MAP_TYPE_UNSPEC"),
+        bpf_constants::BPF_MAP_TYPE_HASH => Cow::Borrowed("BPF_MAP_TYPE_HASH"),
+        bpf_constants::BPF_MAP_TYPE_ARRAY => Cow::Borrowed("BPF_MAP_TYPE_ARRAY"),
+        bpf_constants::BPF_MAP_TYPE_PROG_ARRAY => Cow::Borrowed("BPF_MAP_TYPE_PROG_ARRAY"),
+        bpf_constants::BPF_MAP_TYPE_PERF_EVENT_ARRAY => {
+            Cow::Borrowed("BPF_MAP_TYPE_PERF_EVENT_ARRAY")
+        }
+        bpf_constants::BPF_MAP_TYPE_PERCPU_HASH => Cow::Borrowed("BPF_MAP_TYPE_PERCPU_HASH"),
+        bpf_constants::BPF_MAP_TYPE_PERCPU_ARRAY => Cow::Borrowed("BPF_MAP_TYPE_PERCPU_ARRAY"),
+        bpf_constants::BPF_MAP_TYPE_STACK_TRACE => Cow::Borrowed("BPF_MAP_TYPE_STACK_TRACE"),
+        bpf_constants::BPF_MAP_TYPE_CGROUP_ARRAY => Cow::Borrowed("BPF_MAP_TYPE_CGROUP_ARRAY"),
+        bpf_constants::BPF_MAP_TYPE_LRU_HASH => Cow::Borrowed("BPF_MAP_TYPE_LRU_HASH"),
+        bpf_constants::BPF_MAP_TYPE_LRU_PERCPU_HASH => {
+            Cow::Borrowed("BPF_MAP_TYPE_LRU_PERCPU_HASH")
+        }
+        bpf_constants::BPF_MAP_TYPE_LPM_TRIE => Cow::Borrowed("BPF_MAP_TYPE_LPM_TRIE"),
+        bpf_constants::BPF_MAP_TYPE_ARRAY_OF_MAPS => Cow::Borrowed("BPF_MAP_TYPE_ARRAY_OF_MAPS"),
+        bpf_constants::BPF_MAP_TYPE_HASH_OF_MAPS => Cow::Borrowed("BPF_MAP_TYPE_HASH_OF_MAPS"),
+        bpf_constants::BPF_MAP_TYPE_RINGBUF => Cow::Borrowed("BPF_MAP_TYPE_RINGBUF"),
+        _ => format!("UNKNOWN({})", map_type).into(),
+    }
+}
+
+pub fn format_bpf_prog_type(prog_type: u32) -> Cow<'static, str> {
+    match prog_type {
+        bpf_constants::BPF_PROG_TYPE_UNSPEC => Cow::Borrowed("BPF_PROG_TYPE_UNSPEC"),
+        bpf_constants::BPF_PROG_TYPE_SOCKET_FILTER => Cow::Borrowed("BPF_PROG_TYPE_SOCKET_FILTER"),
+        bpf_constants::BPF_PROG_TYPE_KPROBE => Cow::Borrowed("BPF_PROG_TYPE_KPROBE"),
+        bpf_constants::BPF_PROG_TYPE_SCHED_CLS => Cow::Borrowed("BPF_PROG_TYPE_SCHED_CLS"),
+        bpf_constants::BPF_PROG_TYPE_SCHED_ACT => Cow::Borrowed("BPF_PROG_TYPE_SCHED_ACT"),
+        bpf_constants::BPF_PROG_TYPE_TRACEPOINT => Cow::Borrowed("BPF_PROG_TYPE_TRACEPOINT"),
+        bpf_constants::BPF_PROG_TYPE_XDP => Cow::Borrowed("BPF_PROG_TYPE_XDP"),
+        bpf_constants::BPF_PROG_TYPE_PERF_EVENT => Cow::Borrowed("BPF_PROG_TYPE_PERF_EVENT"),
+        bpf_constants::BPF_PROG_TYPE_CGROUP_SKB => Cow::Borrowed("BPF_PROG_TYPE_CGROUP_SKB"),
+        bpf_constants::BPF_PROG_TYPE_CGROUP_SOCK => Cow::Borrowed("BPF_PROG_TYPE_CGROUP_SOCK"),
+        _ => format!("UNKNOWN({})", prog_type).into(),
+    }
+}
+
+pub fn format_fanotify_init_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+    let fan_report_dfid_name = libc::FAN_REPORT_DIR_FID | libc::FAN_REPORT_NAME;
+
+    match flags & fanotify_constants::FAN_CLASS_MASK {
+        libc::FAN_CLASS_CONTENT => parts.push("CLASS_CONTENT"),
+        libc::FAN_CLASS_PRE_CONTENT => parts.push("CLASS_PRE_CONTENT"),
+        libc::FAN_CLASS_NOTIF => parts.push("CLASS_NOTIF"),
+        _ => {}
+    }
+
+    if flags & libc::FAN_CLOEXEC != 0 {
+        parts.push("CLOEXEC");
+    }
+    if flags & libc::FAN_NONBLOCK != 0 {
+        parts.push("NONBLOCK");
+    }
+    if flags & libc::FAN_UNLIMITED_QUEUE != 0 {
+        parts.push("UNLIMITED_QUEUE");
+    }
+    if flags & libc::FAN_UNLIMITED_MARKS != 0 {
+        parts.push("UNLIMITED_MARKS");
+    }
+    if flags & libc::FAN_ENABLE_AUDIT != 0 {
+        parts.push("ENABLE_AUDIT");
+    }
+    if flags & libc::FAN_REPORT_TID != 0 {
+        parts.push("REPORT_TID");
+    }
+    if flags & fan_report_dfid_name == fan_report_dfid_name {
+        parts.push("REPORT_DFID_NAME");
+    } else {
+        if flags & libc::FAN_REPORT_FID != 0 {
+            parts.push("REPORT_FID");
+        }
+        if flags & libc::FAN_REPORT_DIR_FID != 0 {
+            parts.push("REPORT_DIR_FID");
+        }
+        if flags & libc::FAN_REPORT_NAME != 0 {
+            parts.push("REPORT_NAME");
+        }
+    }
+
+    if parts.is_empty() {
+        format!("{:#x}", flags).into()
+    } else {
+        format!("{:#x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+pub fn format_fanotify_mark_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    match flags & fanotify_constants::FAN_MARK_TYPE_MASK {
+        libc::FAN_MARK_MOUNT => parts.push("MOUNT"),
+        libc::FAN_MARK_FILESYSTEM => parts.push("FILESYSTEM"),
+        libc::FAN_MARK_INODE => parts.push("INODE"),
+        _ => {}
+    }
+
+    if flags & libc::FAN_MARK_ADD != 0 {
+        parts.push("ADD");
+    }
+    if flags & libc::FAN_MARK_REMOVE != 0 {
+        parts.push("REMOVE");
+    }
+    if flags & libc::FAN_MARK_DONT_FOLLOW != 0 {
+        parts.push("DONT_FOLLOW");
+    }
+    if flags & libc::FAN_MARK_ONLYDIR != 0 {
+        parts.push("ONLYDIR");
+    }
+    if flags & libc::FAN_MARK_IGNORED_MASK != 0 {
+        parts.push("IGNORED_MASK");
+    }
+    if flags & libc::FAN_MARK_IGNORED_SURV_MODIFY != 0 {
+        parts.push("IGNORED_SURV_MODIFY");
+    }
+    if flags & libc::FAN_MARK_FLUSH != 0 {
+        parts.push("FLUSH");
+    }
+
+    if parts.is_empty() {
+        format!("{:#x}", flags).into()
+    } else {
+        format!("{:#x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+pub fn format_fanotify_mark_mask(mask: u64) -> Cow<'static, str> {
+    if mask == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if mask & libc::FAN_ACCESS != 0 {
+        parts.push("ACCESS");
+    }
+    if mask & libc::FAN_MODIFY != 0 {
+        parts.push("MODIFY");
+    }
+    if mask & libc::FAN_ATTRIB != 0 {
+        parts.push("ATTRIB");
+    }
+    if mask & libc::FAN_CLOSE_WRITE != 0 {
+        parts.push("CLOSE_WRITE");
+    }
+    if mask & libc::FAN_CLOSE_NOWRITE != 0 {
+        parts.push("CLOSE_NOWRITE");
+    }
+    if mask & libc::FAN_OPEN != 0 {
+        parts.push("OPEN");
+    }
+    if mask & libc::FAN_OPEN_EXEC != 0 {
+        parts.push("OPEN_EXEC");
+    }
+    if mask & libc::FAN_MOVED_FROM != 0 {
+        parts.push("MOVED_FROM");
+    }
+    if mask & libc::FAN_MOVED_TO != 0 {
+        parts.push("MOVED_TO");
+    }
+    if mask & libc::FAN_CREATE != 0 {
+        parts.push("CREATE");
+    }
+    if mask & libc::FAN_DELETE != 0 {
+        parts.push("DELETE");
+    }
+    if mask & libc::FAN_DELETE_SELF != 0 {
+        parts.push("DELETE_SELF");
+    }
+    if mask & libc::FAN_MOVE_SELF != 0 {
+        parts.push("MOVE_SELF");
+    }
+    if mask & libc::FAN_ONDIR != 0 {
+        parts.push("ONDIR");
+    }
+    if mask & libc::FAN_EVENT_ON_CHILD != 0 {
+        parts.push("EVENT_ON_CHILD");
+    }
+
+    if parts.is_empty() {
+        format!("{:#x}", mask).into()
+    } else {
+        format!("{:#x} ({})", mask, parts.join("|")).into()
     }
 }

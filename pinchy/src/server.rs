@@ -565,6 +565,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_swapon,
         syscalls::SYS_swapoff,
         syscalls::SYS_inotify_add_watch,
+        syscalls::SYS_fanotify_init,
+        syscalls::SYS_fanotify_mark,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_chown,
         #[cfg(target_arch = "x86_64")]
@@ -702,6 +704,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_add_key,
         syscalls::SYS_request_key,
         syscalls::SYS_keyctl,
+        syscalls::SYS_perf_event_open,
+        syscalls::SYS_bpf,
     ];
     let system_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_system")

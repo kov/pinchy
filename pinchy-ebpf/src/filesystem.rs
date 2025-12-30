@@ -687,6 +687,24 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
                 }
             }
+            syscalls::SYS_fanotify_init => {
+                let data = data_mut!(entry, fanotify_init);
+                data.flags = args[0] as u32;
+                data.event_f_flags = args[1] as u32;
+            }
+            syscalls::SYS_fanotify_mark => {
+                let data = data_mut!(entry, fanotify_mark);
+                data.fanotify_fd = args[0] as i32;
+                data.flags = args[1] as u32;
+                data.mask = args[2] as u64;
+                data.dirfd = args[3] as i32;
+                let pathname_ptr = args[4] as *const u8;
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+            }
             _ => {
                 entry.discard();
                 return Ok(());

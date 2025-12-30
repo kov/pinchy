@@ -1866,3 +1866,85 @@ fn key_management_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn perf_event_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises perf_event_open syscall
+    let handle = run_workload(&["perf_event_open"], "perf_event_test");
+
+    // Expected output - perf_event_open calls (may succeed or fail depending on permissions)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ perf_event_open(attr: { type: PERF_TYPE_SOFTWARE, size: @NUMBER@, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = @NUMBER@ (fd)
+        @PID@ perf_event_open(attr: { type: PERF_TYPE_SOFTWARE, size: @NUMBER@, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0x8 (FD_CLOEXEC)) = @NUMBER@ (fd)
+        @PID@ perf_event_open(attr: { type: PERF_TYPE_HARDWARE, size: 0, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = -@NUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn bpf_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises bpf syscall
+    let handle = run_workload(&["bpf"], "bpf_test");
+
+    // Expected output - bpf calls (BPF_MAP_CREATE may succeed if CAP_BPF is present)
+    // The test-helper makes 3 calls: BPF_MAP_CREATE, BPF_MAP_LOOKUP_ELEM (if map created), and an invalid command
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ bpf(cmd: BPF_MAP_CREATE, attr: { map_type: BPF_MAP_TYPE_ARRAY, key_size: 4, value_size: 8, max_entries: 1 }, size: @NUMBER@) = @ANY@
+        @PID@ bpf(cmd: BPF_MAP_LOOKUP_ELEM, size: @NUMBER@) = @ANY@
+        @PID@ bpf(cmd: UNKNOWN(@NUMBER@), size: @NUMBER@) = @ANY@
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn fanotify_syscalls() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises fanotify syscalls
+    let handle = run_workload(&["fanotify_init", "fanotify_mark"], "fanotify_test");
+
+    // Expected output - fanotify calls (requires CAP_SYS_ADMIN typically)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ fanotify_init(flags: @ANY@, event_f_flags: @ANY@) = @NUMBER@ (fd)
+        @PID@ fanotify_mark(fanotify_fd: @NUMBER@, flags: @ANY@, mask: @ANY@, dirfd: AT_FDCWD, pathname: "/tmp") = 0 (success)
+        @PID@ fanotify_init(flags: @ANY@, event_f_flags: @ANY@) = -@NUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

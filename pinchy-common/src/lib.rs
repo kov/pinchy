@@ -363,6 +363,10 @@ pub union SyscallEventData {
     pub migrate_pages: MigratePagesData,
     pub move_pages: MovePagesData,
     pub mincore: MincoreData,
+    pub perf_event_open: PerfEventOpenData,
+    pub bpf: BpfData,
+    pub fanotify_init: FanotifyInitData,
+    pub fanotify_mark: FanotifyMarkData,
 }
 
 #[repr(C)]
@@ -3039,4 +3043,56 @@ pub struct KeyctlData {
     pub arg2: u64,
     pub arg3: u64,
     pub arg4: u64,
+}
+
+// Batch 6: Observability & Notifications
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PerfEventOpenData {
+    pub attr: kernel_types::PerfEventAttr, // Parsed perf_event_attr structure
+    pub pid: i32,
+    pub cpu: i32,
+    pub group_fd: i32,
+    pub flags: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct BpfData {
+    pub cmd: i32,
+    pub size: u32,
+    pub which_attr: u8, // 0=none, 1=map_create, 2=prog_load
+    pub map_create_attr: kernel_types::BpfMapCreateAttr,
+    pub prog_load_attr: kernel_types::BpfProgLoadAttr,
+    pub license_str: [u8; 32], // Captured license string from user memory
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FanotifyInitData {
+    pub flags: u32,
+    pub event_f_flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FanotifyMarkData {
+    pub fanotify_fd: i32,
+    pub flags: u32,
+    pub mask: u64,
+    pub dirfd: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+}
+
+impl Default for FanotifyMarkData {
+    fn default() -> Self {
+        Self {
+            fanotify_fd: 0,
+            flags: 0,
+            mask: 0,
+            dirfd: 0,
+            pathname: [0; DATA_READ_SIZE],
+        }
+    }
 }

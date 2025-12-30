@@ -4169,6 +4169,119 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_ptrace => {
+            let data = unsafe { event.data.ptrace };
+
+            argf!(
+                sf,
+                "request: {}",
+                crate::format_helpers::format_ptrace_request(data.request)
+            );
+            argf!(sf, "pid: {}", data.pid);
+
+            // Context-aware formatting based on request type
+            let request = data.request;
+
+            if request == libc::PTRACE_CONT as i32
+                || request == libc::PTRACE_SYSCALL as i32
+                || request == libc::PTRACE_SINGLESTEP as i32
+            {
+                argf!(sf, "addr: 0x{:x}", data.addr);
+                argf!(
+                    sf,
+                    "sig: {}",
+                    crate::format_helpers::format_signal_number(data.data as i32)
+                );
+                finish!(sf, event.return_value);
+            } else if request == libc::PTRACE_PEEKTEXT as i32
+                || request == libc::PTRACE_PEEKDATA as i32
+            {
+                argf!(sf, "addr: 0x{:x}", data.addr);
+                argf!(sf, "data: 0x{:x}", data.data);
+                finish!(sf, event.return_value, b" (data ptr)");
+            } else {
+                argf!(sf, "addr: 0x{:x}", data.addr);
+                argf!(sf, "data: 0x{:x}", data.data);
+                finish!(sf, event.return_value);
+            }
+        }
+        syscalls::SYS_seccomp => {
+            let data = unsafe { event.data.seccomp };
+
+            argf!(
+                sf,
+                "operation: {}",
+                crate::format_helpers::format_seccomp_operation(data.operation)
+            );
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_seccomp_flags(data.flags)
+            );
+
+            // Context-aware args formatting based on operation
+            match data.operation {
+                crate::format_helpers::seccomp_constants::SECCOMP_GET_ACTION_AVAIL => {
+                    if data.args == 0 {
+                        arg!(sf, "action: NULL");
+                    } else if data.action_read_ok != 0 {
+                        // Show the parsed action value only if read succeeded
+                        argf!(
+                            sf,
+                            "action: {}",
+                            crate::format_helpers::format_seccomp_action(data.action_avail)
+                        );
+                    } else {
+                        // Read failed, show raw pointer
+                        argf!(sf, "action: 0x{:x}", data.args);
+                    }
+                }
+                crate::format_helpers::seccomp_constants::SECCOMP_SET_MODE_FILTER => {
+                    if data.args == 0 {
+                        arg!(sf, "prog: NULL");
+                    } else if data.filter_len != 0 {
+                        // Show the parsed filter length
+                        argf!(
+                            sf,
+                            "prog: {{len: {}, filter: 0x{:x}}}",
+                            data.filter_len,
+                            data.args
+                        );
+                    } else {
+                        argf!(sf, "prog: 0x{:x}", data.args);
+                    }
+                }
+                crate::format_helpers::seccomp_constants::SECCOMP_GET_NOTIF_SIZES => {
+                    if data.args == 0 {
+                        arg!(sf, "sizes: NULL");
+                    } else if data.notif_sizes[0] != 0
+                        || data.notif_sizes[1] != 0
+                        || data.notif_sizes[2] != 0
+                    {
+                        // Show the parsed notification sizes
+                        argf!(
+                            sf,
+                            "sizes: {{notif: {}, resp: {}, data: {}}}",
+                            data.notif_sizes[0],
+                            data.notif_sizes[1],
+                            data.notif_sizes[2]
+                        );
+                    } else {
+                        argf!(sf, "sizes: 0x{:x}", data.args);
+                    }
+                }
+                _ => {
+                    // For other operations, show the raw args pointer
+                    if data.args == 0 {
+                        arg!(sf, "args: NULL");
+                    } else {
+                        argf!(sf, "args: 0x{:x}", data.args);
+                    }
+                }
+            }
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_fanotify_init => {
             let data = unsafe { event.data.fanotify_init };
 

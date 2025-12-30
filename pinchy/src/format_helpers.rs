@@ -2485,7 +2485,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_getitimer
         | syscalls::SYS_setitimer
         | syscalls::SYS_ptrace
-        | syscalls::SYS_seccomp => match return_value {
+        | syscalls::SYS_seccomp
+        | syscalls::SYS_quotactl
+        | syscalls::SYS_quotactl_fd => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -6011,5 +6013,58 @@ pub fn format_seccomp_action(action: u32) -> Cow<'static, str> {
         seccomp_constants::SECCOMP_RET_LOG => Cow::Borrowed("SECCOMP_RET_LOG"),
         seccomp_constants::SECCOMP_RET_ALLOW => Cow::Borrowed("SECCOMP_RET_ALLOW"),
         _ => format!("0x{:x}", action).into(),
+    }
+}
+
+pub mod quota_constants {
+    // Quota commands from linux/quota.h
+    pub const Q_SYNC: i32 = 0x800001;
+    pub const Q_QUOTAON: i32 = 0x800002;
+    pub const Q_QUOTAOFF: i32 = 0x800003;
+    pub const Q_GETFMT: i32 = 0x800004;
+    pub const Q_GETINFO: i32 = 0x800005;
+    pub const Q_SETINFO: i32 = 0x800006;
+    pub const Q_GETQUOTA: i32 = 0x800007;
+    pub const Q_SETQUOTA: i32 = 0x800008;
+    pub const Q_GETNEXTQUOTA: i32 = 0x800009;
+
+    // XFS quota commands from linux/dqblk_xfs.h
+    // XQM_CMD(x) = ('X'<<8)+(x) where 'X' = 0x58
+    pub const Q_XQUOTAON: i32 = 0x5801;
+    pub const Q_XQUOTAOFF: i32 = 0x5802;
+    pub const Q_XGETQUOTA: i32 = 0x5803;
+    pub const Q_XSETQLIM: i32 = 0x5804;
+    pub const Q_XGETQSTAT: i32 = 0x5805;
+    pub const Q_XQUOTARM: i32 = 0x5806;
+    pub const Q_XQUOTASYNC: i32 = 0x5807;
+    pub const Q_XGETQSTATV: i32 = 0x5808;
+    pub const Q_XGETNEXTQUOTA: i32 = 0x5809;
+}
+
+pub fn format_quotactl_op(op: i32) -> Cow<'static, str> {
+    // The Q_* constants are complete operation values
+    // We need to match the exact value to identify both command and type
+    match op {
+        quota_constants::Q_SYNC => Cow::Borrowed("0x800001 (QCMD(Q_SYNC, USRQUOTA))"),
+        quota_constants::Q_QUOTAON => Cow::Borrowed("0x800002 (QCMD(Q_QUOTAON, USRQUOTA))"),
+        quota_constants::Q_QUOTAOFF => Cow::Borrowed("0x800003 (QCMD(Q_QUOTAOFF, USRQUOTA))"),
+        quota_constants::Q_GETFMT => Cow::Borrowed("0x800004 (QCMD(Q_GETFMT, USRQUOTA))"),
+        quota_constants::Q_GETINFO => Cow::Borrowed("0x800005 (QCMD(Q_GETINFO, USRQUOTA))"),
+        quota_constants::Q_SETINFO => Cow::Borrowed("0x800006 (QCMD(Q_SETINFO, USRQUOTA))"),
+        quota_constants::Q_GETQUOTA => Cow::Borrowed("0x800007 (QCMD(Q_GETQUOTA, USRQUOTA))"),
+        quota_constants::Q_SETQUOTA => Cow::Borrowed("0x800008 (QCMD(Q_SETQUOTA, USRQUOTA))"),
+        quota_constants::Q_GETNEXTQUOTA => {
+            Cow::Borrowed("0x800009 (QCMD(Q_GETNEXTQUOTA, USRQUOTA))")
+        }
+        quota_constants::Q_XQUOTAON => Cow::Borrowed("0x5801 (Q_XQUOTAON)"),
+        quota_constants::Q_XQUOTAOFF => Cow::Borrowed("0x5802 (Q_XQUOTAOFF)"),
+        quota_constants::Q_XGETQUOTA => Cow::Borrowed("0x5803 (Q_XGETQUOTA)"),
+        quota_constants::Q_XSETQLIM => Cow::Borrowed("0x5804 (Q_XSETQLIM)"),
+        quota_constants::Q_XGETQSTAT => Cow::Borrowed("0x5805 (Q_XGETQSTAT)"),
+        quota_constants::Q_XQUOTARM => Cow::Borrowed("0x5806 (Q_XQUOTARM)"),
+        quota_constants::Q_XQUOTASYNC => Cow::Borrowed("0x5807 (Q_XQUOTASYNC)"),
+        quota_constants::Q_XGETQSTATV => Cow::Borrowed("0x5808 (Q_XGETQSTATV)"),
+        quota_constants::Q_XGETNEXTQUOTA => Cow::Borrowed("0x5809 (Q_XGETNEXTQUOTA)"),
+        _ => format!("0x{:x}", op).into(),
     }
 }

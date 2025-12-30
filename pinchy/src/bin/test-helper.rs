@@ -110,6 +110,7 @@ fn main() -> anyhow::Result<()> {
             "syslog_test" => syslog_test(),
             "ptrace_test" => ptrace_test(),
             "seccomp_test" => seccomp_test(),
+            "quotactl_test" => quotactl_test(),
             "execveat_test" => execveat_test(),
             "pipe_operations_test" => pipe_operations_test(),
             "io_multiplexing_test" => io_multiplexing_test(),
@@ -4497,6 +4498,61 @@ fn seccomp_test() -> anyhow::Result<()> {
             0u32,
             std::ptr::null_mut::<u8>(),
         );
+    }
+
+    Ok(())
+}
+
+fn quotactl_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test quotactl syscalls
+        // Note: these will likely fail without quotas enabled on the filesystem
+        // but we just need them to be traced
+
+        // Test 1: Q_SYNC - sync quota info to disk
+        let _result = libc::syscall(
+            pinchy_common::syscalls::SYS_quotactl,
+            0x800001i32,                // Q_SYNC
+            std::ptr::null::<u8>(),     // special (can be NULL for Q_SYNC)
+            0i32,                       // id (ignored for Q_SYNC)
+            std::ptr::null_mut::<u8>(), // addr (ignored for Q_SYNC)
+        );
+
+        // Test 2: Q_GETFMT - get quota format
+        let mut fmt: u32 = 0;
+        let path = std::ffi::CString::new("/").unwrap();
+        let _result = libc::syscall(
+            pinchy_common::syscalls::SYS_quotactl,
+            0x800004i32,                     // Q_GETFMT
+            path.as_ptr(),                   // special
+            0i32,                            // id
+            &mut fmt as *mut u32 as *mut u8, // addr
+        );
+
+        // Test 3: Q_GETQUOTA - get quota limits (likely to fail)
+        let mut dqblk = [0u8; 128]; // large enough for struct dqblk
+        let _result = libc::syscall(
+            pinchy_common::syscalls::SYS_quotactl,
+            0x800007i32,        // Q_GETQUOTA
+            path.as_ptr(),      // special
+            1000i32,            // uid
+            dqblk.as_mut_ptr(), // addr
+        );
+
+        // Test 4: quotactl_fd if available (will fail on older kernels)
+        // Open a file descriptor for testing
+        let fd = libc::open(path.as_ptr(), libc::O_RDONLY);
+        if fd >= 0 {
+            let _result = libc::syscall(
+                pinchy_common::syscalls::SYS_quotactl_fd,
+                fd,                 // fd
+                0x800007u32,        // Q_GETQUOTA
+                1000i32,            // uid
+                dqblk.as_mut_ptr(), // addr
+            );
+
+            libc::close(fd);
+        }
     }
 
     Ok(())

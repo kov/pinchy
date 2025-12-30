@@ -798,6 +798,24 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 data.flags = args[3] as i32;
             }
+            syscalls::SYS_quotactl => {
+                let data = data_mut!(entry, quotactl);
+                data.op = args[0] as i32;
+                let special_ptr = args[1] as *const u8;
+                data.id = args[2] as i32;
+                data.addr = args[3] as u64;
+
+                unsafe {
+                    let _ = bpf_probe_read_buf(special_ptr as *const _, &mut data.special);
+                }
+            }
+            syscalls::SYS_quotactl_fd => {
+                let data = data_mut!(entry, quotactl_fd);
+                data.fd = args[0] as i32;
+                data.cmd = args[1] as u32;
+                data.id = args[2] as i32;
+                data.addr = args[3] as u64;
+            }
             _ => {
                 entry.discard();
                 return Ok(());

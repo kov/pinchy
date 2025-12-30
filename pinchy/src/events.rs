@@ -4434,6 +4434,34 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_quotactl => {
+            let data = unsafe { event.data.quotactl };
+
+            argf!(
+                sf,
+                "op: {}",
+                crate::format_helpers::format_quotactl_op(data.op)
+            );
+            argf!(sf, "special: {}", format_path(&data.special, false));
+            argf!(sf, "id: {}", data.id);
+            argf!(sf, "addr: 0x{:x}", data.addr);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_quotactl_fd => {
+            let data = unsafe { event.data.quotactl_fd };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(
+                sf,
+                "cmd: {}",
+                crate::format_helpers::format_quotactl_op(data.cmd as i32)
+            );
+            argf!(sf, "id: {}", data.id);
+            argf!(sf, "addr: 0x{:x}", data.addr);
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

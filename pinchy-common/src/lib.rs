@@ -378,6 +378,8 @@ pub union SyscallEventData {
     pub syslog: SyslogData,
     pub ptrace: PtraceData,
     pub seccomp: SeccompData,
+    pub quotactl: QuotactlData,
+    pub quotactl_fd: QuotactlFdData,
 }
 
 #[repr(C)]
@@ -3229,4 +3231,33 @@ pub struct SeccompData {
     pub action_avail: u32, // For GET_ACTION_AVAIL: the action value
     pub filter_len: u16,   // For SET_MODE_FILTER: number of BPF instructions
     pub notif_sizes: [u16; 3], // For GET_NOTIF_SIZES: [notif, resp, data] sizes
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct QuotactlData {
+    pub op: i32,
+    pub special: [u8; MEDIUM_READ_SIZE],
+    pub id: i32,
+    pub addr: u64,
+}
+
+impl Default for QuotactlData {
+    fn default() -> Self {
+        Self {
+            op: 0,
+            special: [0; MEDIUM_READ_SIZE],
+            id: 0,
+            addr: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct QuotactlFdData {
+    pub fd: i32,
+    pub cmd: u32,
+    pub id: i32,
+    pub addr: u64,
 }

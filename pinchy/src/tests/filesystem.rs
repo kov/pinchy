@@ -12,15 +12,16 @@ use pinchy_common::{
         SYS_fanotify_init, SYS_fanotify_mark, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
         SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
         SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat, SYS_mkdirat,
-        SYS_name_to_handle_at, SYS_newfstatat, SYS_open_by_handle_at, SYS_readlinkat, SYS_renameat,
-        SYS_renameat2, SYS_statfs, SYS_sync_file_range, SYS_syncfs, SYS_truncate, SYS_utimensat,
+        SYS_name_to_handle_at, SYS_newfstatat, SYS_open_by_handle_at, SYS_quotactl,
+        SYS_quotactl_fd, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
+        SYS_sync_file_range, SYS_syncfs, SYS_truncate, SYS_utimensat,
     },
     AcctData, CopyFileRangeData, FaccessatData, FallocateData, FanotifyInitData, FanotifyMarkData,
     FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData, FtruncateData,
     InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData, LinkatData, MkdiratData,
-    MknodatData, NameToHandleAtData, OpenByHandleAtData, Renameat2Data, RenameatData,
-    SyncFileRangeData, SyncfsData, SyscallEvent, SyscallEventData, UtimensatData, DATA_READ_SIZE,
-    MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    MknodatData, NameToHandleAtData, OpenByHandleAtData, QuotactlFdData, Renameat2Data,
+    RenameatData, SyncFileRangeData, SyncfsData, SyscallEvent, SyscallEventData, UtimensatData,
+    DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
 use crate::syscall_test;
@@ -3189,4 +3190,208 @@ syscall_test!(
         }
     },
     "9702 utimensat(dirfd: AT_FDCWD, pathname: \"/nonexistent\", times: [UTIME_NOW, UTIME_OMIT], flags: 0) = -2 (error)\n"
+);
+
+syscall_test!(
+    parse_quotactl_getquota,
+    {
+        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_quotactl,
+            pid: 10001,
+            tid: 10001,
+            return_value: 0,
+            data: SyscallEventData {
+                quotactl: QuotactlData {
+                    op: pinchy_common::Q_GETQUOTA,
+                    special: [0u8; MEDIUM_READ_SIZE],
+                    id: 1000,
+                    addr: 0x7fff87654321,
+                },
+            },
+        };
+        let special = b"/dev/sda1\0";
+        let data = unsafe { &mut event.data.quotactl };
+        data.special[..special.len()].copy_from_slice(special);
+        event
+    },
+    "10001 quotactl(op: 0x800007 (QCMD(Q_GETQUOTA, USRQUOTA)), special: \"/dev/sda1\", id: 1000, addr: 0x7fff87654321) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_quotactl_getnextquota,
+    {
+        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_quotactl,
+            pid: 10002,
+            tid: 10002,
+            return_value: 0,
+            data: SyscallEventData {
+                quotactl: QuotactlData {
+                    op: pinchy_common::Q_GETNEXTQUOTA,
+                    special: [0u8; MEDIUM_READ_SIZE],
+                    id: 100,
+                    addr: 0x7fff00002000,
+                },
+            },
+        };
+        let special = b"/dev/sdb1\0";
+        let data = unsafe { &mut event.data.quotactl };
+        data.special[..special.len()].copy_from_slice(special);
+        event
+    },
+    "10002 quotactl(op: 0x800009 (QCMD(Q_GETNEXTQUOTA, USRQUOTA)), special: \"/dev/sdb1\", id: 100, addr: 0x7fff00002000) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_quotactl_sync,
+    {
+        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_quotactl,
+            pid: 10003,
+            tid: 10003,
+            return_value: 0,
+            data: SyscallEventData {
+                quotactl: QuotactlData {
+                    op: pinchy_common::Q_SYNC,
+                    special: [0u8; MEDIUM_READ_SIZE],
+                    id: 0,
+                    addr: 0,
+                },
+            },
+        };
+        let special = b"/\0";
+        let data = unsafe { &mut event.data.quotactl };
+        data.special[..special.len()].copy_from_slice(special);
+        event
+    },
+    "10003 quotactl(op: 0x800001 (QCMD(Q_SYNC, USRQUOTA)), special: \"/\", id: 0, addr: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_quotactl_error,
+    {
+        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_quotactl,
+            pid: 10004,
+            tid: 10004,
+            return_value: -1,
+            data: SyscallEventData {
+                quotactl: QuotactlData {
+                    op: pinchy_common::Q_GETINFO,
+                    special: [0u8; MEDIUM_READ_SIZE],
+                    id: 500,
+                    addr: 0x7fff00003000,
+                },
+            },
+        };
+        let special = b"/dev/sdc1\0";
+        let data = unsafe { &mut event.data.quotactl };
+        data.special[..special.len()].copy_from_slice(special);
+        event
+    },
+    "10004 quotactl(op: 0x800005 (QCMD(Q_GETINFO, USRQUOTA)), special: \"/dev/sdc1\", id: 500, addr: 0x7fff00003000) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_quotactl_fd_getquota,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_quotactl_fd,
+            pid: 10005,
+            tid: 10005,
+            return_value: 0,
+            data: SyscallEventData {
+                quotactl_fd: QuotactlFdData {
+                    fd: 3,
+                    cmd: pinchy_common::Q_GETQUOTA as u32,
+                    id: 1000,
+                    addr: 0x7fff12340000,
+                },
+            },
+        }
+    },
+    "10005 quotactl_fd(fd: 3, cmd: 0x800007 (QCMD(Q_GETQUOTA, USRQUOTA)), id: 1000, addr: 0x7fff12340000) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_quotactl_fd_xfs,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_quotactl_fd,
+            pid: 10006,
+            tid: 10006,
+            return_value: 0,
+            data: SyscallEventData {
+                quotactl_fd: QuotactlFdData {
+                    fd: 5,
+                    cmd: pinchy_common::Q_XGETQUOTA as u32,
+                    id: 2000,
+                    addr: 0x7fff56780000,
+                },
+            },
+        }
+    },
+    "10006 quotactl_fd(fd: 5, cmd: 0x5803 (Q_XGETQUOTA), id: 2000, addr: 0x7fff56780000) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_quotactl_getquota_grpquota,
+    {
+        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        // Test QCMD(Q_GETQUOTA, GRPQUOTA) = (0x800007 << 8) | 1 = 0x80000701
+        // Note: This wraps to a negative i32 value
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_quotactl,
+            pid: 10007,
+            tid: 10007,
+            return_value: 0,
+            data: SyscallEventData {
+                quotactl: QuotactlData {
+                    op: (((pinchy_common::Q_GETQUOTA as i64) << 8) | 1)
+                        as i32,
+                    special: [0u8; MEDIUM_READ_SIZE],
+                    id: 500,
+                    addr: 0x7fff11111111,
+                },
+            },
+        };
+        let special = b"/dev/sda1\0";
+        let data = unsafe { &mut event.data.quotactl };
+        data.special[..special.len()].copy_from_slice(special);
+        event
+    },
+    "10007 quotactl(op: 0x80000701 (QCMD(Q_GETQUOTA, GRPQUOTA)), special: \"/dev/sda1\", id: 500, addr: 0x7fff11111111) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_quotactl_setquota_prjquota,
+    {
+        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        // Test QCMD(Q_SETQUOTA, PRJQUOTA) = (0x800008 << 8) | 2 = 0x80000802
+        // Note: This wraps to a negative i32 value
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_quotactl,
+            pid: 10008,
+            tid: 10008,
+            return_value: 0,
+            data: SyscallEventData {
+                quotactl: QuotactlData {
+                    op: (((pinchy_common::Q_SETQUOTA as i64) << 8) | 2)
+                        as i32,
+                    special: [0u8; MEDIUM_READ_SIZE],
+                    id: 1001,
+                    addr: 0x7fff22222222,
+                },
+            },
+        };
+        let special = b"/dev/sdc1\0";
+        let data = unsafe { &mut event.data.quotactl };
+        data.special[..special.len()].copy_from_slice(special);
+        event
+    },
+    "10008 quotactl(op: 0x80000802 (QCMD(Q_SETQUOTA, PRJQUOTA)), special: \"/dev/sdc1\", id: 1001, addr: 0x7fff22222222) = 0 (success)\n"
 );

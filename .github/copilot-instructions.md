@@ -426,6 +426,9 @@ trivial handler and a case in a consolidated handler for the same syscall.**
 When trying a build, always use `cargo check`, aya projects are not very
 friendly with the `--workspace` argument.
 
+Keep in mind there is no real lib crate. The unit tests are in the pinchy
+binary.
+
 ## Architecture-Specific Code
 
 When adding code that should only be on one of the supported architectures,

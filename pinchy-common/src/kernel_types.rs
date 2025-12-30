@@ -192,6 +192,14 @@ pub struct Timeval {
     pub tv_usec: i64, // microseconds
 }
 
+/// Interval timer value structure for getitimer/setitimer syscalls
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Itimerval {
+    pub it_interval: Timeval, // Interval for periodic timer
+    pub it_value: Timeval,    // Time until next expiration
+}
+
 /// Timezone structure for gettimeofday/settimeofday
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]

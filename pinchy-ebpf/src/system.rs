@@ -461,6 +461,12 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
+            syscalls::SYS_syslog => {
+                let data = data_mut!(entry, syslog);
+                data.type_ = args[0] as i32;
+                data.bufp = args[1] as u64;
+                data.size = args[2] as i32;
+            }
             _ => {
                 entry.discard();
                 return Ok(());

@@ -9,16 +9,16 @@ use pinchy_common::{
         SYS_ioprio_get, SYS_ioprio_set, SYS_keyctl, SYS_landlock_add_rule,
         SYS_landlock_create_ruleset, SYS_landlock_restrict_self, SYS_nanosleep,
         SYS_perf_event_open, SYS_personality, SYS_reboot, SYS_request_key, SYS_setdomainname,
-        SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname,
-        SYS_vhangup,
+        SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_syslog, SYS_times, SYS_umask,
+        SYS_uname, SYS_vhangup,
     },
     AddKeyData, BpfData, CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData,
     FinitModuleData, GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData,
     IoprioGetData, IoprioSetData, KeyctlData, LandlockAddRuleData, LandlockCreateRulesetData,
     LandlockRestrictSelfData, NanosleepData, PerfEventOpenData, PersonalityData, RebootData,
     RequestKeyData, RtSigreturnData, SetdomainnameData, SethostnameData, SettimeofdayData,
-    SyncData, SyscallEvent, SyscallEventData, SysinfoData, TimesData, UmaskData, UnameData,
-    VhangupData,
+    SyncData, SyscallEvent, SyscallEventData, SysinfoData, SyslogData, TimesData, UmaskData,
+    UnameData, VhangupData,
 };
 
 use crate::syscall_test;
@@ -1840,4 +1840,64 @@ syscall_test!(
         }
     },
     "8102 bpf(cmd: BPF_PROG_LOAD, size: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_syslog_read_all,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_syslog,
+            pid: 9100,
+            tid: 9100,
+            return_value: 4096,
+            data: SyscallEventData {
+                syslog: SyslogData {
+                    type_: crate::format_helpers::syslog_constants::SYSLOG_ACTION_READ_ALL,
+                    bufp: 0x7fff12345678,
+                    size: 8192,
+                },
+            },
+        }
+    },
+    "9100 syslog(type: SYSLOG_ACTION_READ_ALL, bufp: 0x7fff12345678, size: 8192) = 4096\n"
+);
+
+syscall_test!(
+    parse_syslog_size_buffer,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_syslog,
+            pid: 9101,
+            tid: 9101,
+            return_value: 262144,
+            data: SyscallEventData {
+                syslog: SyslogData {
+                    type_: crate::format_helpers::syslog_constants::SYSLOG_ACTION_SIZE_BUFFER,
+                    bufp: 0,
+                    size: 0,
+                },
+            },
+        }
+    },
+    "9101 syslog(type: SYSLOG_ACTION_SIZE_BUFFER, bufp: 0x0, size: 0) = 262144\n"
+);
+
+syscall_test!(
+    parse_syslog_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_syslog,
+            pid: 9102,
+            tid: 9102,
+            return_value: -1,
+            data: SyscallEventData {
+                syslog: SyslogData {
+                    type_: crate::format_helpers::syslog_constants::SYSLOG_ACTION_READ,
+                    bufp: 0,
+                    size: 0,
+                },
+            },
+        }
+    },
+    "9102 syslog(type: SYSLOG_ACTION_READ, bufp: 0x0, size: 0) = -1 (error)\n"
 );

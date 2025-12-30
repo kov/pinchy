@@ -2099,6 +2099,25 @@ pub async fn format_timeval(
     Ok(())
 }
 
+/// Format itimerval structure for display
+pub async fn format_itimerval(
+    sf: &mut SyscallFormatter<'_>,
+    itv: &pinchy_common::kernel_types::Itimerval,
+) -> anyhow::Result<()> {
+    with_struct!(sf, {
+        arg!(sf, "it_interval:");
+        with_struct!(sf, {
+            format_timeval(sf, &itv.it_interval).await?;
+        });
+
+        arg!(sf, "it_value:");
+        with_struct!(sf, {
+            format_timeval(sf, &itv.it_value).await?;
+        });
+    });
+    Ok(())
+}
+
 /// Format timex structure for display
 pub async fn format_timex(
     sf: &mut SyscallFormatter<'_>,
@@ -2462,7 +2481,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_timer_delete
         | syscalls::SYS_io_uring_register
         | syscalls::SYS_sethostname
-        | syscalls::SYS_setdomainname => match return_value {
+        | syscalls::SYS_setdomainname
+        | syscalls::SYS_getitimer
+        | syscalls::SYS_setitimer => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -2701,6 +2722,13 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_rt_sigtimedwait => match return_value {
             -1 => std::borrow::Cow::Borrowed("-1 (error)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (signal)")),
+        },
+
+        // Syslog - returns vary by operation type: 0 for success, or size/byte count
+        syscalls::SYS_syslog => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            n if n > 0 => std::borrow::Cow::Owned(format!("{n}")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
 
         // Default case - just show the raw value with error indication if negative
@@ -5805,5 +5833,47 @@ pub fn format_sync_file_range_flags(flags: u32) -> Cow<'static, str> {
         format!("0x{:x}", flags).into()
     } else {
         format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+pub fn format_timer_which(which: i32) -> Cow<'static, str> {
+    match which {
+        libc::ITIMER_REAL => Cow::Borrowed("ITIMER_REAL"),
+        libc::ITIMER_VIRTUAL => Cow::Borrowed("ITIMER_VIRTUAL"),
+        libc::ITIMER_PROF => Cow::Borrowed("ITIMER_PROF"),
+        _ => format!("{}", which).into(),
+    }
+}
+
+pub mod syslog_constants {
+    pub const SYSLOG_ACTION_CLOSE: i32 = 0;
+    pub const SYSLOG_ACTION_OPEN: i32 = 1;
+    pub const SYSLOG_ACTION_READ: i32 = 2;
+    pub const SYSLOG_ACTION_READ_ALL: i32 = 3;
+    pub const SYSLOG_ACTION_READ_CLEAR: i32 = 4;
+    pub const SYSLOG_ACTION_CLEAR: i32 = 5;
+    pub const SYSLOG_ACTION_CONSOLE_OFF: i32 = 6;
+    pub const SYSLOG_ACTION_CONSOLE_ON: i32 = 7;
+    pub const SYSLOG_ACTION_CONSOLE_LEVEL: i32 = 8;
+    pub const SYSLOG_ACTION_SIZE_UNREAD: i32 = 9;
+    pub const SYSLOG_ACTION_SIZE_BUFFER: i32 = 10;
+}
+
+pub fn format_syslog_type(type_: i32) -> Cow<'static, str> {
+    match type_ {
+        syslog_constants::SYSLOG_ACTION_CLOSE => Cow::Borrowed("SYSLOG_ACTION_CLOSE"),
+        syslog_constants::SYSLOG_ACTION_OPEN => Cow::Borrowed("SYSLOG_ACTION_OPEN"),
+        syslog_constants::SYSLOG_ACTION_READ => Cow::Borrowed("SYSLOG_ACTION_READ"),
+        syslog_constants::SYSLOG_ACTION_READ_ALL => Cow::Borrowed("SYSLOG_ACTION_READ_ALL"),
+        syslog_constants::SYSLOG_ACTION_READ_CLEAR => Cow::Borrowed("SYSLOG_ACTION_READ_CLEAR"),
+        syslog_constants::SYSLOG_ACTION_CLEAR => Cow::Borrowed("SYSLOG_ACTION_CLEAR"),
+        syslog_constants::SYSLOG_ACTION_CONSOLE_OFF => Cow::Borrowed("SYSLOG_ACTION_CONSOLE_OFF"),
+        syslog_constants::SYSLOG_ACTION_CONSOLE_ON => Cow::Borrowed("SYSLOG_ACTION_CONSOLE_ON"),
+        syslog_constants::SYSLOG_ACTION_CONSOLE_LEVEL => {
+            Cow::Borrowed("SYSLOG_ACTION_CONSOLE_LEVEL")
+        }
+        syslog_constants::SYSLOG_ACTION_SIZE_UNREAD => Cow::Borrowed("SYSLOG_ACTION_SIZE_UNREAD"),
+        syslog_constants::SYSLOG_ACTION_SIZE_BUFFER => Cow::Borrowed("SYSLOG_ACTION_SIZE_BUFFER"),
+        _ => format!("{}", type_).into(),
     }
 }

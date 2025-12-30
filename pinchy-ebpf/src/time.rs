@@ -142,6 +142,46 @@ pub fn syscall_exit_time(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
+            syscalls::SYS_getitimer => {
+                let data = data_mut!(entry, getitimer);
+                data.which = args[0] as i32;
+
+                let curr_value_ptr = args[1] as *const pinchy_common::kernel_types::Itimerval;
+                if !curr_value_ptr.is_null() {
+                    data.curr_value = unsafe {
+                        bpf_probe_read_user::<pinchy_common::kernel_types::Itimerval>(
+                            curr_value_ptr,
+                        )
+                    }
+                    .unwrap_or_default();
+                }
+            }
+            syscalls::SYS_setitimer => {
+                let data = data_mut!(entry, setitimer);
+                data.which = args[0] as i32;
+
+                let new_value_ptr = args[1] as *const pinchy_common::kernel_types::Itimerval;
+                if !new_value_ptr.is_null() {
+                    data.new_value = unsafe {
+                        bpf_probe_read_user::<pinchy_common::kernel_types::Itimerval>(new_value_ptr)
+                    }
+                    .unwrap_or_default();
+                }
+
+                let old_value_ptr = args[2] as *const pinchy_common::kernel_types::Itimerval;
+                data.has_old_value = false;
+
+                if !old_value_ptr.is_null() {
+                    if let Ok(val) = unsafe {
+                        bpf_probe_read_user::<pinchy_common::kernel_types::Itimerval>(old_value_ptr)
+                    } {
+                        data.old_value = val;
+                        data.has_old_value = true;
+                    } else {
+                        data.has_old_value = false;
+                    }
+                }
+            }
 
             _ => {
                 entry.discard();

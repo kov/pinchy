@@ -3,6 +3,8 @@
 
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::syscalls::SYS_getpgrp;
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::GetpgrpData;
 use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
@@ -18,8 +20,6 @@ use pinchy_common::{
     SetresuidData, SetreuidData, SetsidData, SetuidData, SyscallEvent, UnshareData,
     SMALL_READ_SIZE,
 };
-#[cfg(target_arch = "x86_64")]
-use pinchy_common::GetpgrpData;
 
 use crate::syscall_test;
 

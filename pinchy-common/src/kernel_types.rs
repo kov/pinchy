@@ -812,3 +812,49 @@ pub struct MqAttr {
     pub mq_msgsize: i64,
     pub mq_curmsgs: i64,
 }
+
+/// Perf event attribute structure for perf_event_open syscall
+/// Note: we only capture the most important fields for traceability
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct PerfEventAttr {
+    pub type_: u32,         // Event type (hardware, software, tracepoint, etc.)
+    pub size: u32,          // Size of the attr structure
+    pub config: u64,        // Event-specific configuration
+    pub sample_period: u64, // Sample period or frequency
+    pub sample_type: u64,   // Sample type bitfield
+    pub read_format: u64,   // Read format bitfield
+    pub flags: u64,         // Event configuration flags (bitfield)
+    pub wakeup_events: u32, // Wakeup every n events
+    pub bp_type: u32,       // Breakpoint type
+    pub bp_addr: u64,       // Breakpoint address or config1
+    pub bp_len: u64,        // Breakpoint length or config2
+}
+
+/// BPF map creation attributes for BPF_MAP_CREATE command
+/// Note: simplified version capturing key fields only
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct BpfMapCreateAttr {
+    pub map_type: u32,    // Map type (hash, array, etc.)
+    pub key_size: u32,    // Size of key in bytes
+    pub value_size: u32,  // Size of value in bytes
+    pub max_entries: u32, // Maximum number of entries
+    pub map_flags: u32,   // Map creation flags
+}
+
+/// BPF program load attributes for BPF_PROG_LOAD command
+/// Note: simplified version capturing key fields only
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct BpfProgLoadAttr {
+    pub prog_type: u32, // Program type (socket filter, kprobe, etc.)
+    pub insn_cnt: u32,  // Number of instructions
+    pub license: u64,   // Pointer to license string in user memory
+}
+
+/// BPF command constants
+pub mod bpf_cmd {
+    pub const MAP_CREATE: i32 = 0;
+    pub const PROG_LOAD: i32 = 5;
+}

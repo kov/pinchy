@@ -125,6 +125,9 @@ fn main() -> anyhow::Result<()> {
             "landlock_test" => landlock_test(),
             "mempolicy_test" => mempolicy_test(),
             "key_management_test" => key_management_test(),
+            "perf_event_test" => perf_event_test(),
+            "bpf_test" => bpf_test(),
+            "fanotify_test" => fanotify_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -3902,6 +3905,222 @@ fn key_management_test() -> anyhow::Result<()> {
                 key_id as usize,
             );
         }
+    }
+
+    Ok(())
+}
+
+fn perf_event_test() -> anyhow::Result<()> {
+    // perf_event_attr structure (simplified for software events)
+    #[repr(C)]
+    #[derive(Default)]
+    struct PerfEventAttr {
+        type_: u32,
+        size: u32,
+        config: u64,
+        sample_period_or_freq: u64,
+        sample_type: u64,
+        read_format: u64,
+        flags: u64,
+        wakeup_events_or_watermark: u32,
+        bp_type: u32,
+        bp_addr_or_config1: u64,
+        bp_len_or_config2: u64,
+        branch_sample_type: u64,
+        sample_regs_user: u64,
+        sample_stack_user: u32,
+        clockid: i32,
+        sample_regs_intr: u64,
+        aux_watermark: u32,
+        sample_max_stack: u16,
+        reserved: u16,
+    }
+
+    const PERF_TYPE_SOFTWARE: u32 = 1;
+    const PERF_COUNT_SW_CPU_CLOCK: u64 = 0;
+    const PERF_FLAG_FD_CLOEXEC: u64 = 1 << 3;
+
+    unsafe {
+        // Create a simple software counter for CPU clock
+        let mut attr: PerfEventAttr = std::mem::zeroed();
+        attr.type_ = PERF_TYPE_SOFTWARE;
+        attr.size = std::mem::size_of::<PerfEventAttr>() as u32;
+        attr.config = PERF_COUNT_SW_CPU_CLOCK;
+        attr.flags = 1; // disabled initially
+
+        // Test 1: perf_event_open with basic settings (pid=0 means current process, cpu=-1 means any)
+        let fd = libc::syscall(
+            syscalls::SYS_perf_event_open,
+            &attr as *const PerfEventAttr,
+            0i32,  // pid: current process
+            -1i32, // cpu: any CPU
+            -1i32, // group_fd: no group
+            0u64,  // flags
+        );
+
+        if fd >= 0 {
+            libc::close(fd as i32);
+        }
+
+        // Test 2: perf_event_open with CLOEXEC flag
+        let fd2 = libc::syscall(
+            syscalls::SYS_perf_event_open,
+            &attr as *const PerfEventAttr,
+            0i32,
+            -1i32,
+            -1i32,
+            PERF_FLAG_FD_CLOEXEC,
+        );
+
+        if fd2 >= 0 {
+            libc::close(fd2 as i32);
+        }
+
+        // Test 3: perf_event_open with invalid parameters (expect error)
+        let _fd3 = libc::syscall(
+            syscalls::SYS_perf_event_open,
+            std::ptr::null::<PerfEventAttr>(),
+            0i32,
+            -1i32,
+            -1i32,
+            0u64,
+        );
+        // This should fail with EFAULT, which is expected
+    }
+
+    Ok(())
+}
+
+fn bpf_test() -> anyhow::Result<()> {
+    // BPF commands
+    const BPF_MAP_CREATE: i32 = 0;
+    const BPF_MAP_LOOKUP_ELEM: i32 = 1;
+
+    // BPF map types
+    const BPF_MAP_TYPE_ARRAY: u32 = 2;
+
+    // bpf_attr union for BPF_MAP_CREATE
+    #[repr(C)]
+    #[derive(Default)]
+    struct BpfAttrMapCreate {
+        map_type: u32,
+        key_size: u32,
+        value_size: u32,
+        max_entries: u32,
+        map_flags: u32,
+        inner_map_fd: u32,
+        numa_node: u32,
+        map_name: [u8; 16],
+        map_ifindex: u32,
+        btf_fd: u32,
+        btf_key_type_id: u32,
+        btf_value_type_id: u32,
+        btf_vmlinux_value_type_id: u32,
+        map_extra: u64,
+    }
+
+    unsafe {
+        // Test 1: BPF_MAP_CREATE - create a simple array map
+        let mut attr: BpfAttrMapCreate = std::mem::zeroed();
+        attr.map_type = BPF_MAP_TYPE_ARRAY;
+        attr.key_size = 4;
+        attr.value_size = 8;
+        attr.max_entries = 1;
+
+        let fd = libc::syscall(
+            syscalls::SYS_bpf,
+            BPF_MAP_CREATE,
+            &attr as *const BpfAttrMapCreate,
+            std::mem::size_of::<BpfAttrMapCreate>(),
+        );
+
+        if fd >= 0 {
+            // Test 2: BPF_MAP_LOOKUP_ELEM on our new map
+            #[repr(C)]
+            struct BpfAttrElem {
+                map_fd: u32,
+                pad: u32,
+                key: u64,
+                value_or_next_key: u64,
+                flags: u64,
+            }
+
+            let key: u32 = 0;
+            let mut value: u64 = 0;
+
+            let elem_attr = BpfAttrElem {
+                map_fd: fd as u32,
+                pad: 0,
+                key: &key as *const u32 as u64,
+                value_or_next_key: &mut value as *mut u64 as u64,
+                flags: 0,
+            };
+
+            let _lookup = libc::syscall(
+                syscalls::SYS_bpf,
+                BPF_MAP_LOOKUP_ELEM,
+                &elem_attr as *const BpfAttrElem,
+                std::mem::size_of::<BpfAttrElem>(),
+            );
+
+            libc::close(fd as i32);
+        }
+
+        // Test 3: BPF with invalid command (expect error)
+        let _err = libc::syscall(syscalls::SYS_bpf, 9999, std::ptr::null::<u8>(), 0);
+        // This should fail, which is expected
+    }
+
+    Ok(())
+}
+
+fn fanotify_test() -> anyhow::Result<()> {
+    use std::ffi::CString;
+
+    // fanotify_init flags
+    const FAN_CLOEXEC: u32 = 0x00000001;
+    const FAN_CLASS_NOTIF: u32 = 0x00000000;
+
+    // fanotify_mark flags
+    const FAN_MARK_ADD: u32 = 0x00000001;
+
+    // fanotify event mask
+    const FAN_ACCESS: u64 = 0x00000001;
+    const FAN_MODIFY: u64 = 0x00000002;
+
+    unsafe {
+        // Test 1: fanotify_init with basic settings
+        let fd = libc::syscall(
+            syscalls::SYS_fanotify_init,
+            FAN_CLASS_NOTIF | FAN_CLOEXEC,
+            libc::O_RDONLY as u32,
+        );
+
+        if fd >= 0 {
+            let fd = fd as i32;
+
+            // Test 2: fanotify_mark to add a watch on /tmp
+            let path = CString::new("/tmp")?;
+
+            let _mark = libc::syscall(
+                syscalls::SYS_fanotify_mark,
+                fd,
+                FAN_MARK_ADD,
+                FAN_ACCESS | FAN_MODIFY,
+                libc::AT_FDCWD,
+                path.as_ptr(),
+            );
+
+            libc::close(fd);
+        }
+
+        // Test 3: fanotify_init with invalid flags (expect error)
+        let _err = libc::syscall(
+            syscalls::SYS_fanotify_init,
+            0xFFFFFFFFu32,
+            libc::O_RDONLY as u32,
+        );
+        // This should fail with EINVAL, which is expected
     }
 
     Ok(())

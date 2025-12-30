@@ -7,16 +7,17 @@ use pinchy_common::syscalls::SYS_link;
 use pinchy_common::LinkData;
 use pinchy_common::{
     syscalls::{
-        self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fallocate, SYS_fchmod, SYS_fchmodat,
-        SYS_fchown, SYS_fchownat, SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd,
-        SYS_getdents64, SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat,
-        SYS_mkdirat, SYS_newfstatat, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
-        SYS_truncate,
+        self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fallocate, SYS_fanotify_init,
+        SYS_fanotify_mark, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat, SYS_fdatasync,
+        SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64, SYS_inotify_add_watch,
+        SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat, SYS_mkdirat, SYS_newfstatat,
+        SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs, SYS_truncate,
     },
-    AcctData, FaccessatData, FallocateData, FchmodData, FchmodatData, FchownData, FchownatData,
-    FdatasyncData, FsyncData, FtruncateData, InotifyAddWatchData, InotifyInit1Data,
-    InotifyRmWatchData, LinkatData, MkdiratData, MknodatData, Renameat2Data, RenameatData,
-    SyscallEvent, SyscallEventData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    AcctData, FaccessatData, FallocateData, FanotifyInitData, FanotifyMarkData, FchmodData,
+    FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData, FtruncateData,
+    InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData, LinkatData, MkdiratData,
+    MknodatData, Renameat2Data, RenameatData, SyscallEvent, SyscallEventData, DATA_READ_SIZE,
+    MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 
 use crate::syscall_test;
@@ -2656,4 +2657,139 @@ syscall_test!(
         }
     },
     "901 linkat(olddirfd: AT_FDCWD, oldpath: \"nonexistent\", newdirfd: AT_FDCWD, newpath: \"link\", flags: 0) = -1 (error)\n"
+);
+
+// Use fanotify constants directly from libc
+
+syscall_test!(
+    parse_fanotify_init_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fanotify_init,
+            pid: 9000,
+            tid: 9000,
+            return_value: 3,
+            data: SyscallEventData {
+                fanotify_init: FanotifyInitData {
+                    flags: 0,
+                    event_f_flags: libc::O_RDONLY as u32,
+                },
+            },
+        }
+    },
+    "9000 fanotify_init(flags: 0, event_f_flags: 0x0 (O_RDONLY)) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_fanotify_init_with_flags,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fanotify_init,
+            pid: 9001,
+            tid: 9001,
+            return_value: 4,
+            data: SyscallEventData {
+                fanotify_init: FanotifyInitData {
+                    flags: libc::FAN_CLOEXEC | libc::FAN_NONBLOCK,
+                    event_f_flags: (libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NONBLOCK) as u32,
+                },
+            },
+        }
+    },
+    "9001 fanotify_init(flags: 0x3 (CLASS_NOTIF|CLOEXEC|NONBLOCK), event_f_flags: 0x80800 (O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NDELAY)) = 4 (fd)\n"
+);
+
+syscall_test!(
+    parse_fanotify_init_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fanotify_init,
+            pid: 9002,
+            tid: 9002,
+            return_value: -1,
+            data: SyscallEventData {
+                fanotify_init: FanotifyInitData {
+                    flags: 0,
+                    event_f_flags: libc::O_RDONLY as u32,
+                },
+            },
+        }
+    },
+    "9002 fanotify_init(flags: 0, event_f_flags: 0x0 (O_RDONLY)) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_fanotify_mark_success,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/watch";
+        pathname[..path.len()].copy_from_slice(path);
+
+        SyscallEvent {
+            syscall_nr: SYS_fanotify_mark,
+            pid: 9100,
+            tid: 9100,
+            return_value: 0,
+            data: SyscallEventData {
+                fanotify_mark: FanotifyMarkData {
+                    fanotify_fd: 3,
+                    flags: libc::FAN_MARK_ADD,
+                    mask: libc::FAN_ACCESS | libc::FAN_MODIFY,
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                },
+            },
+        }
+    },
+    "9100 fanotify_mark(fanotify_fd: 3, flags: 0x1 (INODE|ADD), mask: 0x3 (ACCESS|MODIFY), dirfd: AT_FDCWD, pathname: \"/tmp/watch\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fanotify_mark_with_dirfd,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"subdir/file.txt";
+        pathname[..path.len()].copy_from_slice(path);
+
+        SyscallEvent {
+            syscall_nr: SYS_fanotify_mark,
+            pid: 9101,
+            tid: 9101,
+            return_value: 0,
+            data: SyscallEventData {
+                fanotify_mark: FanotifyMarkData {
+                    fanotify_fd: 4,
+                    flags: libc::FAN_MARK_ADD | libc::FAN_MARK_DONT_FOLLOW,
+                    mask: libc::FAN_OPEN | libc::FAN_CLOSE_WRITE,
+                    dirfd: 5,
+                    pathname,
+                },
+            },
+        }
+    },
+    "9101 fanotify_mark(fanotify_fd: 4, flags: 0x5 (INODE|ADD|DONT_FOLLOW), mask: 0x28 (CLOSE_WRITE|OPEN), dirfd: 5, pathname: \"subdir/file.txt\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_fanotify_mark_error,
+    {
+        let pathname = [0u8; DATA_READ_SIZE];
+
+        SyscallEvent {
+            syscall_nr: SYS_fanotify_mark,
+            pid: 9102,
+            tid: 9102,
+            return_value: -9,
+            data: SyscallEventData {
+                fanotify_mark: FanotifyMarkData {
+                    fanotify_fd: 999,
+                    flags: libc::FAN_MARK_ADD,
+                    mask: libc::FAN_ACCESS,
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                },
+            },
+        }
+    },
+    "9102 fanotify_mark(fanotify_fd: 999, flags: 0x1 (INODE|ADD), mask: 0x1 (ACCESS), dirfd: AT_FDCWD, pathname: (null)) = -9 (error)\n"
 );

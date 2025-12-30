@@ -2484,7 +2484,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_setdomainname
         | syscalls::SYS_getitimer
         | syscalls::SYS_setitimer
-        | syscalls::SYS_seccomp => match return_value {
+        | syscalls::SYS_ptrace
+        | syscalls::SYS_seccomp
+        | syscalls::SYS_quotactl
+        | syscalls::SYS_quotactl_fd => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -6017,5 +6020,94 @@ pub fn format_seccomp_action(action: u32) -> Cow<'static, str> {
         seccomp_constants::SECCOMP_RET_LOG => Cow::Borrowed("SECCOMP_RET_LOG"),
         seccomp_constants::SECCOMP_RET_ALLOW => Cow::Borrowed("SECCOMP_RET_ALLOW"),
         _ => format!("0x{:x}", action).into(),
+    }
+}
+
+pub fn format_quotactl_op(op: i32) -> Cow<'static, str> {
+    use pinchy_common::*;
+
+    // Convert to unsigned for proper bit manipulation
+    // (QCMD-encoded values can overflow into negative i32 range)
+    let op_unsigned = op as u32;
+
+    // First, try to match the raw op value against Q_* constants
+    // This handles cases where the constant is used directly (backward compat)
+    let direct_match = match op {
+        Q_SYNC => Some(("Q_SYNC", "USRQUOTA")),
+        Q_QUOTAON => Some(("Q_QUOTAON", "USRQUOTA")),
+        Q_QUOTAOFF => Some(("Q_QUOTAOFF", "USRQUOTA")),
+        Q_GETFMT => Some(("Q_GETFMT", "USRQUOTA")),
+        Q_GETINFO => Some(("Q_GETINFO", "USRQUOTA")),
+        Q_SETINFO => Some(("Q_SETINFO", "USRQUOTA")),
+        Q_GETQUOTA => Some(("Q_GETQUOTA", "USRQUOTA")),
+        Q_SETQUOTA => Some(("Q_SETQUOTA", "USRQUOTA")),
+        Q_GETNEXTQUOTA => Some(("Q_GETNEXTQUOTA", "USRQUOTA")),
+        Q_XQUOTAON => Some(("Q_XQUOTAON", "")),
+        Q_XQUOTAOFF => Some(("Q_XQUOTAOFF", "")),
+        Q_XGETQUOTA => Some(("Q_XGETQUOTA", "")),
+        Q_XSETQLIM => Some(("Q_XSETQLIM", "")),
+        Q_XGETQSTAT => Some(("Q_XGETQSTAT", "")),
+        Q_XQUOTARM => Some(("Q_XQUOTARM", "")),
+        Q_XQUOTASYNC => Some(("Q_XQUOTASYNC", "")),
+        Q_XGETQSTATV => Some(("Q_XGETQSTATV", "")),
+        Q_XGETNEXTQUOTA => Some(("Q_XGETNEXTQUOTA", "")),
+        _ => None,
+    };
+
+    if let Some((cmd_name, qtype_default)) = direct_match {
+        if qtype_default.is_empty() {
+            // XFS commands
+            return format!("0x{:x} ({})", op_unsigned, cmd_name).into();
+        } else {
+            return format!(
+                "0x{:x} (QCMD({}, {}))",
+                op_unsigned, cmd_name, qtype_default
+            )
+            .into();
+        }
+    }
+
+    // If no direct match, try to decode as QCMD(Q_CMD, quota_type)
+    // op = (Q_CMD << 8) | quota_type
+    let qcmd = (op_unsigned >> 8) as i32;
+    let qtype = (op_unsigned & 0xff) as u8;
+
+    let qtype_str = match qtype {
+        0 => "USRQUOTA",
+        1 => "GRPQUOTA",
+        2 => "PRJQUOTA",
+        _ => "unknown",
+    };
+
+    // Match on the Q_* command constant
+    let cmd_name = match qcmd {
+        Q_SYNC => "Q_SYNC",
+        Q_QUOTAON => "Q_QUOTAON",
+        Q_QUOTAOFF => "Q_QUOTAOFF",
+        Q_GETFMT => "Q_GETFMT",
+        Q_GETINFO => "Q_GETINFO",
+        Q_SETINFO => "Q_SETINFO",
+        Q_GETQUOTA => "Q_GETQUOTA",
+        Q_SETQUOTA => "Q_SETQUOTA",
+        Q_GETNEXTQUOTA => "Q_GETNEXTQUOTA",
+        Q_XQUOTAON => "Q_XQUOTAON",
+        Q_XQUOTAOFF => "Q_XQUOTAOFF",
+        Q_XGETQUOTA => "Q_XGETQUOTA",
+        Q_XSETQLIM => "Q_XSETQLIM",
+        Q_XGETQSTAT => "Q_XGETQSTAT",
+        Q_XQUOTARM => "Q_XQUOTARM",
+        Q_XQUOTASYNC => "Q_XQUOTASYNC",
+        Q_XGETQSTATV => "Q_XGETQSTATV",
+        Q_XGETNEXTQUOTA => "Q_XGETNEXTQUOTA",
+        _ => "",
+    };
+
+    if cmd_name.is_empty() {
+        format!("0x{:x}", op_unsigned).into()
+    } else if qcmd >= 0x5801 && qcmd <= 0x5809 {
+        // XFS commands
+        format!("0x{:x} ({})", op_unsigned, cmd_name).into()
+    } else {
+        format!("0x{:x} (QCMD({}, {}))", op_unsigned, cmd_name, qtype_str).into()
     }
 }

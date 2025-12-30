@@ -73,6 +73,29 @@ pub const MPOL_F_NODE: u64 = 1 << 0;
 pub const MPOL_F_ADDR: u64 = 1 << 1;
 pub const MPOL_F_MEMS_ALLOWED: u64 = 1 << 2;
 
+// Quota management constants - from uapi/linux/quota.h
+pub const Q_SYNC: i32 = 0x800001;
+pub const Q_QUOTAON: i32 = 0x800002;
+pub const Q_QUOTAOFF: i32 = 0x800003;
+pub const Q_GETFMT: i32 = 0x800004;
+pub const Q_GETINFO: i32 = 0x800005;
+pub const Q_SETINFO: i32 = 0x800006;
+pub const Q_GETQUOTA: i32 = 0x800007;
+pub const Q_SETQUOTA: i32 = 0x800008;
+pub const Q_GETNEXTQUOTA: i32 = 0x800009;
+
+// XFS quota commands - from uapi/linux/dqblk_xfs.h
+// XQM_CMD(x) = ('X'<<8)+(x) where 'X' = 0x58
+pub const Q_XQUOTAON: i32 = 0x5801;
+pub const Q_XQUOTAOFF: i32 = 0x5802;
+pub const Q_XGETQUOTA: i32 = 0x5803;
+pub const Q_XSETQLIM: i32 = 0x5804;
+pub const Q_XGETQSTAT: i32 = 0x5805;
+pub const Q_XQUOTARM: i32 = 0x5806;
+pub const Q_XQUOTASYNC: i32 = 0x5807;
+pub const Q_XGETQSTATV: i32 = 0x5808;
+pub const Q_XGETNEXTQUOTA: i32 = 0x5809;
+
 #[repr(C)]
 pub struct SyscallEvent {
     pub syscall_nr: i64,
@@ -378,6 +401,8 @@ pub union SyscallEventData {
     pub syslog: SyslogData,
     pub ptrace: PtraceData,
     pub seccomp: SeccompData,
+    pub quotactl: QuotactlData,
+    pub quotactl_fd: QuotactlFdData,
 }
 
 #[repr(C)]
@@ -3234,4 +3259,33 @@ pub struct SeccompData {
     pub action_read_ok: u8,    // 1 if action_avail was successfully read, 0 otherwise
     pub filter_len: u16,       // For SET_MODE_FILTER: number of BPF instructions
     pub notif_sizes: [u16; 3], // For GET_NOTIF_SIZES: [notif, resp, data] sizes
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct QuotactlData {
+    pub op: i32,
+    pub special: [u8; MEDIUM_READ_SIZE],
+    pub id: i32,
+    pub addr: u64,
+}
+
+impl Default for QuotactlData {
+    fn default() -> Self {
+        Self {
+            op: 0,
+            special: [0; MEDIUM_READ_SIZE],
+            id: 0,
+            addr: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct QuotactlFdData {
+    pub fd: i32,
+    pub cmd: u32,
+    pub id: i32,
+    pub addr: u64,
 }

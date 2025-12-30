@@ -2099,3 +2099,28 @@ fn seccomp_test() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn quotactl_test() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["quotactl"], "quotactl_test");
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ quotactl(op: 0x800001 (QCMD(Q_SYNC, USRQUOTA)), special: "", id: 0, addr: @ADDR@) = @SIGNEDNUMBER@ (error)
+        @PID@ quotactl(op: 0x800004 (QCMD(Q_GETFMT, USRQUOTA)), special: "/", id: 0, addr: @ADDR@) = @SIGNEDNUMBER@ (error)
+        @PID@ quotactl(op: 0x800007 (QCMD(Q_GETQUOTA, USRQUOTA)), special: "/", id: 1000, addr: @ADDR@) = @SIGNEDNUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

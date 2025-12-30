@@ -590,6 +590,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_sync_file_range,
         syscalls::SYS_syncfs,
         syscalls::SYS_utimensat,
+        syscalls::SYS_quotactl,
+        syscalls::SYS_quotactl_fd,
     ];
     let filesystem_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_filesystem")

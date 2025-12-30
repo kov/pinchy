@@ -408,6 +408,10 @@ pub union SyscallEventData {
     pub setgroups: SetgroupsData,
     pub getresuid: GetresuidData,
     pub getresgid: GetresgidData,
+    pub memfd_create: MemfdCreateData,
+    pub pkey_mprotect: PkeyMprotectData,
+    pub mseal: MsealData,
+    pub remap_file_pages: RemapFilePagesData,
 }
 
 #[repr(C)]
@@ -3357,4 +3361,47 @@ pub struct GetresgidData {
     pub rgid: u32,
     pub egid: u32,
     pub sgid: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MemfdCreateData {
+    pub name: [u8; SMALL_READ_SIZE],
+    pub flags: u32,
+}
+
+impl Default for MemfdCreateData {
+    fn default() -> Self {
+        Self {
+            name: [0; SMALL_READ_SIZE],
+            flags: 0,
+        }
+    }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PkeyMprotectData {
+    pub addr: u64,
+    pub len: u64,
+    pub prot: i32,
+    pub pkey: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MsealData {
+    pub addr: u64,
+    pub len: u64,
+    pub flags: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct RemapFilePagesData {
+    pub addr: u64,
+    pub size: u64,
+    pub prot: i32,
+    pub pgoff: u64,
+    pub flags: i32,
 }

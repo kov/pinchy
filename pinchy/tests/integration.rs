@@ -778,6 +778,42 @@ fn mmap_syscalls() {
 #[test]
 #[serial]
 #[ignore = "runs in special environment"]
+fn memfd_create_syscall() {
+    let pinchy = PinchyTest::new(None, None);
+
+    // Run a workload that exercises memfd_create syscall
+    let handle = run_workload(&["memfd_create", "close"], "memfd_test");
+
+    // Verify that our memfd_create calls are present in the output
+    // Note: Names are truncated to 8 bytes (SMALL_READ_SIZE)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ memfd_create(name: "test_mem" ... (truncated), flags: 0x1 (MFD_CLOEXEC)) = @NUMBER@ (fd)
+        @PID@ memfd_create(name: "test_mem" ... (truncated), flags: 0x2 (MFD_ALLOW_SEALING)) = @NUMBER@ (fd)
+        @PID@ memfd_create(name: "test_mem" ... (truncated), flags: 0x3 (MFD_CLOEXEC|MFD_ALLOW_SEALING)) = @NUMBER@ (fd)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+        @PID@ close(fd: @NUMBER@) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
 fn madvise_syscall() {
     let pinchy = PinchyTest::new(None, None);
 

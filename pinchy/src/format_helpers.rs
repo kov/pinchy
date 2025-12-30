@@ -2642,6 +2642,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         // Memory/protection syscalls that return 0 on success
         syscalls::SYS_munmap
         | syscalls::SYS_mprotect
+        | syscalls::SYS_pkey_mprotect
+        | syscalls::SYS_mseal
+        | syscalls::SYS_remap_file_pages
         | syscalls::SYS_madvise
         | syscalls::SYS_mbind
         | syscalls::SYS_set_mempolicy
@@ -6164,4 +6167,99 @@ pub fn format_kcmp_type(type_: i32) -> Cow<'static, str> {
         KCMP_EPOLL_TFD => Cow::Borrowed("KCMP_EPOLL_TFD"),
         _ => format!("{}", type_).into(),
     }
+}
+
+pub mod memfd_constants {
+    /// memfd_create flags from linux/memfd.h
+    pub const MFD_CLOEXEC: u32 = 0x0001;
+    pub const MFD_ALLOW_SEALING: u32 = 0x0002;
+    pub const MFD_HUGETLB: u32 = 0x0004;
+    pub const MFD_NOEXEC_SEAL: u32 = 0x0008;
+    pub const MFD_EXEC: u32 = 0x0010;
+
+    /// Hugetlb size encodings (upper bits)
+    pub const MFD_HUGE_SHIFT: u32 = 26;
+    pub const MFD_HUGE_MASK: u32 = 0x3F;
+
+    /// Hugetlb flag values (for constructing memfd_create flags)
+    pub const MFD_HUGE_64KB: u32 = 16 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_512KB: u32 = 19 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_1MB: u32 = 20 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_2MB: u32 = 21 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_8MB: u32 = 23 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_16MB: u32 = 24 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_32MB: u32 = 25 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_256MB: u32 = 28 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_512MB: u32 = 29 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_1GB: u32 = 30 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_2GB: u32 = 31 << MFD_HUGE_SHIFT;
+    pub const MFD_HUGE_16GB: u32 = 34 << MFD_HUGE_SHIFT;
+}
+
+pub fn format_memfd_create_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts: Vec<Cow<'static, str>> = Vec::new();
+
+    if flags & memfd_constants::MFD_CLOEXEC != 0 {
+        parts.push(Cow::Borrowed("MFD_CLOEXEC"));
+    }
+
+    if flags & memfd_constants::MFD_ALLOW_SEALING != 0 {
+        parts.push(Cow::Borrowed("MFD_ALLOW_SEALING"));
+    }
+
+    if flags & memfd_constants::MFD_HUGETLB != 0 {
+        parts.push(Cow::Borrowed("MFD_HUGETLB"));
+    }
+
+    if flags & memfd_constants::MFD_NOEXEC_SEAL != 0 {
+        parts.push(Cow::Borrowed("MFD_NOEXEC_SEAL"));
+    }
+
+    if flags & memfd_constants::MFD_EXEC != 0 {
+        parts.push(Cow::Borrowed("MFD_EXEC"));
+    }
+
+    // Check for hugetlb size flags
+    let huge_flags = flags & (memfd_constants::MFD_HUGE_MASK << memfd_constants::MFD_HUGE_SHIFT);
+
+    if huge_flags != 0 {
+        let huge_str: Cow<'static, str> = match huge_flags {
+            memfd_constants::MFD_HUGE_64KB => Cow::Borrowed("MFD_HUGE_64KB"),
+            memfd_constants::MFD_HUGE_512KB => Cow::Borrowed("MFD_HUGE_512KB"),
+            memfd_constants::MFD_HUGE_1MB => Cow::Borrowed("MFD_HUGE_1MB"),
+            memfd_constants::MFD_HUGE_2MB => Cow::Borrowed("MFD_HUGE_2MB"),
+            memfd_constants::MFD_HUGE_8MB => Cow::Borrowed("MFD_HUGE_8MB"),
+            memfd_constants::MFD_HUGE_16MB => Cow::Borrowed("MFD_HUGE_16MB"),
+            memfd_constants::MFD_HUGE_32MB => Cow::Borrowed("MFD_HUGE_32MB"),
+            memfd_constants::MFD_HUGE_256MB => Cow::Borrowed("MFD_HUGE_256MB"),
+            memfd_constants::MFD_HUGE_512MB => Cow::Borrowed("MFD_HUGE_512MB"),
+            memfd_constants::MFD_HUGE_1GB => Cow::Borrowed("MFD_HUGE_1GB"),
+            memfd_constants::MFD_HUGE_2GB => Cow::Borrowed("MFD_HUGE_2GB"),
+            memfd_constants::MFD_HUGE_16GB => Cow::Borrowed("MFD_HUGE_16GB"),
+            _ => {
+                let huge_size =
+                    (flags >> memfd_constants::MFD_HUGE_SHIFT) & memfd_constants::MFD_HUGE_MASK;
+                Cow::Owned(format!("MFD_HUGE_{}", huge_size))
+            }
+        };
+
+        parts.push(huge_str);
+    }
+
+    let parts_str: Vec<&str> = parts.iter().map(|p| p.as_ref()).collect();
+
+    format!("0x{:x} ({})", flags, parts_str.join("|")).into()
+}
+
+pub fn format_mseal_flags(flags: u64) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    // Flags are reserved for future use as of Linux 6.10
+    Cow::Owned(format!("0x{:x} (reserved)", flags))
 }

@@ -128,6 +128,7 @@ fn main() -> anyhow::Result<()> {
             "perf_event_test" => perf_event_test(),
             "bpf_test" => bpf_test(),
             "fanotify_test" => fanotify_test(),
+            "file_handles_test" => file_handles_test(),
             name => bail!("Unknown test name: {name}"),
         }
     } else {
@@ -4122,6 +4123,153 @@ fn fanotify_test() -> anyhow::Result<()> {
         );
         // This should fail with EINVAL, which is expected
     }
+
+    Ok(())
+}
+
+fn file_handles_test() -> anyhow::Result<()> {
+    use std::{
+        fs::File,
+        io::Write,
+        os::fd::AsRawFd,
+        time::{SystemTime, UNIX_EPOCH},
+    };
+
+    // Create a temporary file for testing
+    let tmp_path = CString::new("/tmp/pinchy_file_handles_test.txt")?;
+
+    // Create test file
+    {
+        let mut file = File::create("/tmp/pinchy_file_handles_test.txt")?;
+        file.write_all(b"Test content for file handle operations\n")?;
+    }
+
+    // Test copy_file_range
+    {
+        let src = File::open("/tmp/pinchy_file_handles_test.txt")?;
+        let dst = File::create("/tmp/pinchy_file_handles_test_copy.txt")?;
+
+        let mut off_in: i64 = 0;
+        let mut off_out: i64 = 0;
+
+        unsafe {
+            let _result = libc::syscall(
+                syscalls::SYS_copy_file_range,
+                src.as_raw_fd(),
+                &mut off_in as *mut i64,
+                dst.as_raw_fd(),
+                &mut off_out as *mut i64,
+                1024usize,
+                0u32,
+            );
+        }
+    }
+
+    // Test sync_file_range
+    {
+        let file = File::options()
+            .write(true)
+            .open("/tmp/pinchy_file_handles_test.txt")?;
+
+        unsafe {
+            let _result = libc::syscall(
+                syscalls::SYS_sync_file_range,
+                file.as_raw_fd(),
+                0i64,
+                0i64,
+                libc::SYNC_FILE_RANGE_WRITE,
+            );
+        }
+    }
+
+    // Test syncfs
+    {
+        let file = File::open("/tmp/pinchy_file_handles_test.txt")?;
+
+        unsafe {
+            let _result = libc::syscall(syscalls::SYS_syncfs, file.as_raw_fd());
+        }
+    }
+
+    // Test utimensat - update access and modification times
+    {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH)?;
+        let times: [libc::timespec; 2] = [
+            libc::timespec {
+                tv_sec: now.as_secs() as i64,
+                tv_nsec: now.subsec_nanos() as i64,
+            },
+            libc::timespec {
+                tv_sec: now.as_secs() as i64,
+                tv_nsec: now.subsec_nanos() as i64,
+            },
+        ];
+
+        unsafe {
+            let _result = libc::syscall(
+                syscalls::SYS_utimensat,
+                libc::AT_FDCWD,
+                tmp_path.as_ptr(),
+                times.as_ptr(),
+                0i32,
+            );
+        }
+
+        // Test utimensat with NULL times (sets to current time)
+        unsafe {
+            let _result = libc::syscall(
+                syscalls::SYS_utimensat,
+                libc::AT_FDCWD,
+                tmp_path.as_ptr(),
+                std::ptr::null::<libc::timespec>(),
+                0i32,
+            );
+        }
+    }
+
+    // Test name_to_handle_at and open_by_handle_at
+    // Note: These require CAP_DAC_READ_SEARCH; might fail without it
+    {
+        // file_handle struct from linux/fcntl.h
+        #[repr(C)]
+        struct FileHandle {
+            handle_bytes: u32,
+            handle_type: i32,
+            f_handle: [u8; 128],
+        }
+
+        let mut handle = FileHandle {
+            handle_bytes: 128,
+            handle_type: 0,
+            f_handle: [0u8; 128],
+        };
+        let mut mount_id: i32 = 0;
+
+        unsafe {
+            // name_to_handle_at
+            let _result = libc::syscall(
+                syscalls::SYS_name_to_handle_at,
+                libc::AT_FDCWD,
+                tmp_path.as_ptr(),
+                &mut handle as *mut FileHandle,
+                &mut mount_id as *mut i32,
+                0i32,
+            );
+
+            // open_by_handle_at - requires a mount fd
+            // This will likely fail without CAP_DAC_READ_SEARCH, but we trace it anyway
+            let _fd = libc::syscall(
+                syscalls::SYS_open_by_handle_at,
+                libc::AT_FDCWD,
+                &mut handle as *mut FileHandle,
+                libc::O_RDONLY,
+            );
+        }
+    }
+
+    // Cleanup
+    let _ = std::fs::remove_file("/tmp/pinchy_file_handles_test.txt");
+    let _ = std::fs::remove_file("/tmp/pinchy_file_handles_test_copy.txt");
 
     Ok(())
 }

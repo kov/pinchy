@@ -4178,6 +4178,131 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_name_to_handle_at => {
+            let data = unsafe { event.data.name_to_handle_at };
+
+            argf!(
+                sf,
+                "dirfd: {}",
+                crate::format_helpers::format_dirfd(data.dirfd)
+            );
+
+            let pathname = crate::format_helpers::extract_cstring_with_truncation(&data.pathname);
+            if !pathname.is_empty() {
+                argf!(sf, "pathname: \"{}\"", pathname);
+            } else {
+                argf!(sf, "pathname: (null)");
+            }
+
+            // Note: handle and mount_id are pointers to output parameters
+            argf!(sf, "handle: 0x{:x}", data.handle);
+            argf!(sf, "mount_id: 0x{:x}", data.mount_id);
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_at_flags(data.flags)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_open_by_handle_at => {
+            let data = unsafe { event.data.open_by_handle_at };
+
+            argf!(
+                sf,
+                "mount_fd: {}",
+                crate::format_helpers::format_dirfd(data.mount_fd)
+            );
+            argf!(sf, "handle: 0x{:x}", data.handle);
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_flags(data.flags)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_copy_file_range => {
+            let data = unsafe { event.data.copy_file_range };
+
+            argf!(sf, "fd_in: {}", data.fd_in);
+
+            if data.off_in_is_null != 0 {
+                argf!(sf, "off_in: NULL");
+            } else {
+                argf!(sf, "off_in: {}", data.off_in);
+            }
+
+            argf!(sf, "fd_out: {}", data.fd_out);
+
+            if data.off_out_is_null != 0 {
+                argf!(sf, "off_out: NULL");
+            } else {
+                argf!(sf, "off_out: {}", data.off_out);
+            }
+
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "flags: {}", data.flags);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_sync_file_range => {
+            let data = unsafe { event.data.sync_file_range };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "offset: {}", data.offset);
+            argf!(sf, "nbytes: {}", data.nbytes);
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_sync_file_range_flags(data.flags)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_syncfs => {
+            let data = unsafe { event.data.syncfs };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_utimensat => {
+            let data = unsafe { event.data.utimensat };
+
+            argf!(
+                sf,
+                "dirfd: {}",
+                crate::format_helpers::format_dirfd(data.dirfd)
+            );
+
+            let pathname = crate::format_helpers::extract_cstring_with_truncation(&data.pathname);
+
+            if !pathname.is_empty() {
+                argf!(sf, "pathname: \"{}\"", pathname);
+            } else {
+                argf!(sf, "pathname: (null)");
+            }
+
+            if data.times_is_null != 0 {
+                argf!(sf, "times: NULL");
+            } else {
+                argf!(
+                    sf,
+                    "times: [{}, {}]",
+                    crate::format_helpers::format_timespec_with_special(&data.times[0]),
+                    crate::format_helpers::format_timespec_with_special(&data.times[1])
+                );
+            }
+
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_at_flags(data.flags)
+            );
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

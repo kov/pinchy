@@ -6,19 +6,23 @@ use pinchy_common::syscalls::SYS_link;
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::LinkData;
 use pinchy_common::{
+    kernel_types::Timespec,
     syscalls::{
-        self, SYS_acct, SYS_chdir, SYS_faccessat, SYS_fallocate, SYS_fanotify_init,
-        SYS_fanotify_mark, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat, SYS_fdatasync,
-        SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64, SYS_inotify_add_watch,
-        SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat, SYS_mkdirat, SYS_newfstatat,
-        SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs, SYS_truncate,
+        self, SYS_acct, SYS_chdir, SYS_copy_file_range, SYS_faccessat, SYS_fallocate,
+        SYS_fanotify_init, SYS_fanotify_mark, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
+        SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
+        SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat, SYS_mkdirat,
+        SYS_name_to_handle_at, SYS_newfstatat, SYS_open_by_handle_at, SYS_readlinkat, SYS_renameat,
+        SYS_renameat2, SYS_statfs, SYS_sync_file_range, SYS_syncfs, SYS_truncate, SYS_utimensat,
     },
-    AcctData, FaccessatData, FallocateData, FanotifyInitData, FanotifyMarkData, FchmodData,
-    FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData, FtruncateData,
+    AcctData, CopyFileRangeData, FaccessatData, FallocateData, FanotifyInitData, FanotifyMarkData,
+    FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData, FtruncateData,
     InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData, LinkatData, MkdiratData,
-    MknodatData, Renameat2Data, RenameatData, SyscallEvent, SyscallEventData, DATA_READ_SIZE,
+    MknodatData, NameToHandleAtData, OpenByHandleAtData, Renameat2Data, RenameatData,
+    SyncFileRangeData, SyncfsData, SyscallEvent, SyscallEventData, UtimensatData, DATA_READ_SIZE,
     MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
+
 
 use crate::syscall_test;
 
@@ -2792,4 +2796,398 @@ syscall_test!(
         }
     },
     "9102 fanotify_mark(fanotify_fd: 999, flags: 0x1 (INODE|ADD), mask: 0x1 (ACCESS), dirfd: AT_FDCWD, pathname: (null)) = -9 (error)\n"
+);
+
+syscall_test!(
+    parse_name_to_handle_at_success,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let p = b"/tmp/test_file.txt";
+        pathname[..p.len()].copy_from_slice(p);
+
+        SyscallEvent {
+            syscall_nr: SYS_name_to_handle_at,
+            pid: 9200,
+            tid: 9200,
+            return_value: 0,
+            data: SyscallEventData {
+                name_to_handle_at: NameToHandleAtData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    handle: 0x7fff12345678,
+                    mount_id: 0x7fff87654321,
+                    flags: libc::AT_SYMLINK_FOLLOW,
+                },
+            },
+        }
+    },
+    "9200 name_to_handle_at(dirfd: AT_FDCWD, pathname: \"/tmp/test_file.txt\", handle: 0x7fff12345678, mount_id: 0x7fff87654321, flags: AT_SYMLINK_FOLLOW (0x400)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_name_to_handle_at_empty_path,
+    {
+        let pathname = [0u8; DATA_READ_SIZE];
+
+        SyscallEvent {
+            syscall_nr: SYS_name_to_handle_at,
+            pid: 9201,
+            tid: 9201,
+            return_value: 0,
+            data: SyscallEventData {
+                name_to_handle_at: NameToHandleAtData {
+                    dirfd: 5,
+                    pathname,
+                    handle: 0x7fff00000000,
+                    mount_id: 0x7fff11111111,
+                    flags: libc::AT_EMPTY_PATH,
+                },
+            },
+        }
+    },
+    "9201 name_to_handle_at(dirfd: 5, pathname: (null), handle: 0x7fff00000000, mount_id: 0x7fff11111111, flags: AT_EMPTY_PATH (0x1000)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_name_to_handle_at_error,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let p = b"/nonexistent";
+        pathname[..p.len()].copy_from_slice(p);
+
+        SyscallEvent {
+            syscall_nr: SYS_name_to_handle_at,
+            pid: 9202,
+            tid: 9202,
+            return_value: -2,
+            data: SyscallEventData {
+                name_to_handle_at: NameToHandleAtData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    handle: 0,
+                    mount_id: 0,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "9202 name_to_handle_at(dirfd: AT_FDCWD, pathname: \"/nonexistent\", handle: 0x0, mount_id: 0x0, flags: 0) = -2 (error)\n"
+);
+
+syscall_test!(
+    parse_open_by_handle_at_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_open_by_handle_at,
+            pid: 9300,
+            tid: 9300,
+            return_value: 7,
+            data: SyscallEventData {
+                open_by_handle_at: OpenByHandleAtData {
+                    mount_fd: 3,
+                    handle: 0x7fff12345678,
+                    flags: libc::O_RDONLY,
+                },
+            },
+        }
+    },
+    "9300 open_by_handle_at(mount_fd: 3, handle: 0x7fff12345678, flags: 0x0 (O_RDONLY)) = 7 (fd)\n"
+);
+
+syscall_test!(
+    parse_open_by_handle_at_rdwr,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_open_by_handle_at,
+            pid: 9301,
+            tid: 9301,
+            return_value: 8,
+            data: SyscallEventData {
+                open_by_handle_at: OpenByHandleAtData {
+                    mount_fd: libc::AT_FDCWD,
+                    handle: 0x7fff87654321,
+                    flags: libc::O_RDWR | libc::O_CLOEXEC,
+                },
+            },
+        }
+    },
+    "9301 open_by_handle_at(mount_fd: AT_FDCWD, handle: 0x7fff87654321, flags: 0x80002 (O_RDWR|O_CLOEXEC)) = 8 (fd)\n"
+);
+
+syscall_test!(
+    parse_open_by_handle_at_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_open_by_handle_at,
+            pid: 9302,
+            tid: 9302,
+            return_value: -1,
+            data: SyscallEventData {
+                open_by_handle_at: OpenByHandleAtData {
+                    mount_fd: 999,
+                    handle: 0xbadbadbad,
+                    flags: libc::O_RDONLY,
+                },
+            },
+        }
+    },
+    "9302 open_by_handle_at(mount_fd: 999, handle: 0xbadbadbad, flags: 0x0 (O_RDONLY)) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_copy_file_range_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_copy_file_range,
+            pid: 9400,
+            tid: 9400,
+            return_value: 4096,
+            data: SyscallEventData {
+                copy_file_range: CopyFileRangeData {
+                    fd_in: 3,
+                    off_in: 0x1000,
+                    off_in_is_null: 0,
+                    fd_out: 4,
+                    off_out: 0x2000,
+                    off_out_is_null: 0,
+                    len: 4096,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "9400 copy_file_range(fd_in: 3, off_in: 4096, fd_out: 4, off_out: 8192, len: 4096, flags: 0) = 4096 (bytes)\n"
+);
+
+syscall_test!(
+    parse_copy_file_range_null_offsets,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_copy_file_range,
+            pid: 9401,
+            tid: 9401,
+            return_value: 1024,
+            data: SyscallEventData {
+                copy_file_range: CopyFileRangeData {
+                    fd_in: 5,
+                    off_in: 0,
+                    off_in_is_null: 1,
+                    fd_out: 6,
+                    off_out: 0,
+                    off_out_is_null: 1,
+                    len: 8192,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "9401 copy_file_range(fd_in: 5, off_in: NULL, fd_out: 6, off_out: NULL, len: 8192, flags: 0) = 1024 (bytes)\n"
+);
+
+syscall_test!(
+    parse_copy_file_range_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_copy_file_range,
+            pid: 9402,
+            tid: 9402,
+            return_value: -1,
+            data: SyscallEventData {
+                copy_file_range: CopyFileRangeData {
+                    fd_in: 999,
+                    off_in: 0,
+                    off_in_is_null: 1,
+                    fd_out: 998,
+                    off_out: 0,
+                    off_out_is_null: 1,
+                    len: 0,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "9402 copy_file_range(fd_in: 999, off_in: NULL, fd_out: 998, off_out: NULL, len: 0, flags: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_sync_file_range_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sync_file_range,
+            pid: 9500,
+            tid: 9500,
+            return_value: 0,
+            data: SyscallEventData {
+                sync_file_range: SyncFileRangeData {
+                    fd: 3,
+                    offset: 0,
+                    nbytes: 4096,
+                    flags: libc::SYNC_FILE_RANGE_WRITE,
+                },
+            },
+        }
+    },
+    "9500 sync_file_range(fd: 3, offset: 0, nbytes: 4096, flags: 0x2 (SYNC_FILE_RANGE_WRITE)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sync_file_range_all_flags,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sync_file_range,
+            pid: 9501,
+            tid: 9501,
+            return_value: 0,
+            data: SyscallEventData {
+                sync_file_range: SyncFileRangeData {
+                    fd: 5,
+                    offset: 1024,
+                    nbytes: 8192,
+                    flags: libc::SYNC_FILE_RANGE_WAIT_BEFORE
+                        | libc::SYNC_FILE_RANGE_WRITE
+                        | libc::SYNC_FILE_RANGE_WAIT_AFTER,
+                },
+            },
+        }
+    },
+    "9501 sync_file_range(fd: 5, offset: 1024, nbytes: 8192, flags: 0x7 (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_sync_file_range_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sync_file_range,
+            pid: 9502,
+            tid: 9502,
+            return_value: -9,
+            data: SyscallEventData {
+                sync_file_range: SyncFileRangeData {
+                    fd: 999,
+                    offset: 0,
+                    nbytes: 0,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "9502 sync_file_range(fd: 999, offset: 0, nbytes: 0, flags: 0) = -9 (error)\n"
+);
+
+syscall_test!(
+    parse_syncfs_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_syncfs,
+            pid: 9600,
+            tid: 9600,
+            return_value: 0,
+            data: SyscallEventData {
+                syncfs: SyncfsData { fd: 3 },
+            },
+        }
+    },
+    "9600 syncfs(fd: 3) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_syncfs_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_syncfs,
+            pid: 9601,
+            tid: 9601,
+            return_value: -9,
+            data: SyscallEventData {
+                syncfs: SyncfsData { fd: 999 },
+            },
+        }
+    },
+    "9601 syncfs(fd: 999) = -9 (error)\n"
+);
+
+syscall_test!(
+    parse_utimensat_success,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let p = b"/tmp/file.txt";
+        pathname[..p.len()].copy_from_slice(p);
+
+        SyscallEvent {
+            syscall_nr: SYS_utimensat,
+            pid: 9700,
+            tid: 9700,
+            return_value: 0,
+            data: SyscallEventData {
+                utimensat: UtimensatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    times: [
+                        Timespec { seconds: 1234567890, nanos: 123456789 },
+                        Timespec { seconds: 1234567891, nanos: 987654321 },
+                    ],
+                    times_is_null: 0,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "9700 utimensat(dirfd: AT_FDCWD, pathname: \"/tmp/file.txt\", times: [{secs: 1234567890, nanos: 123456789}, {secs: 1234567891, nanos: 987654321}], flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_utimensat_null_times,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let p = b"/var/log/app.log";
+        pathname[..p.len()].copy_from_slice(p);
+
+        SyscallEvent {
+            syscall_nr: SYS_utimensat,
+            pid: 9701,
+            tid: 9701,
+            return_value: 0,
+            data: SyscallEventData {
+                utimensat: UtimensatData {
+                    dirfd: 5,
+                    pathname,
+                    times: [Timespec::default(); 2],
+                    times_is_null: 1,
+                    flags: libc::AT_SYMLINK_NOFOLLOW,
+                },
+            },
+        }
+    },
+    "9701 utimensat(dirfd: 5, pathname: \"/var/log/app.log\", times: NULL, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_utimensat_error,
+    {
+        use crate::format_helpers::time_constants;
+
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let p = b"/nonexistent";
+        pathname[..p.len()].copy_from_slice(p);
+
+        SyscallEvent {
+            syscall_nr: SYS_utimensat,
+            pid: 9702,
+            tid: 9702,
+            return_value: -2,
+            data: SyscallEventData {
+                utimensat: UtimensatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname,
+                    times: [
+                        Timespec { seconds: 0, nanos: time_constants::UTIME_NOW },
+                        Timespec { seconds: 0, nanos: time_constants::UTIME_OMIT },
+                    ],
+                    times_is_null: 0,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "9702 utimensat(dirfd: AT_FDCWD, pathname: \"/nonexistent\", times: [UTIME_NOW, UTIME_OMIT], flags: 0) = -2 (error)\n"
 );

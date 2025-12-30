@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 #[cfg(target_arch = "x86_64")]
-use pinchy_common::syscalls::{SYS_alarm, SYS_getpgrp, SYS_pause};
+use pinchy_common::syscalls::SYS_getpgrp;
 use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
@@ -19,7 +19,7 @@ use pinchy_common::{
     SMALL_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
-use pinchy_common::{AlarmData, GetpgrpData, PauseData};
+use pinchy_common::GetpgrpData;
 
 use crate::syscall_test;
 

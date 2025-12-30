@@ -360,6 +360,51 @@ pub fn syscall_exit_memory(ctx: TracePointContext) -> u32 {
                     }
                 }
             }
+            syscalls::SYS_memfd_create => {
+                let data = data_mut!(entry, memfd_create);
+                data.flags = args[1] as u32;
+
+                let name_ptr = args[0] as *const u8;
+
+                if !name_ptr.is_null() {
+                    for i in 0..data.name.len() {
+                        unsafe {
+                            let ptr = name_ptr.add(i);
+
+                            if let Ok(byte) = bpf_probe_read_user(ptr) {
+                                data.name[i] = byte;
+
+                                if byte == 0 {
+                                    break;
+                                }
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            syscalls::SYS_pkey_mprotect => {
+                let data = data_mut!(entry, pkey_mprotect);
+                data.addr = args[0] as u64;
+                data.len = args[1] as u64;
+                data.prot = args[2] as i32;
+                data.pkey = args[3] as i32;
+            }
+            syscalls::SYS_mseal => {
+                let data = data_mut!(entry, mseal);
+                data.addr = args[0] as u64;
+                data.len = args[1] as u64;
+                data.flags = args[2] as u64;
+            }
+            syscalls::SYS_remap_file_pages => {
+                let data = data_mut!(entry, remap_file_pages);
+                data.addr = args[0] as u64;
+                data.size = args[1] as u64;
+                data.prot = args[2] as i32;
+                data.pgoff = args[3] as u64;
+                data.flags = args[4] as i32;
+            }
             _ => {
                 entry.discard();
                 return Ok(());

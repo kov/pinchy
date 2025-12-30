@@ -671,6 +671,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_migrate_pages,
         syscalls::SYS_move_pages,
         syscalls::SYS_mincore,
+        syscalls::SYS_memfd_create,
+        syscalls::SYS_pkey_mprotect,
+        syscalls::SYS_mseal,
+        syscalls::SYS_remap_file_pages,
     ];
     let memory_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_memory")

@@ -133,6 +133,7 @@ fn main() -> anyhow::Result<()> {
             "system_info_test" => system_info_test(),
             "prctl_test" => prctl_test(),
             "mmap_test" => mmap_test(),
+            "memfd_test" => memfd_test(),
             "ioctl_test" => ioctl_test(),
             "filesystem_links_test" => filesystem_links_test(),
             "statfs_test" => statfs_test(),
@@ -3425,6 +3426,53 @@ fn mmap_test() -> anyhow::Result<()> {
         // Test 12: munmap with invalid size (might succeed or fail depending on system)
         let _result = libc::munmap(0x1000 as *mut libc::c_void, 0);
         // Result can vary by system - just generate the syscall for tracing
+    }
+
+    Ok(())
+}
+
+fn memfd_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test 1: memfd_create with MFD_CLOEXEC flag
+        let name1 = CString::new("test_memfd_1").expect("CString creation failed");
+        let fd1 = libc::syscall(
+            syscalls::SYS_memfd_create as i64,
+            name1.as_ptr(),
+            libc::MFD_CLOEXEC as i32,
+        );
+
+        if fd1 < 0 {
+            bail!("memfd_create 1 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 2: memfd_create with MFD_ALLOW_SEALING flag
+        let name2 = CString::new("test_memfd_2").expect("CString creation failed");
+        let fd2 = libc::syscall(
+            syscalls::SYS_memfd_create as i64,
+            name2.as_ptr(),
+            libc::MFD_ALLOW_SEALING as i32,
+        );
+
+        if fd2 < 0 {
+            bail!("memfd_create 2 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Test 3: memfd_create with both MFD_CLOEXEC and MFD_ALLOW_SEALING
+        let name3 = CString::new("test_memfd_3").expect("CString creation failed");
+        let fd3 = libc::syscall(
+            syscalls::SYS_memfd_create as i64,
+            name3.as_ptr(),
+            (libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING) as i32,
+        );
+
+        if fd3 < 0 {
+            bail!("memfd_create 3 failed: {}", std::io::Error::last_os_error());
+        }
+
+        // Close all file descriptors
+        libc::close(fd1 as i32);
+        libc::close(fd2 as i32);
+        libc::close(fd3 as i32);
     }
 
     Ok(())

@@ -4046,6 +4046,136 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 finish!(sf, event.return_value);
             }
         }
+        syscalls::SYS_perf_event_open => {
+            let data = unsafe { event.data.perf_event_open };
+
+            arg!(sf, "attr:");
+            format_perf_event_attr(&mut sf, &data.attr).await?;
+
+            argf!(sf, "pid: {}", data.pid);
+            argf!(sf, "cpu: {}", data.cpu);
+            argf!(sf, "group_fd: {}", data.group_fd);
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_perf_event_open_flags(data.flags)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_bpf => {
+            let data = unsafe { event.data.bpf };
+
+            argf!(
+                sf,
+                "cmd: {}",
+                crate::format_helpers::format_bpf_cmd(data.cmd)
+            );
+
+            match data.which_attr {
+                1 => {
+                    arg!(sf, "attr:");
+                    with_struct!(sf, {
+                        argf!(
+                            sf,
+                            "map_type: {}",
+                            crate::format_helpers::format_bpf_map_type(data.map_create_attr.map_type)
+                        );
+                        argf!(sf, "key_size: {}", data.map_create_attr.key_size);
+                        argf!(sf, "value_size: {}", data.map_create_attr.value_size);
+                        argf!(sf, "max_entries: {}", data.map_create_attr.max_entries);
+                    });
+                }
+                2 => {
+                    let license_end = data
+                        .prog_load_attr
+                        .license
+                        .iter()
+                        .position(|&b| b == 0)
+                        .unwrap_or(data.prog_load_attr.license.len());
+                    let license_str =
+                        std::str::from_utf8(&data.prog_load_attr.license[..license_end])
+                            .unwrap_or("<invalid>");
+
+                    arg!(sf, "attr:");
+                    with_struct!(sf, {
+                        argf!(
+                            sf,
+                            "prog_type: {}",
+                            crate::format_helpers::format_bpf_prog_type(data.prog_load_attr.prog_type)
+                        );
+                        argf!(sf, "insn_cnt: {}", data.prog_load_attr.insn_cnt);
+                        argf!(sf, "license: \"{}\"", license_str);
+                    });
+                }
+                _ => {}
+            }
+
+            argf!(sf, "size: {}", data.size);
+
+            // Some BPF commands return file descriptors on success
+            let returns_fd = matches!(
+                data.cmd,
+                crate::format_helpers::bpf_constants::BPF_MAP_CREATE
+                    | crate::format_helpers::bpf_constants::BPF_PROG_LOAD
+                    | crate::format_helpers::bpf_constants::BPF_OBJ_GET
+                    | crate::format_helpers::bpf_constants::BPF_PROG_GET_FD_BY_ID
+                    | crate::format_helpers::bpf_constants::BPF_MAP_GET_FD_BY_ID
+                    | crate::format_helpers::bpf_constants::BPF_BTF_GET_FD_BY_ID
+                    | crate::format_helpers::bpf_constants::BPF_LINK_GET_FD_BY_ID
+            );
+
+            if returns_fd && event.return_value >= 0 {
+                finish!(sf, event.return_value, b" (fd)");
+            } else {
+                finish!(sf, event.return_value);
+            }
+        }
+        syscalls::SYS_fanotify_init => {
+            let data = unsafe { event.data.fanotify_init };
+
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_fanotify_init_flags(data.flags)
+            );
+            argf!(
+                sf,
+                "event_f_flags: {}",
+                crate::format_helpers::format_flags(data.event_f_flags as i32)
+            );
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_fanotify_mark => {
+            let data = unsafe { event.data.fanotify_mark };
+
+            argf!(sf, "fanotify_fd: {}", data.fanotify_fd);
+            argf!(
+                sf,
+                "flags: {}",
+                crate::format_helpers::format_fanotify_mark_flags(data.flags)
+            );
+            argf!(
+                sf,
+                "mask: {}",
+                crate::format_helpers::format_fanotify_mark_mask(data.mask)
+            );
+            argf!(
+                sf,
+                "dirfd: {}",
+                crate::format_helpers::format_dirfd(data.dirfd)
+            );
+
+            let pathname = crate::format_helpers::extract_cstring_with_truncation(&data.pathname);
+            if !pathname.is_empty() {
+                argf!(sf, "pathname: \"{}\"", pathname);
+            } else {
+                argf!(sf, "pathname: (null)");
+            }
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

@@ -4,19 +4,21 @@
 use pinchy_common::{
     kernel_types::{CapUserData, CapUserHeader, LandlockRuleAttrUnion, Rlimit, Utsname},
     syscalls::{
-        SYS_add_key, SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module,
+        SYS_add_key, SYS_bpf, SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module,
         SYS_finit_module, SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_init_module, SYS_ioctl,
         SYS_ioprio_get, SYS_ioprio_set, SYS_keyctl, SYS_landlock_add_rule,
-        SYS_landlock_create_ruleset, SYS_landlock_restrict_self, SYS_nanosleep, SYS_personality,
-        SYS_reboot, SYS_request_key, SYS_setdomainname, SYS_sethostname, SYS_settimeofday,
-        SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
+        SYS_landlock_create_ruleset, SYS_landlock_restrict_self, SYS_nanosleep,
+        SYS_perf_event_open, SYS_personality, SYS_reboot, SYS_request_key, SYS_setdomainname,
+        SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_times, SYS_umask, SYS_uname,
+        SYS_vhangup,
     },
-    AddKeyData, CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData,
+    AddKeyData, BpfData, CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData,
     FinitModuleData, GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData,
     IoprioGetData, IoprioSetData, KeyctlData, LandlockAddRuleData, LandlockCreateRulesetData,
-    LandlockRestrictSelfData, NanosleepData, PersonalityData, RebootData, RequestKeyData,
-    RtSigreturnData, SetdomainnameData, SethostnameData, SettimeofdayData, SyncData, SyscallEvent,
-    SyscallEventData, SysinfoData, TimesData, UmaskData, UnameData, VhangupData,
+    LandlockRestrictSelfData, NanosleepData, PerfEventOpenData, PersonalityData, RebootData,
+    RequestKeyData, RtSigreturnData, SetdomainnameData, SethostnameData, SettimeofdayData,
+    SyncData, SyscallEvent, SyscallEventData, SysinfoData, TimesData, UmaskData, UnameData,
+    VhangupData,
 };
 
 use crate::syscall_test;
@@ -1674,4 +1676,166 @@ syscall_test!(
         }
     },
     "7023 keyctl(operation: SEARCH, keyring: KEY_SPEC_SESSION_KEYRING, type: 0xaabbccdd, description: 0xddeeffaa, dest_keyring: KEY_SPEC_PROCESS_KEYRING) = 512000023 (key)\n"
+);
+
+// Import constants from format_helpers
+use crate::format_helpers::{bpf_constants, perf_constants};
+
+syscall_test!(
+    parse_perf_event_open_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_perf_event_open,
+            pid: 8000,
+            tid: 8000,
+            return_value: 3,
+            data: SyscallEventData {
+                perf_event_open: PerfEventOpenData {
+                    attr: pinchy_common::kernel_types::PerfEventAttr {
+                        type_: 0, // PERF_TYPE_HARDWARE
+                        config: 0,
+                        sample_period: 4000,
+                        ..Default::default()
+                    },
+                    pid: 1234,
+                    cpu: 0,
+                    group_fd: -1,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "8000 perf_event_open(attr: { type: PERF_TYPE_HARDWARE, size: 0, config: 0x0, sample_period: 4000 }, pid: 1234, cpu: 0, group_fd: -1, flags: 0) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_perf_event_open_with_flags,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_perf_event_open,
+            pid: 8001,
+            tid: 8001,
+            return_value: 4,
+            data: SyscallEventData {
+                perf_event_open: PerfEventOpenData {
+                    attr: pinchy_common::kernel_types::PerfEventAttr {
+                        type_: 1, // PERF_TYPE_SOFTWARE
+                        config: 0x9, // PERF_COUNT_SW_CPU_CLOCK
+                        sample_period: 1000000,
+                        ..Default::default()
+                    },
+                    pid: -1,
+                    cpu: 2,
+                    group_fd: 3,
+                    flags: perf_constants::PERF_FLAG_FD_CLOEXEC
+                        | perf_constants::PERF_FLAG_FD_NO_GROUP,
+                },
+            },
+        }
+    },
+    "8001 perf_event_open(attr: { type: PERF_TYPE_SOFTWARE, size: 0, config: 0x9, sample_period: 1000000 }, pid: -1, cpu: 2, group_fd: 3, flags: 0x9 (FD_NO_GROUP|FD_CLOEXEC)) = 4 (fd)\n"
+);
+
+syscall_test!(
+    parse_perf_event_open_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_perf_event_open,
+            pid: 8002,
+            tid: 8002,
+            return_value: -22,
+            data: SyscallEventData {
+                perf_event_open: PerfEventOpenData {
+                    attr: Default::default(),
+                    pid: 0,
+                    cpu: -1,
+                    group_fd: -1,
+                    flags: 0,
+                },
+            },
+        }
+    },
+    "8002 perf_event_open(attr: { type: PERF_TYPE_HARDWARE, size: 0, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = -22 (error)\n"
+);
+
+syscall_test!(
+    parse_bpf_map_create,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_bpf,
+            pid: 8100,
+            tid: 8100,
+            return_value: 3,
+            data: SyscallEventData {
+                bpf: BpfData {
+                    cmd: bpf_constants::BPF_MAP_CREATE,
+                    size: 72,
+                    which_attr: 1,
+                    map_create_attr: pinchy_common::kernel_types::BpfMapCreateAttr {
+                        map_type: 1, // BPF_MAP_TYPE_HASH
+                        key_size: 4,
+                        value_size: 8,
+                        max_entries: 1024,
+                        ..Default::default()
+                    },
+                    prog_load_attr: Default::default(),
+                },
+            },
+        }
+    },
+    "8100 bpf(cmd: BPF_MAP_CREATE, attr: { map_type: BPF_MAP_TYPE_HASH, key_size: 4, value_size: 8, max_entries: 1024 }, size: 72) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_bpf_prog_load,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_bpf,
+            pid: 8101,
+            tid: 8101,
+            return_value: 4,
+            data: SyscallEventData {
+                bpf: BpfData {
+                    cmd: bpf_constants::BPF_PROG_LOAD,
+                    size: 128,
+                    which_attr: 2,
+                    map_create_attr: Default::default(),
+                    prog_load_attr: pinchy_common::kernel_types::BpfProgLoadAttr {
+                        prog_type: 1, // BPF_PROG_TYPE_SOCKET_FILTER
+                        insn_cnt: 10,
+                        license: {
+                            let mut arr = [0u8; 32];
+                            arr[0] = b'G';
+                            arr[1] = b'P';
+                            arr[2] = b'L';
+                            arr
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "8101 bpf(cmd: BPF_PROG_LOAD, attr: { prog_type: BPF_PROG_TYPE_SOCKET_FILTER, insn_cnt: 10, license: \"GPL\" }, size: 128) = 4 (fd)\n"
+);
+
+syscall_test!(
+    parse_bpf_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_bpf,
+            pid: 8102,
+            tid: 8102,
+            return_value: -1,
+            data: SyscallEventData {
+                bpf: BpfData {
+                    cmd: bpf_constants::BPF_PROG_LOAD,
+                    size: 0,
+                    which_attr: 0,
+                    map_create_attr: Default::default(),
+                    prog_load_attr: Default::default(),
+                },
+            },
+        }
+    },
+    "8102 bpf(cmd: BPF_PROG_LOAD, size: 0) = -1 (error)\n"
 );

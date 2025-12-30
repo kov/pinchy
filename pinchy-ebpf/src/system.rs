@@ -398,6 +398,60 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                 data.arg3 = args[3] as u64;
                 data.arg4 = args[4] as u64;
             }
+            syscalls::SYS_perf_event_open => {
+                let data = data_mut!(entry, perf_event_open);
+
+                let attr_ptr = args[0] as *const pinchy_common::kernel_types::PerfEventAttr;
+                if !attr_ptr.is_null() {
+                    data.attr = unsafe {
+                        bpf_probe_read_user::<pinchy_common::kernel_types::PerfEventAttr>(
+                            attr_ptr,
+                        )
+                    }
+                    .unwrap_or_default();
+                }
+
+                data.pid = args[1] as i32;
+                data.cpu = args[2] as i32;
+                data.group_fd = args[3] as i32;
+                data.flags = args[4] as u64;
+            }
+            syscalls::SYS_bpf => {
+                let data = data_mut!(entry, bpf);
+                let cmd = args[0] as i32;
+                data.cmd = cmd;
+                data.size = args[2] as u32;
+
+                let attr_ptr = args[1] as usize;
+                if attr_ptr != 0 {
+                    // BPF_MAP_CREATE = 0
+                    if cmd == 0 {
+                        let map_attr_ptr =
+                            attr_ptr as *const pinchy_common::kernel_types::BpfMapCreateAttr;
+                        if let Ok(attr) = unsafe {
+                            bpf_probe_read_user::<pinchy_common::kernel_types::BpfMapCreateAttr>(
+                                map_attr_ptr,
+                            )
+                        } {
+                            data.map_create_attr = attr;
+                            data.which_attr = 1;
+                        }
+                    }
+                    // BPF_PROG_LOAD = 5
+                    else if cmd == 5 {
+                        let prog_attr_ptr =
+                            attr_ptr as *const pinchy_common::kernel_types::BpfProgLoadAttr;
+                        if let Ok(attr) = unsafe {
+                            bpf_probe_read_user::<pinchy_common::kernel_types::BpfProgLoadAttr>(
+                                prog_attr_ptr,
+                            )
+                        } {
+                            data.prog_load_attr = attr;
+                            data.which_attr = 2;
+                        }
+                    }
+                }
+            }
             _ => {
                 entry.discard();
                 return Ok(());

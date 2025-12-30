@@ -860,3 +860,24 @@ pub struct BpfProgLoadAttr {
     pub insn_cnt: u32,  // Number of instructions
     pub license: [u8; 32], // License string (GPL, etc.)
 }
+
+/// Berkeley Packet Filter program structure for SECCOMP_SET_MODE_FILTER
+/// See: https://man7.org/linux/man-pages/man2/seccomp.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct SockFprog {
+    pub len: u16,     // Number of BPF instructions
+    pub _padding: u16, // Padding for alignment
+    pub _padding2: u32, // Additional padding for 64-bit alignment
+    pub filter: u64,  // Pointer to array of BPF instructions (stored as u64)
+}
+
+/// Seccomp notification sizes for SECCOMP_GET_NOTIF_SIZES
+/// See: https://man7.org/linux/man-pages/man2/seccomp.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct SeccompNotifSizes {
+    pub seccomp_notif: u16,      // Size of notification structure
+    pub seccomp_notif_resp: u16, // Size of response structure
+    pub seccomp_data: u16,       // Size of 'struct seccomp_data'
+}

@@ -404,9 +404,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                 let attr_ptr = args[0] as *const pinchy_common::kernel_types::PerfEventAttr;
                 if !attr_ptr.is_null() {
                     data.attr = unsafe {
-                        bpf_probe_read_user::<pinchy_common::kernel_types::PerfEventAttr>(
-                            attr_ptr,
-                        )
+                        bpf_probe_read_user::<pinchy_common::kernel_types::PerfEventAttr>(attr_ptr)
                     }
                     .unwrap_or_default();
                 }

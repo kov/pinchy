@@ -2049,3 +2049,53 @@ fn syslog_test() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn ptrace_test() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["ptrace"], "ptrace_test");
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ ptrace(request: PTRACE_TRACEME, pid: 0, addr: @ADDR@, data: @ADDR@) = 0 (success)
+        @PID@ ptrace(request: PTRACE_PEEKTEXT, pid: @NUMBER@, addr: @ADDR@, data: @ADDR@) = @SIGNEDNUMBER@ (error) (data ptr)
+        @PID@ ptrace(request: PTRACE_CONT, pid: 1, addr: @ADDR@, sig: @ALPHANUM@) = @SIGNEDNUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn seccomp_test() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["seccomp"], "seccomp_test");
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ seccomp(operation: SECCOMP_GET_ACTION_AVAIL, flags: 0, action: SECCOMP_RET_KILL_THREAD) = 0 (success)
+        @PID@ seccomp(operation: SECCOMP_GET_NOTIF_SIZES, flags: 0, sizes: {notif: @NUMBER@, resp: @NUMBER@, data: @NUMBER@}) = 0 (success)
+        @PID@ seccomp(operation: 255, flags: 0, args: NULL) = @SIGNEDNUMBER@ (error)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

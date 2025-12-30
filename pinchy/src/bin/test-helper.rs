@@ -108,6 +108,8 @@ fn main() -> anyhow::Result<()> {
             "timerfd_test" => timerfd_test(),
             "itimer_test" => itimer_test(),
             "syslog_test" => syslog_test(),
+            "ptrace_test" => ptrace_test(),
+            "seccomp_test" => seccomp_test(),
             "execveat_test" => execveat_test(),
             "pipe_operations_test" => pipe_operations_test(),
             "io_multiplexing_test" => io_multiplexing_test(),
@@ -4412,6 +4414,88 @@ fn syslog_test() -> anyhow::Result<()> {
             5i32, // SYSLOG_ACTION_CLEAR
             std::ptr::null_mut::<u8>(),
             0i32,
+        );
+    }
+
+    Ok(())
+}
+
+fn ptrace_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test ptrace syscalls
+        // Note: ptrace usually needs special setup, these calls may fail
+        // but we just need them to be traced
+
+        // Test 1: PTRACE_TRACEME - allows parent to trace this process
+        // This should succeed
+        let result = libc::syscall(
+            libc::SYS_ptrace,
+            0i32,   // PTRACE_TRACEME
+            0i32,   // pid (ignored for TRACEME)
+            0usize, // addr
+            0usize, // data
+        );
+
+        if result < 0 {
+            // This is expected to fail in many contexts
+            eprintln!("ptrace TRACEME returned: {}", result);
+        }
+
+        // Test 2: PTRACE_PEEKTEXT - try to read from own memory
+        // This will likely fail but will be traced
+        let _result = libc::syscall(
+            libc::SYS_ptrace,
+            1i32, // PTRACE_PEEKTEXT
+            std::process::id() as i32,
+            0x1000usize, // arbitrary address
+            0usize,
+        );
+
+        // Test 3: PTRACE_CONT - continue a traced process
+        // This will likely fail but will be traced
+        let _result = libc::syscall(
+            libc::SYS_ptrace,
+            7i32, // PTRACE_CONT
+            1i32, // arbitrary pid
+            0usize,
+            0usize,
+        );
+    }
+
+    Ok(())
+}
+
+fn seccomp_test() -> anyhow::Result<()> {
+    unsafe {
+        // Test seccomp syscalls
+        // Note: these may fail without proper permissions or kernel support
+        // but we just need them to be traced
+
+        // Test 1: SECCOMP_GET_ACTION_AVAIL - check if an action is available
+        let mut action: u32 = 0; // SECCOMP_RET_KILL_PROCESS
+        let _result = libc::syscall(
+            libc::SYS_seccomp,
+            2u32, // SECCOMP_GET_ACTION_AVAIL
+            0u32, // flags
+            &mut action as *mut u32,
+        );
+
+        // Test 2: SECCOMP_GET_NOTIF_SIZES - get notification sizes
+        // This may fail on older kernels
+        let mut sizes = [0u8; 32];
+        let _result = libc::syscall(
+            libc::SYS_seccomp,
+            3u32, // SECCOMP_GET_NOTIF_SIZES
+            0u32, // flags
+            sizes.as_mut_ptr(),
+        );
+
+        // Test 3: Invalid operation - should fail
+        let _result = libc::syscall(
+            libc::SYS_seccomp,
+            255u32, // invalid operation
+            0u32,
+            std::ptr::null_mut::<u8>(),
         );
     }
 

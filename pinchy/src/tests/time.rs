@@ -2,15 +2,16 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use pinchy_common::{
-    kernel_types::{Itimerspec, Sigevent, SigeventUn, Sigval, Timespec, Timeval, Timex},
+    kernel_types::{Itimerspec, Itimerval, Sigevent, SigeventUn, Sigval, Timespec, Timeval, Timex},
     syscalls::{
         SYS_adjtimex, SYS_clock_adjtime, SYS_clock_getres, SYS_clock_gettime, SYS_clock_settime,
-        SYS_timer_create, SYS_timer_delete, SYS_timer_getoverrun, SYS_timer_gettime,
-        SYS_timer_settime, SYS_timerfd_create, SYS_timerfd_gettime, SYS_timerfd_settime,
+        SYS_getitimer, SYS_setitimer, SYS_timer_create, SYS_timer_delete, SYS_timer_getoverrun,
+        SYS_timer_gettime, SYS_timer_settime, SYS_timerfd_create, SYS_timerfd_gettime,
+        SYS_timerfd_settime,
     },
-    AdjtimexData, ClockAdjtimeData, ClockTimeData, SyscallEvent, SyscallEventData, TimerCreateData,
-    TimerDeleteData, TimerGetoverrunData, TimerGettimeData, TimerSettimeData, TimerfdCreateData,
-    TimerfdGettimeData, TimerfdSettimeData,
+    AdjtimexData, ClockAdjtimeData, ClockTimeData, GetItimerData, SetItimerData, SyscallEvent,
+    SyscallEventData, TimerCreateData, TimerDeleteData, TimerGetoverrunData, TimerGettimeData,
+    TimerSettimeData, TimerfdCreateData, TimerfdGettimeData, TimerfdSettimeData,
 };
 
 use crate::syscall_test;
@@ -463,4 +464,202 @@ syscall_test!(
         }
     },
     "2005 timerfd_settime(fd: 7, flags: TIMER_ABSTIME, new_value: { it_interval: { secs: 0, nanos: 0 }, it_value: { secs: 1675209700, nanos: 0 } }, old_value: NULL) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getitimer_real,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getitimer,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                getitimer: GetItimerData {
+                    which: libc::ITIMER_REAL,
+                    curr_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 1,
+                            tv_usec: 500000,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 100000,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "1234 getitimer(which: ITIMER_REAL, curr_value: { it_interval: { tv_sec: 1, tv_usec: 500000 }, it_value: { tv_sec: 0, tv_usec: 100000 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getitimer_virtual,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getitimer,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                getitimer: GetItimerData {
+                    which: libc::ITIMER_VIRTUAL,
+                    curr_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 2,
+                            tv_usec: 750000,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "1234 getitimer(which: ITIMER_VIRTUAL, curr_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 2, tv_usec: 750000 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getitimer_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_getitimer,
+            pid: 1234,
+            tid: 1234,
+            return_value: -1,
+            data: SyscallEventData {
+                getitimer: GetItimerData {
+                    which: 999, // Invalid timer
+                    curr_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "1234 getitimer(which: 999, curr_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_setitimer_prof,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_setitimer,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                setitimer: SetItimerData {
+                    which: libc::ITIMER_PROF,
+                    new_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 100000,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 100000,
+                        },
+                    },
+                    old_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 1,
+                            tv_usec: 0,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 250000,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "1234 setitimer(which: ITIMER_PROF, new_value: { it_interval: { tv_sec: 0, tv_usec: 100000 }, it_value: { tv_sec: 0, tv_usec: 100000 } }, old_value: { it_interval: { tv_sec: 1, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 250000 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_setitimer_real,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_setitimer,
+            pid: 1234,
+            tid: 1234,
+            return_value: 0,
+            data: SyscallEventData {
+                setitimer: SetItimerData {
+                    which: libc::ITIMER_REAL,
+                    new_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 5,
+                            tv_usec: 0,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 5,
+                            tv_usec: 0,
+                        },
+                    },
+                    old_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "1234 setitimer(which: ITIMER_REAL, new_value: { it_interval: { tv_sec: 5, tv_usec: 0 }, it_value: { tv_sec: 5, tv_usec: 0 } }, old_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_setitimer_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_setitimer,
+            pid: 1234,
+            tid: 1234,
+            return_value: -1,
+            data: SyscallEventData {
+                setitimer: SetItimerData {
+                    which: -1, // Invalid timer
+                    new_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                    },
+                    old_value: Itimerval {
+                        it_interval: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                        it_value: Timeval {
+                            tv_sec: 0,
+                            tv_usec: 0,
+                        },
+                    },
+                },
+            },
+        }
+    },
+    "1234 setitimer(which: -1, new_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }, old_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = -1 (error)\n"
 );

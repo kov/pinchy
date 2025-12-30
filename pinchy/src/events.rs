@@ -814,6 +814,29 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_getitimer => {
+            let data = unsafe { event.data.getitimer };
+
+            argf!(sf, "which: {}", format_timer_which(data.which));
+
+            arg!(sf, "curr_value:");
+            format_itimerval(&mut sf, &data.curr_value).await?;
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_setitimer => {
+            let data = unsafe { event.data.setitimer };
+
+            argf!(sf, "which: {}", format_timer_which(data.which));
+
+            arg!(sf, "new_value:");
+            format_itimerval(&mut sf, &data.new_value).await?;
+
+            arg!(sf, "old_value:");
+            format_itimerval(&mut sf, &data.old_value).await?;
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_getpriority => {
             let data = unsafe { event.data.getpriority };
 
@@ -4130,6 +4153,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             } else {
                 finish!(sf, event.return_value);
             }
+        }
+        syscalls::SYS_syslog => {
+            let data = unsafe { event.data.syslog };
+
+            argf!(sf, "type: {}", format_syslog_type(data.type_));
+            argf!(sf, "bufp: 0x{:x}", data.bufp);
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, event.return_value);
         }
         syscalls::SYS_fanotify_init => {
             let data = unsafe { event.data.fanotify_init };

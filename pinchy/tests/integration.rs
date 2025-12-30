@@ -1994,3 +1994,58 @@ fn file_handles_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn itimer_test() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["getitimer", "setitimer"], "itimer_test");
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ getitimer(which: ITIMER_REAL, curr_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = 0 (success)
+        @PID@ setitimer(which: ITIMER_VIRTUAL, new_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 100000 } }, old_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = 0 (success)
+        @PID@ getitimer(which: ITIMER_VIRTUAL, curr_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: @NUMBER@ } }) = 0 (success)
+        @PID@ setitimer(which: ITIMER_VIRTUAL, new_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }, old_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[serial]
+#[ignore = "runs in special environment"]
+fn syslog_test() {
+    let pinchy = PinchyTest::new(None, None);
+
+    let handle = run_workload(&["syslog"], "syslog_test");
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ syslog(type: SYSLOG_ACTION_SIZE_BUFFER, bufp: 0x0, size: 0) = @NUMBER@
+        @PID@ syslog(type: SYSLOG_ACTION_SIZE_UNREAD, bufp: 0x0, size: 0) = @NUMBER@
+        @PID@ syslog(type: SYSLOG_ACTION_READ_ALL, bufp: 0x@HEXNUMBER@, size: 1024) = @ANY@
+        @PID@ syslog(type: SYSLOG_ACTION_CONSOLE_LEVEL, bufp: 0x0, size: 7) = 0 (success)
+        @PID@ syslog(type: SYSLOG_ACTION_CONSOLE_OFF, bufp: 0x0, size: 0) = 0 (success)
+        @PID@ syslog(type: SYSLOG_ACTION_CONSOLE_ON, bufp: 0x0, size: 0) = 0 (success)
+        @PID@ syslog(type: SYSLOG_ACTION_CLEAR, bufp: 0x0, size: 0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

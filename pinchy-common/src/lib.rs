@@ -373,6 +373,9 @@ pub union SyscallEventData {
     pub sync_file_range: SyncFileRangeData,
     pub syncfs: SyncfsData,
     pub utimensat: UtimensatData,
+    pub getitimer: GetItimerData,
+    pub setitimer: SetItimerData,
+    pub syslog: SyslogData,
 }
 
 #[repr(C)]
@@ -3180,4 +3183,27 @@ impl Default for UtimensatData {
             flags: 0,
         }
     }
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct GetItimerData {
+    pub which: i32,
+    pub curr_value: kernel_types::Itimerval,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SetItimerData {
+    pub which: i32,
+    pub new_value: kernel_types::Itimerval,
+    pub old_value: kernel_types::Itimerval,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SyslogData {
+    pub type_: i32,
+    pub bufp: u64,
+    pub size: i32,
 }

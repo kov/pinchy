@@ -2483,7 +2483,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_sethostname
         | syscalls::SYS_setdomainname
         | syscalls::SYS_getitimer
-        | syscalls::SYS_setitimer => match return_value {
+        | syscalls::SYS_setitimer
+        | syscalls::SYS_seccomp => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -5875,5 +5876,146 @@ pub fn format_syslog_type(type_: i32) -> Cow<'static, str> {
         syslog_constants::SYSLOG_ACTION_SIZE_UNREAD => Cow::Borrowed("SYSLOG_ACTION_SIZE_UNREAD"),
         syslog_constants::SYSLOG_ACTION_SIZE_BUFFER => Cow::Borrowed("SYSLOG_ACTION_SIZE_BUFFER"),
         _ => format!("{}", type_).into(),
+    }
+}
+
+pub mod ptrace_constants {
+    // Most constants are available from libc and should be used from there.
+    // Only constants not available in libc are defined here.
+
+    // Architecture-specific constants (x86_64 only)
+    // These constants are only valid request codes on x86_64 systems.
+    // On aarch64, these operations don't exist - use PTRACE_GETREGSET/SETREGSET instead.
+    pub const PTRACE_GETREGS: i32 = 12;
+    pub const PTRACE_SETREGS: i32 = 13;
+    pub const PTRACE_GETFPREGS: i32 = 14;
+    pub const PTRACE_SETFPREGS: i32 = 15;
+    pub const PTRACE_GETFPXREGS: i32 = 18;
+    pub const PTRACE_SETFPXREGS: i32 = 19;
+
+    // Constants not available in libc
+    pub const PTRACE_SECCOMP_GET_FILTER: i32 = 0x420c;
+    pub const PTRACE_SECCOMP_GET_METADATA: i32 = 0x420d;
+}
+
+pub fn format_ptrace_request(request: i32) -> Cow<'static, str> {
+    match request {
+        x if x == libc::PTRACE_TRACEME as i32 => Cow::Borrowed("PTRACE_TRACEME"),
+        x if x == libc::PTRACE_PEEKTEXT as i32 => Cow::Borrowed("PTRACE_PEEKTEXT"),
+        x if x == libc::PTRACE_PEEKDATA as i32 => Cow::Borrowed("PTRACE_PEEKDATA"),
+        x if x == libc::PTRACE_PEEKUSER as i32 => Cow::Borrowed("PTRACE_PEEKUSER"),
+        x if x == libc::PTRACE_POKETEXT as i32 => Cow::Borrowed("PTRACE_POKETEXT"),
+        x if x == libc::PTRACE_POKEDATA as i32 => Cow::Borrowed("PTRACE_POKEDATA"),
+        x if x == libc::PTRACE_POKEUSER as i32 => Cow::Borrowed("PTRACE_POKEUSER"),
+        x if x == libc::PTRACE_CONT as i32 => Cow::Borrowed("PTRACE_CONT"),
+        x if x == libc::PTRACE_KILL as i32 => Cow::Borrowed("PTRACE_KILL"),
+        x if x == libc::PTRACE_SINGLESTEP as i32 => Cow::Borrowed("PTRACE_SINGLESTEP"),
+        ptrace_constants::PTRACE_GETREGS => Cow::Borrowed("PTRACE_GETREGS"),
+        ptrace_constants::PTRACE_SETREGS => Cow::Borrowed("PTRACE_SETREGS"),
+        ptrace_constants::PTRACE_GETFPREGS => Cow::Borrowed("PTRACE_GETFPREGS"),
+        ptrace_constants::PTRACE_SETFPREGS => Cow::Borrowed("PTRACE_SETFPREGS"),
+        x if x == libc::PTRACE_ATTACH as i32 => Cow::Borrowed("PTRACE_ATTACH"),
+        x if x == libc::PTRACE_DETACH as i32 => Cow::Borrowed("PTRACE_DETACH"),
+        ptrace_constants::PTRACE_GETFPXREGS => Cow::Borrowed("PTRACE_GETFPXREGS"),
+        ptrace_constants::PTRACE_SETFPXREGS => Cow::Borrowed("PTRACE_SETFPXREGS"),
+        x if x == libc::PTRACE_SYSCALL as i32 => Cow::Borrowed("PTRACE_SYSCALL"),
+        x if x == libc::PTRACE_SETOPTIONS as i32 => Cow::Borrowed("PTRACE_SETOPTIONS"),
+        x if x == libc::PTRACE_GETEVENTMSG as i32 => Cow::Borrowed("PTRACE_GETEVENTMSG"),
+        x if x == libc::PTRACE_GETSIGINFO as i32 => Cow::Borrowed("PTRACE_GETSIGINFO"),
+        x if x == libc::PTRACE_SETSIGINFO as i32 => Cow::Borrowed("PTRACE_SETSIGINFO"),
+        x if x == libc::PTRACE_GETREGSET as i32 => Cow::Borrowed("PTRACE_GETREGSET"),
+        x if x == libc::PTRACE_SETREGSET as i32 => Cow::Borrowed("PTRACE_SETREGSET"),
+        x if x == libc::PTRACE_SEIZE as i32 => Cow::Borrowed("PTRACE_SEIZE"),
+        x if x == libc::PTRACE_INTERRUPT as i32 => Cow::Borrowed("PTRACE_INTERRUPT"),
+        x if x == libc::PTRACE_LISTEN as i32 => Cow::Borrowed("PTRACE_LISTEN"),
+        x if x == libc::PTRACE_PEEKSIGINFO as i32 => Cow::Borrowed("PTRACE_PEEKSIGINFO"),
+        x if x == libc::PTRACE_GETSIGMASK as i32 => Cow::Borrowed("PTRACE_GETSIGMASK"),
+        x if x == libc::PTRACE_SETSIGMASK as i32 => Cow::Borrowed("PTRACE_SETSIGMASK"),
+        ptrace_constants::PTRACE_SECCOMP_GET_FILTER => Cow::Borrowed("PTRACE_SECCOMP_GET_FILTER"),
+        ptrace_constants::PTRACE_SECCOMP_GET_METADATA => {
+            Cow::Borrowed("PTRACE_SECCOMP_GET_METADATA")
+        }
+        x if x == libc::PTRACE_GET_SYSCALL_INFO as i32 => Cow::Borrowed("PTRACE_GET_SYSCALL_INFO"),
+        _ => format!("{}", request).into(),
+    }
+}
+
+pub mod seccomp_constants {
+    // From linux/seccomp.h
+    pub const SECCOMP_SET_MODE_STRICT: u32 = 0;
+    pub const SECCOMP_SET_MODE_FILTER: u32 = 1;
+    pub const SECCOMP_GET_ACTION_AVAIL: u32 = 2;
+    pub const SECCOMP_GET_NOTIF_SIZES: u32 = 3;
+
+    // Seccomp action return values (from include/uapi/linux/seccomp.h)
+    pub const SECCOMP_RET_KILL_PROCESS: u32 = 0x80000000;
+    pub const SECCOMP_RET_KILL_THREAD: u32 = 0x00000000;
+    pub const SECCOMP_RET_TRAP: u32 = 0x00030000;
+    pub const SECCOMP_RET_ERRNO: u32 = 0x00050000;
+    pub const SECCOMP_RET_USER_NOTIF: u32 = 0x7fc00000;
+    pub const SECCOMP_RET_TRACE: u32 = 0x7ff00000;
+    pub const SECCOMP_RET_LOG: u32 = 0x7ffc0000;
+    pub const SECCOMP_RET_ALLOW: u32 = 0x7fff0000;
+}
+
+pub fn format_seccomp_operation(operation: u32) -> Cow<'static, str> {
+    match operation {
+        seccomp_constants::SECCOMP_SET_MODE_STRICT => Cow::Borrowed("SECCOMP_SET_MODE_STRICT"),
+        seccomp_constants::SECCOMP_SET_MODE_FILTER => Cow::Borrowed("SECCOMP_SET_MODE_FILTER"),
+        seccomp_constants::SECCOMP_GET_ACTION_AVAIL => Cow::Borrowed("SECCOMP_GET_ACTION_AVAIL"),
+        seccomp_constants::SECCOMP_GET_NOTIF_SIZES => Cow::Borrowed("SECCOMP_GET_NOTIF_SIZES"),
+        _ => format!("{}", operation).into(),
+    }
+}
+
+pub fn format_seccomp_flags(flags: u32) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts = Vec::new();
+
+    if flags & (libc::SECCOMP_FILTER_FLAG_TSYNC as u32) != 0 {
+        parts.push("SECCOMP_FILTER_FLAG_TSYNC");
+    }
+
+    if flags & (libc::SECCOMP_FILTER_FLAG_LOG as u32) != 0 {
+        parts.push("SECCOMP_FILTER_FLAG_LOG");
+    }
+
+    if flags & (libc::SECCOMP_FILTER_FLAG_SPEC_ALLOW as u32) != 0 {
+        parts.push("SECCOMP_FILTER_FLAG_SPEC_ALLOW");
+    }
+
+    if flags & (libc::SECCOMP_FILTER_FLAG_NEW_LISTENER as u32) != 0 {
+        parts.push("SECCOMP_FILTER_FLAG_NEW_LISTENER");
+    }
+
+    if flags & (libc::SECCOMP_FILTER_FLAG_TSYNC_ESRCH as u32) != 0 {
+        parts.push("SECCOMP_FILTER_FLAG_TSYNC_ESRCH");
+    }
+
+    if flags & (libc::SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV as u32) != 0 {
+        parts.push("SECCOMP_FILTER_FLAG_WAIT_KILLABLE_RECV");
+    }
+
+    if parts.is_empty() {
+        format!("0x{:x}", flags).into()
+    } else {
+        format!("0x{:x} ({})", flags, parts.join("|")).into()
+    }
+}
+
+pub fn format_seccomp_action(action: u32) -> Cow<'static, str> {
+    match action {
+        seccomp_constants::SECCOMP_RET_KILL_PROCESS => Cow::Borrowed("SECCOMP_RET_KILL_PROCESS"),
+        seccomp_constants::SECCOMP_RET_KILL_THREAD => Cow::Borrowed("SECCOMP_RET_KILL_THREAD"),
+        seccomp_constants::SECCOMP_RET_TRAP => Cow::Borrowed("SECCOMP_RET_TRAP"),
+        seccomp_constants::SECCOMP_RET_ERRNO => Cow::Borrowed("SECCOMP_RET_ERRNO"),
+        seccomp_constants::SECCOMP_RET_USER_NOTIF => Cow::Borrowed("SECCOMP_RET_USER_NOTIF"),
+        seccomp_constants::SECCOMP_RET_TRACE => Cow::Borrowed("SECCOMP_RET_TRACE"),
+        seccomp_constants::SECCOMP_RET_LOG => Cow::Borrowed("SECCOMP_RET_LOG"),
+        seccomp_constants::SECCOMP_RET_ALLOW => Cow::Borrowed("SECCOMP_RET_ALLOW"),
+        _ => format!("0x{:x}", action).into(),
     }
 }

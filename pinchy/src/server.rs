@@ -726,6 +726,20 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         explicitly_supported.insert(syscall_nr);
     }
 
+    // Security syscalls - all handled by the unified security handler
+    const SECURITY_SYSCALLS: &[i64] = &[syscalls::SYS_ptrace, syscalls::SYS_seccomp];
+    let security_prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_security")
+        .context("missing security handler")?
+        .try_into()?;
+    security_prog
+        .load()
+        .context("trying to load syscall_exit_security into eBPF")?;
+    for &syscall_nr in SECURITY_SYSCALLS {
+        prog_array.set(syscall_nr as u32, security_prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
     // IPC syscalls - all handled by the unified IPC handler
     const IPC_SYSCALLS: &[i64] = &[
         syscalls::SYS_shmget,

@@ -24,6 +24,7 @@ mod memory;
 mod network;
 mod process;
 mod scheduling;
+mod security;
 mod signal;
 mod sync;
 mod system;

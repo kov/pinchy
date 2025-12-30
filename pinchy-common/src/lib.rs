@@ -376,6 +376,8 @@ pub union SyscallEventData {
     pub getitimer: GetItimerData,
     pub setitimer: SetItimerData,
     pub syslog: SyslogData,
+    pub ptrace: PtraceData,
+    pub seccomp: SeccompData,
 }
 
 #[repr(C)]
@@ -3210,4 +3212,26 @@ pub struct SyslogData {
     pub type_: i32,
     pub bufp: u64,
     pub size: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct PtraceData {
+    pub request: i32,
+    pub pid: i32,
+    pub addr: u64,
+    pub data: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct SeccompData {
+    pub operation: u32,
+    pub flags: u32,
+    pub args: u64,
+    // Parsed argument data based on operation
+    pub action_avail: u32,     // For GET_ACTION_AVAIL: the action value
+    pub action_read_ok: u8,    // 1 if action_avail was successfully read, 0 otherwise
+    pub filter_len: u16,       // For SET_MODE_FILTER: number of BPF instructions
+    pub notif_sizes: [u16; 3], // For GET_NOTIF_SIZES: [notif, resp, data] sizes
 }

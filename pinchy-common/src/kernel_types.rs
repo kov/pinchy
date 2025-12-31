@@ -27,6 +27,9 @@ pub const IOCB_FLAG_IOPRIO: u32 = 1 << 1; // aio_reqprio is valid
 pub const AIO_IOCB_ARRAY_CAP: usize = 4;
 pub const AIO_EVENT_ARRAY_CAP: usize = 4;
 
+// Constants for kexec_load
+pub const KEXEC_SEGMENT_ARRAY_CAP: usize = 16;
+
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
 pub struct Pollfd {
@@ -885,4 +888,15 @@ pub struct SeccompNotifSizes {
     pub seccomp_notif: u16,      // Size of notification structure
     pub seccomp_notif_resp: u16, // Size of response structure
     pub seccomp_data: u16,       // Size of 'struct seccomp_data'
+}
+
+/// Kernel memory segment descriptor for kexec_load
+/// See: https://man7.org/linux/man-pages/man2/kexec_load.2.html
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct KexecSegment {
+    pub buf: u64,   // Buffer in user space (void* as u64)
+    pub bufsz: u64, // Buffer length in user space (size_t as u64)
+    pub mem: u64,   // Physical address of kernel (void* as u64)
+    pub memsz: u64, // Physical address length (size_t as u64)
 }

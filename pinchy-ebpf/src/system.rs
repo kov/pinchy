@@ -467,6 +467,39 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                 data.bufp = args[1] as u64;
                 data.size = args[2] as i32;
             }
+            syscalls::SYS_restart_syscall => {
+                let _data = data_mut!(entry, restart_syscall);
+                // No arguments to capture
+            }
+            syscalls::SYS_kexec_load => {
+                let data = data_mut!(entry, kexec_load);
+                data.entry = args[0] as u64;
+                data.nr_segments = args[1] as u64;
+                data.segments = args[2] as u64;
+                data.flags = args[3] as u64;
+
+                let segments_ptr = args[2] as *const kernel_types::KexecSegment;
+
+                if !segments_ptr.is_null() && data.nr_segments > 0 {
+                    let max_to_read = core::cmp::min(
+                        kernel_types::KEXEC_SEGMENT_ARRAY_CAP,
+                        data.nr_segments as usize,
+                    );
+
+                    for i in 0..max_to_read {
+                        unsafe {
+                            let ptr = segments_ptr.add(i);
+
+                            if let Ok(segment) = bpf_probe_read_user(ptr) {
+                                data.parsed_segments[i] = segment;
+                                data.segments_read += 1;
+                            } else {
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
             _ => {
                 entry.discard();
                 return Ok(());

@@ -4417,6 +4417,52 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_restart_syscall => {
+            let _data = unsafe { event.data.restart_syscall };
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_kexec_load => {
+            let data = unsafe { event.data.kexec_load };
+
+            argf!(sf, "entry: 0x{:x}", data.entry);
+            argf!(sf, "nr_segments: {}", data.nr_segments);
+
+            if data.segments_read > 0 {
+                let segments: Vec<String> = data.parsed_segments[..data.segments_read as usize]
+                    .iter()
+                    .map(|seg| {
+                        format!(
+                            "{{buf: 0x{:x}, bufsz: {}, mem: 0x{:x}, memsz: {}}}",
+                            seg.buf, seg.bufsz, seg.mem, seg.memsz
+                        )
+                    })
+                    .collect();
+
+                if data.segments_read < data.nr_segments
+                    && data.nr_segments
+                        > pinchy_common::kernel_types::KEXEC_SEGMENT_ARRAY_CAP as u64
+                {
+                    argf!(
+                        sf,
+                        "segments: [{}... (showing {} of {})]",
+                        segments.join(", "),
+                        data.segments_read,
+                        data.nr_segments
+                    );
+                } else {
+                    argf!(sf, "segments: [{}]", segments.join(", "));
+                }
+            } else if data.segments == 0 {
+                arg!(sf, "segments: NULL");
+            } else {
+                argf!(sf, "segments: 0x{:x}", data.segments);
+            }
+
+            argf!(sf, "flags: {}", format_kexec_load_flags(data.flags));
+
+            finish!(sf, event.return_value);
+        }
         syscalls::SYS_fanotify_init => {
             let data = unsafe { event.data.fanotify_init };
 

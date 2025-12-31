@@ -821,6 +821,50 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.id = args[2] as i32;
                 data.addr = args[3] as u64;
             }
+            syscalls::SYS_lookup_dcookie => {
+                let data = data_mut!(entry, lookup_dcookie);
+                data.cookie = args[0] as u64;
+                data.size = args[2] as u64;
+
+                let buffer_ptr = args[1] as *const u8;
+
+                if !buffer_ptr.is_null() && return_value > 0 {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(buffer_ptr, &mut data.buffer);
+                    }
+                }
+            }
+            syscalls::SYS_nfsservctl => {
+                let data = data_mut!(entry, nfsservctl);
+                data.cmd = args[0] as i32;
+                data.argp = args[1] as u64;
+                data.resp = args[2] as u64;
+            }
+            #[cfg(target_arch = "x86_64")]
+            syscalls::SYS_utime => {
+                let data = data_mut!(entry, utime);
+
+                let filename_ptr = args[0] as *const u8;
+                let times_ptr = args[1] as *const pinchy_common::kernel_types::Utimbuf;
+
+                if !filename_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
+                    }
+                }
+
+                if times_ptr.is_null() {
+                    data.times_is_null = 1;
+                } else {
+                    data.times_is_null = 0;
+
+                    unsafe {
+                        if let Ok(times) = bpf_probe_read_user(times_ptr) {
+                            data.times = times;
+                        }
+                    }
+                }
+            }
             _ => {
                 entry.discard();
                 return Ok(());

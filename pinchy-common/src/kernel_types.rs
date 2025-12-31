@@ -45,6 +45,14 @@ pub struct Timespec {
     pub nanos: i64,
 }
 
+/// Structure for utime syscall
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Utimbuf {
+    pub actime: i64,  // Access time
+    pub modtime: i64, // Modification time
+}
+
 /// Structure for openat2 syscall, matching the kernel's struct open_how
 /// See: https://man7.org/linux/man-pages/man2/openat2.2.html
 #[repr(C)]

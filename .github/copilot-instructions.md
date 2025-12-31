@@ -276,6 +276,9 @@ addresses):
 **NEVER use magic values (0x1, 0x2, etc.) in format helpers or tests.** This
 is a critical requirement for maintainability.
 
+IMPORTANT: you can verify if a constant is available in the libc crate by going
+to https://docs.rs/libc/latest/libc/#constants
+
 #### Identifying and Using Existing Format Helpers
 
 Before implementing argument parsing, **always check** for existing format

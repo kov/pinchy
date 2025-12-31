@@ -2327,7 +2327,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_process_vm_readv
         | syscalls::SYS_process_vm_writev
         | syscalls::SYS_sched_getaffinity
-        | syscalls::SYS_copy_file_range => {
+        | syscalls::SYS_copy_file_range
+        | syscalls::SYS_lookup_dcookie => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
             } else {
@@ -2492,7 +2493,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_getresuid
         | syscalls::SYS_getresgid
         | syscalls::SYS_restart_syscall
-        | syscalls::SYS_kexec_load => match return_value {
+        | syscalls::SYS_kexec_load
+        | syscalls::SYS_nfsservctl => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -2532,7 +2534,8 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_rename
         | syscalls::SYS_mknod
         | syscalls::SYS_stat
-        | syscalls::SYS_lstat => match return_value {
+        | syscalls::SYS_lstat
+        | syscalls::SYS_utime => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },

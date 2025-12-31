@@ -391,6 +391,9 @@ pub union SyscallEventData {
     pub remap_file_pages: RemapFilePagesData,
     pub restart_syscall: RestartSyscallData,
     pub kexec_load: KexecLoadData,
+    pub lookup_dcookie: LookupDcookieData,
+    pub nfsservctl: NfsservctlData,
+    pub utime: UtimeData,
 }
 
 #[repr(C)]
@@ -3395,4 +3398,28 @@ pub struct KexecLoadData {
     pub flags: u64,
     pub segments_read: u64,
     pub parsed_segments: [kernel_types::KexecSegment; kernel_types::KEXEC_SEGMENT_ARRAY_CAP],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LookupDcookieData {
+    pub cookie: u64,
+    pub buffer: [u8; MEDIUM_READ_SIZE],
+    pub size: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct NfsservctlData {
+    pub cmd: i32,
+    pub argp: u64,
+    pub resp: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UtimeData {
+    pub filename: [u8; DATA_READ_SIZE],
+    pub times: kernel_types::Utimbuf,
+    pub times_is_null: u8,
 }

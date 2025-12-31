@@ -866,3 +866,76 @@ syscall_test!(
     },
     "2468 mq_getsetattr(mqdes: 99, newattr: NULL, oldattr: NULL) = -1 (error)\n"
 );
+
+syscall_test!(
+    parse_semtimedop_success,
+    {
+        use pinchy_common::kernel_types::{Sembuf, Timespec};
+
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_semtimedop,
+            pid: 300,
+            tid: 300,
+            return_value: 0,
+            data: SyscallEventData {
+                semtimedop: pinchy_common::SemtimedopData {
+                    semid: 123,
+                    sops: [
+                        Sembuf {
+                            sem_num: 0,
+                            sem_op: -1,
+                            sem_flg: 0,
+                        },
+                        Sembuf {
+                            sem_num: 1,
+                            sem_op: 1,
+                            sem_flg: libc::IPC_NOWAIT as i16,
+                        },
+                        Sembuf::default(),
+                        Sembuf::default(),
+                    ],
+                    nsops: 2,
+                    timeout: Timespec {
+                        seconds: 5,
+                        nanos: 500000000,
+                    },
+                    timeout_is_null: 0,
+                },
+            },
+        }
+    },
+    "300 semtimedop(semid: 123, sops: [ sembuf { sem_num: 0, sem_op: -1, sem_flg: 0x0 }, sembuf { sem_num: 1, sem_op: 1, sem_flg: 0x800 } ], nsops: 2, timeout: {tv_sec: 5, tv_nsec: 500000000}) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_semtimedop_null_timeout,
+    {
+        use pinchy_common::kernel_types::{Sembuf, Timespec};
+
+        SyscallEvent {
+            syscall_nr: pinchy_common::syscalls::SYS_semtimedop,
+            pid: 301,
+            tid: 301,
+            return_value: 0,
+            data: SyscallEventData {
+                semtimedop: pinchy_common::SemtimedopData {
+                    semid: 456,
+                    sops: [
+                        Sembuf {
+                            sem_num: 0,
+                            sem_op: 1,
+                            sem_flg: 0,
+                        },
+                        Sembuf::default(),
+                        Sembuf::default(),
+                        Sembuf::default(),
+                    ],
+                    nsops: 1,
+                    timeout: Timespec::default(),
+                    timeout_is_null: 1,
+                },
+            },
+        }
+    },
+    "301 semtimedop(semid: 456, sops: [ sembuf { sem_num: 0, sem_op: 1, sem_flg: 0x0 } ], nsops: 1, timeout: NULL) = 0 (success)\n"
+);

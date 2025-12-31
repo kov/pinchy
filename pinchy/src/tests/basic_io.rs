@@ -25,8 +25,8 @@ use pinchy_common::{
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
-    syscalls::{SYS_dup2, SYS_epoll_create, SYS_poll},
-    Dup2Data, EpollCreateData, PollData,
+    syscalls::{SYS_dup2, SYS_epoll_create, SYS_poll, SYS_sendfile},
+    Dup2Data, EpollCreateData, PollData, SendfileData,
 };
 
 use crate::{
@@ -1185,4 +1185,50 @@ syscall_test!(
         }
     },
     "444 io_uring_register(fd: 4, opcode: IORING_REGISTER_PROBE, arg: 0x7ffeabcd3000, nr_args: 0x80000004 (4|IORING_REGISTER_USE_REGISTERED_RING)) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_sendfile_with_offset,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sendfile,
+            pid: 400,
+            tid: 400,
+            return_value: 1024,
+            data: SyscallEventData {
+                sendfile: SendfileData {
+                    out_fd: 4,
+                    in_fd: 3,
+                    offset: 512,
+                    offset_is_null: 0,
+                    count: 2048,
+                },
+            },
+        }
+    },
+    "400 sendfile(out_fd: 4, in_fd: 3, offset: 512, count: 2048) = 1024 (bytes)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_sendfile_null_offset,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_sendfile,
+            pid: 401,
+            tid: 401,
+            return_value: 4096,
+            data: SyscallEventData {
+                sendfile: SendfileData {
+                    out_fd: 5,
+                    in_fd: 3,
+                    offset: 0,
+                    offset_is_null: 1,
+                    count: 8192,
+                },
+            },
+        }
+    },
+    "401 sendfile(out_fd: 5, in_fd: 3, offset: NULL, count: 8192) = 4096 (bytes)\n"
 );

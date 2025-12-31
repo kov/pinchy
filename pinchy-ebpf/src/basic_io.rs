@@ -577,6 +577,23 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 data.arg = args[2] as u64;
                 data.nr_args = args[3] as u32;
             }
+            #[cfg(x86_64)]
+            syscalls::SYS_sendfile => {
+                let data = data_mut!(entry, sendfile);
+
+                data.out_fd = args[0] as i32;
+                data.in_fd = args[1] as i32;
+                data.count = args[3] as usize;
+
+                let offset_ptr = args[2] as *const u64;
+
+                if offset_ptr.is_null() {
+                    data.offset_is_null = 1;
+                } else {
+                    data.offset_is_null = 0;
+                    data.offset = unsafe { bpf_probe_read_user::<u64>(offset_ptr).unwrap_or(0) };
+                }
+            }
             _ => {
                 entry.discard();
                 return Ok(());

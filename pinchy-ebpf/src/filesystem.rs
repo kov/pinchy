@@ -7,6 +7,8 @@ use aya_ebpf::{
     programs::TracePointContext,
 };
 use aya_log_ebpf::error;
+#[cfg(x86_64)]
+use pinchy_common::kernel_types::LinuxDirent;
 use pinchy_common::{
     kernel_types::{LinuxDirent64, Stat},
     syscalls, DATA_READ_SIZE,
@@ -81,6 +83,43 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                         if reclen == 0 {
                             error!(&ctx, "Read a dent with reclen=0 in getdents64 handler.");
                             break; // This should not really happen.
+                        }
+
+                        data.num_dirents += 1;
+                        offset += reclen;
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_getdents => {
+                let data = data_mut!(entry, getdents);
+
+                data.fd = args[0] as i32;
+                data.count = args[2] as usize;
+                data.num_dirents = 0;
+
+                let dirp = args[1] as *const u8;
+                let mut offset = 0usize;
+
+                for dirent in data.dirents.iter_mut() {
+                    if offset < data.count {
+                        let base = unsafe { dirp.add(offset) };
+
+                        if base.is_null() {
+                            break;
+                        }
+
+                        if let Ok(val) =
+                            unsafe { bpf_probe_read_user::<LinuxDirent>(base as *const _) }
+                        {
+                            *dirent = val;
+                        }
+
+                        let reclen = dirent.d_reclen as usize;
+
+                        if reclen == 0 {
+                            error!(&ctx, "Read a dent with reclen=0 in getdents handler.");
+                            break;
                         }
 
                         data.num_dirents += 1;
@@ -840,7 +879,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.argp = args[1] as u64;
                 data.resp = args[2] as u64;
             }
-            #[cfg(target_arch = "x86_64")]
+            #[cfg(x86_64)]
             syscalls::SYS_utime => {
                 let data = data_mut!(entry, utime);
 
@@ -850,6 +889,179 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 if !filename_ptr.is_null() {
                     unsafe {
                         let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
+                    }
+                }
+
+                if times_ptr.is_null() {
+                    data.times_is_null = 1;
+                } else {
+                    data.times_is_null = 0;
+
+                    unsafe {
+                        if let Ok(times) = bpf_probe_read_user(times_ptr) {
+                            data.times = times;
+                        }
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_access => {
+                let data = data_mut!(entry, access);
+
+                let pathname_ptr = args[0] as *const u8;
+                data.mode = args[1] as i32;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_chmod => {
+                let data = data_mut!(entry, chmod);
+
+                let pathname_ptr = args[0] as *const u8;
+                data.mode = args[1] as u32;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_creat => {
+                let data = data_mut!(entry, creat);
+
+                let pathname_ptr = args[0] as *const u8;
+                data.mode = args[1] as u32;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_mkdir => {
+                let data = data_mut!(entry, mkdir);
+
+                let pathname_ptr = args[0] as *const u8;
+                data.mode = args[1] as u32;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_readlink => {
+                let data = data_mut!(entry, readlink);
+
+                let pathname_ptr = args[0] as *const u8;
+                let buf_ptr = args[1] as *const u8;
+                data.bufsiz = args[2] as u64;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+
+                if !buf_ptr.is_null() && return_value > 0 {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(buf_ptr, &mut data.buf);
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_stat => {
+                let data = data_mut!(entry, stat);
+
+                let pathname_ptr = args[0] as *const u8;
+                let statbuf_ptr = args[1] as *const u8;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+
+                if !statbuf_ptr.is_null() && return_value == 0 {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(
+                            statbuf_ptr,
+                            core::slice::from_raw_parts_mut(
+                                &mut data.statbuf as *mut _ as *mut u8,
+                                core::mem::size_of::<pinchy_common::kernel_types::Stat>(),
+                            ),
+                        );
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_lstat => {
+                let data = data_mut!(entry, lstat);
+
+                let pathname_ptr = args[0] as *const u8;
+                let statbuf_ptr = args[1] as *const u8;
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    }
+                }
+
+                if !statbuf_ptr.is_null() && return_value == 0 {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(
+                            statbuf_ptr,
+                            core::slice::from_raw_parts_mut(
+                                &mut data.statbuf as *mut _ as *mut u8,
+                                core::mem::size_of::<pinchy_common::kernel_types::Stat>(),
+                            ),
+                        );
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_utimes => {
+                let data = data_mut!(entry, utimes);
+
+                let filename_ptr = args[0] as *const u8;
+                let times_ptr = args[1] as *const [pinchy_common::kernel_types::Timeval; 2];
+
+                if !filename_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
+                    }
+                }
+
+                if times_ptr.is_null() {
+                    data.times_is_null = 1;
+                } else {
+                    data.times_is_null = 0;
+
+                    unsafe {
+                        if let Ok(times) = bpf_probe_read_user(times_ptr) {
+                            data.times = times;
+                        }
+                    }
+                }
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_futimesat => {
+                let data = data_mut!(entry, futimesat);
+
+                data.dirfd = args[0] as i32;
+                let pathname_ptr = args[1] as *const u8;
+                let times_ptr = args[2] as *const [pinchy_common::kernel_types::Timeval; 2];
+
+                if !pathname_ptr.is_null() {
+                    unsafe {
+                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
 

@@ -99,6 +99,38 @@ pub fn syscall_exit_ipc(ctx: TracePointContext) -> u32 {
                 data.sops = args[1];
                 data.nsops = args[2] as usize;
             }
+            syscalls::SYS_semtimedop => {
+                let data = data_mut!(entry, semtimedop);
+
+                data.semid = args[0] as i32;
+                data.nsops = args[2] as usize;
+
+                let sops_ptr = args[1] as *const kernel_types::Sembuf;
+
+                for (i, sop) in data.sops.iter_mut().enumerate() {
+                    if i < data.nsops && i < 4 {
+                        unsafe {
+                            if let Ok(val) =
+                                bpf_probe_read_user::<kernel_types::Sembuf>(sops_ptr.add(i))
+                            {
+                                *sop = val;
+                            }
+                        }
+                    }
+                }
+
+                let timeout_ptr = args[3] as *const kernel_types::Timespec;
+
+                if timeout_ptr.is_null() {
+                    data.timeout_is_null = 1;
+                } else {
+                    data.timeout_is_null = 0;
+                    data.timeout = unsafe {
+                        bpf_probe_read_user::<kernel_types::Timespec>(timeout_ptr)
+                            .unwrap_or(kernel_types::Timespec::default())
+                    };
+                }
+            }
             syscalls::SYS_semctl => {
                 let data = data_mut!(entry, semctl);
                 data.semid = args[0] as i32;

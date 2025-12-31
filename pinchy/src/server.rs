@@ -444,6 +444,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_inotify_rm_watch,
         syscalls::SYS_timer_delete,
         syscalls::SYS_timer_getoverrun,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_fork,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_vfork,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -521,6 +525,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fstat,
         syscalls::SYS_newfstatat,
         syscalls::SYS_getdents64,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_getdents,
         syscalls::SYS_statfs,
         syscalls::SYS_fstatfs,
         syscalls::SYS_fsopen,
@@ -596,6 +602,24 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_nfsservctl,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_utime,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_access,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_chmod,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_creat,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_mkdir,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_readlink,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_stat,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_lstat,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_utimes,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_futimesat,
     ];
     let filesystem_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_filesystem")
@@ -637,6 +661,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_pipe2,
         syscalls::SYS_splice,
         syscalls::SYS_tee,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_sendfile,
         syscalls::SYS_vmsplice,
         // Async I/O syscalls
         syscalls::SYS_io_setup,
@@ -764,6 +790,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_msgctl,
         syscalls::SYS_semget,
         syscalls::SYS_semop,
+        syscalls::SYS_semtimedop,
         syscalls::SYS_semctl,
         syscalls::SYS_mq_open,
         syscalls::SYS_mq_unlink,

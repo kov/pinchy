@@ -4661,6 +4661,48 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
+        syscalls::SYS_lookup_dcookie => {
+            let data = unsafe { event.data.lookup_dcookie };
+
+            argf!(sf, "cookie: {}", data.cookie);
+
+            let buffer = format_path(&data.buffer, false);
+
+            argf!(sf, "buffer: {}", buffer);
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_nfsservctl => {
+            let data = unsafe { event.data.nfsservctl };
+
+            argf!(sf, "cmd: {}", data.cmd);
+            argf!(sf, "argp: 0x{:x}", data.argp);
+            argf!(sf, "resp: 0x{:x}", data.resp);
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_utime => {
+            let data = unsafe { event.data.utime };
+
+            let filename = format_path(&data.filename, false);
+
+            argf!(sf, "filename: {}", filename);
+
+            if data.times_is_null != 0 {
+                argf!(sf, "times: NULL");
+            } else {
+                argf!(
+                    sf,
+                    "times: {{actime: {}, modtime: {}}}",
+                    data.times.actime,
+                    data.times.modtime
+                );
+            }
+
+            finish!(sf, event.return_value);
+        }
         _ => {
             let data = unsafe { event.data.generic };
 

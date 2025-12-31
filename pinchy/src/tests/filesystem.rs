@@ -11,18 +11,20 @@ use pinchy_common::{
         self, SYS_acct, SYS_chdir, SYS_copy_file_range, SYS_faccessat, SYS_fallocate,
         SYS_fanotify_init, SYS_fanotify_mark, SYS_fchmod, SYS_fchmodat, SYS_fchown, SYS_fchownat,
         SYS_fdatasync, SYS_fstat, SYS_fsync, SYS_ftruncate, SYS_getcwd, SYS_getdents64,
-        SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat, SYS_mkdirat,
-        SYS_name_to_handle_at, SYS_newfstatat, SYS_open_by_handle_at, SYS_quotactl,
-        SYS_quotactl_fd, SYS_readlinkat, SYS_renameat, SYS_renameat2, SYS_statfs,
-        SYS_sync_file_range, SYS_syncfs, SYS_truncate, SYS_utimensat,
+        SYS_inotify_add_watch, SYS_inotify_init1, SYS_inotify_rm_watch, SYS_linkat,
+        SYS_lookup_dcookie, SYS_mkdirat, SYS_name_to_handle_at, SYS_newfstatat, SYS_nfsservctl,
+        SYS_open_by_handle_at, SYS_quotactl, SYS_quotactl_fd, SYS_readlinkat, SYS_renameat,
+        SYS_renameat2, SYS_statfs, SYS_sync_file_range, SYS_syncfs, SYS_truncate, SYS_utimensat,
     },
     AcctData, CopyFileRangeData, FaccessatData, FallocateData, FanotifyInitData, FanotifyMarkData,
     FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData, FtruncateData,
-    InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData, LinkatData, MkdiratData,
-    MknodatData, NameToHandleAtData, OpenByHandleAtData, QuotactlFdData, Renameat2Data,
-    RenameatData, SyncFileRangeData, SyncfsData, SyscallEvent, SyscallEventData, UtimensatData,
-    DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData, LinkatData, LookupDcookieData,
+    MkdiratData, MknodatData, NameToHandleAtData, NfsservctlData, OpenByHandleAtData,
+    QuotactlFdData, Renameat2Data, RenameatData, SyncFileRangeData, SyncfsData, SyscallEvent,
+    SyscallEventData, UtimensatData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::{syscalls::SYS_utime, UtimeData};
 
 use crate::syscall_test;
 
@@ -3394,4 +3396,125 @@ syscall_test!(
         event
     },
     "10008 quotactl(op: 0x80000802 (QCMD(Q_SETQUOTA, PRJQUOTA)), special: \"/dev/sdc1\", id: 1001, addr: 0x7fff22222222) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_lookup_dcookie_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_lookup_dcookie,
+            pid: 123,
+            tid: 123,
+            return_value: 10,
+            data: SyscallEventData {
+                lookup_dcookie: LookupDcookieData {
+                    cookie: 0x123456789abcdef0,
+                    buffer: *b"/proc/sys\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                    size: 64,
+                },
+            },
+        }
+    },
+    "123 lookup_dcookie(cookie: 1311768467463790320, buffer: \"/proc/sys\", size: 64) = 10 (bytes)\n"
+);
+
+syscall_test!(
+    parse_lookup_dcookie_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_lookup_dcookie,
+            pid: 123,
+            tid: 123,
+            return_value: -1,
+            data: SyscallEventData {
+                lookup_dcookie: LookupDcookieData {
+                    cookie: 0x123456789abcdef0,
+                    buffer: [0; MEDIUM_READ_SIZE],
+                    size: 64,
+                },
+            },
+        }
+    },
+    "123 lookup_dcookie(cookie: 1311768467463790320, buffer: \"\", size: 64) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_nfsservctl_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_nfsservctl,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                nfsservctl: NfsservctlData {
+                    cmd: 1,
+                    argp: 0x7fff1000,
+                    resp: 0x7fff2000,
+                },
+            },
+        }
+    },
+    "123 nfsservctl(cmd: 1, argp: 0x7fff1000, resp: 0x7fff2000) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_utime_with_times,
+    {
+        use pinchy_common::kernel_types::Utimbuf;
+
+        SyscallEvent {
+            syscall_nr: SYS_utime,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                utime: UtimeData {
+                    filename: {
+                        let mut filename = [0u8; DATA_READ_SIZE];
+                        let name = b"/tmp/foo";
+                        filename[..name.len()].copy_from_slice(name);
+
+                        filename
+                    },
+                    times: Utimbuf {
+                        actime: 1234567890,
+                        modtime: 1234567900,
+                    },
+                    times_is_null: 0,
+                },
+            },
+        }
+    },
+    "123 utime(filename: \"/tmp/foo\", times: {actime: 1234567890, modtime: 1234567900}) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_utime_null_times,
+    {
+        use pinchy_common::kernel_types::Utimbuf;
+
+        SyscallEvent {
+            syscall_nr: SYS_utime,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                utime: UtimeData {
+                    filename: {
+                        let mut filename = [0u8; DATA_READ_SIZE];
+                        let name = b"/tmp/bar";
+                        filename[..name.len()].copy_from_slice(name);
+
+                        filename
+                    },
+                    times: Utimbuf::default(),
+                    times_is_null: 1,
+                },
+            },
+        }
+    },
+    "123 utime(filename: \"/tmp/bar\", times: NULL) = 0 (success)\n"
 );

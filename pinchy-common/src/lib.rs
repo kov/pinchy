@@ -107,6 +107,9 @@ pub union SyscallEventData {
     pub fstat: FstatData,
     pub newfstatat: NewfstatatData,
     pub getdents64: Getdents64Data,
+    pub getdents: GetdentsData,
+    pub semtimedop: SemtimedopData,
+    pub sendfile: SendfileData,
     pub mmap: MmapData,
     pub munmap: MunmapData,
     pub brk: BrkData,
@@ -147,6 +150,8 @@ pub union SyscallEventData {
     pub gettid: GettidData,
     pub getuid: GetuidData,
     pub geteuid: GeteuidData,
+    pub fork: ForkData,
+    pub vfork: VforkData,
     pub getgid: GetgidData,
     pub getegid: GetegidData,
     pub getppid: GetppidData,
@@ -394,6 +399,15 @@ pub union SyscallEventData {
     pub lookup_dcookie: LookupDcookieData,
     pub nfsservctl: NfsservctlData,
     pub utime: UtimeData,
+    pub access: AccessData,
+    pub chmod: ChmodData,
+    pub creat: CreatData,
+    pub mkdir: MkdirData,
+    pub readlink: ReadlinkData,
+    pub stat: StatData,
+    pub lstat: LstatData,
+    pub utimes: UtimesData,
+    pub futimesat: FutimesatData,
 }
 
 #[repr(C)]
@@ -729,6 +743,14 @@ pub struct GetppidData;
 
 #[repr(C)]
 #[derive(Clone, Copy)]
+pub struct ForkData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct VforkData;
+
+#[repr(C)]
+#[derive(Clone, Copy)]
 pub struct IoctlData {
     pub fd: i32,
     pub request: u32,
@@ -809,6 +831,35 @@ pub struct Getdents64Data {
     pub count: usize,
     pub dirents: [crate::kernel_types::LinuxDirent64; 4],
     pub num_dirents: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetdentsData {
+    pub fd: i32,
+    pub count: usize,
+    pub dirents: [crate::kernel_types::LinuxDirent; 4],
+    pub num_dirents: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SemtimedopData {
+    pub semid: i32,
+    pub sops: [crate::kernel_types::Sembuf; 4],
+    pub nsops: usize,
+    pub timeout: crate::kernel_types::Timespec,
+    pub timeout_is_null: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SendfileData {
+    pub out_fd: i32,
+    pub in_fd: i32,
+    pub offset: u64,
+    pub offset_is_null: u8,
+    pub count: usize,
 }
 
 #[repr(C)]
@@ -3421,5 +3472,72 @@ pub struct NfsservctlData {
 pub struct UtimeData {
     pub filename: [u8; DATA_READ_SIZE],
     pub times: kernel_types::Utimbuf,
+    pub times_is_null: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct AccessData {
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub mode: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ChmodData {
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub mode: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct CreatData {
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub mode: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct MkdirData {
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub mode: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ReadlinkData {
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub buf: [u8; MEDIUM_READ_SIZE],
+    pub bufsiz: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct StatData {
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub statbuf: kernel_types::Stat,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct LstatData {
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub statbuf: kernel_types::Stat,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct UtimesData {
+    pub filename: [u8; SMALL_READ_SIZE],
+    pub times: [kernel_types::Timeval; 2],
+    pub times_is_null: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FutimesatData {
+    pub dirfd: i32,
+    pub pathname: [u8; SMALL_READ_SIZE],
+    pub times: [kernel_types::Timeval; 2],
     pub times_is_null: u8,
 }

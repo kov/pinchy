@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 #[cfg(target_arch = "x86_64")]
-use pinchy_common::syscalls::{SYS_alarm, SYS_getpgrp, SYS_pause};
+use pinchy_common::syscalls::{SYS_alarm, SYS_fork, SYS_getpgrp, SYS_pause, SYS_vfork};
 use pinchy_common::{
     kernel_types::CloneArgs,
     syscalls::{
@@ -19,7 +19,7 @@ use pinchy_common::{
     SetuidData, SyscallEvent, SyscallEventData, UnshareData, SMALL_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
-use pinchy_common::{AlarmData, GetpgrpData, PauseData};
+use pinchy_common::{AlarmData, ForkData, GetpgrpData, PauseData, VforkData};
 
 use crate::syscall_test;
 
@@ -1270,4 +1270,94 @@ syscall_test!(
         }
     },
     "5000 getresgid(rgid: 1000, egid: 1000, sgid: 1000) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    test_fork_parent,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fork,
+            pid: 1000,
+            tid: 1000,
+            return_value: 1001,
+            data: SyscallEventData { fork: ForkData },
+        }
+    },
+    "1000 fork() = 1001 (child pid)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    test_fork_child,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fork,
+            pid: 1001,
+            tid: 1001,
+            return_value: 0,
+            data: SyscallEventData { fork: ForkData },
+        }
+    },
+    "1001 fork() = 0 (child)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    test_fork_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_fork,
+            pid: 1000,
+            tid: 1000,
+            return_value: -1,
+            data: SyscallEventData { fork: ForkData },
+        }
+    },
+    "1000 fork() = -1 (error)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    test_vfork_parent,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_vfork,
+            pid: 2000,
+            tid: 2000,
+            return_value: 2001,
+            data: SyscallEventData { vfork: VforkData },
+        }
+    },
+    "2000 vfork() = 2001 (child pid)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    test_vfork_child,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_vfork,
+            pid: 2001,
+            tid: 2001,
+            return_value: 0,
+            data: SyscallEventData { vfork: VforkData },
+        }
+    },
+    "2001 vfork() = 0 (child)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    test_vfork_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_vfork,
+            pid: 2000,
+            tid: 2000,
+            return_value: -1,
+            data: SyscallEventData { vfork: VforkData },
+        }
+    },
+    "2000 vfork() = -1 (error)\n"
 );

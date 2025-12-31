@@ -78,7 +78,11 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             finish!(sf, event.return_value);
         }
         #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_pause | syscalls::SYS_inotify_init | syscalls::SYS_getpgrp => {
+        syscalls::SYS_pause
+        | syscalls::SYS_inotify_init
+        | syscalls::SYS_getpgrp
+        | syscalls::SYS_fork
+        | syscalls::SYS_vfork => {
             finish!(sf, event.return_value);
         }
         syscalls::SYS_capget | syscalls::SYS_capset => {
@@ -1713,6 +1717,77 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     dirent.d_ino, dirent.d_off, dirent.d_reclen, dirent.d_type, d_name
                 ));
             }
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_getdents => {
+            let data = unsafe { event.data.getdents };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "count: {}", data.count);
+            arg!(sf, "entries:");
+
+            with_array!(sf, {
+                for dirent in data.dirents.iter().take(data.num_dirents as usize) {
+                    arg!(sf, "dirent");
+                    with_struct!(sf, {
+                        argf!(sf, "ino: {}", dirent.d_ino);
+                        argf!(sf, "off: {}", dirent.d_off);
+                        argf!(sf, "reclen: {}", dirent.d_reclen);
+                        argf!(sf, "name: {}", format_path(&dirent.d_name, false));
+                    });
+                }
+            });
+
+            finish!(sf, event.return_value);
+        }
+        syscalls::SYS_semtimedop => {
+            let data = unsafe { event.data.semtimedop };
+
+            argf!(sf, "semid: {}", data.semid);
+            arg!(sf, "sops:");
+
+            with_array!(sf, {
+                for sop in data.sops.iter().take(core::cmp::min(data.nsops, 4)) {
+                    arg!(sf, "sembuf");
+                    with_struct!(sf, {
+                        argf!(sf, "sem_num: {}", sop.sem_num);
+                        argf!(sf, "sem_op: {}", sop.sem_op);
+                        argf!(sf, "sem_flg: 0x{:x}", sop.sem_flg);
+                    });
+                }
+            });
+
+            argf!(sf, "nsops: {}", data.nsops);
+
+            if data.timeout_is_null != 0 {
+                argf!(sf, "timeout: NULL");
+            } else {
+                argf!(
+                    sf,
+                    "timeout: {{tv_sec: {}, tv_nsec: {}}}",
+                    data.timeout.seconds,
+                    data.timeout.nanos
+                );
+            }
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_sendfile => {
+            let data = unsafe { event.data.sendfile };
+
+            argf!(sf, "out_fd: {}", data.out_fd);
+            argf!(sf, "in_fd: {}", data.in_fd);
+
+            if data.offset_is_null != 0 {
+                argf!(sf, "offset: NULL");
+            } else {
+                argf!(sf, "offset: {}", data.offset);
+            }
+
+            argf!(sf, "count: {}", data.count);
+
+            finish!(sf, event.return_value);
         }
         syscalls::SYS_mmap => {
             let data = unsafe { event.data.mmap };
@@ -4675,7 +4750,138 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             if data.times_is_null != 0 {
                 argf!(sf, "times: NULL");
             } else {
-                argf!(sf, "times: {{actime: {}, modtime: {}}}", data.times.actime, data.times.modtime);
+                argf!(
+                    sf,
+                    "times: {{actime: {}, modtime: {}}}",
+                    data.times.actime,
+                    data.times.modtime
+                );
+            }
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_access => {
+            let data = unsafe { event.data.access };
+
+            let pathname = format_path(&data.pathname, false);
+
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "mode: {}", format_access_mode(data.mode));
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_chmod => {
+            let data = unsafe { event.data.chmod };
+
+            let pathname = format_path(&data.pathname, false);
+
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "mode: {}", format_mode(data.mode));
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_creat => {
+            let data = unsafe { event.data.creat };
+
+            let pathname = format_path(&data.pathname, false);
+
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "mode: {}", format_mode(data.mode));
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_mkdir => {
+            let data = unsafe { event.data.mkdir };
+
+            let pathname = format_path(&data.pathname, false);
+
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "mode: {}", format_mode(data.mode));
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_readlink => {
+            let data = unsafe { event.data.readlink };
+
+            let pathname = format_path(&data.pathname, false);
+            let buf = format_path(&data.buf, false);
+
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "buf: {}", buf);
+            argf!(sf, "bufsiz: {}", data.bufsiz);
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_stat => {
+            let data = unsafe { event.data.stat };
+
+            let pathname = format_path(&data.pathname, false);
+
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "statbuf: {}", format_stat(&data.statbuf));
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_lstat => {
+            let data = unsafe { event.data.lstat };
+
+            let pathname = format_path(&data.pathname, false);
+
+            argf!(sf, "pathname: {}", pathname);
+            argf!(sf, "statbuf: {}", format_stat(&data.statbuf));
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_utimes => {
+            let data = unsafe { event.data.utimes };
+
+            let filename = format_path(&data.filename, false);
+
+            argf!(sf, "filename: {}", filename);
+
+            if data.times_is_null != 0 {
+                argf!(sf, "times: NULL");
+            } else {
+                argf!(
+                    sf,
+                    "times: [{{tv_sec: {}, tv_usec: {}}}, {{tv_sec: {}, tv_usec: {}}}]",
+                    data.times[0].tv_sec,
+                    data.times[0].tv_usec,
+                    data.times[1].tv_sec,
+                    data.times[1].tv_usec
+                );
+            }
+
+            finish!(sf, event.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_futimesat => {
+            let data = unsafe { event.data.futimesat };
+
+            let pathname = format_path(&data.pathname, false);
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", pathname);
+
+            if data.times_is_null != 0 {
+                argf!(sf, "times: NULL");
+            } else {
+                argf!(
+                    sf,
+                    "times: [{{tv_sec: {}, tv_usec: {}}}, {{tv_sec: {}, tv_usec: {}}}]",
+                    data.times[0].tv_sec,
+                    data.times[0].tv_usec,
+                    data.times[1].tv_sec,
+                    data.times[1].tv_usec
+                );
             }
 
             finish!(sf, event.return_value);

@@ -169,6 +169,16 @@ pub struct LinuxDirent64 {
     pub d_name: [u8; SMALL_READ_SIZE],
 }
 
+/// Linux directory entry structure (legacy getdents syscall)
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct LinuxDirent {
+    pub d_ino: u64,
+    pub d_off: u64,
+    pub d_reclen: u16,
+    pub d_name: [u8; SMALL_READ_SIZE],
+}
+
 /// Filesystem statistics structure, matching the kernel's struct statfs
 #[repr(C)]
 #[derive(Debug, Default, Copy, Clone)]
@@ -521,6 +531,15 @@ pub struct Seminfo {
     pub semusz: i32,
     pub semvmx: i32,
     pub semaem: i32,
+}
+
+/// System V semaphore operation structure, matching the kernel's struct sembuf.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Sembuf {
+    pub sem_num: u16, // Semaphore number
+    pub sem_op: i16,  // Semaphore operation
+    pub sem_flg: i16, // Operation flags
 }
 
 #[repr(C)]

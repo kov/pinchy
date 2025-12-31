@@ -590,6 +590,8 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
             | syscalls::SYS_setsid
             | syscalls::SYS_munlockall
             | syscalls::SYS_vhangup => {}
+            #[cfg(x86_64)]
+            syscalls::SYS_fork | syscalls::SYS_vfork => {}
             syscalls::SYS_set_mempolicy_home_node => {
                 let data = unsafe { &mut entry.data.set_mempolicy_home_node };
                 data.start = args[0] as u64;

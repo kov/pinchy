@@ -33,8 +33,6 @@ use pinchy_common::{
     AccessData, ChmodData, CreatData, FutimesatData, GetdentsData, LstatData, MkdirData,
     ReadlinkData, StatData, UtimeData, UtimesData,
 };
-#[cfg(target_arch = "x86_64")]
-use pinchy_common::{syscalls::SYS_utime, UtimeData};
 
 use crate::syscall_test;
 
@@ -3457,4 +3455,385 @@ syscall_test!(
         }
     },
     "123 utime(filename: \"/tmp/bar\", times: NULL) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_access_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_access,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                access: AccessData {
+                    pathname: *b"/tmp/foo",
+                    mode: libc::R_OK | libc::W_OK,
+                },
+            },
+        }
+    },
+    "123 access(pathname: \"/tmp/foo\", mode: 0x6 (R_OK|W_OK)) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_access_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_access,
+            pid: 124,
+            tid: 124,
+            return_value: -1,
+            data: SyscallEventData {
+                access: AccessData {
+                    pathname: *b"/root/.s",
+                    mode: libc::X_OK,
+                },
+            },
+        }
+    },
+    "124 access(pathname: \"/root/.s\", mode: 0x1 (X_OK)) = -1 (error)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_access_f_ok,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_access,
+            pid: 125,
+            tid: 125,
+            return_value: 0,
+            data: SyscallEventData {
+                access: AccessData {
+                    pathname: *b"/tmp/tes",
+                    mode: libc::F_OK,
+                },
+            },
+        }
+    },
+    "125 access(pathname: \"/tmp/tes\", mode: F_OK) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_chmod_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_chmod,
+            pid: 126,
+            tid: 126,
+            return_value: 0,
+            data: SyscallEventData {
+                chmod: ChmodData {
+                    pathname: *b"/tmp/foo",
+                    mode: 0o755,
+                },
+            },
+        }
+    },
+    "126 chmod(pathname: \"/tmp/foo\", mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_creat_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_creat,
+            pid: 127,
+            tid: 127,
+            return_value: 3,
+            data: SyscallEventData {
+                creat: CreatData {
+                    pathname: *b"/tmp/new",
+                    mode: 0o644,
+                },
+            },
+        }
+    },
+    "127 creat(pathname: \"/tmp/new\", mode: 0o644 (rw-r--r--)) = 3 (fd)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_mkdir_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_mkdir,
+            pid: 128,
+            tid: 128,
+            return_value: 0,
+            data: SyscallEventData {
+                mkdir: MkdirData {
+                    pathname: *b"/tmp/dir",
+                    mode: 0o755,
+                },
+            },
+        }
+    },
+    "128 mkdir(pathname: \"/tmp/dir\", mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_readlink_success,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_readlink,
+            pid: 128,
+            tid: 128,
+            return_value: 8,
+            data: SyscallEventData {
+                readlink: ReadlinkData {
+                    pathname: *b"/tmp/lnk",
+                    buf: *b"/tmp/foo\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
+                    bufsiz: 64,
+                },
+            },
+        }
+    },
+    "128 readlink(pathname: \"/tmp/lnk\", buf: \"/tmp/foo\", bufsiz: 64) = 8 (bytes)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_readlink_error,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_readlink,
+            pid: 129,
+            tid: 129,
+            return_value: -1,
+            data: SyscallEventData {
+                readlink: ReadlinkData {
+                    pathname: *b"/tmp/not",
+                    buf: [0; MEDIUM_READ_SIZE],
+                    bufsiz: 64,
+                },
+            },
+        }
+    },
+    "129 readlink(pathname: \"/tmp/not\", buf: \"\", bufsiz: 64) = -1 (error)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_stat_success,
+    {
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_stat,
+            pid: 130,
+            tid: 130,
+            return_value: 0,
+            data: SyscallEventData {
+                stat: StatData {
+                    pathname: *b"/tmp/foo",
+                    statbuf: Stat::default(),
+                },
+            },
+        };
+
+        let stat_data = unsafe { &mut event.data.stat.statbuf };
+
+        stat_data.st_mode = libc::S_IFREG | 0o644;
+        stat_data.st_size = 1024;
+        stat_data.st_uid = 1000;
+        stat_data.st_gid = 1000;
+        stat_data.st_blocks = 8;
+        stat_data.st_blksize = 4096;
+        stat_data.st_ino = 12345;
+        event
+    },
+    &"130 stat(pathname: \"/tmp/foo\", statbuf: { mode: 0o644 (rw-r--r--), ino: 12345, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 1024, blksize: 4096, blocks: 8, atime: 0, mtime: 0, ctime: 0 }) = 0 (success)\n".to_string()
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_lstat_success,
+    {
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_lstat,
+            pid: 131,
+            tid: 131,
+            return_value: 0,
+            data: SyscallEventData {
+                lstat: LstatData {
+                    pathname: *b"/tmp/lnk",
+                    statbuf: Stat::default(),
+                },
+            },
+        };
+
+        let stat_data = unsafe { &mut event.data.lstat.statbuf };
+
+        stat_data.st_mode = libc::S_IFLNK | 0o777;
+        stat_data.st_size = 8;
+        stat_data.st_uid = 1000;
+        stat_data.st_gid = 1000;
+        stat_data.st_blocks = 0;
+        stat_data.st_blksize = 4096;
+        stat_data.st_ino = 54321;
+        event
+    },
+    &"131 lstat(pathname: \"/tmp/lnk\", statbuf: { mode: 0o777 (rwxrwxrwx), ino: 54321, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 8, blksize: 4096, blocks: 0, atime: 0, mtime: 0, ctime: 0 }) = 0 (success)\n".to_string()
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_utimes_with_times,
+    {
+        use pinchy_common::kernel_types::Timeval;
+
+        SyscallEvent {
+            syscall_nr: SYS_utimes,
+            pid: 132,
+            tid: 132,
+            return_value: 0,
+            data: SyscallEventData {
+                utimes: UtimesData {
+                    filename: *b"/tmp/foo",
+                    times: [
+                        Timeval {
+                            tv_sec: 1234567890,
+                            tv_usec: 123456,
+                        },
+                        Timeval {
+                            tv_sec: 1234567900,
+                            tv_usec: 654321,
+                        },
+                    ],
+                    times_is_null: 0,
+                },
+            },
+        }
+    },
+    "132 utimes(filename: \"/tmp/foo\", times: [{tv_sec: 1234567890, tv_usec: 123456}, {tv_sec: 1234567900, tv_usec: 654321}]) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_utimes_null,
+    {
+        use pinchy_common::kernel_types::Timeval;
+
+        SyscallEvent {
+            syscall_nr: SYS_utimes,
+            pid: 133,
+            tid: 133,
+            return_value: 0,
+            data: SyscallEventData {
+                utimes: UtimesData {
+                    filename: *b"/tmp/bar",
+                    times: [Timeval::default(), Timeval::default()],
+                    times_is_null: 1,
+                },
+            },
+        }
+    },
+    "133 utimes(filename: \"/tmp/bar\", times: NULL) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_futimesat_with_times,
+    {
+        use pinchy_common::kernel_types::Timeval;
+
+        SyscallEvent {
+            syscall_nr: SYS_futimesat,
+            pid: 134,
+            tid: 134,
+            return_value: 0,
+            data: SyscallEventData {
+                futimesat: FutimesatData {
+                    dirfd: libc::AT_FDCWD,
+                    pathname: *b"/tmp/foo",
+                    times: [
+                        Timeval {
+                            tv_sec: 1111111111,
+                            tv_usec: 111111,
+                        },
+                        Timeval {
+                            tv_sec: 2222222222,
+                            tv_usec: 222222,
+                        },
+                    ],
+                    times_is_null: 0,
+                },
+            },
+        }
+    },
+    "134 futimesat(dirfd: AT_FDCWD, pathname: \"/tmp/foo\", times: [{tv_sec: 1111111111, tv_usec: 111111}, {tv_sec: 2222222222, tv_usec: 222222}]) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_futimesat_fd,
+    {
+        use pinchy_common::kernel_types::Timeval;
+
+        SyscallEvent {
+            syscall_nr: SYS_futimesat,
+            pid: 135,
+            tid: 135,
+            return_value: 0,
+            data: SyscallEventData {
+                futimesat: FutimesatData {
+                    dirfd: 5,
+                    pathname: *b"foo",
+                    times: [
+                        Timeval {
+                            tv_sec: 3333333333,
+                            tv_usec: 333333,
+                        },
+                        Timeval {
+                            tv_sec: 4444444444,
+                            tv_usec: 444444,
+                        },
+                    ],
+                    times_is_null: 0,
+                },
+            },
+        }
+    },
+    "135 futimesat(dirfd: 5, pathname: \"foo\", times: [{tv_sec: 3333333333, tv_usec: 333333}, {tv_sec: 4444444444, tv_usec: 444444}]) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_getdents_success,
+    {
+        let mut event = SyscallEvent {
+            syscall_nr: SYS_getdents,
+            pid: 200,
+            tid: 200,
+            return_value: 48,
+            data: SyscallEventData {
+                getdents: GetdentsData {
+                    fd: 3,
+                    count: 1024,
+                    dirents: [LinuxDirent::default(); 4],
+                    num_dirents: 2,
+                },
+            },
+        };
+
+        let data = unsafe { &mut event.data.getdents };
+
+        data.dirents[0].d_ino = 12345;
+        data.dirents[0].d_off = 24;
+        data.dirents[0].d_reclen = 24;
+        data.dirents[0].d_name = *b".";
+
+        data.dirents[1].d_ino = 12346;
+        data.dirents[1].d_off = 48;
+        data.dirents[1].d_reclen = 24;
+        data.dirents[1].d_name = *b"..";
+
+        event
+    },
+    "200 getdents(fd: 3, count: 1024, entries: [dirent { ino: 12345, off: 24, reclen: 24, name: \".\" }, dirent { ino: 12346, off: 48, reclen: 24, name: \"..\" }]) = 48 (bytes)\n"
 );

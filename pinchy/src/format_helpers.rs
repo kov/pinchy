@@ -2336,6 +2336,15 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             }
         }
 
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_readlink | syscalls::SYS_getdents => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{} (bytes)", return_value))
+            } else {
+                std::borrow::Cow::Owned(format!("{} (error)", return_value))
+            }
+        }
+
         // Message count returning syscalls
         syscalls::SYS_recvmmsg | syscalls::SYS_sendmmsg => {
             if return_value >= 0 {
@@ -2445,6 +2454,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_shmdt
         | syscalls::SYS_msgsnd
         | syscalls::SYS_semop
+        | syscalls::SYS_semtimedop
         | syscalls::SYS_acct
         | syscalls::SYS_getcpu
         | syscalls::SYS_shutdown
@@ -2535,7 +2545,12 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_mknod
         | syscalls::SYS_stat
         | syscalls::SYS_lstat
-        | syscalls::SYS_utime => match return_value {
+        | syscalls::SYS_utime
+        | syscalls::SYS_access
+        | syscalls::SYS_chmod
+        | syscalls::SYS_mkdir
+        | syscalls::SYS_utimes
+        | syscalls::SYS_futimesat => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -2565,6 +2580,14 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             }
         }
 
+        // fork/vfork return child PID in parent, 0 in child
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_fork | syscalls::SYS_vfork => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (child)"),
+            v if v > 0 => std::borrow::Cow::Owned(format!("{v} (child pid)")),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
         // PID returning syscalls
         syscalls::SYS_getpid
         | syscalls::SYS_getppid
@@ -2587,15 +2610,6 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
                 std::borrow::Cow::Owned(format!("{return_value} (pid)"))
             } else {
                 std::borrow::Cow::Owned(format!("{return_value} (error)"))
-            }
-        }
-
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_fork | syscalls::SYS_vfork => {
-            if return_value >= 0 {
-                std::borrow::Cow::Owned(format!("{} (pid)", return_value))
-            } else {
-                std::borrow::Cow::Owned(format!("{} (error)", return_value))
             }
         }
 
@@ -6287,7 +6301,13 @@ pub fn format_kexec_load_flags(flags: u64) -> Cow<'static, str> {
             kexec_constants::KEXEC_ARCH_LOONGARCH => parts.push("KEXEC_ARCH_LOONGARCH"),
             _ => {
                 let arch_num = (flags & kexec_constants::KEXEC_ARCH_MASK) >> 16;
-                return format!("0x{:x} ({}|KEXEC_ARCH_{})", flags, parts.join("|"), arch_num).into();
+                return format!(
+                    "0x{:x} ({}|KEXEC_ARCH_{})",
+                    flags,
+                    parts.join("|"),
+                    arch_num
+                )
+                .into();
             }
         }
     }

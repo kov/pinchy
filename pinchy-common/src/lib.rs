@@ -412,6 +412,8 @@ pub union SyscallEventData {
     pub pkey_mprotect: PkeyMprotectData,
     pub mseal: MsealData,
     pub remap_file_pages: RemapFilePagesData,
+    pub restart_syscall: RestartSyscallData,
+    pub kexec_load: KexecLoadData,
 }
 
 #[repr(C)]
@@ -3404,4 +3406,21 @@ pub struct RemapFilePagesData {
     pub prot: i32,
     pub pgoff: u64,
     pub flags: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct RestartSyscallData {
+    // No arguments
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct KexecLoadData {
+    pub entry: u64,
+    pub nr_segments: u64,
+    pub segments: u64,
+    pub flags: u64,
+    pub segments_read: u64,
+    pub parsed_segments: [kernel_types::KexecSegment; kernel_types::KEXEC_SEGMENT_ARRAY_CAP],
 }

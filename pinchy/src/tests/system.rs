@@ -6,19 +6,19 @@ use pinchy_common::{
     syscalls::{
         SYS_add_key, SYS_bpf, SYS_capget, SYS_capset, SYS_clock_nanosleep, SYS_delete_module,
         SYS_finit_module, SYS_getcpu, SYS_getrandom, SYS_gettimeofday, SYS_init_module, SYS_ioctl,
-        SYS_ioprio_get, SYS_ioprio_set, SYS_keyctl, SYS_landlock_add_rule,
+        SYS_ioprio_get, SYS_ioprio_set, SYS_kexec_load, SYS_keyctl, SYS_landlock_add_rule,
         SYS_landlock_create_ruleset, SYS_landlock_restrict_self, SYS_nanosleep,
-        SYS_perf_event_open, SYS_personality, SYS_reboot, SYS_request_key, SYS_setdomainname,
-        SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_syslog, SYS_times, SYS_umask,
-        SYS_uname, SYS_vhangup,
+        SYS_perf_event_open, SYS_personality, SYS_reboot, SYS_request_key, SYS_restart_syscall,
+        SYS_setdomainname, SYS_sethostname, SYS_settimeofday, SYS_sync, SYS_sysinfo, SYS_syslog,
+        SYS_times, SYS_umask, SYS_uname, SYS_vhangup,
     },
     AddKeyData, BpfData, CapsetgetData, ClockNanosleepData, DeleteModuleData, ExitGroupData,
     FinitModuleData, GetcpuData, GetrandomData, GettimeofdayData, InitModuleData, IoctlData,
-    IoprioGetData, IoprioSetData, KeyctlData, LandlockAddRuleData, LandlockCreateRulesetData,
-    LandlockRestrictSelfData, NanosleepData, PerfEventOpenData, PersonalityData, RebootData,
-    RequestKeyData, RtSigreturnData, SetdomainnameData, SethostnameData, SettimeofdayData,
-    SyncData, SyscallEvent, SyscallEventData, SysinfoData, SyslogData, TimesData, UmaskData,
-    UnameData, VhangupData,
+    IoprioGetData, IoprioSetData, KexecLoadData, KeyctlData, LandlockAddRuleData,
+    LandlockCreateRulesetData, LandlockRestrictSelfData, NanosleepData, PerfEventOpenData,
+    PersonalityData, RebootData, RequestKeyData, RestartSyscallData, RtSigreturnData,
+    SetdomainnameData, SethostnameData, SettimeofdayData, SyncData, SyscallEvent, SyscallEventData,
+    SysinfoData, SyslogData, TimesData, UmaskData, UnameData, VhangupData,
 };
 
 use crate::syscall_test;
@@ -1900,4 +1900,129 @@ syscall_test!(
         }
     },
     "9102 syslog(type: SYSLOG_ACTION_READ, bufp: 0x0, size: 0) = -1 (error)\n"
+);
+
+syscall_test!(
+    parse_restart_syscall,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_restart_syscall,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                restart_syscall: RestartSyscallData::default(),
+            },
+        }
+    },
+    "123 restart_syscall() = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_kexec_load_basic,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_kexec_load,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                kexec_load: KexecLoadData {
+                    entry: 0x80000000,
+                    nr_segments: 4,
+                    segments: 0x7fff0000,
+                    flags: 0,
+                    segments_read: 0,
+                    parsed_segments: Default::default(),
+                },
+            },
+        }
+    },
+    "123 kexec_load(entry: 0x80000000, nr_segments: 4, segments: 0x7fff0000, flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_kexec_load_on_crash,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_kexec_load,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                kexec_load: KexecLoadData {
+                    entry: 0x80000000,
+                    nr_segments: 2,
+                    segments: 0x7fff0000,
+                    flags: crate::format_helpers::kexec_constants::KEXEC_ON_CRASH,
+                    segments_read: 0,
+                    parsed_segments: Default::default(),
+                },
+            },
+        }
+    },
+    "123 kexec_load(entry: 0x80000000, nr_segments: 2, segments: 0x7fff0000, flags: 0x1 (KEXEC_ON_CRASH)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_kexec_load_with_arch,
+    {
+        SyscallEvent {
+            syscall_nr: SYS_kexec_load,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                kexec_load: KexecLoadData {
+                    entry: 0x80000000,
+                    nr_segments: 3,
+                    segments: 0x7fff0000,
+                    flags: crate::format_helpers::kexec_constants::KEXEC_ON_CRASH
+                        | crate::format_helpers::kexec_constants::KEXEC_ARCH_X86_64,
+                    segments_read: 0,
+                    parsed_segments: Default::default(),
+                },
+            },
+        }
+    },
+    "123 kexec_load(entry: 0x80000000, nr_segments: 3, segments: 0x7fff0000, flags: 0x3e0001 (KEXEC_ON_CRASH|KEXEC_ARCH_X86_64)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_kexec_load_with_segments,
+    {
+        use pinchy_common::kernel_types::KexecSegment;
+
+        let mut parsed_segments = [KexecSegment::default(); 16];
+        parsed_segments[0] = KexecSegment {
+            buf: 0x1000,
+            bufsz: 4096,
+            mem: 0x100000,
+            memsz: 4096,
+        };
+        parsed_segments[1] = KexecSegment {
+            buf: 0x2000,
+            bufsz: 8192,
+            mem: 0x200000,
+            memsz: 8192,
+        };
+
+        SyscallEvent {
+            syscall_nr: SYS_kexec_load,
+            pid: 123,
+            tid: 123,
+            return_value: 0,
+            data: SyscallEventData {
+                kexec_load: KexecLoadData {
+                    entry: 0x80000000,
+                    nr_segments: 2,
+                    segments: 0x7fff0000,
+                    flags: 0,
+                    segments_read: 2,
+                    parsed_segments,
+                },
+            },
+        }
+    },
+    "123 kexec_load(entry: 0x80000000, nr_segments: 2, segments: [{buf: 0x1000, bufsz: 4096, mem: 0x100000, memsz: 4096}, {buf: 0x2000, bufsz: 8192, mem: 0x200000, memsz: 8192}], flags: 0) = 0 (success)\n"
 );

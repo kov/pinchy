@@ -2490,7 +2490,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_quotactl_fd
         | syscalls::SYS_setgroups
         | syscalls::SYS_getresuid
-        | syscalls::SYS_getresgid => match return_value {
+        | syscalls::SYS_getresgid
+        | syscalls::SYS_restart_syscall
+        | syscalls::SYS_kexec_load => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
@@ -6262,4 +6264,96 @@ pub fn format_mseal_flags(flags: u64) -> Cow<'static, str> {
 
     // Flags are reserved for future use as of Linux 6.10
     Cow::Owned(format!("0x{:x} (reserved)", flags))
+}
+
+pub mod kexec_constants {
+    /// kexec_load flags from linux/kexec.h
+    pub const KEXEC_ON_CRASH: u64 = 0x00000001;
+    pub const KEXEC_PRESERVE_CONTEXT: u64 = 0x00000002;
+    pub const KEXEC_UPDATE_ELFCOREHDR: u64 = 0x00000004;
+    pub const KEXEC_CRASH_HOTPLUG_SUPPORT: u64 = 0x00000008;
+    pub const KEXEC_ARCH_MASK: u64 = 0xffff0000;
+
+    /// Architecture constants
+    pub const KEXEC_ARCH_DEFAULT: u64 = 0 << 16;
+    pub const KEXEC_ARCH_386: u64 = 3 << 16;
+    pub const KEXEC_ARCH_68K: u64 = 4 << 16;
+    pub const KEXEC_ARCH_PARISC: u64 = 15 << 16;
+    pub const KEXEC_ARCH_X86_64: u64 = 62 << 16;
+    pub const KEXEC_ARCH_PPC: u64 = 20 << 16;
+    pub const KEXEC_ARCH_PPC64: u64 = 21 << 16;
+    pub const KEXEC_ARCH_IA_64: u64 = 50 << 16;
+    pub const KEXEC_ARCH_ARM: u64 = 40 << 16;
+    pub const KEXEC_ARCH_S390: u64 = 22 << 16;
+    pub const KEXEC_ARCH_SH: u64 = 42 << 16;
+    pub const KEXEC_ARCH_MIPS_LE: u64 = 10 << 16;
+    pub const KEXEC_ARCH_MIPS: u64 = 8 << 16;
+    pub const KEXEC_ARCH_AARCH64: u64 = 183 << 16;
+    pub const KEXEC_ARCH_RISCV: u64 = 243 << 16;
+    pub const KEXEC_ARCH_LOONGARCH: u64 = 258 << 16;
+}
+
+pub fn format_kexec_load_flags(flags: u64) -> Cow<'static, str> {
+    if flags == 0 {
+        return Cow::Borrowed("0");
+    }
+
+    let mut parts: Vec<&str> = Vec::new();
+
+    if flags & kexec_constants::KEXEC_ON_CRASH != 0 {
+        parts.push("KEXEC_ON_CRASH");
+    }
+
+    if flags & kexec_constants::KEXEC_PRESERVE_CONTEXT != 0 {
+        parts.push("KEXEC_PRESERVE_CONTEXT");
+    }
+
+    if flags & kexec_constants::KEXEC_UPDATE_ELFCOREHDR != 0 {
+        parts.push("KEXEC_UPDATE_ELFCOREHDR");
+    }
+
+    if flags & kexec_constants::KEXEC_CRASH_HOTPLUG_SUPPORT != 0 {
+        parts.push("KEXEC_CRASH_HOTPLUG_SUPPORT");
+    }
+
+    // Check for architecture flags
+    let arch_flags = flags & kexec_constants::KEXEC_ARCH_MASK;
+
+    if arch_flags != 0 {
+        match arch_flags {
+            kexec_constants::KEXEC_ARCH_DEFAULT => parts.push("KEXEC_ARCH_DEFAULT"),
+            kexec_constants::KEXEC_ARCH_386 => parts.push("KEXEC_ARCH_386"),
+            kexec_constants::KEXEC_ARCH_68K => parts.push("KEXEC_ARCH_68K"),
+            kexec_constants::KEXEC_ARCH_PARISC => parts.push("KEXEC_ARCH_PARISC"),
+            kexec_constants::KEXEC_ARCH_X86_64 => parts.push("KEXEC_ARCH_X86_64"),
+            kexec_constants::KEXEC_ARCH_PPC => parts.push("KEXEC_ARCH_PPC"),
+            kexec_constants::KEXEC_ARCH_PPC64 => parts.push("KEXEC_ARCH_PPC64"),
+            kexec_constants::KEXEC_ARCH_IA_64 => parts.push("KEXEC_ARCH_IA_64"),
+            kexec_constants::KEXEC_ARCH_ARM => parts.push("KEXEC_ARCH_ARM"),
+            kexec_constants::KEXEC_ARCH_S390 => parts.push("KEXEC_ARCH_S390"),
+            kexec_constants::KEXEC_ARCH_SH => parts.push("KEXEC_ARCH_SH"),
+            kexec_constants::KEXEC_ARCH_MIPS_LE => parts.push("KEXEC_ARCH_MIPS_LE"),
+            kexec_constants::KEXEC_ARCH_MIPS => parts.push("KEXEC_ARCH_MIPS"),
+            kexec_constants::KEXEC_ARCH_AARCH64 => parts.push("KEXEC_ARCH_AARCH64"),
+            kexec_constants::KEXEC_ARCH_RISCV => parts.push("KEXEC_ARCH_RISCV"),
+            kexec_constants::KEXEC_ARCH_LOONGARCH => parts.push("KEXEC_ARCH_LOONGARCH"),
+            _ => {
+                let arch_num = (flags & kexec_constants::KEXEC_ARCH_MASK) >> 16;
+
+                if parts.is_empty() {
+                    return format!("0x{:x} (KEXEC_ARCH_{})", flags, arch_num).into();
+                } else {
+                    return format!(
+                        "0x{:x} ({}|KEXEC_ARCH_{})",
+                        flags,
+                        parts.join("|"),
+                        arch_num
+                    )
+                    .into();
+                }
+            }
+        }
+    }
+
+    format!("0x{:x} ({})", flags, parts.join("|")).into()
 }

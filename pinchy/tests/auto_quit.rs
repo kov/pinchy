@@ -17,13 +17,14 @@ use serial_test::serial;
 #[serial]
 #[ignore = "runs in special environment"]
 fn auto_quit() {
-    // We won't start any tracing, after a minute we should see this message.
-    let now = Instant::now();
-
     let pinchy = PinchyTest::new(
         None,
         Some("Pinchy has been idle for a while, shutting down".to_string()),
     );
+
+    // We won't start any tracing, after a minute we should see this message.
+    let now = Instant::now();
+
     let output = pinchy.wait();
     Assert::new(output)
         .success()

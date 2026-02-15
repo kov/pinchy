@@ -2,7 +2,7 @@ use core::{mem::size_of, ops::DerefMut as _};
 
 use aya_ebpf::{
     bindings::BPF_RB_FORCE_WAKEUP,
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
     maps::ring_buf::RingBufEntry,
     programs::TracePointContext,
     EbpfContext as _,
@@ -250,7 +250,7 @@ pub fn read_iovec_array(
             if to_read > 0 {
                 if let Some(ref mut bufs) = iov_bufs {
                     unsafe {
-                        let _ = bpf_probe_read_buf(iov_base as *const u8, &mut bufs[i][..to_read]);
+                        let _ = bpf_probe_read_user_buf(iov_base as *const u8, &mut bufs[i][..to_read]);
                     }
                 }
             }

@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -85,7 +85,7 @@ pub fn syscall_exit_signal(ctx: TracePointContext) -> u32 {
                         )
                     };
 
-                    let _ = unsafe { bpf_probe_read_buf(ss_ptr, buf) };
+                    let _ = unsafe { bpf_probe_read_user_buf(ss_ptr, buf) };
                     data.has_ss = true;
                 }
 
@@ -99,7 +99,7 @@ pub fn syscall_exit_signal(ctx: TracePointContext) -> u32 {
                         )
                     };
 
-                    let _ = unsafe { bpf_probe_read_buf(old_ss_ptr, buf) };
+                    let _ = unsafe { bpf_probe_read_user_buf(old_ss_ptr, buf) };
                     data.has_old_ss = true;
                 }
             }

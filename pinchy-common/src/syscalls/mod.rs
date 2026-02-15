@@ -21,9 +21,20 @@ pub const SYS_generic_parse_test: i64 = i64::MAX; // for testing only
 macro_rules! declare_syscalls {
     (
         $( $name:ident = $num:expr ),* $(,)?
+        $(; aliases: $( $alias:literal => $target:ident ),* $(,)? )?
     ) => {
         $(pub const $name: i64 = $num;)*
         pub fn syscall_nr_from_name(name: &str) -> Option<i64> {
+            // First check aliases
+            $(
+                $(
+                    if name == $alias {
+                        return Some($target);
+                    }
+                )*
+            )?
+
+            // Then check canonical names
             match name {
                 $( x if x == &stringify!($name)[4..] => Some($name), )*
                 _ => None,

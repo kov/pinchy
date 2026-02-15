@@ -24,6 +24,80 @@ cargo run --release --config 'target."cfg(all())".runner="sudo -E"'
 Cargo build scripts are used to automatically build the eBPF correctly and include it in the
 program.
 
+## Usage
+
+Pinchy can trace syscalls for a running process or launch a new process and trace it. You can specify which syscalls to trace using the `-e` or `--event` option.
+
+### Basic Examples
+
+Trace all syscalls for a command:
+```shell
+pinchy ls /tmp
+```
+
+Trace specific syscalls:
+```shell
+pinchy -e read,write,open ls /tmp
+```
+
+Attach to a running process:
+```shell
+pinchy -p <PID> -e open,close
+```
+
+### Syscall Aliases
+
+Pinchy supports common syscall aliases that users might be familiar with from `libc` or other tools.
+
+#### Signal Syscalls
+
+On x86_64 and aarch64, signal-related syscalls use `rt_*` prefixes in the kernel, but you can use the more familiar names without the prefix:
+
+```shell
+# These are equivalent:
+pinchy -e sigaction,sigprocmask ./myprogram
+pinchy -e rt_sigaction,rt_sigprocmask ./myprogram
+```
+
+Supported signal aliases (all architectures):
+- `sigaction` → `rt_sigaction`
+- `sigprocmask` → `rt_sigprocmask`
+- `sigreturn` → `rt_sigreturn`
+- `sigpending` → `rt_sigpending`
+- `sigtimedwait` → `rt_sigtimedwait`
+- `sigqueueinfo` → `rt_sigqueueinfo`
+- `sigsuspend` → `rt_sigsuspend`
+
+#### Architecture-Specific Aliases
+
+On **aarch64**, many traditional syscalls don't exist in the kernel but are provided by glibc as wrappers around newer `*at` variants. Pinchy supports these for convenience:
+
+```shell
+# On aarch64, these are equivalent:
+pinchy -e open,stat ./myprogram
+pinchy -e openat,newfstatat ./myprogram
+```
+
+Supported aarch64 aliases:
+- `open` → `openat`
+- `stat` → `newfstatat`
+- `lstat` → `newfstatat`
+- `poll` → `ppoll`
+- `dup2` → `dup3`
+- `pipe` → `pipe2`
+- `access` → `faccessat`
+- `chmod` → `fchmodat`
+- `chown` → `fchownat`
+- `link` → `linkat`
+- `mkdir` → `mkdirat`
+- `mknod` → `mknodat`
+- `rename` → `renameat`
+- `rmdir` → `unlinkat`
+- `symlink` → `symlinkat`
+- `unlink` → `unlinkat`
+
+On **x86_64**, these traditional syscalls exist directly in the kernel, so no aliases are needed.
+
 ## Cross-compiling on macOS
 
 Cross compilation should work on both Intel and Apple Silicon Macs.

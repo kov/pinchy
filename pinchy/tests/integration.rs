@@ -2139,3 +2139,136 @@ fn auto_quit_after_client_timing() {
     let output = pinchy.wait();
     Assert::new(output).success();
 }
+
+// Tests for syscall aliases - these verify that users can use aliased names
+// and get the same behavior as using canonical names
+
+#[test]
+fn signal_alias_sigprocmask() {
+    let pinchy = PinchyTest::new();
+
+    // Use the alias "sigprocmask" instead of "rt_sigprocmask"
+    let handle = run_workload(&pinchy, &["sigprocmask"], "rt_sig");
+
+    // Expected output should show rt_sigprocmask (the canonical name)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1], oldset: [], sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: [SIGUSR1], sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_UNBLOCK, set: [SIGUSR1], oldset: NULL, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_SETMASK, set: [], oldset: NULL, sigsetsize: 8) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+fn signal_alias_sigaction() {
+    let pinchy = PinchyTest::new();
+
+    // Use the alias "sigaction" instead of "rt_sigaction"
+    let handle = run_workload(&pinchy, &["sigaction"], "rt_sigaction_standard");
+
+    // Expected output should show rt_sigaction (the canonical name)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ rt_sigaction(signum: SIGUSR1, act: @ADDR@, oldact: @ADDR@, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGUSR1, act: 0x0, oldact: @ADDR@, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigaction(signum: SIGUSR1, act: @ADDR@, oldact: 0x0, sigsetsize: 8) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn aarch64_alias_open() {
+    let pinchy = PinchyTest::new();
+
+    // On aarch64, use the alias "open" which maps to "openat"
+    let handle = run_workload(&pinchy, &["open", "read", "lseek"], "pinchy_reads");
+
+    // Expected output should show openat (the canonical name on aarch64)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ openat(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", flags: 0x0 (O_RDONLY), mode: 0) = 3 (fd)
+        @PID@ read(fd: 3, buf: @ANY@, count: 128) = 128 (bytes)
+        @PID@ read(fd: 3, buf: @ANY@, count: 1024) = 1024 (bytes)
+        @PID@ lseek(fd: 3, offset: 0, whence: 2) = 18092
+        @PID@ read(fd: 3, buf: "", count: 1024) = 0 (bytes)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+#[cfg(target_arch = "aarch64")]
+fn aarch64_alias_stat() {
+    let pinchy = PinchyTest::new();
+
+    // On aarch64, use the alias "stat" which maps to "newfstatat"
+    let handle = run_workload(&pinchy, &["stat", "fstat"], "filesystem_syscalls_test");
+
+    // Expected output should show newfstatat (the canonical name on aarch64)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ fstat(fd: @NUMBER@, struct stat: { mode: 0o@NUMBER@ (@MODE@), ino: @NUMBER@, dev: @NUMBER@, nlink: @NUMBER@, uid: @NUMBER@, gid: @NUMBER@, size: 18092, blksize: @NUMBER@, blocks: @NUMBER@, atime: @NUMBER@, mtime: @NUMBER@, ctime: @NUMBER@ }) = 0 (success)
+        @PID@ newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0o@NUMBER@ (@MODE@), ino: @NUMBER@, dev: @NUMBER@, nlink: @NUMBER@, uid: @NUMBER@, gid: @NUMBER@, size: 18092, blksize: @NUMBER@, blocks: @NUMBER@, atime: @NUMBER@, mtime: @NUMBER@, ctime: @NUMBER@ }, flags: 0) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+fn mixed_aliases_and_canonical() {
+    let pinchy = PinchyTest::new();
+
+    // Mix aliases and canonical names in the same filter
+    let handle = run_workload(&pinchy, &["sigprocmask"], "rt_sig");
+
+    // Should capture both rt_sigprocmask (from sigprocmask alias)
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ rt_sigprocmask(how: SIG_BLOCK, set: [SIGUSR1], oldset: [], sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_SETMASK, set: NULL, oldset: [SIGUSR1], sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_UNBLOCK, set: [SIGUSR1], oldset: NULL, sigsetsize: 8) = 0 (success)
+        @PID@ rt_sigprocmask(how: SIG_SETMASK, set: [], oldset: NULL, sigsetsize: 8) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}

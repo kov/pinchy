@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user, bpf_probe_read_user_str_bytes},
+    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user, bpf_probe_read_user_str_bytes},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -38,7 +38,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
 
                 if !arg_ptr.is_null() {
                     // Best-effort read; mark present only on successful copy
-                    if let Ok(()) = unsafe { bpf_probe_read_buf(arg_ptr, &mut data.restart2) } {
+                    if let Ok(()) = unsafe { bpf_probe_read_user_buf(arg_ptr, &mut data.restart2) } {
                         data.has_restart2 = true;
                     }
                 }
@@ -49,42 +49,42 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                 data.utsname = Utsname::default();
                 const FIELD_SIZE: usize = 65;
                 unsafe {
-                    let _ = bpf_probe_read_buf(
+                    let _ = bpf_probe_read_user_buf(
                         buf_ptr,
                         core::slice::from_raw_parts_mut(
                             data.utsname.sysname.as_mut_ptr(),
                             pinchy_common::kernel_types::SYSNAME_READ_SIZE,
                         ),
                     );
-                    let _ = bpf_probe_read_buf(
+                    let _ = bpf_probe_read_user_buf(
                         buf_ptr.add(FIELD_SIZE),
                         core::slice::from_raw_parts_mut(
                             data.utsname.nodename.as_mut_ptr(),
                             pinchy_common::kernel_types::NODENAME_READ_SIZE,
                         ),
                     );
-                    let _ = bpf_probe_read_buf(
+                    let _ = bpf_probe_read_user_buf(
                         buf_ptr.add(2 * FIELD_SIZE),
                         core::slice::from_raw_parts_mut(
                             data.utsname.release.as_mut_ptr(),
                             pinchy_common::kernel_types::RELEASE_READ_SIZE,
                         ),
                     );
-                    let _ = bpf_probe_read_buf(
+                    let _ = bpf_probe_read_user_buf(
                         buf_ptr.add(3 * FIELD_SIZE),
                         core::slice::from_raw_parts_mut(
                             data.utsname.version.as_mut_ptr(),
                             pinchy_common::kernel_types::VERSION_READ_SIZE,
                         ),
                     );
-                    let _ = bpf_probe_read_buf(
+                    let _ = bpf_probe_read_user_buf(
                         buf_ptr.add(4 * FIELD_SIZE),
                         core::slice::from_raw_parts_mut(
                             data.utsname.machine.as_mut_ptr(),
                             pinchy_common::kernel_types::MACHINE_READ_SIZE,
                         ),
                     );
-                    let _ = bpf_probe_read_buf(
+                    let _ = bpf_probe_read_user_buf(
                         buf_ptr.add(5 * FIELD_SIZE),
                         core::slice::from_raw_parts_mut(
                             data.utsname.domainname.as_mut_ptr(),
@@ -245,7 +245,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
 
                 let param_ptr = args[2] as *const u8;
                 if !param_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(param_ptr, &mut data.param_values) };
+                    let _ = unsafe { bpf_probe_read_user_buf(param_ptr, &mut data.param_values) };
                 }
             }
             syscalls::SYS_finit_module => {
@@ -255,7 +255,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
 
                 let param_ptr = args[1] as *const u8;
                 if !param_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(param_ptr, &mut data.param_values) };
+                    let _ = unsafe { bpf_probe_read_user_buf(param_ptr, &mut data.param_values) };
                 }
             }
             syscalls::SYS_delete_module => {
@@ -264,7 +264,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
 
                 let name_ptr = args[0] as *const u8;
                 if !name_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
+                    let _ = unsafe { bpf_probe_read_user_buf(name_ptr, &mut data.name) };
                 }
             }
             syscalls::SYS_sethostname => {
@@ -273,7 +273,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
 
                 let name_ptr = args[0] as *const u8;
                 if !name_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
+                    let _ = unsafe { bpf_probe_read_user_buf(name_ptr, &mut data.name) };
                 }
             }
             syscalls::SYS_setdomainname => {
@@ -282,7 +282,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
 
                 let name_ptr = args[0] as *const u8;
                 if !name_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(name_ptr, &mut data.name) };
+                    let _ = unsafe { bpf_probe_read_user_buf(name_ptr, &mut data.name) };
                 }
             }
             syscalls::SYS_prctl => {
@@ -341,11 +341,11 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                 let payload_len = args[3];
 
                 if !type_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(type_ptr, &mut data.key_type) };
+                    let _ = unsafe { bpf_probe_read_user_buf(type_ptr, &mut data.key_type) };
                 }
 
                 if !desc_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(desc_ptr, &mut data.description) };
+                    let _ = unsafe { bpf_probe_read_user_buf(desc_ptr, &mut data.description) };
                 }
 
                 if !payload_ptr.is_null() && payload_len > 0 {
@@ -355,7 +355,7 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                         payload_len
                     };
                     let _ = unsafe {
-                        bpf_probe_read_buf(
+                        bpf_probe_read_user_buf(
                             payload_ptr,
                             core::slice::from_raw_parts_mut(
                                 data.payload.as_mut_ptr(),
@@ -376,15 +376,15 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                 let info_ptr = args[2] as *const u8;
 
                 if !type_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(type_ptr, &mut data.key_type) };
+                    let _ = unsafe { bpf_probe_read_user_buf(type_ptr, &mut data.key_type) };
                 }
 
                 if !desc_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(desc_ptr, &mut data.description) };
+                    let _ = unsafe { bpf_probe_read_user_buf(desc_ptr, &mut data.description) };
                 }
 
                 if !info_ptr.is_null() {
-                    let _ = unsafe { bpf_probe_read_buf(info_ptr, &mut data.callout_info) };
+                    let _ = unsafe { bpf_probe_read_user_buf(info_ptr, &mut data.callout_info) };
                     data.callout_info_len = pinchy_common::MEDIUM_READ_SIZE;
                 } else {
                     data.callout_info_len = 0;

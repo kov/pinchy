@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -118,7 +118,7 @@ pub fn syscall_exit_network(ctx: TracePointContext) -> u32 {
                             core::cmp::min(return_value as usize, pinchy_common::DATA_READ_SIZE);
                         if read_size > 0 {
                             let _ =
-                                bpf_probe_read_buf(buf_ptr, &mut data.received_data[..read_size]);
+                                bpf_probe_read_user_buf(buf_ptr, &mut data.received_data[..read_size]);
                             data.received_len = read_size;
                         }
                     }
@@ -152,7 +152,7 @@ pub fn syscall_exit_network(ctx: TracePointContext) -> u32 {
                     if data.size > 0 && !buf_ptr.is_null() {
                         let read_size = core::cmp::min(data.size, pinchy_common::DATA_READ_SIZE);
                         if read_size > 0 {
-                            let _ = bpf_probe_read_buf(buf_ptr, &mut data.sent_data[..read_size]);
+                            let _ = bpf_probe_read_user_buf(buf_ptr, &mut data.sent_data[..read_size]);
                             data.sent_len = read_size;
                         }
                     }
@@ -265,7 +265,7 @@ pub fn syscall_exit_network(ctx: TracePointContext) -> u32 {
                     let read_size =
                         core::cmp::min(data.optlen as usize, pinchy_common::MEDIUM_READ_SIZE);
                     unsafe {
-                        let _ = bpf_probe_read_buf(optval_ptr, &mut data.optval[..read_size]);
+                        let _ = bpf_probe_read_user_buf(optval_ptr, &mut data.optval[..read_size]);
                     }
                 }
             }
@@ -288,7 +288,7 @@ pub fn syscall_exit_network(ctx: TracePointContext) -> u32 {
                                     pinchy_common::MEDIUM_READ_SIZE,
                                 );
                                 let _ =
-                                    bpf_probe_read_buf(optval_ptr, &mut data.optval[..read_size]);
+                                    bpf_probe_read_user_buf(optval_ptr, &mut data.optval[..read_size]);
                             }
                         }
                     }
@@ -474,7 +474,7 @@ fn parse_msghdr(
                 msghdr.msg_controllen as usize,
                 kernel_types::MSG_CONTROL_SIZE,
             );
-            let _ = bpf_probe_read_buf(
+            let _ = bpf_probe_read_user_buf(
                 msghdr.msg_control as *const u8,
                 &mut msghdr.control_data[..control_size],
             );

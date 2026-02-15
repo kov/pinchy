@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -43,7 +43,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
 
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
                 }
             }
             syscalls::SYS_openat2 => {
@@ -56,7 +56,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
 
                 // Read pathname
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
 
                 // Read struct open_how
@@ -75,7 +75,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_read = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_buf(buf_addr as *const _, &mut data.buf[..to_read]);
+                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
                     }
                 }
             }
@@ -88,7 +88,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_copy = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
+                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
                     }
                 }
             }
@@ -102,7 +102,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_read = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_buf(buf_addr as *const _, &mut data.buf[..to_read]);
+                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
                     }
                 }
             }
@@ -116,7 +116,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_copy = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
+                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
                     }
                 }
             }
@@ -365,7 +365,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 let pipefd_ptr = args[0] as *const i32;
                 let mut pipefd_bytes = [0u8; core::mem::size_of::<[i32; 2]>()];
                 unsafe {
-                    let _ = bpf_probe_read_buf(pipefd_ptr as *const u8, &mut pipefd_bytes);
+                    let _ = bpf_probe_read_user_buf(pipefd_ptr as *const u8, &mut pipefd_bytes);
                 }
 
                 data.pipefd = unsafe {
@@ -622,7 +622,7 @@ fn read_fdset(fdset: &mut FdSet, fd_set_ptr: *const u8, nfds: i32) {
     let bytes_to_read = core::cmp::min(bytes_needed, fdset.bytes.len());
 
     unsafe {
-        if bpf_probe_read_buf(fd_set_ptr, &mut fdset.bytes[..bytes_to_read]).is_ok() {
+        if bpf_probe_read_user_buf(fd_set_ptr, &mut fdset.bytes[..bytes_to_read]).is_ok() {
             fdset.len = bytes_to_read as u32;
         }
     }

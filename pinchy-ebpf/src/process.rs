@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
     macros::{map, tracepoint},
     maps::HashMap,
     programs::TracePointContext,
@@ -239,7 +239,7 @@ fn read_execve_enter_data(
     envc: &mut u8,
 ) {
     unsafe {
-        let _ = bpf_probe_read_buf(pathname_ptr as *const _, pathname);
+        let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, pathname);
     }
 
     for byte in pathname {
@@ -257,7 +257,7 @@ fn read_execve_enter_data(
             }
             if i < 4 {
                 unsafe {
-                    let _ = bpf_probe_read_buf(arg_ptr as *const _, &mut argv[i]);
+                    let _ = bpf_probe_read_user_buf(arg_ptr as *const _, &mut argv[i]);
                 }
                 for j in 0..argv[i].len() {
                     if argv[i][j] == 0 {
@@ -283,7 +283,7 @@ fn read_execve_enter_data(
             }
             if i < 2 {
                 unsafe {
-                    let _ = bpf_probe_read_buf(env_ptr as *const _, &mut envp[i]);
+                    let _ = bpf_probe_read_user_buf(env_ptr as *const _, &mut envp[i]);
                 }
                 for j in 0..envp[i].len() {
                     if envp[i][j] == 0 {
@@ -383,7 +383,7 @@ pub fn syscall_exit_process(ctx: TracePointContext) -> u32 {
                     let read_size =
                         core::cmp::min(data.size as usize, core::mem::size_of::<CloneArgs>());
                     if read_size > 0 {
-                        let _ = bpf_probe_read_buf(
+                        let _ = bpf_probe_read_user_buf(
                             cl_args_ptr as *const u8,
                             &mut core::slice::from_raw_parts_mut(
                                 &mut data.cl_args as *mut CloneArgs as *mut u8,

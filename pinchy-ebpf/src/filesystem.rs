@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -44,9 +44,9 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let stat_ptr = args[2] as *const u8;
                 data.flags = args[3] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
                     if return_value == 0 {
-                        let _ = bpf_probe_read_buf(
+                        let _ = bpf_probe_read_user_buf(
                             stat_ptr,
                             core::slice::from_raw_parts_mut(
                                 &mut data.stat as *mut _ as *mut u8,
@@ -134,8 +134,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let buf_ptr = args[2] as *const u8;
                 data.bufsiz = args[3] as usize;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_buf(buf_ptr, &mut data.buf);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(buf_ptr, &mut data.buf);
                 }
             }
             syscalls::SYS_statfs => {
@@ -143,7 +143,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[0] as *const u8;
                 let buf_ptr = args[1] as *const pinchy_common::kernel_types::Statfs;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
                     if return_value == 0 {
                         if let Ok(val) = bpf_probe_read_user(buf_ptr as *const _) {
                             data.statfs = val;
@@ -158,7 +158,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.mode = args[2] as i32;
                 data.flags = args[3] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr as *const _, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
                 }
             }
             syscalls::SYS_inotify_add_watch => {
@@ -167,7 +167,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.mask = args[2] as u32;
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_flistxattr => {
@@ -181,7 +181,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
                     unsafe {
                         let _ =
-                            bpf_probe_read_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
+                            bpf_probe_read_user_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
                     }
                     data.xattr_list.size = read_size;
                 }
@@ -192,7 +192,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let list_ptr = args[1] as *const u8;
                 data.size = args[2] as usize;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
                 data.list = list_ptr as u64;
                 data.xattr_list = pinchy_common::kernel_types::XattrList::default();
@@ -200,7 +200,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
                     unsafe {
                         let _ =
-                            bpf_probe_read_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
+                            bpf_probe_read_user_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
                     }
                     data.xattr_list.size = read_size;
                 }
@@ -211,7 +211,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let list_ptr = args[1] as *const u8;
                 data.size = args[2] as usize;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
                 data.list = list_ptr as u64;
                 data.xattr_list = pinchy_common::kernel_types::XattrList::default();
@@ -219,7 +219,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
                     unsafe {
                         let _ =
-                            bpf_probe_read_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
+                            bpf_probe_read_user_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
                     }
                     data.xattr_list.size = read_size;
                 }
@@ -232,11 +232,11 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.size = args[3] as usize;
                 data.flags = args[4] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                     if !value_ptr.is_null() && data.size > 0 {
                         let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                        let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
                     }
                 }
             }
@@ -248,11 +248,11 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.size = args[3] as usize;
                 data.flags = args[4] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                     if !value_ptr.is_null() && data.size > 0 {
                         let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                        let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
                     }
                 }
             }
@@ -264,10 +264,10 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.size = args[3] as usize;
                 data.flags = args[4] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                     if !value_ptr.is_null() && data.size > 0 {
                         let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                        let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
                     }
                 }
             }
@@ -278,14 +278,14 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let value_ptr = args[2] as *const u8;
                 data.size = args[3] as usize;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                     if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
                         let read_size = core::cmp::min(
                             return_value as usize,
                             core::cmp::min(data.size, DATA_READ_SIZE),
                         );
-                        let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
                     }
                 }
             }
@@ -296,14 +296,14 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let value_ptr = args[2] as *const u8;
                 data.size = args[3] as usize;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                     if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
                         let read_size = core::cmp::min(
                             return_value as usize,
                             core::cmp::min(data.size, DATA_READ_SIZE),
                         );
-                        let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
                     }
                 }
             }
@@ -314,13 +314,13 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let value_ptr = args[2] as *const u8;
                 data.size = args[3] as usize;
                 unsafe {
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                     if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
                         let read_size = core::cmp::min(
                             return_value as usize,
                             core::cmp::min(data.size, DATA_READ_SIZE),
                         );
-                        let _ = bpf_probe_read_buf(value_ptr, &mut data.value[..read_size]);
+                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
                     }
                 }
             }
@@ -329,8 +329,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[0] as *const u8;
                 let name_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                 }
             }
             syscalls::SYS_lremovexattr => {
@@ -338,8 +338,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[0] as *const u8;
                 let name_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                 }
             }
             syscalls::SYS_fremovexattr => {
@@ -347,7 +347,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.fd = args[0] as i32;
                 let name_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(name_ptr, &mut data.name);
+                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                 }
             }
             syscalls::SYS_getcwd => {
@@ -357,7 +357,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.size = args[1] as usize;
                 if return_value > 0 {
                     unsafe {
-                        let _ = bpf_probe_read_buf(buf_ptr, &mut data.path);
+                        let _ = bpf_probe_read_user_buf(buf_ptr, &mut data.path);
                     }
                 }
             }
@@ -365,7 +365,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let data = data_mut!(entry, chdir);
                 let path_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
+                    let _ = bpf_probe_read_user_buf(path_ptr, &mut data.path);
                 }
             }
             syscalls::SYS_mkdirat => {
@@ -374,7 +374,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.mode = args[2] as u32;
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             #[cfg(x86_64)]
@@ -384,7 +384,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.gid = args[2] as u32;
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             #[cfg(x86_64)]
@@ -394,7 +394,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.gid = args[2] as u32;
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_truncate => {
@@ -402,7 +402,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.length = args[1] as i64;
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             #[cfg(x86_64)]
@@ -411,8 +411,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let oldpath_ptr = args[0] as *const u8;
                 let newpath_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
+                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
+                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
                 }
             }
             syscalls::SYS_renameat => {
@@ -422,8 +422,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.newdirfd = args[2] as i32;
                 let newpath_ptr = args[3] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
+                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
+                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
                 }
             }
             syscalls::SYS_renameat2 => {
@@ -434,8 +434,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let newpath_ptr = args[3] as *const u8;
                 data.flags = args[4] as u32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
+                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
+                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
                 }
             }
             syscalls::SYS_fchmodat => {
@@ -445,7 +445,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.flags = args[3] as i32;
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_fchownat => {
@@ -456,7 +456,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.flags = args[4] as i32;
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             #[cfg(x86_64)]
@@ -464,7 +464,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let data = data_mut!(entry, rmdir);
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             #[cfg(x86_64)]
@@ -472,7 +472,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let data = data_mut!(entry, unlink);
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_unlinkat => {
@@ -481,14 +481,14 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.flags = args[2] as i32;
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_acct => {
                 let data = data_mut!(entry, acct);
                 let filename_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
+                    let _ = bpf_probe_read_user_buf(filename_ptr, &mut data.filename);
                 }
             }
             #[cfg(x86_64)]
@@ -497,8 +497,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let target_ptr = args[0] as *const u8;
                 let linkpath_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
-                    let _ = bpf_probe_read_buf(linkpath_ptr, &mut data.linkpath);
+                    let _ = bpf_probe_read_user_buf(target_ptr, &mut data.target);
+                    let _ = bpf_probe_read_user_buf(linkpath_ptr, &mut data.linkpath);
                 }
             }
             syscalls::SYS_symlinkat => {
@@ -507,8 +507,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let target_ptr = args[0] as *const u8;
                 let linkpath_ptr = args[2] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
-                    let _ = bpf_probe_read_buf(linkpath_ptr, &mut data.linkpath);
+                    let _ = bpf_probe_read_user_buf(target_ptr, &mut data.target);
+                    let _ = bpf_probe_read_user_buf(linkpath_ptr, &mut data.linkpath);
                 }
             }
             syscalls::SYS_statx => {
@@ -521,9 +521,9 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.statxbuf = statxbuf_ptr as u64;
 
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     if return_value == 0 {
-                        let _ = bpf_probe_read_buf(
+                        let _ = bpf_probe_read_user_buf(
                             statxbuf_ptr as *const u8,
                             core::slice::from_raw_parts_mut(
                                 &mut data.statx as *mut _ as *mut u8,
@@ -540,7 +540,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.dev = args[2] as u64;
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_mknodat => {
@@ -550,7 +550,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.dev = args[3] as u64;
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_pivot_root => {
@@ -558,15 +558,15 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let new_root_ptr = args[0] as *const u8;
                 let put_old_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(new_root_ptr, &mut data.new_root);
-                    let _ = bpf_probe_read_buf(put_old_ptr, &mut data.put_old);
+                    let _ = bpf_probe_read_user_buf(new_root_ptr, &mut data.new_root);
+                    let _ = bpf_probe_read_user_buf(put_old_ptr, &mut data.put_old);
                 }
             }
             syscalls::SYS_chroot => {
                 let data = data_mut!(entry, chroot);
                 let path_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
+                    let _ = bpf_probe_read_user_buf(path_ptr, &mut data.path);
                 }
             }
             syscalls::SYS_open_tree => {
@@ -575,7 +575,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[1] as *const u8;
                 data.flags = args[2] as u32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_mount => {
@@ -586,9 +586,9 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.mountflags = args[3] as u64;
                 data.data = args[4] as u64;
                 unsafe {
-                    let _ = bpf_probe_read_buf(source_ptr, &mut data.source);
-                    let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
-                    let _ = bpf_probe_read_buf(filesystemtype_ptr, &mut data.filesystemtype);
+                    let _ = bpf_probe_read_user_buf(source_ptr, &mut data.source);
+                    let _ = bpf_probe_read_user_buf(target_ptr, &mut data.target);
+                    let _ = bpf_probe_read_user_buf(filesystemtype_ptr, &mut data.filesystemtype);
                 }
             }
             syscalls::SYS_umount2 => {
@@ -596,7 +596,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let target_ptr = args[0] as *const u8;
                 data.flags = args[1] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(target_ptr, &mut data.target);
+                    let _ = bpf_probe_read_user_buf(target_ptr, &mut data.target);
                 }
             }
             syscalls::SYS_mount_setattr => {
@@ -610,12 +610,12 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 if !attr_ptr.is_null() {
                     data.has_attr = true;
                     unsafe {
-                        let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
+                        let _ = bpf_probe_read_user_buf(path_ptr, &mut data.path);
                         let read_size = core::cmp::min(
                             data.size,
                             core::mem::size_of::<pinchy_common::kernel_types::MountAttr>(),
                         );
-                        let _ = bpf_probe_read_buf(
+                        let _ = bpf_probe_read_user_buf(
                             attr_ptr,
                             core::slice::from_raw_parts_mut(
                                 &mut data.attr as *mut _ as *mut u8,
@@ -633,8 +633,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let to_pathname_ptr = args[3] as *const u8;
                 data.flags = args[4] as u32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(from_pathname_ptr, &mut data.from_pathname);
-                    let _ = bpf_probe_read_buf(to_pathname_ptr, &mut data.to_pathname);
+                    let _ = bpf_probe_read_user_buf(from_pathname_ptr, &mut data.from_pathname);
+                    let _ = bpf_probe_read_user_buf(to_pathname_ptr, &mut data.to_pathname);
                 }
             }
             syscalls::SYS_swapon => {
@@ -642,14 +642,14 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[0] as *const u8;
                 data.flags = args[1] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_swapoff => {
                 let data = data_mut!(entry, swapoff);
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             syscalls::SYS_fstatfs => {
@@ -669,7 +669,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let fsname_ptr = args[0] as *const u8;
                 data.flags = args[1] as u32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(fsname_ptr, &mut data.fsname);
+                    let _ = bpf_probe_read_user_buf(fsname_ptr, &mut data.fsname);
                 }
             }
             syscalls::SYS_fsconfig => {
@@ -681,10 +681,10 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 data.aux = args[4] as i32;
                 unsafe {
                     if !key_ptr.is_null() {
-                        let _ = bpf_probe_read_buf(key_ptr, &mut data.key);
+                        let _ = bpf_probe_read_user_buf(key_ptr, &mut data.key);
                     }
                     if !value_ptr.is_null() {
-                        let _ = bpf_probe_read_buf(value_ptr, &mut data.value);
+                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value);
                     }
                 }
             }
@@ -694,7 +694,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let path_ptr = args[1] as *const u8;
                 data.flags = args[2] as u32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(path_ptr, &mut data.path);
+                    let _ = bpf_probe_read_user_buf(path_ptr, &mut data.path);
                 }
             }
             syscalls::SYS_fallocate => {
@@ -710,8 +710,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let oldpath_ptr = args[0] as *const u8;
                 let newpath_ptr = args[1] as *const u8;
                 unsafe {
-                    let _ = bpf_probe_read_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
+                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
+                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
                 }
             }
             syscalls::SYS_linkat => {
@@ -722,8 +722,8 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let newpath_ptr = args[3] as *const u8;
                 data.flags = args[4] as i32;
                 unsafe {
-                    let _ = bpf_probe_read_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_buf(newpath_ptr, &mut data.newpath);
+                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
+                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
                 }
             }
             syscalls::SYS_fanotify_init => {
@@ -740,7 +740,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[4] as *const u8;
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
             }
@@ -754,7 +754,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
             }
@@ -820,7 +820,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
 
@@ -849,7 +849,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !special_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(special_ptr as *const _, &mut data.special);
+                        let _ = bpf_probe_read_user_buf(special_ptr as *const _, &mut data.special);
                     }
                 }
             }
@@ -869,7 +869,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !buffer_ptr.is_null() && return_value > 0 {
                     unsafe {
-                        let _ = bpf_probe_read_buf(buffer_ptr, &mut data.buffer);
+                        let _ = bpf_probe_read_user_buf(buffer_ptr, &mut data.buffer);
                     }
                 }
             }
@@ -888,7 +888,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !filename_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
+                        let _ = bpf_probe_read_user_buf(filename_ptr, &mut data.filename);
                     }
                 }
 
@@ -913,7 +913,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
             }
@@ -926,7 +926,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
             }
@@ -939,7 +939,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
             }
@@ -952,7 +952,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
             }
@@ -966,13 +966,13 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
 
                 if !buf_ptr.is_null() && return_value > 0 {
                     unsafe {
-                        let _ = bpf_probe_read_buf(buf_ptr, &mut data.buf);
+                        let _ = bpf_probe_read_user_buf(buf_ptr, &mut data.buf);
                     }
                 }
             }
@@ -985,13 +985,13 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
 
                 if !statbuf_ptr.is_null() && return_value == 0 {
                     unsafe {
-                        let _ = bpf_probe_read_buf(
+                        let _ = bpf_probe_read_user_buf(
                             statbuf_ptr,
                             core::slice::from_raw_parts_mut(
                                 &mut data.statbuf as *mut _ as *mut u8,
@@ -1010,13 +1010,13 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
 
                 if !statbuf_ptr.is_null() && return_value == 0 {
                     unsafe {
-                        let _ = bpf_probe_read_buf(
+                        let _ = bpf_probe_read_user_buf(
                             statbuf_ptr,
                             core::slice::from_raw_parts_mut(
                                 &mut data.statbuf as *mut _ as *mut u8,
@@ -1035,7 +1035,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !filename_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(filename_ptr, &mut data.filename);
+                        let _ = bpf_probe_read_user_buf(filename_ptr, &mut data.filename);
                     }
                 }
 
@@ -1061,7 +1061,7 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 if !pathname_ptr.is_null() {
                     unsafe {
-                        let _ = bpf_probe_read_buf(pathname_ptr, &mut data.pathname);
+                        let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                     }
                 }
 

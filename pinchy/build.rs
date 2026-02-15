@@ -10,5 +10,7 @@ fn main() -> anyhow::Result<()> {
             features: &[],
         }],
         aya_build::Toolchain::Custom("nightly-2025-12-12"),
-    )
+    )?;
+
+    Ok(())
 }

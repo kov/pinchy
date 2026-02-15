@@ -1860,7 +1860,7 @@ fn filesystem_sync_test() -> anyhow::Result<()> {
         .create(true)
         .write(true)
         .truncate(true)
-        .open("test_sync_file.tmp")?;
+        .open("/tmp/test_sync_file.tmp")?;
 
     let fd = file.as_raw_fd();
 
@@ -1905,7 +1905,7 @@ fn filesystem_sync_test() -> anyhow::Result<()> {
 
     // Clean up - the file will be closed when it goes out of scope
     drop(file);
-    let _ = std::fs::remove_file("test_sync_file.tmp");
+    let _ = std::fs::remove_file("/tmp/test_sync_file.tmp");
 
     Ok(())
 }
@@ -3436,7 +3436,7 @@ fn memfd_test() -> anyhow::Result<()> {
         // Test 1: memfd_create with MFD_CLOEXEC flag
         let name1 = CString::new("test_memfd_1").expect("CString creation failed");
         let fd1 = libc::syscall(
-            syscalls::SYS_memfd_create as i64,
+            syscalls::SYS_memfd_create,
             name1.as_ptr(),
             libc::MFD_CLOEXEC as i32,
         );
@@ -3448,7 +3448,7 @@ fn memfd_test() -> anyhow::Result<()> {
         // Test 2: memfd_create with MFD_ALLOW_SEALING flag
         let name2 = CString::new("test_memfd_2").expect("CString creation failed");
         let fd2 = libc::syscall(
-            syscalls::SYS_memfd_create as i64,
+            syscalls::SYS_memfd_create,
             name2.as_ptr(),
             libc::MFD_ALLOW_SEALING as i32,
         );
@@ -3460,7 +3460,7 @@ fn memfd_test() -> anyhow::Result<()> {
         // Test 3: memfd_create with both MFD_CLOEXEC and MFD_ALLOW_SEALING
         let name3 = CString::new("test_memfd_3").expect("CString creation failed");
         let fd3 = libc::syscall(
-            syscalls::SYS_memfd_create as i64,
+            syscalls::SYS_memfd_create,
             name3.as_ptr(),
             (libc::MFD_CLOEXEC | libc::MFD_ALLOW_SEALING) as i32,
         );

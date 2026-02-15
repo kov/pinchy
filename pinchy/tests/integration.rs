@@ -3,23 +3,14 @@
 
 mod common;
 
-use std::{
-    fs,
-    process::{Command, Output},
-    thread::JoinHandle,
-};
-
 use assert_cmd::assert::Assert;
-use common::PinchyTest;
+use common::{run_workload, PinchyTest, TestMode};
 use indoc::indoc;
 use predicates::prelude::*;
-use serial_test::serial;
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn basic_output() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
     let output = pinchy.wait();
     Assert::new(output)
         .success()
@@ -27,13 +18,12 @@ fn basic_output() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn memory_policy_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises memory policy syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "set_mempolicy",
             "mbind",
@@ -72,13 +62,12 @@ fn memory_policy_syscalls() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn epoll_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     #[cfg(target_arch = "x86_64")]
     let handle = run_workload(
+        &pinchy,
         &[
             "epoll_create1",
             "epoll_ctl",
@@ -91,6 +80,7 @@ fn epoll_syscalls() {
 
     #[cfg(target_arch = "aarch64")]
     let handle = run_workload(
+        &pinchy,
         &["epoll_create1", "epoll_ctl", "epoll_pwait", "epoll_pwait2"],
         "epoll_test",
     );
@@ -127,18 +117,16 @@ fn epoll_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn drop_privileges() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::with_mode(TestMode::CheckCaps);
 
-    let pid = pinchy.get_pid();
-    let status = fs::read_to_string(format!("/proc/{pid}/status"))
-        .expect("Failed to read process status from /proc");
+    // read_file triggers UML boot and reads the captured proc status
+    let status = pinchy.read_file("proc_status");
 
     let mut dropped_cap_inh = false;
     let mut dropped_cap_prm = false;
     let mut dropped_cap_eff = false;
+
     for line in status.split('\n') {
         if line.starts_with("CapInh:\t0000000000000000") {
             dropped_cap_inh = true;
@@ -148,6 +136,7 @@ fn drop_privileges() {
             dropped_cap_eff = true;
         }
     }
+
     assert!(dropped_cap_inh);
     assert!(dropped_cap_prm);
     assert!(dropped_cap_eff);
@@ -159,13 +148,11 @@ fn drop_privileges() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn pinchy_reads() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload
-    let handle = run_workload(&["openat", "openat2", "read", "lseek"], "pinchy_reads");
+    let handle = run_workload(&pinchy, &["openat", "openat2", "read", "lseek"], "pinchy_reads");
 
     // Client's output
     let expected_output = escaped_regex(indoc! {r#"
@@ -194,13 +181,12 @@ fn pinchy_reads() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn filesystem_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises getdents64, fstat, newfstatat, faccessat, faccessat2
     let handle = run_workload(
+        &pinchy,
         &[
             "getdents64",
             "fstat",
@@ -213,7 +199,7 @@ fn filesystem_syscalls() {
 
     // Client's output - we expect the syscalls from the workload
     let expected_output = escaped_regex(indoc! {r#"
-        @PID@ getdents64(fd: @NUMBER@, count: @NUMBER@, entries: [ dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ } ]) = 184 (bytes)
+        @PID@ getdents64(fd: @NUMBER@, count: @NUMBER@, entries: [ dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ }, dirent { ino: @NUMBER@, off: @NUMBER@, reclen: @NUMBER@, type: @NUMBER@, name: "@ALPHANUM@"@MAYBETRUNCATED@ } ]) = @NUMBER@ (bytes)
         @PID@ fstat(fd: @NUMBER@, struct stat: { mode: 0o@NUMBER@ (@MODE@), ino: @NUMBER@, dev: @NUMBER@, nlink: @NUMBER@, uid: @NUMBER@, gid: @NUMBER@, size: 18092, blksize: @NUMBER@, blocks: @NUMBER@, atime: @NUMBER@, mtime: @NUMBER@, ctime: @NUMBER@ }) = 0 (success)
         @PID@ newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0o@NUMBER@ (@MODE@), ino: @NUMBER@, dev: @NUMBER@, nlink: @NUMBER@, uid: @NUMBER@, gid: @NUMBER@, size: 18092, blksize: @NUMBER@, blocks: @NUMBER@, atime: @NUMBER@, mtime: @NUMBER@, ctime: @NUMBER@ }, flags: 0) = 0 (success)
         @PID@ faccessat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK) = 0 (success)
@@ -233,13 +219,11 @@ fn filesystem_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn statfs_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises statfs and fstatfs
-    let handle = run_workload(&["statfs", "fstatfs"], "statfs_test");
+    let handle = run_workload(&pinchy, &["statfs", "fstatfs"], "statfs_test");
 
     // Expected output - we test both success and error cases
     let expected_output = escaped_regex(indoc! {r#"
@@ -260,13 +244,11 @@ fn statfs_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn rt_sig() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload
-    let handle = run_workload(&["rt_sigprocmask"], "rt_sig");
+    let handle = run_workload(&pinchy, &["rt_sigprocmask"], "rt_sig");
 
     // Client's output - we expect pretty-printed signal sets
     let expected_output = escaped_regex(indoc! {r#"
@@ -289,13 +271,11 @@ fn rt_sig() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn rt_sigaction_realtime() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises rt_sigaction with real-time signals
-    let handle = run_workload(&["rt_sigaction"], "rt_sigaction_realtime");
+    let handle = run_workload(&pinchy, &["rt_sigaction"], "rt_sigaction_realtime");
 
     // Client's output - we expect rt_sigaction calls with SIGRT1
     let expected_output = escaped_regex(indoc! {r#"
@@ -317,13 +297,11 @@ fn rt_sigaction_realtime() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn rt_sigaction_standard() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises rt_sigaction with standard signals
-    let handle = run_workload(&["rt_sigaction"], "rt_sigaction_standard");
+    let handle = run_workload(&pinchy, &["rt_sigaction"], "rt_sigaction_standard");
 
     // Client's output - we expect rt_sigaction calls with SIGUSR1
     let expected_output = escaped_regex(indoc! {r#"
@@ -345,13 +323,11 @@ fn rt_sigaction_standard() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn fcntl_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises fcntl syscalls
-    let handle = run_workload(&["fcntl"], "fcntl_test");
+    let handle = run_workload(&pinchy, &["fcntl"], "fcntl_test");
 
     // Client's output - we expect several fcntl calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -375,13 +351,12 @@ fn fcntl_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn pipe_operations_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises pipe operations
     let handle = run_workload(
+        &pinchy,
         &["pipe2", "splice", "tee", "vmsplice"],
         "pipe_operations_test",
     );
@@ -414,24 +389,15 @@ fn pipe_operations_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn io_uring_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     let handle = run_workload(
+        &pinchy,
         &["io_uring_setup", "io_uring_enter", "io_uring_register"],
         "io_uring_test",
     );
 
-    #[cfg(target_arch = "x86_64")]
-    let expected_output = escaped_regex(indoc! {r#"
-        @PID@ io_uring_setup(entries: 8, params_ptr: @ADDR@, params: { sq_entries: 8, cq_entries: 16, flags: 0, sq_thread_cpu: 0, sq_thread_idle: 0, features: 0x@HEXNUMBER@ (IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING|IORING_FEAT_RECVSEND_BUNDLE|IORING_FEAT_MIN_TIMEOUT|IORING_FEAT_RW_ATTR), wq_fd: 0 }) = @NUMBER@ (fd)
-        @PID@ io_uring_enter(fd: @NUMBER@, to_submit: 0, min_complete: 0, flags: 0x5 (IORING_ENTER_GETEVENTS|IORING_ENTER_SQ_WAIT), sig: 0x0, sigsz: 0) = @NUMBER@ (submitted)
-        @PID@ io_uring_register(fd: @NUMBER@, opcode: IORING_REGISTER_PROBE, arg: @ADDR@, nr_args: 4) = -@NUMBER@ (error)
-    "#});
-
-    #[cfg(target_arch = "aarch64")]
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ io_uring_setup(entries: 8, params_ptr: @ADDR@, params: { sq_entries: 8, cq_entries: 16, flags: 0, sq_thread_cpu: 0, sq_thread_idle: 0, features: 0x@HEXNUMBER@ (IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING|IORING_FEAT_RECVSEND_BUNDLE|IORING_FEAT_MIN_TIMEOUT|IORING_FEAT_RW_ATTR|IORING_FEAT_NO_IOWAIT), wq_fd: 0 }) = @NUMBER@ (fd)
         @PID@ io_uring_enter(fd: @NUMBER@, to_submit: 0, min_complete: 0, flags: 0x5 (IORING_ENTER_GETEVENTS|IORING_ENTER_SQ_WAIT), sig: 0x0, sigsz: 0) = @NUMBER@ (submitted)
@@ -450,18 +416,16 @@ fn io_uring_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn io_multiplexing_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises I/O multiplexing syscalls
     // Architecture-specific syscalls: select and poll are x86_64 only
     #[cfg(target_arch = "x86_64")]
-    let handle = run_workload(&["select", "poll", "ppoll"], "io_multiplexing_test");
+    let handle = run_workload(&pinchy, &["select", "poll", "ppoll"], "io_multiplexing_test");
 
     #[cfg(target_arch = "aarch64")]
-    let handle = run_workload(&["ppoll"], "io_multiplexing_test");
+    let handle = run_workload(&pinchy, &["ppoll"], "io_multiplexing_test");
 
     // Expected output - architecture-specific formatting
     #[cfg(target_arch = "x86_64")]
@@ -496,25 +460,6 @@ fn io_multiplexing_syscalls() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
-fn run_workload(events: &[&str], test_name: &str) -> JoinHandle<Output> {
-    let events: Vec<String> = events.iter().map(|&s| s.to_owned()).collect();
-    let test_name = test_name.to_owned();
-    std::thread::spawn(move || {
-        let mut cmd = Command::new(assert_cmd::cargo::cargo_bin!("pinchy"));
-
-        // Add event filters
-        for event in events {
-            cmd.args(["-e", &event]);
-        }
-
-        // Add the test helper command
-        cmd.arg("--")
-            .arg(assert_cmd::cargo::cargo_bin!("test-helper"))
-            .arg(&test_name)
-            .output()
-            .expect("Failed to run pinchy")
-    })
-}
 
 fn escaped_regex(expected_output: &str) -> String {
     // Use unique markers to avoid accidental partial replacements
@@ -535,12 +480,10 @@ fn escaped_regex(expected_output: &str) -> String {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn fchdir_syscall() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
-    let handle = run_workload(&["fchdir"], "fchdir_test");
+    let handle = run_workload(&pinchy, &["fchdir"], "fchdir_test");
 
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ fchdir(fd: 3) = 0 (success)
@@ -558,12 +501,11 @@ fn fchdir_syscall() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn filesystem_sync_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     let handle = run_workload(
+        &pinchy,
         &["fsync", "fdatasync", "ftruncate", "fchmod"],
         "filesystem_sync_test",
     );
@@ -589,13 +531,11 @@ fn filesystem_sync_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn network_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises network syscalls
-    let handle = run_workload(&["accept4", "recvmsg", "sendmsg"], "network_test");
+    let handle = run_workload(&pinchy, &["accept4", "recvmsg", "sendmsg"], "network_test");
 
     // Expected output - we should see accept4, recvmsg, and sendmsg calls
     // The exact addresses and file descriptors will vary, so we use regex patterns
@@ -622,12 +562,11 @@ fn network_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn socket_introspection_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     let handle = run_workload(
+        &pinchy,
         &[
             "getsockname",
             "getpeername",
@@ -663,13 +602,11 @@ fn socket_introspection_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn recvfrom_syscall() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises recvfrom syscall
-    let handle = run_workload(&["recvfrom"], "recvfrom_test");
+    let handle = run_workload(&pinchy, &["recvfrom"], "recvfrom_test");
 
     // Expected output - we should see recvfrom calls with and without source address
     let expected_output = escaped_regex(indoc! {r#"
@@ -694,13 +631,12 @@ fn recvfrom_syscall() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn identity_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises identity-related syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "getpid", "gettid", "getuid", "geteuid", "getgid", "getegid", "getppid",
         ],
@@ -735,13 +671,11 @@ fn identity_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn mmap_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises mmap and munmap syscalls
-    let handle = run_workload(&["mmap", "munmap"], "mmap_test");
+    let handle = run_workload(&pinchy, &["mmap", "munmap"], "mmap_test");
 
     // Verify that our specific test mmap calls are present in the output
     let expected_output = escaped_regex(indoc! {r#"
@@ -776,13 +710,11 @@ fn mmap_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn memfd_create_syscall() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises memfd_create syscall
-    let handle = run_workload(&["memfd_create", "close"], "memfd_test");
+    let handle = run_workload(&pinchy, &["memfd_create", "close"], "memfd_test");
 
     // Verify that our memfd_create calls are present in the output
     // Note: Names are truncated to 8 bytes (SMALL_READ_SIZE)
@@ -812,13 +744,11 @@ fn memfd_create_syscall() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn madvise_syscall() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises madvise syscall
-    let handle = run_workload(&["madvise"], "madvise_test");
+    let handle = run_workload(&pinchy, &["madvise"], "madvise_test");
 
     // Expected output - we should see multiple madvise calls with different advice values
     let expected_output = escaped_regex(indoc! {r#"
@@ -845,13 +775,11 @@ fn madvise_syscall() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn mlock_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises memory locking syscalls
-    let handle = run_workload(&["mlock", "munlockall"], "mlock_test");
+    let handle = run_workload(&pinchy, &["mlock", "munlockall"], "mlock_test");
 
     // Expected output - we should see mlock and munlockall calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -876,20 +804,19 @@ fn mlock_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn file_descriptor_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises file descriptor syscalls
     #[cfg(target_arch = "x86_64")]
     let handle = run_workload(
+        &pinchy,
         &["dup", "dup2", "dup3", "close_range"],
         "file_descriptor_test",
     );
 
     #[cfg(target_arch = "aarch64")]
-    let handle = run_workload(&["dup", "dup3", "close_range"], "file_descriptor_test");
+    let handle = run_workload(&pinchy, &["dup", "dup3", "close_range"], "file_descriptor_test");
 
     // Expected output - we should see dup, dup2, dup3 and close_range calls
     #[cfg(target_arch = "x86_64")]
@@ -924,13 +851,12 @@ fn file_descriptor_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn session_process_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises session and process group syscalls
     let handle = run_workload(
+        &pinchy,
         &["getpgid", "getsid", "setpgid", "setsid"],
         "session_process_test",
     );
@@ -960,13 +886,12 @@ fn session_process_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn uid_gid_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises user/group ID syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "setuid",
             "setgid",
@@ -1005,13 +930,11 @@ fn uid_gid_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn system_operations() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises system operation syscalls
-    let handle = run_workload(&["umask", "sync"], "system_operations_test");
+    let handle = run_workload(&pinchy, &["umask", "sync"], "system_operations_test");
 
     // Expected output - umask and sync calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -1037,13 +960,11 @@ fn system_operations() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn uname_sysinfo_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises system information syscalls
-    let handle = run_workload(&["uname", "sysinfo"], "system_info_test");
+    let handle = run_workload(&pinchy, &["uname", "sysinfo"], "system_info_test");
 
     // Expected output - uname and sysinfo calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -1068,13 +989,11 @@ fn uname_sysinfo_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn prctl_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises various prctl operations
-    let handle = run_workload(&["prctl"], "prctl_test");
+    let handle = run_workload(&pinchy, &["prctl"], "prctl_test");
 
     // Expected output - prctl operations with various argument patterns
     let expected_output = escaped_regex(indoc! {r#"
@@ -1107,13 +1026,11 @@ fn prctl_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn ioprio_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises I/O priority syscalls
-    let handle = run_workload(&["ioprio_get", "ioprio_set"], "ioprio_test");
+    let handle = run_workload(&pinchy, &["ioprio_get", "ioprio_set"], "ioprio_test");
 
     // Expected output - ioprio_get and ioprio_set calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -1138,13 +1055,12 @@ fn ioprio_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn scheduler_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises scheduler syscalls
     let handle = run_workload(
+        &pinchy,
         &["sched_getscheduler", "sched_setscheduler"],
         "scheduler_test",
     );
@@ -1172,13 +1088,11 @@ fn scheduler_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn pread_pwrite_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises pread and pwrite syscalls
-    let handle = run_workload(&["write", "pread64", "pwrite64"], "pread_pwrite_test");
+    let handle = run_workload(&pinchy, &["write", "pread64", "pwrite64"], "pread_pwrite_test");
 
     // Expected output - pread and pwrite calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -1204,13 +1118,11 @@ fn pread_pwrite_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn readv_writev_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises readv and writev syscalls
-    let handle = run_workload(&["writev", "readv"], "readv_writev_test");
+    let handle = run_workload(&pinchy, &["writev", "readv"], "readv_writev_test");
 
     // Expected output - readv and writev calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -1235,13 +1147,12 @@ fn readv_writev_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn socket_lifecycle_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises socket lifecycle syscalls
     let handle = run_workload(
+        &pinchy,
         &["socket", "bind", "connect", "listen", "shutdown"],
         "socket_lifecycle_test",
     );
@@ -1279,13 +1190,11 @@ fn socket_lifecycle_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn accept_syscall() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises accept syscall
-    let handle = run_workload(&["accept"], "accept_test");
+    let handle = run_workload(&pinchy, &["accept"], "accept_test");
 
     // Expected output - we should see accept call
     // The exact addresses and file descriptors will vary, so we use regex patterns
@@ -1310,12 +1219,10 @@ fn accept_syscall() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn pselect6_syscall() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
-    let handle = run_workload(&["pselect6"], "pselect6_test");
+    let handle = run_workload(&pinchy, &["pselect6"], "pselect6_test");
 
     // Expected output - we should see two pselect6 calls:
     // 1. One that times out (return 0)
@@ -1338,18 +1245,16 @@ fn pselect6_syscall() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn eventfd_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises eventfd syscalls
     // FIXME: in the future we should alias eventfd to eventfd2, I suppose.
     #[cfg(target_arch = "x86_64")]
-    let handle = run_workload(&["eventfd", "eventfd2", "close"], "eventfd_test");
+    let handle = run_workload(&pinchy, &["eventfd", "eventfd2", "close"], "eventfd_test");
 
     #[cfg(target_arch = "aarch64")]
-    let handle = run_workload(&["eventfd2", "close"], "eventfd_test");
+    let handle = run_workload(&pinchy, &["eventfd2", "close"], "eventfd_test");
 
     // Expected output - we should see eventfd2 calls with different flags and closes
     // eventfd() syscall (x86_64 only) and eventfd2() are both tested
@@ -1392,13 +1297,11 @@ fn eventfd_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn execveat_syscall() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises execveat syscalls
-    let handle = run_workload(&["execveat"], "execveat_test");
+    let handle = run_workload(&pinchy, &["execveat"], "execveat_test");
 
     // Expected output - we should see execveat calls with different arguments and flags
     let expected_output = escaped_regex(indoc! {r#"
@@ -1422,13 +1325,12 @@ fn execveat_syscall() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn xattr_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises extended attribute syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "setxattr",
             "fsetxattr",
@@ -1469,13 +1371,12 @@ fn xattr_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn sysv_ipc_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises SysV IPC syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "shmget", "shmat", "shmdt", "shmctl", "msgget", "msgsnd", "msgrcv", "msgctl", "semget",
             "semop", "semctl",
@@ -1519,13 +1420,12 @@ fn sysv_ipc_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn socketpair_sendmmsg_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises socketpair, sendmmsg, and recvmmsg syscalls
     let handle = run_workload(
+        &pinchy,
         &["socketpair", "sendmmsg", "recvmmsg"],
         "socketpair_sendmmsg_test",
     );
@@ -1556,12 +1456,11 @@ fn socketpair_sendmmsg_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn timer_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     let handle = run_workload(
+        &pinchy,
         &[
             "timer_create",
             "timer_settime",
@@ -1594,12 +1493,11 @@ fn timer_test() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn timerfd_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     let handle = run_workload(
+        &pinchy,
         &[
             "timerfd_create",
             "timerfd_settime",
@@ -1632,13 +1530,11 @@ fn timerfd_test() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn ioctl_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises ioctl syscalls
-    let handle = run_workload(&["ioctl"], "ioctl_test");
+    let handle = run_workload(&pinchy, &["ioctl"], "ioctl_test");
 
     // Expected output - we should see ioctl calls with different requests
     let expected_output = escaped_regex(indoc! {r#"
@@ -1664,20 +1560,20 @@ fn ioctl_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn filesystem_links_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises filesystem link operations
     #[cfg(target_arch = "x86_64")]
     let handle = run_workload(
+        &pinchy,
         &["symlinkat", "readlinkat", "linkat", "link"],
         "filesystem_links_test",
     );
 
     #[cfg(target_arch = "aarch64")]
     let handle = run_workload(
+        &pinchy,
         &["symlinkat", "readlinkat", "linkat"],
         "filesystem_links_test",
     );
@@ -1719,13 +1615,12 @@ fn filesystem_links_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn aio_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises Async I/O syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "io_setup",
             "io_submit",
@@ -1765,13 +1660,12 @@ fn aio_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn landlock_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises Landlock syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "landlock_create_ruleset",
             "landlock_add_rule",
@@ -1811,13 +1705,12 @@ fn landlock_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn posix_mq_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises POSIX message queue syscalls
     let handle = run_workload(
+        &pinchy,
         &[
             "mq_open",
             "mq_timedsend",
@@ -1866,13 +1759,11 @@ fn posix_mq_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn key_management_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises key management syscalls
-    let handle = run_workload(&["add_key", "request_key", "keyctl"], "key_management_test");
+    let handle = run_workload(&pinchy, &["add_key", "request_key", "keyctl"], "key_management_test");
 
     // Expected output - we should see key management syscalls being traced
     let expected_output = escaped_regex(indoc! {r#"
@@ -1905,13 +1796,11 @@ fn key_management_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn perf_event_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises perf_event_open syscall
-    let handle = run_workload(&["perf_event_open"], "perf_event_test");
+    let handle = run_workload(&pinchy, &["perf_event_open"], "perf_event_test");
 
     // Expected output - perf_event_open calls (may succeed or fail depending on permissions)
     let expected_output = escaped_regex(indoc! {r#"
@@ -1932,13 +1821,11 @@ fn perf_event_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn bpf_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises bpf syscall
-    let handle = run_workload(&["bpf"], "bpf_test");
+    let handle = run_workload(&pinchy, &["bpf"], "bpf_test");
 
     // Expected output - bpf calls (BPF_MAP_CREATE may succeed if CAP_BPF is present)
     // The test-helper makes 3 calls: BPF_MAP_CREATE, BPF_MAP_LOOKUP_ELEM (if map created), and an invalid command
@@ -1960,13 +1847,11 @@ fn bpf_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn fanotify_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises fanotify syscalls
-    let handle = run_workload(&["fanotify_init", "fanotify_mark"], "fanotify_test");
+    let handle = run_workload(&pinchy, &["fanotify_init", "fanotify_mark"], "fanotify_test");
 
     // Expected output - fanotify calls (requires CAP_SYS_ADMIN typically)
     let expected_output = escaped_regex(indoc! {r#"
@@ -1987,13 +1872,12 @@ fn fanotify_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn file_handles_syscalls() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     // Run a workload that exercises file handle and range operations
     let handle = run_workload(
+        &pinchy,
         &[
             "copy_file_range",
             "sync_file_range",
@@ -2033,12 +1917,10 @@ fn file_handles_syscalls() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn itimer_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
-    let handle = run_workload(&["getitimer", "setitimer"], "itimer_test");
+    let handle = run_workload(&pinchy, &["getitimer", "setitimer"], "itimer_test");
 
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ getitimer(which: ITIMER_REAL, curr_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = 0 (success)
@@ -2059,12 +1941,10 @@ fn itimer_test() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn syslog_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
-    let handle = run_workload(&["syslog"], "syslog_test");
+    let handle = run_workload(&pinchy, &["syslog"], "syslog_test");
 
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ syslog(type: SYSLOG_ACTION_SIZE_BUFFER, bufp: 0x0, size: 0) = @NUMBER@
@@ -2088,12 +1968,10 @@ fn syslog_test() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn ptrace_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
-    let handle = run_workload(&["ptrace"], "ptrace_test");
+    let handle = run_workload(&pinchy, &["ptrace"], "ptrace_test");
 
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ ptrace(request: PTRACE_TRACEME, pid: 0, addr: @ADDR@, data: @ADDR@) = 0 (success)
@@ -2113,12 +1991,10 @@ fn ptrace_test() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn seccomp_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
-    let handle = run_workload(&["seccomp"], "seccomp_test");
+    let handle = run_workload(&pinchy, &["seccomp"], "seccomp_test");
 
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ seccomp(operation: SECCOMP_GET_ACTION_AVAIL, flags: 0, action: SECCOMP_RET_KILL_THREAD) = 0 (success)
@@ -2138,12 +2014,10 @@ fn seccomp_test() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn quotactl_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
-    let handle = run_workload(&["quotactl"], "quotactl_test");
+    let handle = run_workload(&pinchy, &["quotactl"], "quotactl_test");
 
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ quotactl(op: 0x800001 (QCMD(Q_SYNC, USRQUOTA)), special: "", id: 0, addr: @ADDR@) = @SIGNEDNUMBER@ (error)
@@ -2163,12 +2037,11 @@ fn quotactl_test() {
 }
 
 #[test]
-#[serial]
-#[ignore = "runs in special environment"]
 fn process_identity_test() {
-    let pinchy = PinchyTest::new(None, None);
+    let pinchy = PinchyTest::new();
 
     let handle = run_workload(
+        &pinchy,
         &["getresuid", "getresgid", "getgroups", "setgroups"],
         "process_identity_test",
     );
@@ -2189,4 +2062,80 @@ fn process_identity_test() {
     Assert::new(output)
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+fn auto_quit() {
+    let pinchy = PinchyTest::with_mode(TestMode::AutoQuit);
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+fn auto_quit_timing() {
+    let pinchy = PinchyTest::with_mode(TestMode::AutoQuit);
+
+    // Read timestamps before wait() which consumes self
+    let start = pinchy
+        .read_timestamp("pinchyd.start_time")
+        .expect("missing pinchyd.start_time");
+
+    let end = pinchy
+        .read_timestamp("pinchyd.end_time")
+        .expect("missing pinchyd.end_time");
+
+    let elapsed = end - start;
+
+    assert!(
+        (10..=20).contains(&elapsed),
+        "auto_quit idle time {elapsed}s outside expected \
+         10..=20s range"
+    );
+
+    let output = pinchy.wait();
+    Assert::new(output).success();
+}
+
+#[test]
+fn auto_quit_after_client() {
+    let pinchy =
+        PinchyTest::with_mode(TestMode::AutoQuitAfterClient);
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::contains("Currently serving: 0"))
+        .stdout(predicate::str::contains(
+            "Pinchy has been idle for a while, shutting down",
+        ))
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+fn auto_quit_after_client_timing() {
+    let pinchy =
+        PinchyTest::with_mode(TestMode::AutoQuitAfterClient);
+
+    // Read timestamps before wait() which consumes self
+    let kill_time = pinchy
+        .read_timestamp("client.kill_time")
+        .expect("missing client.kill_time");
+
+    let end = pinchy
+        .read_timestamp("pinchyd.end_time")
+        .expect("missing pinchyd.end_time");
+
+    let elapsed = end - kill_time;
+
+    assert!(
+        elapsed < 22,
+        "auto_quit_after_client took {elapsed}s after client \
+         kill, expected < 22s"
+    );
+
+    let output = pinchy.wait();
+    Assert::new(output).success();
 }

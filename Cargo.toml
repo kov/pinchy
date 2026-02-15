@@ -9,9 +9,9 @@ license = "MIT OR Apache-2.0"
 [workspace.dependencies]
 aya = { version = "0.13", default-features = false }
 aya-build = { version = "0.1", default-features = false }
-aya-ebpf = { version = "0.1", default-features = false }
+aya-ebpf = { git = "https://github.com/kov/aya", branch = "read_kernel-fix", default-features = false }
 aya-log = { version = "0.2", default-features = false }
-aya-log-ebpf = { version = "0.1", default-features = false }
+aya-log-ebpf = { git = "https://github.com/kov/aya", branch = "read_kernel-fix", default-features = false }
 
 anyhow = { version = "1", default-features = false }
 # `std` feature is currently required to build `clap`.

@@ -6142,7 +6142,7 @@ pub fn format_quotactl_op(op: i32) -> Cow<'static, str> {
 
     if cmd_name.is_empty() {
         format!("0x{:x}", op_unsigned).into()
-    } else if qcmd >= 0x5801 && qcmd <= 0x5809 {
+    } else if (0x5801..=0x5809).contains(&qcmd) {
         // XFS commands
         format!("0x{:x} ({})", op_unsigned, cmd_name).into()
     } else {

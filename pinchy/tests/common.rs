@@ -2,260 +2,340 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use std::{
-    convert::TryFrom,
-    io::{BufRead as _, BufReader, PipeReader},
-    process::{self, Child, Command, Output},
+    fs,
+    path::{Path, PathBuf},
+    process::{Command, ExitStatus, Output},
+    sync::{Arc, Mutex},
     thread::JoinHandle,
-    time::{Duration, Instant},
 };
 
-use anyhow::bail;
-use futures::StreamExt;
-use once_cell::sync::Lazy;
-use zbus::{fdo::DBusProxy, names::BusName, Connection};
+fn project_root() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap()
+        .to_path_buf()
+}
 
-pub fn run_pinchyd(pid: Option<u32>) -> (PipeReader, Child) {
-    let mut cmd = process::Command::new(assert_cmd::cargo::cargo_bin!("pinchyd"));
+fn kernel_path() -> PathBuf {
+    project_root()
+        .join("uml-kernel/cache")
+        .join(format!("linux-{}", std::env::consts::ARCH))
+}
 
-    let (reader, writer) = std::io::pipe().unwrap();
+fn bin_dir() -> PathBuf {
+    let bin = assert_cmd::cargo::cargo_bin!("pinchyd");
+    bin.parent().unwrap().to_path_buf()
+}
 
-    let mut cmd = cmd
-        //.env("RUST_LOG", "trace")
-        .stdout(writer.try_clone().unwrap())
-        .stderr(writer);
+fn init_script() -> PathBuf {
+    project_root().join("uml-kernel/uml-test-runner.sh")
+}
 
-    if let Some(pid) = pid {
-        cmd = cmd.arg(pid.to_string())
+#[derive(Clone, Debug)]
+pub enum TestMode {
+    Standard,
+    ServerOnly,
+    CheckCaps,
+    AutoQuit,
+    AutoQuitAfterClient,
+}
+
+impl TestMode {
+    fn as_str(&self) -> &'static str {
+        match self {
+            TestMode::Standard => "standard",
+            TestMode::ServerOnly => "server_only",
+            TestMode::CheckCaps => "check_caps",
+            TestMode::AutoQuit => "auto_quit",
+            TestMode::AutoQuitAfterClient => "auto_quit_after_client",
+        }
     }
-
-    let child = cmd.spawn().unwrap_or_else(|e| {
-        panic!("Failed to run pinchyd process under dbus-launch for testing: {e}")
-    });
-
-    (reader, child)
 }
 
-pub fn wait_for_output(child: Child) -> Output {
-    unsafe { libc::kill(child.id() as i32, libc::SIGINT) };
-
-    child.wait_with_output().unwrap()
-}
-
-pub fn ensure_root() {
-    assert_eq!(
-        unsafe { libc::geteuid() },
-        0,
-        "Need to run test as root (using, for instance, cargo sudo)"
-    );
-}
-
-pub fn read_until(
-    mut reader: BufReader<PipeReader>,
-    needle: String,
-) -> JoinHandle<(BufReader<PipeReader>, Vec<u8>)> {
-    let reader_thread = std::thread::spawn(move || {
-        let mut data = vec![];
-        let mut buf = String::new();
-        let mut found_error = false;
-        while let Ok(bytes_read) = reader.read_line(&mut buf) {
-            if bytes_read == 0 {
-                break;
-            }
-            data.extend_from_slice(buf.as_bytes());
-
-            eprint!("{buf}");
-
-            if buf.contains("Caused by:")
-                || buf.contains("Stack backtrace")
-                || buf.contains(" panicked at ")
-            {
-                found_error = true;
-            }
-
-            if buf.contains(&needle) {
-                // Minor wait as what we are actually waiting for may come right
-                // after the message being printed.
-                std::thread::sleep(Duration::from_millis(10));
-                break;
-            }
-            buf.clear();
-        }
-        if found_error {
-            panic!("Found fatal error in pinchyd output");
-        }
-        (reader, data)
-    });
-
-    reader_thread
-}
-
-pub fn wrap_stdout(reader: PipeReader) -> BufReader<PipeReader> {
-    BufReader::new(reader)
-}
-
-pub enum TestState {
-    Running {
-        reader: BufReader<PipeReader>,
-    },
-    BackgroundThread {
-        handle: JoinHandle<(BufReader<PipeReader>, Vec<u8>)>,
-    },
+struct UmlResult {
+    pinchy_output: Output,
+    pinchyd_output: Output,
 }
 
 pub struct PinchyTest {
-    child: Child,
-    data: Vec<u8>,
-    state: TestState,
+    output_dir: tempfile::TempDir,
+    mode: TestMode,
+    result: Arc<Mutex<Option<UmlResult>>>,
+}
+
+fn describe_file(path: &Path) -> String {
+    match fs::read(path) {
+        Ok(contents) if contents.is_empty() => {
+            "<exists but empty>".to_string()
+        }
+        Ok(contents) => {
+            String::from_utf8_lossy(&contents).into_owned()
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            "<file not found>".to_string()
+        }
+        Err(e) => {
+            format!("<read error: {e}>")
+        }
+    }
+}
+
+fn read_file_or_empty(path: &Path) -> Vec<u8> {
+    fs::read(path).unwrap_or_default()
+}
+
+fn read_exit_code(path: &Path) -> i32 {
+    fs::read_to_string(path)
+        .unwrap_or_else(|_| "1".to_string())
+        .trim()
+        .parse()
+        .unwrap_or(1)
+}
+
+fn make_exit_status(code: i32) -> ExitStatus {
+    // On Unix, ExitStatus::from_raw expects the wait(2) status format
+    // where the exit code is in bits 8-15.
+    std::os::unix::process::ExitStatusExt::from_raw(code << 8)
+}
+
+fn boot_uml(
+    mode: &TestMode,
+    output_dir: &Path,
+    events: Option<&str>,
+    workload: Option<&str>,
+    test_name: Option<&str>,
+) -> UmlResult {
+    let kpath = kernel_path();
+
+    assert!(
+        kpath.exists(),
+        "UML kernel not found at {}. Build it with: \
+         ./uml-kernel/build-kernel.sh",
+        kpath.display()
+    );
+
+    let bdir = bin_dir();
+    let proj = project_root();
+    let init = init_script();
+
+    let events_str = events.unwrap_or("");
+    let workload_str = workload.unwrap_or("");
+    let test_name_str = test_name.unwrap_or("");
+
+    let args = vec![
+        "mem=64M".to_string(),
+        "root=/dev/root".to_string(),
+        "rootfstype=hostfs".to_string(),
+        "hostfs=/".to_string(),
+        format!("init={}", init.display()),
+        "con0=fd:1,fd:1".to_string(),
+        "con=null".to_string(),
+        format!("PINCHY_TEST_EVENTS={events_str}"),
+        format!("PINCHY_TEST_WORKLOAD={workload_str}"),
+        format!(
+            "PINCHY_TEST_OUTDIR={}",
+            output_dir.display()
+        ),
+        format!("PINCHY_TEST_BINDIR={}", bdir.display()),
+        format!("PINCHY_TEST_PROJDIR={}", proj.display()),
+        format!("PINCHY_TEST_MODE={}", mode.as_str()),
+        format!("PINCHY_TEST_NAME={test_name_str}"),
+    ];
+
+    let output = Command::new(&kpath)
+        .args(&args)
+        .output()
+        .expect("Failed to spawn UML kernel");
+
+    // Save UML console output for debugging
+    let console_path = output_dir.join("uml-console.log");
+    let _ = fs::write(
+        &console_path,
+        &output.stdout,
+    );
+
+    if !output.status.success() {
+        eprintln!(
+            "UML kernel exited with status: {}. \
+             Output dir: {}",
+            output.status,
+            output_dir.display()
+        );
+    }
+
+    let done_marker = output_dir.join("done");
+
+    if !done_marker.exists() {
+        let console = String::from_utf8_lossy(
+            &output.stdout,
+        );
+
+        panic!(
+            "UML did not complete: 'done' marker not found \
+             in {}\n\
+             Test mode: {:?}, events: {:?}, \
+             workload: {:?}, name: {:?}\n\
+             UML exit status: {}\n\
+             UML console output:\n{}\n\
+             pinchyd.out: {}\n\
+             pinchy.stderr: {}",
+            output_dir.display(),
+            mode,
+            events,
+            workload,
+            test_name,
+            output.status,
+            console,
+            describe_file(&output_dir.join("pinchyd.out")),
+            describe_file(
+                &output_dir.join("pinchy.stderr")
+            ),
+        );
+    }
+
+    let pinchy_stdout = read_file_or_empty(
+        &output_dir.join("pinchy.stdout"),
+    );
+    let pinchy_stderr = read_file_or_empty(
+        &output_dir.join("pinchy.stderr"),
+    );
+    let pinchy_exit =
+        read_exit_code(&output_dir.join("pinchy.exit"));
+
+    let pinchyd_stdout = read_file_or_empty(
+        &output_dir.join("pinchyd.out"),
+    );
+    let pinchyd_exit =
+        read_exit_code(&output_dir.join("pinchyd.exit"));
+
+    UmlResult {
+        pinchy_output: Output {
+            status: make_exit_status(pinchy_exit),
+            stdout: pinchy_stdout,
+            stderr: pinchy_stderr,
+        },
+        pinchyd_output: Output {
+            status: make_exit_status(pinchyd_exit),
+            stdout: pinchyd_stdout,
+            stderr: vec![],
+        },
+    }
+}
+
+impl Default for PinchyTest {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl PinchyTest {
-    pub fn new(pid: Option<u32>, first_needle: Option<String>) -> Self {
-        ensure_root();
-        ensure_dbus_env();
-
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(wait_for_name_to_disappear(
-                "org.pinchy.Service",
-                Duration::from_secs(10),
-            ));
-        assert!(result.is_ok());
-
-        let (reader, child) = run_pinchyd(pid);
-
-        // Wait synchronously for startup
-        let reader = wrap_stdout(reader);
-        let (reader, data) = read_until(reader, "Waiting for Ctrl-C...".to_string())
-            .join()
-            .expect("pinchyd probably failed to run");
-
-        let state = if let Some(needle) = first_needle {
-            let handle = read_until(reader, needle);
-            TestState::BackgroundThread { handle }
-        } else {
-            TestState::Running { reader }
-        };
-
-        // Wait for name to show up in the bus before we go forward.
-        let result = tokio::runtime::Runtime::new()
-            .unwrap()
-            .block_on(wait_for_name("org.pinchy.Service", Duration::from_secs(1)));
-        assert!(result.is_ok());
-
-        PinchyTest { child, data, state }
+    pub fn new() -> Self {
+        Self::with_mode(TestMode::ServerOnly)
     }
 
-    #[allow(dead_code)] // This is not used in the auto_quit target.
-    pub fn get_pid(&self) -> u32 {
-        self.child.id()
-    }
+    pub fn with_mode(mode: TestMode) -> Self {
+        let output_dir =
+            tempfile::TempDir::with_prefix("uml-")
+                .expect("Failed to create temp dir");
 
-    pub fn wait(mut self) -> Output {
-        if let TestState::BackgroundThread { handle } = self.state {
-            let (reader, more_data) = handle.join().unwrap();
-            self.data.extend_from_slice(&more_data);
-            self.state = TestState::Running { reader };
+        let result = Arc::new(Mutex::new(None));
+
+        PinchyTest {
+            output_dir,
+            mode,
+            result,
         }
+    }
 
-        // Now wait for the process to exit
-        let TestState::Running { reader } = self.state else {
-            unreachable!();
-        };
+    pub fn read_file(&self, name: &str) -> String {
+        self.ensure_booted();
+        let path = self.output_dir.path().join(name);
+        fs::read_to_string(&path).unwrap_or_else(|e| {
+            panic!(
+                "Failed to read {}: {e}",
+                path.display()
+            )
+        })
+    }
 
-        // Signal the child to exit and obtain the Output object
-        let handle = read_until(reader, "Exiting...".to_string());
+    pub fn read_timestamp(
+        &self,
+        name: &str,
+    ) -> Option<u64> {
+        self.ensure_booted();
+        let path = self.output_dir.path().join(name);
 
-        let mut output = wait_for_output(self.child);
+        fs::read_to_string(&path)
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+    }
 
-        let (reader, more_data) = handle.join().unwrap();
-        self.data.extend_from_slice(&more_data);
+    fn ensure_booted(&self) {
+        let has_result =
+            self.result.lock().unwrap().is_some();
 
-        // Read the left-overs from the buffer just so it doesn't block trying to print something
-        let _ = read_until(reader, "something unexpected!".to_string());
+        if !has_result {
+            let result = boot_uml(
+                &self.mode,
+                self.output_dir.path(),
+                None,
+                None,
+                None,
+            );
 
-        output.stdout = self.data;
+            *self.result.lock().unwrap() = Some(result);
+        }
+    }
 
-        output
+    pub fn wait(self) -> Output {
+        self.ensure_booted();
+
+        let mut result =
+            self.result.lock().unwrap().take().unwrap();
+
+        std::mem::replace(
+            &mut result.pinchyd_output,
+            Output {
+                status: make_exit_status(0),
+                stdout: vec![],
+                stderr: vec![],
+            },
+        )
     }
 }
 
-extern "C" fn kill_dbus_daemon() {
-    if let Ok(pid) = std::env::var("DBUS_SESSION_BUS_PID") {
-        let pid: i32 = pid.parse().unwrap();
-        unsafe {
-            libc::kill(pid, libc::SIGTERM);
-        }
-    }
-}
+pub fn run_workload(
+    pinchy: &PinchyTest,
+    events: &[&str],
+    test_name: &str,
+) -> JoinHandle<Output> {
+    let events_str = events.join(",");
+    let test_name = test_name.to_owned();
+    let output_dir = pinchy.output_dir.path().to_path_buf();
+    let result_arc = Arc::clone(&pinchy.result);
 
-static DBUS_ENV: Lazy<()> = Lazy::new(|| {
-    unsafe {
-        libc::atexit(kill_dbus_daemon);
-    }
+    std::thread::spawn(move || {
+        let mode = TestMode::Standard;
+        let mut uml_result = boot_uml(
+            &mode,
+            &output_dir,
+            Some(&events_str),
+            Some(&test_name),
+            Some(&test_name),
+        );
 
-    std::env::set_var("PINCHYD_USE_SESSION_BUS", "true");
+        // Take the pinchy output before storing the result
+        let pinchy_output = std::mem::replace(
+            &mut uml_result.pinchy_output,
+            Output {
+                status: make_exit_status(0),
+                stdout: vec![],
+                stderr: vec![],
+            },
+        );
 
-    let output = Command::new("dbus-launch")
-        .output()
-        .expect("failed to run dbus-launch");
-    let stdout = String::from_utf8_lossy(&output.stdout);
+        *result_arc.lock().unwrap() = Some(uml_result);
 
-    for line in stdout.lines() {
-        if let Some((key, value)) = line.split_once('=') {
-            let value = value.trim_end_matches(';');
-            eprintln!("Setting {key} to {value}");
-            std::env::set_var(key, value);
-        }
-    }
-});
-
-pub fn ensure_dbus_env() {
-    Lazy::force(&DBUS_ENV);
-}
-
-pub async fn wait_for_name_to_disappear(bus_name: &str, timeout: Duration) -> anyhow::Result<()> {
-    let connection = Connection::session().await?;
-    let proxy = DBusProxy::new(&connection).await?;
-
-    let bus_name = BusName::try_from(bus_name)
-        .map_err(|e| zbus::Error::Address(format!("Invalid bus name: {e}")))?;
-
-    let start = Instant::now();
-    loop {
-        if !proxy.name_has_owner(bus_name.clone()).await? {
-            return Ok(());
-        }
-        let _ = Command::new("pkill").arg("pinchyd").status();
-        if start.elapsed() > timeout {
-            break;
-        }
-    }
-
-    bail!("Timeout waiting for name to be dropped")
-}
-
-pub async fn wait_for_name(bus_name: &str, timeout: Duration) -> anyhow::Result<()> {
-    let connection = Connection::session().await?;
-    let proxy = DBusProxy::new(&connection).await?;
-
-    let bus_name = BusName::try_from(bus_name)
-        .map_err(|e| zbus::Error::Address(format!("Invalid bus name: {e}")))?;
-
-    if proxy.name_has_owner(bus_name.clone()).await? {
-        return Ok(());
-    }
-
-    let mut stream = proxy.receive_name_owner_changed().await?;
-    let start = Instant::now();
-    while let Some(signal) = stream.next().await {
-        let args = signal.args()?;
-        if args.name == bus_name && !args.new_owner.is_none() {
-            return Ok(());
-        }
-        if start.elapsed() > timeout {
-            break;
-        }
-    }
-
-    bail!("Time out waiting for Pinchyd to appear")
+        pinchy_output
+    })
 }

@@ -470,21 +470,34 @@ understand how everything works.
 3. **Test both zero and non-zero flag values**: Include tests with `flags: 0`
    and tests with actual flag combinations to verify both cases work.
 
-Integration tests that run the binaries as root in a controlled environment
-are in `pinchy/tests/integration.rs`. The `test-helper` binary used for the
+Integration tests run inside a User Mode Linux (UML) kernel, so they
+do not require root privileges or `--ignored`. The UML kernel
+must be pre-built by running `uml-kernel/build-kernel.sh`
+(this is done automatically in CI). It uses minimal configs
+from `uml-kernel/config-{aarch64,x86_64}`. The init script
+`uml-kernel/uml-test-runner.sh` runs as PID 1 inside UML and
+orchestrates test execution.
+
+Integration tests are in `pinchy/tests/integration.rs` and
+`pinchy/tests/auto_quit.rs`. The `test-helper` binary used for the
 tests is in `pinchy/src/bin/test-helper.rs`.
 
-The integration tests can only be run as root, since `pinchyd` needs to be
-able to load the eBPF programs into the kernel. To run them you need to use
-the following command:
+To run all integration tests:
 
 ```bash
-cargo --config "target.'cfg(all())'.runner=['/bin/sudo', '-s']" test --test integration -- --ignored
+cargo test --test integration
 ```
-You can run an individual test by running:
+
+To run a specific integration test:
 
 ```bash
-cargo --config "target.'cfg(all())'.runner=['/bin/sudo', '-s']" test --test integration -- <test_name_here> --ignored
+cargo test --test integration -- <test_name_here>
+```
+
+To run the auto-quit tests:
+
+```bash
+cargo test --test auto_quit
 ```
 
 ## Helper Functions

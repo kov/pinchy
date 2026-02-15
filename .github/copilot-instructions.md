@@ -470,6 +470,8 @@ understand how everything works.
 3. **Test both zero and non-zero flag values**: Include tests with `flags: 0`
    and tests with actual flag combinations to verify both cases work.
 
+### Integration Tests
+
 Integration tests run inside a User Mode Linux (UML) kernel, so they
 do not require root privileges or `--ignored`. The UML kernel
 must be pre-built by running `uml-kernel/build-kernel.sh`
@@ -480,7 +482,8 @@ orchestrates test execution.
 
 Integration tests are in `pinchy/tests/integration.rs` and
 `pinchy/tests/auto_quit.rs`. The `test-helper` binary used for the
-tests is in `pinchy/src/bin/test-helper.rs`.
+tests is in `pinchy/src/bin/test-helper.rs`. Shared test
+infrastructure is in `pinchy/tests/common.rs`.
 
 To run all integration tests:
 
@@ -499,6 +502,105 @@ To run the auto-quit tests:
 ```bash
 cargo test --test auto_quit
 ```
+
+#### Test Structure
+
+Each integration test boots a fresh UML instance. The typical
+pattern is:
+
+```rust
+#[test]
+fn my_syscall_test() {
+    let pinchy = PinchyTest::new();
+
+    let handle = run_workload(
+        &pinchy,
+        &["syscall1", "syscall2"],
+        "test_helper_workload_name",
+    );
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ syscall1(...) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(
+            predicate::str::is_match(&expected_output)
+                .unwrap(),
+        );
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(
+            predicate::str::ends_with("Exiting...\n"),
+        );
+}
+```
+
+Key API details:
+- `PinchyTest::new()` takes no arguments (creates a
+  server-only UML instance)
+- `run_workload(&pinchy, &[events], name)` takes a reference
+  to the `PinchyTest` instance as its first argument
+- The events array lists syscall names to trace
+- The workload name must match a test case in `test-helper`
+- `pinchy.wait()` must be called **after** `handle.join()`,
+  since `wait()` consumes the `PinchyTest` instance
+
+#### Expected Output and `escaped_regex` Markers
+
+Expected output strings are processed by `escaped_regex()`,
+which first escapes the string for regex, then replaces
+placeholder markers. Available markers:
+
+| Marker | Matches | Use case |
+|--------|---------|----------|
+| `@PID@` | `\d+` | Process ID prefix on each line |
+| `@ADDR@` | `0x[0-9a-f]+` | Hex pointer addresses |
+| `@HEXNUMBER@` | `[0-9a-f]+` | Hex numbers (no prefix) |
+| `@SIGNEDNUMBER@` | `-?[0-9]+` | Signed integers |
+| `@NUMBER@` | `[0-9]+` | Unsigned integers |
+| `@MODE@` | `[rwx-]+` | File permission strings |
+| `@ALPHANUM@` | `[^ "]+` | Non-space, non-quote tokens |
+| `@QUOTEDSTRING@` | `"[^"]*"` | Quoted strings |
+| `@MAYBEITEM_@` | `([^ "]+ )?` | Optional token with trailing space |
+| `@MAYBETRUNCATED@` | `( ... (truncated))?` | Optional truncation suffix |
+| `@GROUPLIST@` | `[0-9, ]*` | Comma-separated group IDs |
+| `@ANY@` | `.+` | Any non-empty content (single line) |
+
+**Important**: `is_match` performs a regex **search**, not a
+full match. The pattern can match a substring of the output.
+However, multi-line patterns must match **consecutive** lines
+in the output, because `.` does not match newlines.
+
+#### Matching Real Output
+
+The traced process output includes **all** syscalls matching
+the filter, not just the ones your workload intentionally
+makes. This includes syscalls from the dynamic linker (loading
+shared libraries), libc initialization, etc. For example,
+filtering on `["open", "read", "lseek"]` will also capture
+`openat` calls for `/etc/ld.so.cache`, `/lib64/libc.so.6`,
+etc.
+
+Since `is_match` does substring search, your expected output
+only needs to match the consecutive lines you care about. The
+test will pass as long as those lines appear somewhere in the
+output. However, be careful:
+
+- Expected lines must appear **consecutively** in the real
+  output. You cannot skip lines between expected entries.
+- Verify your expected output against reality by examining
+  what the test workload actually does (check `test-helper`
+  source and the existing `pinchy_reads` test for reference).
+- Use `@ANY@` for variable content like buffer data that
+  changes between runs or environments.
+- Match return value formatting to what `format_return_value`
+  in `format_helpers.rs` produces (e.g., `= 3 (fd)` not
+  `= 3`, `= 0 (success)` not `= 0`).
 
 ## Helper Functions
 

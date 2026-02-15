@@ -2,6 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 mod basic_io;
+mod client;
 mod filesystem;
 mod ipc;
 mod memory;

@@ -309,4 +309,33 @@ declare_syscalls! {
     SYS_futex_waitv = 449,
     SYS_set_mempolicy_home_node = 450,
     SYS_mseal = 462,
+;
+    aliases:
+    // Signal-related syscalls that libc users might know by their non-rt_ names
+    "sigaction" => SYS_rt_sigaction,
+    "sigprocmask" => SYS_rt_sigprocmask,
+    "sigreturn" => SYS_rt_sigreturn,
+    "sigpending" => SYS_rt_sigpending,
+    "sigtimedwait" => SYS_rt_sigtimedwait,
+    "sigqueueinfo" => SYS_rt_sigqueueinfo,
+    "sigsuspend" => SYS_rt_sigsuspend,
+
+    // File/directory syscalls that don't exist on aarch64 but are provided by glibc
+    // These map to the *at variants with AT_FDCWD
+    "open" => SYS_openat,
+    "stat" => SYS_newfstatat,
+    "lstat" => SYS_newfstatat,
+    "poll" => SYS_ppoll,
+    "dup2" => SYS_dup3,
+    "pipe" => SYS_pipe2,
+    "access" => SYS_faccessat,
+    "chmod" => SYS_fchmodat,
+    "chown" => SYS_fchownat,
+    "link" => SYS_linkat,
+    "mkdir" => SYS_mkdirat,
+    "mknod" => SYS_mknodat,
+    "rename" => SYS_renameat,
+    "rmdir" => SYS_unlinkat,
+    "symlink" => SYS_symlinkat,
+    "unlink" => SYS_unlinkat,
 }

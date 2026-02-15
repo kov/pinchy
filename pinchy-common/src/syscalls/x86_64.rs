@@ -369,4 +369,14 @@ declare_syscalls! {
     SYS_set_mempolicy_home_node = 450,
     SYS_fchmodat2 = 452,
     SYS_mseal = 462,
+;
+    aliases:
+    // Signal-related syscalls that libc users might know by their non-rt_ names
+    "sigaction" => SYS_rt_sigaction,
+    "sigprocmask" => SYS_rt_sigprocmask,
+    "sigreturn" => SYS_rt_sigreturn,
+    "sigpending" => SYS_rt_sigpending,
+    "sigtimedwait" => SYS_rt_sigtimedwait,
+    "sigqueueinfo" => SYS_rt_sigqueueinfo,
+    "sigsuspend" => SYS_rt_sigsuspend,
 }

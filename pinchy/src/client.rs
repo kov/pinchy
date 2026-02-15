@@ -40,7 +40,7 @@ fn parse_syscall_names(names: &[String]) -> Result<Vec<i64>, String> {
 #[derive(Parser, Debug)]
 #[command(author, version, about, trailing_var_arg = true)]
 struct Args {
-    /// Syscall(s) to trace (can be repeated or comma-separated)
+    /// Syscall(s) to trace (can be repeated or comma-separated). Supports aliases like 'sigaction' for 'rt_sigaction'.
     #[arg(short = 'e', long = "event", value_delimiter = ',', action = clap::ArgAction::Append)]
     syscalls: Vec<String>,
 

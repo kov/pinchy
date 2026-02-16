@@ -13,9 +13,12 @@ use pinchy_common::{
     kernel_types::{
         AioSigset, FdSet, IoCb, IoEvent, IoUringParams, OpenHow, Pollfd, Sigset, Timespec,
     },
-    syscalls, CloseData, LseekData, OpenAtData, PreadData, PwriteData, ReadData, VectorIOData,
-    WriteData,
+    syscalls, CloseData, EpollCtlData, EpollPWait2Data, EpollPWaitData, LseekData, OpenAt2Data,
+    OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data, PwriteData, ReadData, SpliceData,
+    TeeData, VectorIOData, VmspliceData, WriteData,
 };
+#[cfg(x86_64)]
+use pinchy_common::{PollData, SelectData, SendfileData};
 
 #[cfg(x86_64)]
 use crate::util::read_timeval;
@@ -238,212 +241,357 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
 
                 return Ok(());
             }
+            syscalls::SYS_openat2 => {
+                submit_compact_payload::<OpenAt2Data, _>(
+                    &ctx,
+                    syscalls::SYS_openat2,
+                    return_value,
+                    |payload| {
+                        payload.dfd = args[0] as i32;
+                        payload.size = args[3];
+
+                        let pathname_ptr = args[1] as *const u8;
+                        let how_ptr = args[2] as *const OpenHow;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(
+                                pathname_ptr as *const _,
+                                &mut payload.pathname,
+                            );
+                        }
+
+                        unsafe {
+                            if let Ok(how) = bpf_probe_read_user(how_ptr) {
+                                payload.how = how;
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_epoll_pwait => {
+                submit_compact_payload::<EpollPWaitData, _>(
+                    &ctx,
+                    syscalls::SYS_epoll_pwait,
+                    return_value,
+                    |payload| {
+                        payload.epfd = args[0] as i32;
+                        payload.max_events = args[2] as i32;
+                        payload.timeout = args[3] as i32;
+                        read_epoll_events(
+                            args[1] as *const _,
+                            return_value as usize,
+                            &mut payload.events,
+                        );
+                    },
+                )?;
+
+                return Ok(());
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_epoll_wait => {
+                submit_compact_payload::<EpollPWaitData, _>(
+                    &ctx,
+                    syscalls::SYS_epoll_wait,
+                    return_value,
+                    |payload| {
+                        payload.epfd = args[0] as i32;
+                        payload.max_events = args[2] as i32;
+                        payload.timeout = args[3] as i32;
+                        read_epoll_events(
+                            args[1] as *const _,
+                            return_value as usize,
+                            &mut payload.events,
+                        );
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_epoll_pwait2 => {
+                submit_compact_payload::<EpollPWait2Data, _>(
+                    &ctx,
+                    syscalls::SYS_epoll_pwait2,
+                    return_value,
+                    |payload| {
+                        payload.epfd = args[0] as i32;
+                        payload.max_events = args[2] as i32;
+                        payload.timeout = read_timespec(args[3] as *const Timespec);
+                        payload.sigmask = args[4];
+                        payload.sigsetsize = args[5];
+                        read_epoll_events(
+                            args[1] as *const _,
+                            return_value as usize,
+                            &mut payload.events,
+                        );
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_epoll_ctl => {
+                submit_compact_payload::<EpollCtlData, _>(
+                    &ctx,
+                    syscalls::SYS_epoll_ctl,
+                    return_value,
+                    |payload| {
+                        payload.epfd = args[0] as i32;
+                        payload.op = args[1] as i32;
+                        payload.fd = args[2] as i32;
+                        read_epoll_events(
+                            args[3] as *const _,
+                            1,
+                            core::slice::from_mut(&mut payload.event),
+                        );
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_ppoll => {
+                submit_compact_payload::<PpollData, _>(
+                    &ctx,
+                    syscalls::SYS_ppoll,
+                    return_value,
+                    |payload| {
+                        payload.nfds = args[1] as u32;
+                        payload.timeout = read_timespec(args[2] as *const _);
+
+                        let fds_ptr = args[0] as *const Pollfd;
+                        for i in 0..payload.fds.len() {
+                            if i < payload.nfds as usize {
+                                unsafe {
+                                    let entry_ptr = fds_ptr.add(i);
+                                    if let Ok(pollfd) =
+                                        bpf_probe_read_user::<Pollfd>(entry_ptr as *const _)
+                                    {
+                                        payload.fds[i] = pollfd.fd;
+                                        payload.events[i] = pollfd.events;
+                                        payload.revents[i] = pollfd.revents;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_poll => {
+                submit_compact_payload::<PollData, _>(
+                    &ctx,
+                    syscalls::SYS_poll,
+                    return_value,
+                    |payload| {
+                        payload.nfds = args[1] as u32;
+                        payload.timeout = args[2] as i32;
+
+                        let mut fds_ptr = args[0] as *const Pollfd;
+                        let fds = &mut payload.fds;
+
+                        if !fds_ptr.is_null() && payload.nfds > 0 {
+                            let max_fds = core::cmp::min(payload.nfds, 16) as usize;
+                            for i in 0..max_fds {
+                                fds_ptr = unsafe { fds_ptr.add(i) };
+
+                                if fds_ptr.is_null() {
+                                    break;
+                                }
+
+                                if let Ok(pollfd) =
+                                    unsafe { bpf_probe_read_user::<Pollfd>(fds_ptr) }
+                                {
+                                    fds[i] = pollfd;
+                                    payload.actual_nfds += 1;
+                                } else {
+                                    break;
+                                }
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_pselect6 => {
+                submit_compact_payload::<Pselect6Data, _>(
+                    &ctx,
+                    syscalls::SYS_pselect6,
+                    return_value,
+                    |payload| {
+                        payload.nfds = args[0] as i32;
+
+                        let readfds_ptr = args[1] as *const u8;
+                        let writefds_ptr = args[2] as *const u8;
+                        let exceptfds_ptr = args[3] as *const u8;
+                        let timeout_ptr = args[4] as *const Timespec;
+                        let sigmask_ptr = args[5] as *const u8;
+
+                        read_fdset(&mut payload.readfds, readfds_ptr, payload.nfds);
+                        read_fdset(&mut payload.writefds, writefds_ptr, payload.nfds);
+                        read_fdset(&mut payload.exceptfds, exceptfds_ptr, payload.nfds);
+
+                        payload.timeout = read_timespec(timeout_ptr);
+
+                        payload.has_readfds = !readfds_ptr.is_null();
+                        payload.has_writefds = !writefds_ptr.is_null();
+                        payload.has_exceptfds = !exceptfds_ptr.is_null();
+                        payload.has_timeout = !timeout_ptr.is_null();
+                        payload.has_sigmask = !sigmask_ptr.is_null();
+                    },
+                )?;
+
+                return Ok(());
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_select => {
+                submit_compact_payload::<SelectData, _>(
+                    &ctx,
+                    syscalls::SYS_select,
+                    return_value,
+                    |payload| {
+                        payload.nfds = args[0] as i32;
+
+                        let readfds_ptr = args[1] as *const u8;
+                        let writefds_ptr = args[2] as *const u8;
+                        let exceptfds_ptr = args[3] as *const u8;
+                        let timeout_ptr = args[4] as *const Timeval;
+
+                        read_fdset(&mut payload.readfds, readfds_ptr, payload.nfds);
+                        read_fdset(&mut payload.writefds, writefds_ptr, payload.nfds);
+                        read_fdset(&mut payload.exceptfds, exceptfds_ptr, payload.nfds);
+
+                        payload.timeout = if !timeout_ptr.is_null() {
+                            read_timeval(timeout_ptr)
+                        } else {
+                            Timeval::default()
+                        };
+
+                        payload.has_readfds = !readfds_ptr.is_null();
+                        payload.has_writefds = !writefds_ptr.is_null();
+                        payload.has_exceptfds = !exceptfds_ptr.is_null();
+                        payload.has_timeout = !timeout_ptr.is_null();
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_pipe2 => {
+                submit_compact_payload::<Pipe2Data, _>(
+                    &ctx,
+                    syscalls::SYS_pipe2,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[1] as i32;
+
+                        let pipefd_ptr = args[0] as *const i32;
+                        let mut pipefd_bytes = [0u8; core::mem::size_of::<[i32; 2]>()];
+                        unsafe {
+                            let _ =
+                                bpf_probe_read_user_buf(pipefd_ptr as *const u8, &mut pipefd_bytes);
+                        }
+
+                        payload.pipefd = unsafe {
+                            core::mem::transmute::<[u8; core::mem::size_of::<[i32; 2]>()], [i32; 2]>(
+                                pipefd_bytes,
+                            )
+                        };
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_splice => {
+                submit_compact_payload::<SpliceData, _>(
+                    &ctx,
+                    syscalls::SYS_splice,
+                    return_value,
+                    |payload| {
+                        payload.fd_in = args[0] as i32;
+                        payload.off_in = args[1] as u64;
+                        payload.fd_out = args[2] as i32;
+                        payload.off_out = args[3] as u64;
+                        payload.len = args[4] as usize;
+                        payload.flags = args[5] as u32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_tee => {
+                submit_compact_payload::<TeeData, _>(
+                    &ctx,
+                    syscalls::SYS_tee,
+                    return_value,
+                    |payload| {
+                        payload.fd_in = args[0] as i32;
+                        payload.fd_out = args[1] as i32;
+                        payload.len = args[2] as usize;
+                        payload.flags = args[3] as u32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_vmsplice => {
+                submit_compact_payload::<VmspliceData, _>(
+                    &ctx,
+                    syscalls::SYS_vmsplice,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.iovcnt = args[2] as usize;
+                        payload.flags = args[3] as u32;
+
+                        let iov_addr = args[1] as u64;
+                        read_iovec_array(
+                            iov_addr,
+                            payload.iovcnt,
+                            IovecOp::Write,
+                            &mut payload.iovecs,
+                            &mut payload.iov_lens,
+                            Some(&mut payload.iov_bufs),
+                            &mut payload.read_count,
+                            return_value,
+                        );
+                    },
+                )?;
+
+                return Ok(());
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_sendfile => {
+                submit_compact_payload::<SendfileData, _>(
+                    &ctx,
+                    syscalls::SYS_sendfile,
+                    return_value,
+                    |payload| {
+                        payload.out_fd = args[0] as i32;
+                        payload.in_fd = args[1] as i32;
+                        payload.count = args[3] as usize;
+
+                        let offset_ptr = args[2] as *const u64;
+
+                        if offset_ptr.is_null() {
+                            payload.offset_is_null = 1;
+                        } else {
+                            payload.offset_is_null = 0;
+                            payload.offset =
+                                unsafe { bpf_probe_read_user::<u64>(offset_ptr).unwrap_or(0) };
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
             _ => {}
         }
 
         let mut entry = Entry::new(&ctx, syscall_nr)?;
 
         match syscall_nr {
-            syscalls::SYS_openat2 => {
-                let data = data_mut!(entry, openat2);
-                data.dfd = args[0] as i32;
-                data.size = args[3];
-
-                let pathname_ptr = args[1] as *const u8;
-                let how_ptr = args[2] as *const OpenHow;
-
-                // Read pathname
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-
-                // Read struct open_how
-                unsafe {
-                    if let Ok(how) = bpf_probe_read_user(how_ptr) {
-                        data.how = how;
-                    }
-                }
-            }
-            syscalls::SYS_epoll_pwait => {
-                let data = data_mut!(entry, epoll_pwait);
-                data.epfd = args[0] as i32;
-                data.max_events = args[2] as i32;
-                data.timeout = args[3] as i32;
-                read_epoll_events(args[1] as *const _, return_value as usize, &mut data.events);
-            }
-            #[cfg(x86_64)]
-            syscalls::SYS_epoll_wait => {
-                let data = data_mut!(entry, epoll_wait);
-                data.epfd = args[0] as i32;
-                data.max_events = args[2] as i32;
-                data.timeout = args[3] as i32;
-                read_epoll_events(args[1] as *const _, return_value as usize, &mut data.events);
-            }
-            syscalls::SYS_epoll_pwait2 => {
-                let data = data_mut!(entry, epoll_pwait2);
-                data.epfd = args[0] as i32;
-                data.max_events = args[2] as i32;
-                data.timeout = read_timespec(args[3] as *const Timespec);
-                data.sigmask = args[4];
-                data.sigsetsize = args[5];
-                read_epoll_events(args[1] as *const _, return_value as usize, &mut data.events);
-            }
-            syscalls::SYS_epoll_ctl => {
-                let data = data_mut!(entry, epoll_ctl);
-                data.epfd = args[0] as i32;
-                data.op = args[1] as i32;
-                data.fd = args[2] as i32;
-                read_epoll_events(
-                    args[3] as *const _,
-                    1,
-                    core::slice::from_mut(&mut data.event),
-                );
-            }
-            syscalls::SYS_ppoll => {
-                let data = data_mut!(entry, ppoll);
-                data.nfds = args[1] as u32;
-                data.timeout = read_timespec(args[2] as *const _);
-
-                let fds_ptr = args[0] as *const Pollfd;
-                for i in 0..data.fds.len() {
-                    if i < data.nfds as usize {
-                        unsafe {
-                            let entry_ptr = fds_ptr.add(i);
-                            if let Ok(pollfd) = bpf_probe_read_user::<Pollfd>(entry_ptr as *const _)
-                            {
-                                data.fds[i] = pollfd.fd;
-                                data.events[i] = pollfd.events;
-                                data.revents[i] = pollfd.revents;
-                            }
-                        }
-                    }
-                }
-            }
-            #[cfg(x86_64)]
-            syscalls::SYS_poll => {
-                let data = data_mut!(entry, poll);
-                data.nfds = args[1] as u32;
-                data.timeout = args[2] as i32;
-
-                let mut fds_ptr = args[0] as *const Pollfd;
-                let fds = &mut data.fds;
-
-                // Only read pollfd array if pointer is valid and we have fds
-                if !fds_ptr.is_null() && data.nfds > 0 {
-                    let max_fds = core::cmp::min(data.nfds, 16) as usize;
-                    for i in 0..max_fds {
-                        fds_ptr = unsafe { fds_ptr.add(i) };
-
-                        if fds_ptr.is_null() {
-                            break;
-                        }
-
-                        if let Ok(pollfd) = unsafe { bpf_probe_read_user::<Pollfd>(fds_ptr) } {
-                            fds[i] = pollfd;
-                            data.actual_nfds += 1;
-                        } else {
-                            break;
-                        }
-                    }
-                }
-            }
-            syscalls::SYS_pselect6 => {
-                let data = data_mut!(entry, pselect6);
-                data.nfds = args[0] as i32;
-
-                let readfds_ptr = args[1] as *const u8;
-                let writefds_ptr = args[2] as *const u8;
-                let exceptfds_ptr = args[3] as *const u8;
-                let timeout_ptr = args[4] as *const Timespec;
-                let sigmask_ptr = args[5] as *const u8;
-
-                read_fdset(&mut data.readfds, readfds_ptr, data.nfds);
-                read_fdset(&mut data.writefds, writefds_ptr, data.nfds);
-                read_fdset(&mut data.exceptfds, exceptfds_ptr, data.nfds);
-
-                data.timeout = read_timespec(timeout_ptr);
-
-                data.has_readfds = !readfds_ptr.is_null();
-                data.has_writefds = !writefds_ptr.is_null();
-                data.has_exceptfds = !exceptfds_ptr.is_null();
-                data.has_timeout = !timeout_ptr.is_null();
-                data.has_sigmask = !sigmask_ptr.is_null();
-            }
-            #[cfg(x86_64)]
-            syscalls::SYS_select => {
-                let data = data_mut!(entry, select);
-                data.nfds = args[0] as i32;
-
-                let readfds_ptr = args[1] as *const u8;
-                let writefds_ptr = args[2] as *const u8;
-                let exceptfds_ptr = args[3] as *const u8;
-                let timeout_ptr = args[4] as *const Timeval;
-
-                read_fdset(&mut data.readfds, readfds_ptr, data.nfds);
-                read_fdset(&mut data.writefds, writefds_ptr, data.nfds);
-                read_fdset(&mut data.exceptfds, exceptfds_ptr, data.nfds);
-
-                data.timeout = if !timeout_ptr.is_null() {
-                    read_timeval(timeout_ptr)
-                } else {
-                    Timeval::default()
-                };
-
-                data.has_readfds = !readfds_ptr.is_null();
-                data.has_writefds = !writefds_ptr.is_null();
-                data.has_exceptfds = !exceptfds_ptr.is_null();
-                data.has_timeout = !timeout_ptr.is_null();
-            }
-            syscalls::SYS_pipe2 => {
-                let data = data_mut!(entry, pipe2);
-                data.flags = args[1] as i32;
-
-                let pipefd_ptr = args[0] as *const i32;
-                let mut pipefd_bytes = [0u8; core::mem::size_of::<[i32; 2]>()];
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pipefd_ptr as *const u8, &mut pipefd_bytes);
-                }
-
-                data.pipefd = unsafe {
-                    core::mem::transmute::<[u8; core::mem::size_of::<[i32; 2]>()], [i32; 2]>(
-                        pipefd_bytes,
-                    )
-                };
-            }
-            syscalls::SYS_splice => {
-                let data = data_mut!(entry, splice);
-                data.fd_in = args[0] as i32;
-                data.off_in = args[1] as u64;
-                data.fd_out = args[2] as i32;
-                data.off_out = args[3] as u64;
-                data.len = args[4] as usize;
-                data.flags = args[5] as u32;
-            }
-            syscalls::SYS_tee => {
-                let data = data_mut!(entry, tee);
-                data.fd_in = args[0] as i32;
-                data.fd_out = args[1] as i32;
-                data.len = args[2] as usize;
-                data.flags = args[3] as u32;
-            }
-            syscalls::SYS_vmsplice => {
-                let data = data_mut!(entry, vmsplice);
-                data.fd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-                data.flags = args[3] as u32;
-
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::Write,
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    Some(&mut data.iov_bufs),
-                    &mut data.read_count,
-                    return_value,
-                );
-            }
             syscalls::SYS_io_setup => {
                 let data = data_mut!(entry, io_setup);
                 data.nr_events = args[0] as u32;
@@ -613,23 +761,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 data.arg = args[2] as u64;
                 data.nr_args = args[3] as u32;
             }
-            #[cfg(x86_64)]
-            syscalls::SYS_sendfile => {
-                let data = data_mut!(entry, sendfile);
-
-                data.out_fd = args[0] as i32;
-                data.in_fd = args[1] as i32;
-                data.count = args[3] as usize;
-
-                let offset_ptr = args[2] as *const u64;
-
-                if offset_ptr.is_null() {
-                    data.offset_is_null = 1;
-                } else {
-                    data.offset_is_null = 0;
-                    data.offset = unsafe { bpf_probe_read_user::<u64>(offset_ptr).unwrap_or(0) };
-                }
-            }
             syscalls::SYS_close
             | syscalls::SYS_openat
             | syscalls::SYS_read
@@ -642,7 +773,28 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
             | syscalls::SYS_preadv
             | syscalls::SYS_pwritev
             | syscalls::SYS_preadv2
-            | syscalls::SYS_pwritev2 => {
+            | syscalls::SYS_pwritev2
+            | syscalls::SYS_openat2
+            | syscalls::SYS_epoll_pwait
+            | syscalls::SYS_epoll_pwait2
+            | syscalls::SYS_epoll_ctl
+            | syscalls::SYS_ppoll
+            | syscalls::SYS_pselect6
+            | syscalls::SYS_pipe2
+            | syscalls::SYS_splice
+            | syscalls::SYS_tee
+            | syscalls::SYS_vmsplice => {
+                error!(&ctx, "hit migrated syscall {}", syscall_nr);
+
+                entry.discard();
+
+                return Ok(());
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_epoll_wait
+            | syscalls::SYS_poll
+            | syscalls::SYS_select
+            | syscalls::SYS_sendfile => {
                 error!(&ctx, "hit migrated syscall {}", syscall_nr);
 
                 entry.discard();

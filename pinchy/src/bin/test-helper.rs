@@ -91,6 +91,7 @@ fn main() -> anyhow::Result<()> {
             "pinchy_reads" => pinchy_reads(),
             "benchmark_trace_loop" => benchmark_trace_loop(),
             "benchmark_basic_io_wave1" => benchmark_basic_io_wave1(),
+            "benchmark_basic_io_wave2" => benchmark_basic_io_wave2(),
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
@@ -640,6 +641,262 @@ fn benchmark_basic_io_wave1() -> anyhow::Result<()> {
         }
 
         let _ = libc::unlink(c"/tmp/benchmark_basic_io_wave1".as_ptr());
+    }
+
+    Ok(())
+}
+
+fn benchmark_basic_io_wave2() -> anyhow::Result<()> {
+    let loops = std::env::var("PINCHY_BENCH_LOOPS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(250);
+
+    if loops == 0 {
+        return Ok(());
+    }
+
+    let how = pinchy_common::kernel_types::OpenHow {
+        flags: (libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC) as u64,
+        mode: 0o644,
+        resolve: 0,
+    };
+
+    let write_data = b"basic-io-wave2-pipe-data";
+    let vmsplice_data = b"basic-io-wave2-vmsplice";
+
+    unsafe {
+        for _ in 0..loops {
+            let fd = libc::syscall(
+                libc::SYS_openat2,
+                libc::AT_FDCWD,
+                c"/tmp/benchmark_basic_io_wave2".as_ptr(),
+                &how as *const pinchy_common::kernel_types::OpenHow,
+                std::mem::size_of::<pinchy_common::kernel_types::OpenHow>(),
+            ) as i32;
+
+            if fd < 0 {
+                bail!("openat2 failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut pipe1 = [0i32; 2];
+            let mut pipe2 = [0i32; 2];
+            let mut pipe3 = [0i32; 2];
+            let mut pipe4 = [0i32; 2];
+
+            if libc::syscall(libc::SYS_pipe2, pipe1.as_mut_ptr(), 0) != 0 {
+                bail!("pipe2 #1 failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_pipe2, pipe2.as_mut_ptr(), libc::O_NONBLOCK) != 0 {
+                bail!("pipe2 #2 failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_pipe2, pipe3.as_mut_ptr(), libc::O_CLOEXEC) != 0 {
+                bail!("pipe2 #3 failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_pipe2,
+                pipe4.as_mut_ptr(),
+                libc::O_NONBLOCK | libc::O_CLOEXEC,
+            ) != 0
+            {
+                bail!("pipe2 #4 failed: {}", std::io::Error::last_os_error());
+            }
+
+            let epfd = libc::epoll_create1(libc::EPOLL_CLOEXEC);
+            if epfd < 0 {
+                bail!("epoll_create1 failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut event = libc::epoll_event {
+                events: libc::EPOLLIN as u32,
+                u64: pipe2[0] as u64,
+            };
+
+            let epoll_ctl_ret = libc::syscall(
+                libc::SYS_epoll_ctl,
+                epfd,
+                libc::EPOLL_CTL_ADD,
+                pipe2[0],
+                &mut event as *mut libc::epoll_event,
+            );
+
+            if epoll_ctl_ret != 0 {
+                bail!("epoll_ctl failed: {}", std::io::Error::last_os_error());
+            }
+
+            let write_ret = libc::write(
+                pipe1[1],
+                write_data.as_ptr() as *const c_void,
+                write_data.len(),
+            );
+            if write_ret != write_data.len() as isize {
+                bail!("write to pipe failed");
+            }
+
+            let splice_ret = libc::syscall(
+                libc::SYS_splice,
+                pipe1[0],
+                std::ptr::null_mut::<libc::loff_t>(),
+                pipe2[1],
+                std::ptr::null_mut::<libc::loff_t>(),
+                write_data.len(),
+                libc::SPLICE_F_MOVE,
+            );
+            if splice_ret < 0 {
+                bail!("splice failed: {}", std::io::Error::last_os_error());
+            }
+
+            let tee_ret = libc::syscall(
+                libc::SYS_tee,
+                pipe2[0],
+                pipe3[1],
+                write_data.len(),
+                libc::SPLICE_F_NONBLOCK,
+            );
+            if tee_ret < 0 {
+                bail!("tee failed: {}", std::io::Error::last_os_error());
+            }
+
+            let iov = libc::iovec {
+                iov_base: vmsplice_data.as_ptr() as *mut libc::c_void,
+                iov_len: vmsplice_data.len(),
+            };
+            let vmsplice_ret = libc::syscall(
+                libc::SYS_vmsplice,
+                pipe4[1],
+                &iov as *const libc::iovec,
+                1,
+                libc::SPLICE_F_GIFT,
+            );
+            if vmsplice_ret < 0 {
+                bail!("vmsplice failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut pollfd = libc::pollfd {
+                fd: pipe3[0],
+                events: libc::POLLIN,
+                revents: 0,
+            };
+            let ppoll_timeout = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            let ppoll_ret = libc::ppoll(&mut pollfd, 1, &ppoll_timeout, std::ptr::null());
+            if ppoll_ret < 0 {
+                bail!("ppoll failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut pselect_readfds: libc::fd_set = std::mem::zeroed();
+            libc::FD_ZERO(&mut pselect_readfds);
+            libc::FD_SET(pipe3[0], &mut pselect_readfds);
+            let pselect_timeout = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            let pselect_ret = libc::syscall(
+                libc::SYS_pselect6,
+                pipe3[0] + 1,
+                &mut pselect_readfds as *mut libc::fd_set,
+                std::ptr::null_mut::<libc::fd_set>(),
+                std::ptr::null_mut::<libc::fd_set>(),
+                &pselect_timeout as *const libc::timespec,
+                std::ptr::null::<libc::c_void>(),
+            );
+            if pselect_ret < 0 {
+                bail!("pselect6 failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut epoll_events = [libc::epoll_event { events: 0, u64: 0 }; 4];
+            let epoll_pwait_ret = libc::syscall(
+                libc::SYS_epoll_pwait,
+                epfd,
+                epoll_events.as_mut_ptr(),
+                4,
+                0,
+                std::ptr::null::<libc::sigset_t>(),
+                std::mem::size_of::<libc::sigset_t>(),
+            );
+            if epoll_pwait_ret < 0 {
+                bail!("epoll_pwait failed: {}", std::io::Error::last_os_error());
+            }
+
+            let epoll_pwait2_timeout = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            let epoll_pwait2_ret = libc::syscall(
+                libc::SYS_epoll_pwait2,
+                epfd,
+                epoll_events.as_mut_ptr(),
+                4,
+                &epoll_pwait2_timeout as *const libc::timespec,
+                std::ptr::null::<libc::sigset_t>(),
+                std::mem::size_of::<libc::sigset_t>(),
+            );
+            if epoll_pwait2_ret < 0 {
+                bail!("epoll_pwait2 failed: {}", std::io::Error::last_os_error());
+            }
+
+            #[cfg(target_arch = "x86_64")]
+            {
+                let mut pollfd_x86 = libc::pollfd {
+                    fd: pipe3[0],
+                    events: libc::POLLIN,
+                    revents: 0,
+                };
+                let poll_ret = libc::poll(&mut pollfd_x86, 1, 0);
+                if poll_ret < 0 {
+                    bail!("poll failed: {}", std::io::Error::last_os_error());
+                }
+
+                let mut select_readfds: libc::fd_set = std::mem::zeroed();
+                libc::FD_ZERO(&mut select_readfds);
+                libc::FD_SET(pipe3[0], &mut select_readfds);
+                let mut select_timeout = libc::timeval {
+                    tv_sec: 0,
+                    tv_usec: 0,
+                };
+                let select_ret = libc::syscall(
+                    libc::SYS_select,
+                    pipe3[0] + 1,
+                    &mut select_readfds as *mut libc::fd_set,
+                    std::ptr::null_mut::<libc::fd_set>(),
+                    std::ptr::null_mut::<libc::fd_set>(),
+                    &mut select_timeout as *mut libc::timeval,
+                );
+                if select_ret < 0 {
+                    bail!("select failed: {}", std::io::Error::last_os_error());
+                }
+
+                let mut offset = 0i64;
+                let sendfile_ret = libc::syscall(
+                    libc::SYS_sendfile,
+                    pipe2[1],
+                    fd,
+                    &mut offset as *mut i64,
+                    16usize,
+                );
+                if sendfile_ret < 0 {
+                    bail!("sendfile failed: {}", std::io::Error::last_os_error());
+                }
+            }
+
+            libc::close(epfd);
+            libc::close(fd);
+            libc::close(pipe1[0]);
+            libc::close(pipe1[1]);
+            libc::close(pipe2[0]);
+            libc::close(pipe2[1]);
+            libc::close(pipe3[0]);
+            libc::close(pipe3[1]);
+            libc::close(pipe4[0]);
+            libc::close(pipe4[1]);
+        }
+
+        let _ = libc::unlink(c"/tmp/benchmark_basic_io_wave2".as_ptr());
     }
 
     Ok(())

@@ -136,6 +136,24 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_pwritev => Some(core::mem::size_of::<VectorIOData>()),
         syscalls::SYS_preadv2 => Some(core::mem::size_of::<VectorIOData>()),
         syscalls::SYS_pwritev2 => Some(core::mem::size_of::<VectorIOData>()),
+        syscalls::SYS_openat2 => Some(core::mem::size_of::<OpenAt2Data>()),
+        syscalls::SYS_epoll_pwait => Some(core::mem::size_of::<EpollPWaitData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_epoll_wait => Some(core::mem::size_of::<EpollPWaitData>()),
+        syscalls::SYS_epoll_pwait2 => Some(core::mem::size_of::<EpollPWait2Data>()),
+        syscalls::SYS_epoll_ctl => Some(core::mem::size_of::<EpollCtlData>()),
+        syscalls::SYS_ppoll => Some(core::mem::size_of::<PpollData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_poll => Some(core::mem::size_of::<PollData>()),
+        syscalls::SYS_pselect6 => Some(core::mem::size_of::<Pselect6Data>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_select => Some(core::mem::size_of::<SelectData>()),
+        syscalls::SYS_pipe2 => Some(core::mem::size_of::<Pipe2Data>()),
+        syscalls::SYS_splice => Some(core::mem::size_of::<SpliceData>()),
+        syscalls::SYS_tee => Some(core::mem::size_of::<TeeData>()),
+        syscalls::SYS_vmsplice => Some(core::mem::size_of::<VmspliceData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_sendfile => Some(core::mem::size_of::<SendfileData>()),
         _ => None,
     }
 }

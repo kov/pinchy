@@ -39,7 +39,7 @@ use crate::{syscall_compact_test, syscall_test, tests::make_compact_test_data};
 syscall_compact_test!(
     parse_fstat_success,
     {
-        use pinchy_common::{kernel_types::Stat, FstatData};
+        use pinchy_common::{FstatData, kernel_types::Stat};
 
         let mut data = FstatData {
             fd: 5,
@@ -137,7 +137,7 @@ syscall_test!(
 syscall_compact_test!(
     parse_fstat_error,
     {
-        use pinchy_common::{kernel_types::Stat, FstatData};
+        use pinchy_common::{FstatData, kernel_types::Stat};
 
         let mut data = FstatData {
             fd: 5,
@@ -160,7 +160,7 @@ syscall_compact_test!(
 syscall_compact_test!(
     parse_statfs_success,
     {
-        use pinchy_common::{kernel_types::Statfs, StatfsData};
+        use pinchy_common::{StatfsData, kernel_types::Statfs};
 
         let mut data = StatfsData {
             pathname: [0u8; DATA_READ_SIZE],
@@ -169,7 +169,7 @@ syscall_compact_test!(
 
         let path = c"/mnt/data".to_bytes_with_nul();
         data.pathname[..path.len()].copy_from_slice(path);
-        data.statfs.f_type = libc::TMPFS_MAGIC as i64;
+        data.statfs.f_type = libc::TMPFS_MAGIC;
         data.statfs.f_bsize = 4096;
         data.statfs.f_blocks = 1024000;
         data.statfs.f_bfree = 512000;
@@ -328,7 +328,7 @@ syscall_compact_test!(
 syscall_compact_test!(
     parse_newfstatat_success,
     {
-        use pinchy_common::{kernel_types::Stat, NewfstatatData};
+        use pinchy_common::{NewfstatatData, kernel_types::Stat};
 
         let mut data = NewfstatatData {
             dirfd: libc::AT_FDCWD,
@@ -355,7 +355,7 @@ syscall_compact_test!(
 syscall_compact_test!(
     parse_newfstatat_error,
     {
-        use pinchy_common::{kernel_types::Stat, NewfstatatData};
+        use pinchy_common::{NewfstatatData, kernel_types::Stat};
 
         let mut data = NewfstatatData {
             dirfd: libc::AT_FDCWD,
@@ -375,7 +375,7 @@ syscall_compact_test!(
 syscall_compact_test!(
     parse_newfstatat_noflags,
     {
-        use pinchy_common::{kernel_types::Stat, NewfstatatData};
+        use pinchy_common::{NewfstatatData, kernel_types::Stat};
 
         let mut data = NewfstatatData {
             dirfd: libc::AT_FDCWD,
@@ -402,7 +402,7 @@ syscall_compact_test!(
 syscall_compact_test!(
     parse_newfstatat_dirfd,
     {
-        use pinchy_common::{kernel_types::Stat, NewfstatatData};
+        use pinchy_common::{NewfstatatData, kernel_types::Stat};
 
         let mut data = NewfstatatData {
             dirfd: 5,
@@ -445,326 +445,284 @@ syscall_compact_test!(
     "5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_flistxattr,
     {
         use pinchy_common::{kernel_types::XattrList, syscalls::SYS_flistxattr, FlistxattrData};
+
         let mut xattr_list = XattrList::default();
         let names = b"user.attr1\0user.attr2\0";
         xattr_list.data[..names.len()].copy_from_slice(names);
         xattr_list.size = names.len();
-        SyscallEvent {
-            syscall_nr: SYS_flistxattr,
-            pid: 42,
-            tid: 42,
-            return_value: names.len() as i64,
-            data: pinchy_common::SyscallEventData {
-                flistxattr: FlistxattrData {
-                    fd: 7,
-                    list: 0xdeadbeef,
-                    size: 256,
-                    xattr_list,
-                },
-            },
-        }
+
+        let data = FlistxattrData {
+            fd: 7,
+            list: 0xdeadbeef,
+            size: 256,
+            xattr_list,
+        };
+
+        make_compact_test_data(SYS_flistxattr, 42, names.len() as i64, &data)
     },
     "42 flistxattr(fd: 7, list: [ user.attr1, user.attr2 ], size: 256) = 22\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_listxattr,
     {
         use pinchy_common::{kernel_types::XattrList, syscalls::SYS_listxattr, ListxattrData};
+
         let mut xattr_list = XattrList::default();
         let names = b"user.attr1\0user.attr2\0";
         xattr_list.data[..names.len()].copy_from_slice(names);
         xattr_list.size = names.len();
-        SyscallEvent {
-            syscall_nr: SYS_listxattr,
-            pid: 43,
-            tid: 43,
-            return_value: names.len() as i64,
-            data: pinchy_common::SyscallEventData {
-                listxattr: ListxattrData {
-                    pathname: {
-                        let mut arr = [0u8; pinchy_common::DATA_READ_SIZE];
-                        let path = b"/tmp/testfile\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                    list: 0xabadcafe,
-                    size: 128,
-                    xattr_list,
-                },
-            },
-        }
+
+        let mut pathname = [0u8; pinchy_common::DATA_READ_SIZE];
+        let path = b"/tmp/testfile\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        let data = ListxattrData {
+            pathname,
+            list: 0xabadcafe,
+            size: 128,
+            xattr_list,
+        };
+
+        make_compact_test_data(SYS_listxattr, 43, names.len() as i64, &data)
     },
     "43 listxattr(pathname: \"/tmp/testfile\", list: [ user.attr1, user.attr2 ], size: 128) = 22\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_llistxattr,
     {
         use pinchy_common::{kernel_types::XattrList, syscalls::SYS_llistxattr, LlistxattrData};
+
         let mut xattr_list = XattrList::default();
         let names = b"user.attr1\0user.attr2\0";
         xattr_list.data[..names.len()].copy_from_slice(names);
         xattr_list.size = names.len();
-        SyscallEvent {
-            syscall_nr: SYS_llistxattr,
-            pid: 44,
-            tid: 44,
-            return_value: names.len() as i64,
-            data: pinchy_common::SyscallEventData {
-                llistxattr: LlistxattrData {
-                    pathname: {
-                        let mut arr = [0u8; pinchy_common::DATA_READ_SIZE];
-                        let path = b"/tmp/testlink\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                    list: 0xfeedface,
-                    size: 64,
-                    xattr_list,
-                },
-            },
-        }
+
+        let mut pathname = [0u8; pinchy_common::DATA_READ_SIZE];
+        let path = b"/tmp/testlink\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        let data = LlistxattrData {
+            pathname,
+            list: 0xfeedface,
+            size: 64,
+            xattr_list,
+        };
+
+        make_compact_test_data(SYS_llistxattr, 44, names.len() as i64, &data)
     },
     "44 llistxattr(pathname: \"/tmp/testlink\", list: [ user.attr1, user.attr2 ], size: 64) = 22\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_setxattr,
     {
-        use pinchy_common::{syscalls::SYS_setxattr, SetxattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE};
+        use pinchy_common::{
+            DATA_READ_SIZE, MEDIUM_READ_SIZE, SetxattrData, syscalls::SYS_setxattr,
+        };
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         pathname[..12].copy_from_slice(b"/tmp/myfile\0");
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..10].copy_from_slice(b"user.attr\0");
         let mut value = [0u8; DATA_READ_SIZE];
         value[..6].copy_from_slice(b"value\0");
-        SyscallEvent {
-            syscall_nr: SYS_setxattr,
-            pid: 45,
-            tid: 45,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setxattr: SetxattrData {
-                    pathname,
-                    name,
-                    value,
-                    size: 6,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = SetxattrData {
+            pathname,
+            name,
+            value,
+            size: 6,
+            flags: 0,
+        };
+
+        make_compact_test_data(SYS_setxattr, 45, 0, &data)
     },
     "45 setxattr(pathname: \"/tmp/myfile\", name: \"user.attr\", value: \"value\\0\", size: 6, flags: 0) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_lsetxattr,
     {
-        use pinchy_common::{syscalls::SYS_lsetxattr, LsetxattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE};
+        use pinchy_common::{
+            DATA_READ_SIZE, LsetxattrData, MEDIUM_READ_SIZE, syscalls::SYS_lsetxattr,
+        };
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         pathname[..12].copy_from_slice(b"/tmp/mylink\0");
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..10].copy_from_slice(b"user.test\0");
         let mut value = [0u8; DATA_READ_SIZE];
         value[..4].copy_from_slice(b"test");
-        SyscallEvent {
-            syscall_nr: SYS_lsetxattr,
-            pid: 46,
-            tid: 46,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                lsetxattr: LsetxattrData {
-                    pathname,
-                    name,
-                    value,
-                    size: 4,
-                    flags: libc::XATTR_CREATE,
-                },
-            },
-        }
+
+        let data = LsetxattrData {
+            pathname,
+            name,
+            value,
+            size: 4,
+            flags: libc::XATTR_CREATE,
+        };
+
+        make_compact_test_data(SYS_lsetxattr, 46, 0, &data)
     },
     "46 lsetxattr(pathname: \"/tmp/mylink\", name: \"user.test\", value: \"test\", size: 4, flags: 0x1 (XATTR_CREATE)) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fsetxattr,
     {
-        use pinchy_common::{syscalls::SYS_fsetxattr, FsetxattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE};
+        use pinchy_common::{
+            DATA_READ_SIZE, FsetxattrData, MEDIUM_READ_SIZE, syscalls::SYS_fsetxattr,
+        };
+
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..9].copy_from_slice(b"user.foo\0");
         let mut value = [0u8; DATA_READ_SIZE];
         value[..3].copy_from_slice(b"bar");
-        SyscallEvent {
-            syscall_nr: SYS_fsetxattr,
-            pid: 47,
-            tid: 47,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fsetxattr: FsetxattrData {
-                    fd: 8,
-                    name,
-                    value,
-                    size: 3,
-                    flags: libc::XATTR_REPLACE,
-                },
-            },
-        }
+
+        let data = FsetxattrData {
+            fd: 8,
+            name,
+            value,
+            size: 3,
+            flags: libc::XATTR_REPLACE,
+        };
+
+        make_compact_test_data(SYS_fsetxattr, 47, 0, &data)
     },
     "47 fsetxattr(fd: 8, name: \"user.foo\", value: \"bar\", size: 3, flags: 0x2 (XATTR_REPLACE)) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_getxattr,
     {
-        use pinchy_common::{syscalls::SYS_getxattr, GetxattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE};
+        use pinchy_common::{
+            DATA_READ_SIZE, GetxattrData, MEDIUM_READ_SIZE, syscalls::SYS_getxattr,
+        };
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         pathname[..12].copy_from_slice(b"/tmp/myfile\0");
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..10].copy_from_slice(b"user.attr\0");
         let mut value = [0u8; DATA_READ_SIZE];
         value[..6].copy_from_slice(b"value\0");
-        SyscallEvent {
-            syscall_nr: SYS_getxattr,
-            pid: 48,
-            tid: 48,
-            return_value: 6,
-            data: pinchy_common::SyscallEventData {
-                getxattr: GetxattrData {
-                    pathname,
-                    name,
-                    value,
-                    size: 100,
-                },
-            },
-        }
+
+        let data = GetxattrData {
+            pathname,
+            name,
+            value,
+            size: 100,
+        };
+
+        make_compact_test_data(SYS_getxattr, 48, 6, &data)
     },
     "48 getxattr(pathname: \"/tmp/myfile\", name: \"user.attr\", value: \"value\\0\", size: 100) = 6\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_lgetxattr,
     {
         use pinchy_common::{
             syscalls::SYS_lgetxattr, LgetxattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE,
         };
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         pathname[..12].copy_from_slice(b"/tmp/mylink\0");
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..10].copy_from_slice(b"user.test\0");
         let mut value = [0u8; DATA_READ_SIZE];
         value[..4].copy_from_slice(b"test");
-        SyscallEvent {
-            syscall_nr: SYS_lgetxattr,
-            pid: 49,
-            tid: 49,
-            return_value: 4,
-            data: pinchy_common::SyscallEventData {
-                lgetxattr: LgetxattrData {
-                    pathname,
-                    name,
-                    value,
-                    size: 50,
-                },
-            },
-        }
+
+        let data = LgetxattrData {
+            pathname,
+            name,
+            value,
+            size: 50,
+        };
+
+        make_compact_test_data(SYS_lgetxattr, 49, 4, &data)
     },
     "49 lgetxattr(pathname: \"/tmp/mylink\", name: \"user.test\", value: \"test\", size: 50) = 4\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fgetxattr,
     {
         use pinchy_common::{
             syscalls::SYS_fgetxattr, FgetxattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE,
         };
+
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..9].copy_from_slice(b"user.foo\0");
         let mut value = [0u8; DATA_READ_SIZE];
         value[..3].copy_from_slice(b"bar");
-        SyscallEvent {
-            syscall_nr: SYS_fgetxattr,
-            pid: 50,
-            tid: 50,
-            return_value: 3,
-            data: pinchy_common::SyscallEventData {
-                fgetxattr: FgetxattrData {
-                    fd: 9,
-                    name,
-                    value,
-                    size: 10,
-                },
-            },
-        }
+
+        let data = FgetxattrData {
+            fd: 9,
+            name,
+            value,
+            size: 10,
+        };
+
+        make_compact_test_data(SYS_fgetxattr, 50, 3, &data)
     },
     "50 fgetxattr(fd: 9, name: \"user.foo\", value: \"bar\", size: 10) = 3\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_removexattr,
     {
         use pinchy_common::{
             syscalls::SYS_removexattr, RemovexattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE,
         };
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         pathname[..12].copy_from_slice(b"/tmp/myfile\0");
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..10].copy_from_slice(b"user.attr\0");
-        SyscallEvent {
-            syscall_nr: SYS_removexattr,
-            pid: 51,
-            tid: 51,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                removexattr: RemovexattrData { pathname, name },
-            },
-        }
+
+        let data = RemovexattrData { pathname, name };
+
+        make_compact_test_data(SYS_removexattr, 51, 0, &data)
     },
     "51 removexattr(pathname: \"/tmp/myfile\", name: \"user.attr\") = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_lremovexattr,
     {
         use pinchy_common::{
             syscalls::SYS_lremovexattr, LremovexattrData, DATA_READ_SIZE, MEDIUM_READ_SIZE,
         };
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         pathname[..12].copy_from_slice(b"/tmp/mylink\0");
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..10].copy_from_slice(b"user.test\0");
-        SyscallEvent {
-            syscall_nr: SYS_lremovexattr,
-            pid: 52,
-            tid: 52,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                lremovexattr: LremovexattrData { pathname, name },
-            },
-        }
+
+        let data = LremovexattrData { pathname, name };
+
+        make_compact_test_data(SYS_lremovexattr, 52, 0, &data)
     },
     "52 lremovexattr(pathname: \"/tmp/mylink\", name: \"user.test\") = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fremovexattr,
     {
         use pinchy_common::{syscalls::SYS_fremovexattr, FremovexattrData, MEDIUM_READ_SIZE};
+
         let mut name = [0u8; MEDIUM_READ_SIZE];
         name[..9].copy_from_slice(b"user.foo\0");
-        SyscallEvent {
-            syscall_nr: SYS_fremovexattr,
-            pid: 53,
-            tid: 53,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fremovexattr: FremovexattrData { fd: 10, name },
-            },
-        }
+
+        let data = FremovexattrData { fd: 10, name };
+
+        make_compact_test_data(SYS_fremovexattr, 53, 0, &data)
     },
     "53 fremovexattr(fd: 10, name: \"user.foo\") = 0 (success)\n"
 );
@@ -1515,7 +1473,7 @@ syscall_test!(
 syscall_test!(
     parse_statx_success,
     {
-        use pinchy_common::{kernel_types::Statx, StatxData};
+        use pinchy_common::{StatxData, kernel_types::Statx};
         SyscallEvent {
             syscall_nr: pinchy_common::syscalls::SYS_statx,
             pid: 42,
@@ -1542,7 +1500,7 @@ syscall_test!(
                         stx_blocks: 20,
                         stx_blksize: 4096,
                         ..Default::default()
-                    }
+                    },
                 },
             },
         }
@@ -2126,14 +2084,14 @@ syscall_test!(
 syscall_compact_test!(
     parse_fstatfs_success,
     {
-        use pinchy_common::{kernel_types::Statfs, FstatfsData};
+        use pinchy_common::{FstatfsData, kernel_types::Statfs};
 
         let mut data = FstatfsData {
             fd: 5,
             statfs: Statfs::default(),
         };
 
-        data.statfs.f_type = libc::EXT4_SUPER_MAGIC as i64;
+        data.statfs.f_type = libc::EXT4_SUPER_MAGIC;
         data.statfs.f_bsize = 4096;
         data.statfs.f_blocks = 1048576;
         data.statfs.f_bfree = 524288;
@@ -2156,7 +2114,7 @@ syscall_compact_test!(
 
         let path = c"/mnt/data".to_bytes_with_nul();
         data.pathname[..path.len()].copy_from_slice(path);
-        data.statfs.f_type = libc::TMPFS_MAGIC as i64;
+        data.statfs.f_type = libc::TMPFS_MAGIC;
         data.statfs.f_bsize = 4096;
         data.statfs.f_blocks = 1024000;
         data.statfs.f_bfree = 512000;
@@ -2294,6 +2252,7 @@ syscall_test!(
     parse_fsconfig_with_string_cmd,
     {
         use pinchy_common::FsconfigData;
+
         use crate::format_helpers::fs_constants;
         let mut key = [0u8; MEDIUM_READ_SIZE];
         let mut value = [0u8; DATA_READ_SIZE];
@@ -2324,6 +2283,7 @@ syscall_test!(
     parse_fsmount_with_flags,
     {
         use pinchy_common::FsmountData;
+
         use crate::format_helpers::fs_constants;
         SyscallEvent {
             syscall_nr: pinchy_common::syscalls::SYS_fsmount,
@@ -2346,6 +2306,7 @@ syscall_test!(
     parse_fspick_with_flags,
     {
         use pinchy_common::FspickData;
+
         use crate::format_helpers::fs_constants;
         let mut path = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/mnt/test\0";
@@ -3041,8 +3002,14 @@ syscall_test!(
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     times: [
-                        Timespec { seconds: 1234567890, nanos: 123456789 },
-                        Timespec { seconds: 1234567891, nanos: 987654321 },
+                        Timespec {
+                            seconds: 1234567890,
+                            nanos: 123456789,
+                        },
+                        Timespec {
+                            seconds: 1234567891,
+                            nanos: 987654321,
+                        },
                     ],
                     times_is_null: 0,
                     flags: 0,
@@ -3098,8 +3065,14 @@ syscall_test!(
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     times: [
-                        Timespec { seconds: 0, nanos: time_constants::UTIME_NOW },
-                        Timespec { seconds: 0, nanos: time_constants::UTIME_OMIT },
+                        Timespec {
+                            seconds: 0,
+                            nanos: time_constants::UTIME_NOW,
+                        },
+                        Timespec {
+                            seconds: 0,
+                            nanos: time_constants::UTIME_OMIT,
+                        },
                     ],
                     times_is_null: 0,
                     flags: 0,
@@ -3113,7 +3086,7 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_getquota,
     {
-        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
         let mut event = SyscallEvent {
             syscall_nr: SYS_quotactl,
             pid: 10001,
@@ -3139,7 +3112,7 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_getnextquota,
     {
-        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
         let mut event = SyscallEvent {
             syscall_nr: SYS_quotactl,
             pid: 10002,
@@ -3165,7 +3138,7 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_sync,
     {
-        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
         let mut event = SyscallEvent {
             syscall_nr: SYS_quotactl,
             pid: 10003,
@@ -3191,7 +3164,7 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_error,
     {
-        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
         let mut event = SyscallEvent {
             syscall_nr: SYS_quotactl,
             pid: 10004,
@@ -3259,7 +3232,7 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_getquota_grpquota,
     {
-        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
         // Test QCMD(Q_GETQUOTA, GRPQUOTA) = (0x800007 << 8) | 1 = 0x80000701
         // Note: This wraps to a negative i32 value
         let mut event = SyscallEvent {
@@ -3269,8 +3242,7 @@ syscall_test!(
             return_value: 0,
             data: SyscallEventData {
                 quotactl: QuotactlData {
-                    op: (((pinchy_common::Q_GETQUOTA as i64) << 8) | 1)
-                        as i32,
+                    op: (((pinchy_common::Q_GETQUOTA as i64) << 8) | 1) as i32,
                     special: [0u8; MEDIUM_READ_SIZE],
                     id: 500,
                     addr: 0x7fff11111111,
@@ -3288,7 +3260,7 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_setquota_prjquota,
     {
-        use pinchy_common::{QuotactlData, MEDIUM_READ_SIZE};
+        use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
         // Test QCMD(Q_SETQUOTA, PRJQUOTA) = (0x800008 << 8) | 2 = 0x80000802
         // Note: This wraps to a negative i32 value
         let mut event = SyscallEvent {
@@ -3298,8 +3270,7 @@ syscall_test!(
             return_value: 0,
             data: SyscallEventData {
                 quotactl: QuotactlData {
-                    op: (((pinchy_common::Q_SETQUOTA as i64) << 8) | 2)
-                        as i32,
+                    op: (((pinchy_common::Q_SETQUOTA as i64) << 8) | 2) as i32,
                     special: [0u8; MEDIUM_READ_SIZE],
                     id: 1001,
                     addr: 0x7fff22222222,

@@ -6,9 +6,11 @@ use std::borrow::Cow;
 use log::{error, trace};
 use pinchy_common::{
     compact_payload_size, kernel_types, syscalls, wire_validation_enabled, CloseData, EpollCtlData,
-    EpollPWait2Data, EpollPWaitData, FaccessatData, FstatData, FstatfsData, LseekData,
-    NewfstatatData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data,
-    PwriteData, ReadData, ReadlinkatData, SpliceData, StatfsData, SyscallEvent, TeeData,
+    EpollPWait2Data, EpollPWaitData, FaccessatData, FgetxattrData, FlistxattrData,
+    FremovexattrData, FsetxattrData, FstatData, FstatfsData, GetxattrData, LgetxattrData,
+    ListxattrData, LlistxattrData, LremovexattrData, LseekData, LsetxattrData, NewfstatatData,
+    OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data, PwriteData, ReadData,
+    ReadlinkatData, RemovexattrData, SetxattrData, SpliceData, StatfsData, SyscallEvent, TeeData,
     VectorIOData, VmspliceData, WireEventHeader, WriteData,
 };
 #[cfg(target_arch = "x86_64")]
@@ -57,7 +59,19 @@ pub async fn handle_compact_event(
         | syscalls::SYS_faccessat2
         | syscalls::SYS_readlinkat
         | syscalls::SYS_statfs
-        | syscalls::SYS_fstatfs => header.syscall_nr,
+        | syscalls::SYS_fstatfs
+        | syscalls::SYS_flistxattr
+        | syscalls::SYS_listxattr
+        | syscalls::SYS_llistxattr
+        | syscalls::SYS_setxattr
+        | syscalls::SYS_lsetxattr
+        | syscalls::SYS_fsetxattr
+        | syscalls::SYS_getxattr
+        | syscalls::SYS_lgetxattr
+        | syscalls::SYS_fgetxattr
+        | syscalls::SYS_removexattr
+        | syscalls::SYS_lremovexattr
+        | syscalls::SYS_fremovexattr => header.syscall_nr,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_wait
         | syscalls::SYS_poll
@@ -662,6 +676,178 @@ pub async fn handle_compact_event(
 
             finish!(sf, header.return_value);
         }
+        syscalls::SYS_flistxattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FlistxattrData) };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            arg!(sf, "list:");
+            format_xattr_list(&mut sf, &data.xattr_list).await?;
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_listxattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const ListxattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+
+            arg!(sf, "list:");
+            format_xattr_list(&mut sf, &data.xattr_list).await?;
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_llistxattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const LlistxattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+
+            arg!(sf, "list:");
+            format_xattr_list(&mut sf, &data.xattr_list).await?;
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_setxattr => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const SetxattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(
+                sf,
+                "value: {}",
+                format_bytes(&data.value[..data.size.min(data.value.len())])
+            );
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_lsetxattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const LsetxattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(
+                sf,
+                "value: {}",
+                format_bytes(&data.value[..data.size.min(data.value.len())])
+            );
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fsetxattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FsetxattrData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            argf!(
+                sf,
+                "value: {}",
+                format_bytes(&data.value[..data.size.min(data.value.len())])
+            );
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_getxattr => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const GetxattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            if header.return_value > 0 {
+                let bytes_read = header.return_value as usize;
+                let buf = &data.value[..bytes_read.min(data.value.len())];
+
+                argf!(sf, "value: {}", format_bytes(buf));
+            } else {
+                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
+            }
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_lgetxattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const LgetxattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            if header.return_value > 0 {
+                let bytes_read = header.return_value as usize;
+                let buf = &data.value[..bytes_read.min(data.value.len())];
+
+                argf!(sf, "value: {}", format_bytes(buf));
+            } else {
+                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
+            }
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fgetxattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FgetxattrData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            if header.return_value > 0 {
+                let bytes_read = header.return_value as usize;
+                let buf = &data.value[..bytes_read.min(data.value.len())];
+
+                argf!(sf, "value: {}", format_bytes(buf));
+            } else {
+                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
+            }
+
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_removexattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const RemovexattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_lremovexattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const LremovexattrData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fremovexattr => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FremovexattrData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            finish!(sf, header.return_value);
+        }
 
         _ => return Ok(false),
     }
@@ -695,7 +881,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_faccessat2
         | syscalls::SYS_readlinkat
         | syscalls::SYS_statfs
-        | syscalls::SYS_fstatfs => {
+        | syscalls::SYS_fstatfs
+        | syscalls::SYS_flistxattr
+        | syscalls::SYS_listxattr
+        | syscalls::SYS_llistxattr
+        | syscalls::SYS_setxattr
+        | syscalls::SYS_lsetxattr
+        | syscalls::SYS_fsetxattr
+        | syscalls::SYS_getxattr
+        | syscalls::SYS_lgetxattr
+        | syscalls::SYS_fgetxattr
+        | syscalls::SYS_removexattr
+        | syscalls::SYS_lremovexattr
+        | syscalls::SYS_fremovexattr => {
             unreachable!("migrated syscall should be handled by compact path");
         }
         #[cfg(target_arch = "x86_64")]
@@ -888,144 +1086,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let data = unsafe { event.data.eventfd2 };
             argf!(sf, "initval: {}", data.initval);
             argf!(sf, "flags: {}", format_eventfd_flags(data.flags));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_flistxattr => {
-            let data = unsafe { event.data.flistxattr };
-            argf!(sf, "fd: {}", data.fd);
-
-            arg!(sf, "list:");
-            format_xattr_list(&mut sf, &data.xattr_list).await?;
-
-            argf!(sf, "size: {}", data.size);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_listxattr => {
-            let data = unsafe { event.data.listxattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-
-            arg!(sf, "list:");
-            format_xattr_list(&mut sf, &data.xattr_list).await?;
-
-            argf!(sf, "size: {}", data.size);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_llistxattr => {
-            let data = unsafe { event.data.llistxattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-
-            arg!(sf, "list:");
-            format_xattr_list(&mut sf, &data.xattr_list).await?;
-
-            argf!(sf, "size: {}", data.size);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_setxattr => {
-            let data = unsafe { event.data.setxattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "name: {}", format_path(&data.name, false));
-            argf!(
-                sf,
-                "value: {}",
-                format_bytes(&data.value[..data.size.min(data.value.len())])
-            );
-            argf!(sf, "size: {}", data.size);
-            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_lsetxattr => {
-            let data = unsafe { event.data.lsetxattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "name: {}", format_path(&data.name, false));
-            argf!(
-                sf,
-                "value: {}",
-                format_bytes(&data.value[..data.size.min(data.value.len())])
-            );
-            argf!(sf, "size: {}", data.size);
-            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fsetxattr => {
-            let data = unsafe { event.data.fsetxattr };
-            argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "name: {}", format_path(&data.name, false));
-            argf!(
-                sf,
-                "value: {}",
-                format_bytes(&data.value[..data.size.min(data.value.len())])
-            );
-            argf!(sf, "size: {}", data.size);
-            argf!(sf, "flags: {}", format_xattr_flags(data.flags));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_getxattr => {
-            let data = unsafe { event.data.getxattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "name: {}", format_path(&data.name, false));
-
-            if event.return_value > 0 {
-                let bytes_read = event.return_value as usize;
-                let buf = &data.value[..bytes_read.min(data.value.len())];
-                argf!(sf, "value: {}", format_bytes(buf));
-            } else {
-                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
-            }
-
-            argf!(sf, "size: {}", data.size);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_lgetxattr => {
-            let data = unsafe { event.data.lgetxattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "name: {}", format_path(&data.name, false));
-
-            if event.return_value > 0 {
-                let bytes_read = event.return_value as usize;
-                let buf = &data.value[..bytes_read.min(data.value.len())];
-                argf!(sf, "value: {}", format_bytes(buf));
-            } else {
-                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
-            }
-
-            argf!(sf, "size: {}", data.size);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fgetxattr => {
-            let data = unsafe { event.data.fgetxattr };
-            argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "name: {}", format_path(&data.name, false));
-
-            if event.return_value > 0 {
-                let bytes_read = event.return_value as usize;
-                let buf = &data.value[..bytes_read.min(data.value.len())];
-                argf!(sf, "value: {}", format_bytes(buf));
-            } else {
-                argf!(sf, "value: 0x{:x}", data.value.as_ptr() as u64);
-            }
-
-            argf!(sf, "size: {}", data.size);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_removexattr => {
-            let data = unsafe { event.data.removexattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "name: {}", format_path(&data.name, false));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_lremovexattr => {
-            let data = unsafe { event.data.lremovexattr };
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "name: {}", format_path(&data.name, false));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fremovexattr => {
-            let data = unsafe { event.data.fremovexattr };
-            argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "name: {}", format_path(&data.name, false));
             finish!(sf, event.return_value);
         }
         syscalls::SYS_exit_group => {

@@ -11,8 +11,10 @@ use aya_log_ebpf::error;
 use pinchy_common::kernel_types::LinuxDirent;
 use pinchy_common::{
     kernel_types::{LinuxDirent64, Stat},
-    syscalls, FaccessatData, FstatData, FstatfsData, NewfstatatData, ReadlinkatData, StatfsData,
-    DATA_READ_SIZE,
+    syscalls, FaccessatData, FgetxattrData, FlistxattrData, FremovexattrData, FsetxattrData,
+    FstatData, FstatfsData, GetxattrData, LgetxattrData, ListxattrData, LlistxattrData,
+    LremovexattrData, LsetxattrData, NewfstatatData, ReadlinkatData, RemovexattrData, SetxattrData,
+    StatfsData, DATA_READ_SIZE,
 };
 
 use crate::{data_mut, util, util::submit_compact_payload};
@@ -162,6 +164,342 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 return Ok(());
             }
+            syscalls::SYS_flistxattr => {
+                submit_compact_payload::<FlistxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_flistxattr,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.list = args[1] as u64;
+                        payload.size = args[2] as usize;
+                        payload.xattr_list = pinchy_common::kernel_types::XattrList::default();
+
+                        let list_ptr = args[1] as *const u8;
+
+                        if !list_ptr.is_null() && payload.size > 0 {
+                            let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    list_ptr,
+                                    &mut payload.xattr_list.data[..read_size],
+                                );
+                            }
+
+                            payload.xattr_list.size = read_size;
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_listxattr => {
+                submit_compact_payload::<ListxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_listxattr,
+                    return_value,
+                    |payload| {
+                        payload.list = args[1] as u64;
+                        payload.size = args[2] as usize;
+                        payload.xattr_list = pinchy_common::kernel_types::XattrList::default();
+
+                        let pathname_ptr = args[0] as *const u8;
+                        let list_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+
+                        if !list_ptr.is_null() && payload.size > 0 {
+                            let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    list_ptr,
+                                    &mut payload.xattr_list.data[..read_size],
+                                );
+                            }
+
+                            payload.xattr_list.size = read_size;
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_llistxattr => {
+                submit_compact_payload::<LlistxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_llistxattr,
+                    return_value,
+                    |payload| {
+                        payload.list = args[1] as u64;
+                        payload.size = args[2] as usize;
+                        payload.xattr_list = pinchy_common::kernel_types::XattrList::default();
+
+                        let pathname_ptr = args[0] as *const u8;
+                        let list_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+
+                        if !list_ptr.is_null() && payload.size > 0 {
+                            let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    list_ptr,
+                                    &mut payload.xattr_list.data[..read_size],
+                                );
+                            }
+
+                            payload.xattr_list.size = read_size;
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_setxattr => {
+                submit_compact_payload::<SetxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_setxattr,
+                    return_value,
+                    |payload| {
+                        payload.size = args[3] as usize;
+                        payload.flags = args[4] as i32;
+
+                        let pathname_ptr = args[0] as *const u8;
+                        let name_ptr = args[1] as *const u8;
+                        let value_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+
+                            if !value_ptr.is_null() && payload.size > 0 {
+                                let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+                                let _ = bpf_probe_read_user_buf(
+                                    value_ptr,
+                                    &mut payload.value[..read_size],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_lsetxattr => {
+                submit_compact_payload::<LsetxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_lsetxattr,
+                    return_value,
+                    |payload| {
+                        payload.size = args[3] as usize;
+                        payload.flags = args[4] as i32;
+
+                        let pathname_ptr = args[0] as *const u8;
+                        let name_ptr = args[1] as *const u8;
+                        let value_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+
+                            if !value_ptr.is_null() && payload.size > 0 {
+                                let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+                                let _ = bpf_probe_read_user_buf(
+                                    value_ptr,
+                                    &mut payload.value[..read_size],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fsetxattr => {
+                submit_compact_payload::<FsetxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_fsetxattr,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.size = args[3] as usize;
+                        payload.flags = args[4] as i32;
+
+                        let name_ptr = args[1] as *const u8;
+                        let value_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+
+                            if !value_ptr.is_null() && payload.size > 0 {
+                                let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+                                let _ = bpf_probe_read_user_buf(
+                                    value_ptr,
+                                    &mut payload.value[..read_size],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_getxattr => {
+                submit_compact_payload::<GetxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_getxattr,
+                    return_value,
+                    |payload| {
+                        payload.size = args[3] as usize;
+
+                        let pathname_ptr = args[0] as *const u8;
+                        let name_ptr = args[1] as *const u8;
+                        let value_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+
+                            if !value_ptr.is_null() && return_value > 0 && payload.size > 0 {
+                                let read_size = core::cmp::min(
+                                    return_value as usize,
+                                    core::cmp::min(payload.size, DATA_READ_SIZE),
+                                );
+                                let _ = bpf_probe_read_user_buf(
+                                    value_ptr,
+                                    &mut payload.value[..read_size],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_lgetxattr => {
+                submit_compact_payload::<LgetxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_lgetxattr,
+                    return_value,
+                    |payload| {
+                        payload.size = args[3] as usize;
+
+                        let pathname_ptr = args[0] as *const u8;
+                        let name_ptr = args[1] as *const u8;
+                        let value_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+
+                            if !value_ptr.is_null() && return_value > 0 && payload.size > 0 {
+                                let read_size = core::cmp::min(
+                                    return_value as usize,
+                                    core::cmp::min(payload.size, DATA_READ_SIZE),
+                                );
+                                let _ = bpf_probe_read_user_buf(
+                                    value_ptr,
+                                    &mut payload.value[..read_size],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fgetxattr => {
+                submit_compact_payload::<FgetxattrData, _>(
+                    &ctx,
+                    syscalls::SYS_fgetxattr,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.size = args[3] as usize;
+
+                        let name_ptr = args[1] as *const u8;
+                        let value_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+
+                            if !value_ptr.is_null() && return_value > 0 && payload.size > 0 {
+                                let read_size = core::cmp::min(
+                                    return_value as usize,
+                                    core::cmp::min(payload.size, DATA_READ_SIZE),
+                                );
+                                let _ = bpf_probe_read_user_buf(
+                                    value_ptr,
+                                    &mut payload.value[..read_size],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_removexattr => {
+                submit_compact_payload::<RemovexattrData, _>(
+                    &ctx,
+                    syscalls::SYS_removexattr,
+                    return_value,
+                    |payload| {
+                        let pathname_ptr = args[0] as *const u8;
+                        let name_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_lremovexattr => {
+                submit_compact_payload::<LremovexattrData, _>(
+                    &ctx,
+                    syscalls::SYS_lremovexattr,
+                    return_value,
+                    |payload| {
+                        let pathname_ptr = args[0] as *const u8;
+                        let name_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fremovexattr => {
+                submit_compact_payload::<FremovexattrData, _>(
+                    &ctx,
+                    syscalls::SYS_fremovexattr,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+
+                        let name_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
             _ => {}
         }
 
@@ -174,7 +512,19 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
             | syscalls::SYS_statfs
             | syscalls::SYS_faccessat
             | syscalls::SYS_faccessat2
-            | syscalls::SYS_fstatfs => {
+            | syscalls::SYS_fstatfs
+            | syscalls::SYS_flistxattr
+            | syscalls::SYS_listxattr
+            | syscalls::SYS_llistxattr
+            | syscalls::SYS_setxattr
+            | syscalls::SYS_lsetxattr
+            | syscalls::SYS_fsetxattr
+            | syscalls::SYS_getxattr
+            | syscalls::SYS_lgetxattr
+            | syscalls::SYS_fgetxattr
+            | syscalls::SYS_removexattr
+            | syscalls::SYS_lremovexattr
+            | syscalls::SYS_fremovexattr => {
                 error!(
                     &ctx,
                     "migrated filesystem syscall {} hit legacy path", syscall_nr
@@ -260,192 +610,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[1] as *const u8;
                 unsafe {
                     let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-            }
-            syscalls::SYS_flistxattr => {
-                let data = data_mut!(entry, flistxattr);
-                data.fd = args[0] as i32;
-                let list_ptr = args[1] as *const u8;
-                data.list = list_ptr as u64;
-                data.size = args[2] as usize;
-                data.xattr_list = pinchy_common::kernel_types::XattrList::default();
-                if !list_ptr.is_null() && data.size > 0 {
-                    let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                    unsafe {
-                        let _ = bpf_probe_read_user_buf(
-                            list_ptr,
-                            &mut data.xattr_list.data[..read_size],
-                        );
-                    }
-                    data.xattr_list.size = read_size;
-                }
-            }
-            syscalls::SYS_listxattr => {
-                let data = data_mut!(entry, listxattr);
-                let pathname_ptr = args[0] as *const u8;
-                let list_ptr = args[1] as *const u8;
-                data.size = args[2] as usize;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-                data.list = list_ptr as u64;
-                data.xattr_list = pinchy_common::kernel_types::XattrList::default();
-                if !list_ptr.is_null() && data.size > 0 {
-                    let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                    unsafe {
-                        let _ = bpf_probe_read_user_buf(
-                            list_ptr,
-                            &mut data.xattr_list.data[..read_size],
-                        );
-                    }
-                    data.xattr_list.size = read_size;
-                }
-            }
-            syscalls::SYS_llistxattr => {
-                let data = data_mut!(entry, llistxattr);
-                let pathname_ptr = args[0] as *const u8;
-                let list_ptr = args[1] as *const u8;
-                data.size = args[2] as usize;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-                data.list = list_ptr as u64;
-                data.xattr_list = pinchy_common::kernel_types::XattrList::default();
-                if !list_ptr.is_null() && data.size > 0 {
-                    let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                    unsafe {
-                        let _ = bpf_probe_read_user_buf(
-                            list_ptr,
-                            &mut data.xattr_list.data[..read_size],
-                        );
-                    }
-                    data.xattr_list.size = read_size;
-                }
-            }
-            syscalls::SYS_setxattr => {
-                let data = data_mut!(entry, setxattr);
-                let pathname_ptr = args[0] as *const u8;
-                let name_ptr = args[1] as *const u8;
-                let value_ptr = args[2] as *const u8;
-                data.size = args[3] as usize;
-                data.flags = args[4] as i32;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                    if !value_ptr.is_null() && data.size > 0 {
-                        let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
-                    }
-                }
-            }
-            syscalls::SYS_lsetxattr => {
-                let data = data_mut!(entry, lsetxattr);
-                let pathname_ptr = args[0] as *const u8;
-                let name_ptr = args[1] as *const u8;
-                let value_ptr = args[2] as *const u8;
-                data.size = args[3] as usize;
-                data.flags = args[4] as i32;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                    if !value_ptr.is_null() && data.size > 0 {
-                        let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
-                    }
-                }
-            }
-            syscalls::SYS_fsetxattr => {
-                let data = data_mut!(entry, fsetxattr);
-                data.fd = args[0] as i32;
-                let name_ptr = args[1] as *const u8;
-                let value_ptr = args[2] as *const u8;
-                data.size = args[3] as usize;
-                data.flags = args[4] as i32;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                    if !value_ptr.is_null() && data.size > 0 {
-                        let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
-                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
-                    }
-                }
-            }
-            syscalls::SYS_getxattr => {
-                let data = data_mut!(entry, getxattr);
-                let pathname_ptr = args[0] as *const u8;
-                let name_ptr = args[1] as *const u8;
-                let value_ptr = args[2] as *const u8;
-                data.size = args[3] as usize;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                    if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
-                        let read_size = core::cmp::min(
-                            return_value as usize,
-                            core::cmp::min(data.size, DATA_READ_SIZE),
-                        );
-                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
-                    }
-                }
-            }
-            syscalls::SYS_lgetxattr => {
-                let data = data_mut!(entry, lgetxattr);
-                let pathname_ptr = args[0] as *const u8;
-                let name_ptr = args[1] as *const u8;
-                let value_ptr = args[2] as *const u8;
-                data.size = args[3] as usize;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                    if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
-                        let read_size = core::cmp::min(
-                            return_value as usize,
-                            core::cmp::min(data.size, DATA_READ_SIZE),
-                        );
-                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
-                    }
-                }
-            }
-            syscalls::SYS_fgetxattr => {
-                let data = data_mut!(entry, fgetxattr);
-                data.fd = args[0] as i32;
-                let name_ptr = args[1] as *const u8;
-                let value_ptr = args[2] as *const u8;
-                data.size = args[3] as usize;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                    if !value_ptr.is_null() && return_value > 0 && data.size > 0 {
-                        let read_size = core::cmp::min(
-                            return_value as usize,
-                            core::cmp::min(data.size, DATA_READ_SIZE),
-                        );
-                        let _ = bpf_probe_read_user_buf(value_ptr, &mut data.value[..read_size]);
-                    }
-                }
-            }
-            syscalls::SYS_removexattr => {
-                let data = data_mut!(entry, removexattr);
-                let pathname_ptr = args[0] as *const u8;
-                let name_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                }
-            }
-            syscalls::SYS_lremovexattr => {
-                let data = data_mut!(entry, lremovexattr);
-                let pathname_ptr = args[0] as *const u8;
-                let name_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
-                }
-            }
-            syscalls::SYS_fremovexattr => {
-                let data = data_mut!(entry, fremovexattr);
-                data.fd = args[0] as i32;
-                let name_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(name_ptr, &mut data.name);
                 }
             }
             syscalls::SYS_getcwd => {

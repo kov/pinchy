@@ -93,6 +93,7 @@ fn main() -> anyhow::Result<()> {
             "benchmark_basic_io_wave1" => benchmark_basic_io_wave1(),
             "benchmark_basic_io_wave2" => benchmark_basic_io_wave2(),
             "benchmark_filesystem_wave1" => benchmark_filesystem_wave1(),
+            "benchmark_filesystem_wave2" => benchmark_filesystem_wave2(),
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
@@ -997,6 +998,204 @@ fn benchmark_filesystem_wave1() -> anyhow::Result<()> {
             if libc::syscall(libc::SYS_fstatfs, fd, &mut fstatfs_buf as *mut _) != 0 {
                 bail!("fstatfs failed: {}", std::io::Error::last_os_error());
             }
+
+            if libc::close(fd) != 0 {
+                bail!("close failed: {}", std::io::Error::last_os_error());
+            }
+        }
+
+        let _ = libc::unlink(link_path.as_ptr());
+        let _ = libc::unlink(file_path.as_ptr());
+    }
+
+    Ok(())
+}
+
+fn benchmark_filesystem_wave2() -> anyhow::Result<()> {
+    fn is_expected_xattr_errno(errno: i32) -> bool {
+        matches!(
+            errno,
+            libc::ENODATA
+                | libc::EOPNOTSUPP
+                | libc::EPERM
+                | libc::EACCES
+                | libc::EINVAL
+                | libc::ENOENT
+                | libc::ERANGE
+        )
+    }
+
+    fn check_xattr_result(operation: &str, result: libc::c_long) -> anyhow::Result<()> {
+        if result >= 0 {
+            return Ok(());
+        }
+
+        let error = std::io::Error::last_os_error();
+        let errno = error.raw_os_error().unwrap_or_default();
+
+        if is_expected_xattr_errno(errno) {
+            return Ok(());
+        }
+
+        bail!("{operation} failed: {error}");
+    }
+
+    let loops = std::env::var("PINCHY_BENCH_LOOPS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(250);
+
+    if loops == 0 {
+        return Ok(());
+    }
+
+    let file_path = c"/tmp/benchmark_filesystem_wave2_file";
+    let link_path = c"/tmp/benchmark_filesystem_wave2_link";
+    let xattr_name = c"user.pinchy_wave2";
+    let value = b"pinchy-wave2-value";
+    let mut value_buf = [0u8; DATA_READ_SIZE];
+    let mut list_buf = [0u8; DATA_READ_SIZE];
+
+    unsafe {
+        for _ in 0..loops {
+            let fd = libc::openat(
+                libc::AT_FDCWD,
+                file_path.as_ptr(),
+                libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+                0o644,
+            );
+
+            if fd < 0 {
+                bail!("openat failed: {}", std::io::Error::last_os_error());
+            }
+
+            let _ = libc::unlink(link_path.as_ptr());
+
+            if libc::symlink(file_path.as_ptr(), link_path.as_ptr()) != 0 {
+                bail!("symlink failed: {}", std::io::Error::last_os_error());
+            }
+
+            check_xattr_result(
+                "setxattr",
+                libc::syscall(
+                    libc::SYS_setxattr,
+                    file_path.as_ptr(),
+                    xattr_name.as_ptr(),
+                    value.as_ptr(),
+                    value.len(),
+                    0,
+                ),
+            )?;
+
+            check_xattr_result(
+                "lsetxattr",
+                libc::syscall(
+                    libc::SYS_lsetxattr,
+                    link_path.as_ptr(),
+                    xattr_name.as_ptr(),
+                    value.as_ptr(),
+                    value.len(),
+                    0,
+                ),
+            )?;
+
+            check_xattr_result(
+                "fsetxattr",
+                libc::syscall(
+                    libc::SYS_fsetxattr,
+                    fd,
+                    xattr_name.as_ptr(),
+                    value.as_ptr(),
+                    value.len(),
+                    0,
+                ),
+            )?;
+
+            check_xattr_result(
+                "getxattr",
+                libc::syscall(
+                    libc::SYS_getxattr,
+                    file_path.as_ptr(),
+                    xattr_name.as_ptr(),
+                    value_buf.as_mut_ptr(),
+                    value_buf.len(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "lgetxattr",
+                libc::syscall(
+                    libc::SYS_lgetxattr,
+                    link_path.as_ptr(),
+                    xattr_name.as_ptr(),
+                    value_buf.as_mut_ptr(),
+                    value_buf.len(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "fgetxattr",
+                libc::syscall(
+                    libc::SYS_fgetxattr,
+                    fd,
+                    xattr_name.as_ptr(),
+                    value_buf.as_mut_ptr(),
+                    value_buf.len(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "listxattr",
+                libc::syscall(
+                    libc::SYS_listxattr,
+                    file_path.as_ptr(),
+                    list_buf.as_mut_ptr(),
+                    list_buf.len(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "llistxattr",
+                libc::syscall(
+                    libc::SYS_llistxattr,
+                    link_path.as_ptr(),
+                    list_buf.as_mut_ptr(),
+                    list_buf.len(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "flistxattr",
+                libc::syscall(
+                    libc::SYS_flistxattr,
+                    fd,
+                    list_buf.as_mut_ptr(),
+                    list_buf.len(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "removexattr",
+                libc::syscall(
+                    libc::SYS_removexattr,
+                    file_path.as_ptr(),
+                    xattr_name.as_ptr(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "lremovexattr",
+                libc::syscall(
+                    libc::SYS_lremovexattr,
+                    link_path.as_ptr(),
+                    xattr_name.as_ptr(),
+                ),
+            )?;
+
+            check_xattr_result(
+                "fremovexattr",
+                libc::syscall(libc::SYS_fremovexattr, fd, xattr_name.as_ptr()),
+            )?;
 
             if libc::close(fd) != 0 {
                 bail!("close failed: {}", std::io::Error::last_os_error());

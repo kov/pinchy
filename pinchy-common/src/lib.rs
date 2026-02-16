@@ -161,6 +161,18 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_readlinkat => Some(core::mem::size_of::<ReadlinkatData>()),
         syscalls::SYS_statfs => Some(core::mem::size_of::<StatfsData>()),
         syscalls::SYS_fstatfs => Some(core::mem::size_of::<FstatfsData>()),
+        syscalls::SYS_flistxattr => Some(core::mem::size_of::<FlistxattrData>()),
+        syscalls::SYS_listxattr => Some(core::mem::size_of::<ListxattrData>()),
+        syscalls::SYS_llistxattr => Some(core::mem::size_of::<LlistxattrData>()),
+        syscalls::SYS_setxattr => Some(core::mem::size_of::<SetxattrData>()),
+        syscalls::SYS_lsetxattr => Some(core::mem::size_of::<LsetxattrData>()),
+        syscalls::SYS_fsetxattr => Some(core::mem::size_of::<FsetxattrData>()),
+        syscalls::SYS_getxattr => Some(core::mem::size_of::<GetxattrData>()),
+        syscalls::SYS_lgetxattr => Some(core::mem::size_of::<LgetxattrData>()),
+        syscalls::SYS_fgetxattr => Some(core::mem::size_of::<FgetxattrData>()),
+        syscalls::SYS_removexattr => Some(core::mem::size_of::<RemovexattrData>()),
+        syscalls::SYS_lremovexattr => Some(core::mem::size_of::<LremovexattrData>()),
+        syscalls::SYS_fremovexattr => Some(core::mem::size_of::<FremovexattrData>()),
         _ => None,
     }
 }

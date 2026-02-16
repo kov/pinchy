@@ -208,10 +208,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.pidfd = args[0] as i32;
                 data.flags = args[1] as u32;
             }
-            syscalls::SYS_close => {
-                let data = unsafe { &mut entry.data.close };
-                data.fd = args[0] as i32;
-            }
             syscalls::SYS_brk => {
                 let data = unsafe { &mut entry.data.brk };
                 data.addr = args[0];
@@ -599,7 +595,7 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.home_node = args[2] as u64;
                 data.flags = args[3] as u64;
             }
-            syscalls::SYS_lseek => {
+            syscalls::SYS_close | syscalls::SYS_lseek => {
                 error!(&ctx, "hit migrated syscall {}", syscall_nr);
             }
             _ => {

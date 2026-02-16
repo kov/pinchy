@@ -14,8 +14,8 @@ use aya::{
     Ebpf,
 };
 use pinchy_common::{
-    compact_payload_size, syscalls, SyscallEvent, WireEventHeader, WIRE_KIND_COMPACT_SYSCALL_EVENT,
-    WIRE_KIND_LEGACY_SYSCALL_EVENT, WIRE_VERSION,
+    compact_payload_size, syscalls, wire_validation_enabled, SyscallEvent, WireEventHeader,
+    WIRE_KIND_COMPACT_SYSCALL_EVENT, WIRE_KIND_LEGACY_SYSCALL_EVENT, WIRE_VERSION,
 };
 use tokio::{
     io::{unix::AsyncFd, AsyncWriteExt},
@@ -523,13 +523,6 @@ fn parse_trusted_wire_metadata(event: &[u8]) -> Option<WireEventHeader> {
     Some(header)
 }
 
-fn parse_wire_validation_enabled() -> bool {
-    match std::env::var("PINCHY_VALIDATE_WIRE") {
-        Ok(value) => value == "1" || value.eq_ignore_ascii_case("true"),
-        Err(_) => cfg!(debug_assertions),
-    }
-}
-
 fn parse_client_queue_capacity() -> usize {
     std::env::var("PINCHY_CLIENT_QUEUE_CAPACITY")
         .ok()
@@ -550,7 +543,7 @@ impl EventDispatch {
 
         let stats_enabled = efficiency::stats_enabled_from_env();
         let client_queue_capacity = parse_client_queue_capacity();
-        let validate_wire = parse_wire_validation_enabled();
+        let validate_wire = wire_validation_enabled();
 
         // Create channels for internal communication
         let (cleanup_tx, mut cleanup_rx) = tokio::sync::mpsc::channel(128);

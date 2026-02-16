@@ -347,7 +347,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 
     // Use the same tail call handler for trivial syscalls.
     const TRIVIAL_SYSCALLS: &[i64] = &[
-        syscalls::SYS_close,
         syscalls::SYS_dup3,
         syscalls::SYS_fcntl,
         syscalls::SYS_sched_yield,
@@ -639,6 +638,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
 
     // Basic I/O syscalls - all handled by the unified basic_io handler
     const BASIC_IO_SYSCALLS: &[i64] = &[
+        syscalls::SYS_close,
         syscalls::SYS_openat,
         syscalls::SYS_openat2,
         syscalls::SYS_read,

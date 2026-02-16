@@ -5,8 +5,8 @@ use std::borrow::Cow;
 
 use log::{error, trace};
 use pinchy_common::{
-    compact_payload_size, kernel_types, syscalls, LseekData, ReadData, SyscallEvent,
-    WireEventHeader,
+    compact_payload_size, kernel_types, syscalls, wire_validation_enabled, CloseData, LseekData,
+    OpenAtData, ReadData, SyscallEvent, WireEventHeader,
 };
 
 use crate::{
@@ -23,16 +23,20 @@ pub async fn handle_compact_event(
     formatter: Formatter<'_>,
 ) -> anyhow::Result<bool> {
     let syscall_nr = match header.syscall_nr {
-        syscalls::SYS_read | syscalls::SYS_lseek => header.syscall_nr,
+        syscalls::SYS_close | syscalls::SYS_openat | syscalls::SYS_read | syscalls::SYS_lseek => {
+            header.syscall_nr
+        }
         _ => return Ok(false),
     };
 
-    let Some(expected_payload_size) = compact_payload_size(header.syscall_nr) else {
-        return Ok(false);
-    };
+    if wire_validation_enabled() {
+        let Some(expected_payload_size) = compact_payload_size(header.syscall_nr) else {
+            return Ok(false);
+        };
 
-    if payload.len() != expected_payload_size {
-        return Ok(true);
+        if payload.len() != expected_payload_size {
+            return Ok(true);
+        }
     }
 
     let Ok(mut sf) = formatter.push_syscall(header.tid, syscall_nr).await else {
@@ -41,6 +45,21 @@ pub async fn handle_compact_event(
     };
 
     match header.syscall_nr {
+        syscalls::SYS_close => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const CloseData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_openat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const OpenAtData) };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: {}", format_flags(data.flags));
+            argf!(sf, "mode: {}", format_mode(data.mode));
+            finish!(sf, header.return_value);
+        }
         syscalls::SYS_read => {
             let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const ReadData) };
 
@@ -451,12 +470,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         syscalls::SYS_exit_group => {
             let data = unsafe { event.data.exit_group };
             argf!(sf, "status: {}", data.status);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_close => {
-            let data = unsafe { event.data.close };
-
-            argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
         }
         syscalls::SYS_pipe2 => {
@@ -1478,16 +1491,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "count: {}", data.count);
             argf!(sf, "offset: {}", data.offset);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_openat => {
-            let data = unsafe { event.data.openat };
-
-            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "flags: {}", format_flags(data.flags));
-            argf!(sf, "mode: {}", format_mode(data.mode));
 
             finish!(sf, event.return_value);
         }
@@ -4939,7 +4942,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        syscalls::SYS_read | syscalls::SYS_lseek => {
+        syscalls::SYS_close | syscalls::SYS_openat | syscalls::SYS_read | syscalls::SYS_lseek => {
             unreachable!();
         }
         _ => {

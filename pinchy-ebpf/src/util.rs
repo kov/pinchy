@@ -240,7 +240,7 @@ impl Entry {
     }
 }
 
-#[repr(C)]
+#[repr(C, packed)]
 struct WireCompactPayload<T> {
     header: WireEventHeader,
     payload: T,
@@ -270,18 +270,24 @@ where
     let event = entry.deref_mut();
     event.write(unsafe { core::mem::zeroed::<WireCompactPayload<T>>() });
 
-    let event = unsafe { event.assume_init_mut() };
-    event.header = WireEventHeader {
-        version: WIRE_VERSION,
-        kind: WIRE_KIND_COMPACT_SYSCALL_EVENT,
-        payload_len: core::mem::size_of::<T>() as u32,
-        syscall_nr,
-        pid: ctx.pid(),
-        tid: ctx.tgid(),
-        return_value,
-    };
+    let event = unsafe { event.assume_init_mut() as *mut WireCompactPayload<T> as *mut u8 };
+    let header_ptr = event as *mut WireEventHeader;
 
-    initialize_payload(&mut event.payload);
+    unsafe {
+        header_ptr.write(WireEventHeader {
+            version: WIRE_VERSION,
+            kind: WIRE_KIND_COMPACT_SYSCALL_EVENT,
+            payload_len: core::mem::size_of::<T>() as u32,
+            syscall_nr,
+            pid: ctx.pid(),
+            tid: ctx.tgid(),
+            return_value,
+        });
+    }
+
+    let payload_ptr = unsafe { event.add(core::mem::size_of::<WireEventHeader>()) as *mut T };
+
+    initialize_payload(unsafe { &mut *payload_ptr });
 
     record_legacy_submit_size(core::mem::size_of::<WireCompactPayload<T>>() as u64);
 

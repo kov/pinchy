@@ -3,6 +3,9 @@
 
 #![no_std]
 
+#[cfg(feature = "user")]
+extern crate std;
+
 use crate::kernel_types::{EpollEvent, LandlockRuleAttrUnion, Timespec};
 
 pub mod kernel_types;
@@ -107,11 +110,23 @@ pub const EFF_STAT_RESERVE_FAIL: u32 = 2;
 pub const EFF_STAT_EVENTS_LEGACY: u32 = 3;
 pub const EFF_STAT_COUNT: u32 = 4;
 
+#[cfg(feature = "user")]
+pub fn wire_validation_enabled() -> bool {
+    static VALIDATE: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+    *VALIDATE.get_or_init(|| match std::env::var("PINCHY_VALIDATE_WIRE") {
+        Ok(value) => value == "1" || value.eq_ignore_ascii_case("true"),
+        Err(_) => cfg!(debug_assertions),
+    })
+}
+
 #[inline]
 pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
     match syscall_nr {
+        syscalls::SYS_close => Some(core::mem::size_of::<CloseData>()),
         syscalls::SYS_read => Some(core::mem::size_of::<ReadData>()),
         syscalls::SYS_lseek => Some(core::mem::size_of::<LseekData>()),
+        syscalls::SYS_openat => Some(core::mem::size_of::<OpenAtData>()),
         _ => None,
     }
 }

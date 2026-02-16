@@ -37,18 +37,12 @@ use crate::{
     tests::make_compact_test_data,
 };
 
-syscall_test!(
+syscall_compact_test!(
     parse_close,
     {
-        SyscallEvent {
-            syscall_nr: SYS_close,
-            pid: 1,
-            tid: 1,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                close: CloseData { fd: 2 },
-            },
-        }
+        let data = CloseData { fd: 2 };
+
+        make_compact_test_data(SYS_close, 1, 0, &data)
     },
     "1 close(fd: 2) = 0 (success)\n"
 );
@@ -284,27 +278,21 @@ syscall_compact_test!(
     "22 lseek(fd: 3, offset: 0, whence: 2) = 18092\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_openat,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_openat,
-            pid: 22,
-            tid: 22,
-            return_value: 3,
-            data: pinchy_common::SyscallEventData {
-                openat: OpenAtData {
-                    dfd: libc::AT_FDCWD,
-                    pathname: [0u8; DATA_READ_SIZE],
-                    flags: libc::O_RDONLY | libc::O_CLOEXEC,
-                    mode: 0o666,
-                },
-            },
+        let mut data = OpenAtData {
+            dfd: libc::AT_FDCWD,
+            pathname: [0u8; DATA_READ_SIZE],
+            flags: libc::O_RDONLY | libc::O_CLOEXEC,
+            mode: 0o666,
         };
-        let openat_data = unsafe { &mut event.data.openat };
+
         let path = c"/etc/passwd".to_bytes_with_nul();
-        openat_data.pathname[..path.len()].copy_from_slice(path);
-        event
+
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        make_compact_test_data(SYS_openat, 22, 3, &data)
     },
     "22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3 (fd)\n"
 );

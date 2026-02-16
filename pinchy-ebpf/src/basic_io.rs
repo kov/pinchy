@@ -6,13 +6,14 @@ use aya_ebpf::{
     macros::tracepoint,
     programs::TracePointContext,
 };
+use aya_log_ebpf::error;
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 use pinchy_common::{
     kernel_types::{
         AioSigset, FdSet, IoCb, IoEvent, IoUringParams, OpenHow, Pollfd, Sigset, Timespec,
     },
-    syscalls, LseekData, ReadData,
+    syscalls, CloseData, LseekData, OpenAtData, ReadData,
 };
 
 #[cfg(x86_64)]
@@ -33,6 +34,41 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
         let return_value = get_return_value(&ctx)?;
 
         match syscall_nr {
+            syscalls::SYS_close => {
+                submit_compact_payload::<CloseData, _>(
+                    &ctx,
+                    syscalls::SYS_close,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_openat => {
+                submit_compact_payload::<OpenAtData, _>(
+                    &ctx,
+                    syscalls::SYS_openat,
+                    return_value,
+                    |payload| {
+                        payload.dfd = args[0] as i32;
+                        payload.flags = args[2] as i32;
+                        payload.mode = args[3] as u32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(
+                                pathname_ptr as *const _,
+                                &mut payload.pathname,
+                            );
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
             syscalls::SYS_read => {
                 submit_compact_payload::<ReadData, _>(
                     &ctx,
@@ -77,17 +113,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
         let mut entry = Entry::new(&ctx, syscall_nr)?;
 
         match syscall_nr {
-            syscalls::SYS_openat => {
-                let data = data_mut!(entry, openat);
-                data.dfd = args[0] as i32;
-                data.flags = args[2] as i32;
-                data.mode = args[3] as u32;
-
-                let pathname_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
-                }
-            }
             syscalls::SYS_openat2 => {
                 let data = data_mut!(entry, openat2);
                 data.dfd = args[0] as i32;
@@ -625,6 +650,16 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                     data.offset_is_null = 0;
                     data.offset = unsafe { bpf_probe_read_user::<u64>(offset_ptr).unwrap_or(0) };
                 }
+            }
+            syscalls::SYS_close
+            | syscalls::SYS_openat
+            | syscalls::SYS_read
+            | syscalls::SYS_lseek => {
+                error!(&ctx, "hit migrated syscall {}", syscall_nr);
+
+                entry.discard();
+
+                return Ok(());
             }
             _ => {
                 entry.discard();

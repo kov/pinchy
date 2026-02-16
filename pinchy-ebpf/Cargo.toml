@@ -3,6 +3,10 @@ name = "pinchy-ebpf"
 version = "0.1.0"
 edition = "2021"
 
+[features]
+default = []
+efficiency-metrics = []
+
 [dependencies]
 pinchy-common = { path = "../pinchy-common" }
 

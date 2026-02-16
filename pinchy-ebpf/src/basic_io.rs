@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user, bpf_probe_read_user_buf},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -75,7 +75,8 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_read = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
+                        let _ =
+                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
                     }
                 }
             }
@@ -88,7 +89,8 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_copy = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
+                        let _ =
+                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
                     }
                 }
             }
@@ -102,7 +104,8 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_read = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
+                        let _ =
+                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
                     }
                 }
             }
@@ -116,7 +119,8 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 if return_value > 0 {
                     let to_copy = core::cmp::min(return_value as usize, data.buf.len());
                     unsafe {
-                        let _ = bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
+                        let _ =
+                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
                     }
                 }
             }

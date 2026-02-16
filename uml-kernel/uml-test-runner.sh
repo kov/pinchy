@@ -38,6 +38,15 @@ for param in $(cat /proc/cmdline); do
         PINCHY_TEST_NAME=*)
             PINCHY_TEST_NAME="${param#PINCHY_TEST_NAME=}"
             ;;
+        PINCHY_BENCH_LOOPS=*)
+            PINCHY_BENCH_LOOPS="${param#PINCHY_BENCH_LOOPS=}"
+            ;;
+        PINCHY_BENCH_RUNS=*)
+            PINCHY_BENCH_RUNS="${param#PINCHY_BENCH_RUNS=}"
+            ;;
+        PINCHY_CLIENT_QUEUE_CAPACITY=*)
+            PINCHY_CLIENT_QUEUE_CAPACITY="${param#PINCHY_CLIENT_QUEUE_CAPACITY=}"
+            ;;
     esac
 done
 
@@ -80,6 +89,7 @@ fi
 PINCHYD="$PINCHY_TEST_BINDIR/pinchyd"
 PINCHY="$PINCHY_TEST_BINDIR/pinchy"
 TEST_HELPER="$PINCHY_TEST_BINDIR/test-helper"
+PINCHY_CLIENT_QUEUE_CAPACITY="${PINCHY_CLIENT_QUEUE_CAPACITY:-128}"
 
 # Start system D-Bus daemon with pinchy policy installed.
 # We copy the policy to a tmpfs-backed directory so tests work without
@@ -135,9 +145,11 @@ cd "$PINCHY_TEST_PROJDIR"
 # Use a smaller ring buffer for tests to reduce memory usage
 export PINCHY_RINGBUF_SIZE=2097152
 
+PINCHYD_OUT="$OUTDIR/pinchyd.out"
+
 wait_for_pinchyd() {
     for i in $(seq 1 60); do
-        if grep -q "Waiting for Ctrl-C..." "$OUTDIR/pinchyd.out" 2>/dev/null; then
+        if grep -q "Waiting for Ctrl-C..." "$PINCHYD_OUT" 2>/dev/null; then
             return 0
         fi
 
@@ -159,12 +171,7 @@ wait_for_pinchyd() {
     poweroff -f
 }
 
-run_standard() {
-    $PINCHYD >"$OUTDIR/pinchyd.out" 2>&1 &
-    PINCHYD_PID=$!
-    wait_for_pinchyd
-
-    # Build event filter arguments
+build_event_args() {
     EVENT_ARGS=""
     OLD_IFS="$IFS"
     IFS=","
@@ -172,6 +179,15 @@ run_standard() {
         EVENT_ARGS="$EVENT_ARGS -e $event"
     done
     IFS="$OLD_IFS"
+}
+
+run_standard() {
+    PINCHYD_OUT="$OUTDIR/pinchyd.out"
+    $PINCHYD >"$PINCHYD_OUT" 2>&1 &
+    PINCHYD_PID=$!
+    wait_for_pinchyd
+
+    build_event_args
 
     # Run pinchy client with test-helper workload under setsid
     setsid sh -c "$PINCHY $EVENT_ARGS -- $TEST_HELPER $PINCHY_TEST_WORKLOAD \
@@ -184,8 +200,69 @@ run_standard() {
     echo $? >"$OUTDIR/pinchyd.exit"
 }
 
+run_benchmark() {
+    BENCH_LOOPS="${PINCHY_BENCH_LOOPS:-250}"
+    BENCH_RUNS="${PINCHY_BENCH_RUNS:-15}"
+    BENCH_LATENCY_LOOPS="${PINCHY_BENCH_LATENCY_LOOPS:-1}"
+
+    build_event_args
+
+    : >"$OUTDIR/pinchy.stderr"
+    rm -f "$OUTDIR/latency-ms.txt"
+
+    # Throughput phase
+    PINCHYD_OUT="$OUTDIR/pinchyd-throughput.out"
+    PINCHY_CLIENT_QUEUE_CAPACITY="$PINCHY_CLIENT_QUEUE_CAPACITY" PINCHY_EFF_STATS=1 $PINCHYD >"$PINCHYD_OUT" 2>&1 &
+    PINCHYD_PID=$!
+    wait_for_pinchyd
+
+    start_ns=$(date +%s%N)
+    PINCHY_BENCH_LOOPS="$BENCH_LOOPS" setsid sh -c "$PINCHY $EVENT_ARGS -- $TEST_HELPER $PINCHY_TEST_WORKLOAD \
+        >/dev/null 2>>\"$OUTDIR/pinchy.stderr\""
+    end_ns=$(date +%s%N)
+
+    echo $(( (end_ns - start_ns) / 1000000 )) >"$OUTDIR/throughput-ms.txt"
+
+    sleep 2
+
+    kill -INT $PINCHYD_PID 2>/dev/null || true
+    wait $PINCHYD_PID 2>/dev/null
+    THROUGHPUT_PINCHYD_EXIT=$?
+
+    # Latency phase
+    PINCHYD_OUT="$OUTDIR/pinchyd-latency.out"
+    PINCHY_CLIENT_QUEUE_CAPACITY="$PINCHY_CLIENT_QUEUE_CAPACITY" PINCHY_EFF_STATS=1 $PINCHYD >"$PINCHYD_OUT" 2>&1 &
+    PINCHYD_PID=$!
+    wait_for_pinchyd
+
+    for _ in $(seq 1 "$BENCH_RUNS"); do
+        start_ns=$(date +%s%N)
+        PINCHY_BENCH_LOOPS="$BENCH_LATENCY_LOOPS" setsid sh -c "$PINCHY $EVENT_ARGS -- $TEST_HELPER $PINCHY_TEST_WORKLOAD \
+            >/dev/null 2>>\"$OUTDIR/pinchy.stderr\""
+        end_ns=$(date +%s%N)
+        echo $(( (end_ns - start_ns) / 1000000 )) >>"$OUTDIR/latency-ms.txt"
+    done
+
+    sleep 1
+
+    kill -INT $PINCHYD_PID 2>/dev/null || true
+    wait $PINCHYD_PID 2>/dev/null
+    LATENCY_PINCHYD_EXIT=$?
+
+    cat "$OUTDIR/pinchyd-throughput.out" "$OUTDIR/pinchyd-latency.out" >"$OUTDIR/pinchyd.out"
+
+    if [ "$THROUGHPUT_PINCHYD_EXIT" -eq 0 ] && [ "$LATENCY_PINCHYD_EXIT" -eq 0 ]; then
+        echo "0" >"$OUTDIR/pinchyd.exit"
+    else
+        echo "1" >"$OUTDIR/pinchyd.exit"
+    fi
+
+    echo "0" >"$OUTDIR/pinchy.exit"
+}
+
 run_server_only() {
-    $PINCHYD >"$OUTDIR/pinchyd.out" 2>&1 &
+    PINCHYD_OUT="$OUTDIR/pinchyd.out"
+    $PINCHYD >"$PINCHYD_OUT" 2>&1 &
     PINCHYD_PID=$!
     wait_for_pinchyd
 
@@ -195,7 +272,8 @@ run_server_only() {
 }
 
 run_check_caps() {
-    $PINCHYD >"$OUTDIR/pinchyd.out" 2>&1 &
+    PINCHYD_OUT="$OUTDIR/pinchyd.out"
+    $PINCHYD >"$PINCHYD_OUT" 2>&1 &
     PINCHYD_PID=$!
     wait_for_pinchyd
 
@@ -209,7 +287,8 @@ run_check_caps() {
 run_auto_quit() {
     date +%s >"$OUTDIR/pinchyd.start_time"
 
-    $PINCHYD >"$OUTDIR/pinchyd.out" 2>&1 &
+    PINCHYD_OUT="$OUTDIR/pinchyd.out"
+    $PINCHYD >"$PINCHYD_OUT" 2>&1 &
     PINCHYD_PID=$!
 
     wait $PINCHYD_PID 2>/dev/null
@@ -219,7 +298,8 @@ run_auto_quit() {
 }
 
 run_auto_quit_after_client() {
-    $PINCHYD >"$OUTDIR/pinchyd.out" 2>&1 &
+    PINCHYD_OUT="$OUTDIR/pinchyd.out"
+    $PINCHYD >"$PINCHYD_OUT" 2>&1 &
     PINCHYD_PID=$!
     wait_for_pinchyd
 
@@ -256,6 +336,9 @@ case "$PINCHY_TEST_MODE" in
         ;;
     auto_quit_after_client)
         run_auto_quit_after_client
+        ;;
+    benchmark)
+        run_benchmark
         ;;
     *)
         echo "FATAL: Unknown test mode: $PINCHY_TEST_MODE" >"$OUTDIR/pinchy.stderr"

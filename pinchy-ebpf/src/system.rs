@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user, bpf_probe_read_user_str_bytes},
+    helpers::{bpf_probe_read_user, bpf_probe_read_user_buf, bpf_probe_read_user_str_bytes},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -38,7 +38,8 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
 
                 if !arg_ptr.is_null() {
                     // Best-effort read; mark present only on successful copy
-                    if let Ok(()) = unsafe { bpf_probe_read_user_buf(arg_ptr, &mut data.restart2) } {
+                    if let Ok(()) = unsafe { bpf_probe_read_user_buf(arg_ptr, &mut data.restart2) }
+                    {
                         data.has_restart2 = true;
                     }
                 }

@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user, bpf_probe_read_user_buf},
     macros::tracepoint,
     programs::TracePointContext,
 };

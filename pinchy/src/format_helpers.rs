@@ -200,7 +200,6 @@ pub fn poll_bits_to_strs(event: &i16) -> Vec<&'static str> {
     strs
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn format_poll_events(events: i16) -> String {
     let event_strs = poll_bits_to_strs(&events);
     if event_strs.is_empty() {

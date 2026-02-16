@@ -13,7 +13,8 @@ use pinchy_common::{
     kernel_types::{
         AioSigset, FdSet, IoCb, IoEvent, IoUringParams, OpenHow, Pollfd, Sigset, Timespec,
     },
-    syscalls, CloseData, LseekData, OpenAtData, ReadData,
+    syscalls, CloseData, LseekData, OpenAtData, PreadData, PwriteData, ReadData, VectorIOData,
+    WriteData,
 };
 
 #[cfg(x86_64)]
@@ -107,6 +108,136 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
 
                 return Ok(());
             }
+            syscalls::SYS_write => {
+                submit_compact_payload::<WriteData, _>(
+                    &ctx,
+                    syscalls::SYS_write,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.count = args[2];
+
+                        let buf_addr = args[1];
+                        if return_value > 0 {
+                            let to_copy = core::cmp::min(return_value as usize, payload.buf.len());
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    buf_addr as *const _,
+                                    &mut payload.buf[..to_copy],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_pread64 => {
+                submit_compact_payload::<PreadData, _>(
+                    &ctx,
+                    syscalls::SYS_pread64,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.count = args[2];
+                        payload.offset = args[3] as i64;
+
+                        let buf_addr = args[1];
+                        if return_value > 0 {
+                            let to_read = core::cmp::min(return_value as usize, payload.buf.len());
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    buf_addr as *const _,
+                                    &mut payload.buf[..to_read],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_pwrite64 => {
+                submit_compact_payload::<PwriteData, _>(
+                    &ctx,
+                    syscalls::SYS_pwrite64,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.count = args[2];
+                        payload.offset = args[3] as i64;
+
+                        let buf_addr = args[1];
+                        if return_value > 0 {
+                            let to_copy = core::cmp::min(return_value as usize, payload.buf.len());
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    buf_addr as *const _,
+                                    &mut payload.buf[..to_copy],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_readv
+            | syscalls::SYS_writev
+            | syscalls::SYS_preadv
+            | syscalls::SYS_pwritev
+            | syscalls::SYS_preadv2
+            | syscalls::SYS_pwritev2 => {
+                submit_compact_payload::<VectorIOData, _>(
+                    &ctx,
+                    syscall_nr,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.iovcnt = args[2] as usize;
+
+                        if syscall_nr == syscalls::SYS_preadv
+                            || syscall_nr == syscalls::SYS_pwritev
+                            || syscall_nr == syscalls::SYS_preadv2
+                            || syscall_nr == syscalls::SYS_pwritev2
+                        {
+                            payload.offset = args[3] as i64;
+                        }
+
+                        if syscall_nr == syscalls::SYS_preadv2
+                            || syscall_nr == syscalls::SYS_pwritev2
+                        {
+                            payload.flags = args[4] as u32;
+                        }
+
+                        let iov_addr = args[1] as u64;
+                        let op = if syscall_nr == syscalls::SYS_readv
+                            || syscall_nr == syscalls::SYS_preadv
+                            || syscall_nr == syscalls::SYS_preadv2
+                        {
+                            IovecOp::Read
+                        } else {
+                            IovecOp::Write
+                        };
+
+                        read_iovec_array(
+                            iov_addr,
+                            payload.iovcnt,
+                            op,
+                            &mut payload.iovecs,
+                            &mut payload.iov_lens,
+                            Some(&mut payload.iov_bufs),
+                            &mut payload.read_count,
+                            return_value,
+                        );
+                    },
+                )?;
+
+                return Ok(());
+            }
             _ => {}
         }
 
@@ -132,158 +263,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         data.how = how;
                     }
                 }
-            }
-            syscalls::SYS_write => {
-                let data = data_mut!(entry, write);
-                data.fd = args[0] as i32;
-                data.count = args[2];
-
-                let buf_addr = args[1];
-                if return_value > 0 {
-                    let to_copy = core::cmp::min(return_value as usize, data.buf.len());
-                    unsafe {
-                        let _ =
-                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
-                    }
-                }
-            }
-            syscalls::SYS_pread64 => {
-                let data = data_mut!(entry, pread);
-                data.fd = args[0] as i32;
-                data.count = args[2];
-                data.offset = args[3] as i64;
-
-                let buf_addr = args[1];
-                if return_value > 0 {
-                    let to_read = core::cmp::min(return_value as usize, data.buf.len());
-                    unsafe {
-                        let _ =
-                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
-                    }
-                }
-            }
-            syscalls::SYS_pwrite64 => {
-                let data = data_mut!(entry, pwrite);
-                data.fd = args[0] as i32;
-                data.count = args[2];
-                data.offset = args[3] as i64;
-
-                let buf_addr = args[1];
-                if return_value > 0 {
-                    let to_copy = core::cmp::min(return_value as usize, data.buf.len());
-                    unsafe {
-                        let _ =
-                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_copy]);
-                    }
-                }
-            }
-            syscalls::SYS_readv => {
-                let data = data_mut!(entry, vector_io);
-                data.fd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::Read,
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    Some(&mut data.iov_bufs),
-                    &mut data.read_count,
-                    return_value,
-                );
-            }
-            syscalls::SYS_writev => {
-                let data = data_mut!(entry, vector_io);
-                data.fd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::Write,
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    Some(&mut data.iov_bufs),
-                    &mut data.read_count,
-                    return_value,
-                );
-            }
-            syscalls::SYS_preadv => {
-                let data = data_mut!(entry, vector_io);
-                data.fd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-                data.offset = args[3] as i64;
-
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::Read,
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    Some(&mut data.iov_bufs),
-                    &mut data.read_count,
-                    return_value,
-                );
-            }
-            syscalls::SYS_pwritev => {
-                let data = data_mut!(entry, vector_io);
-                data.fd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-                data.offset = args[3] as i64;
-
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::Write,
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    Some(&mut data.iov_bufs),
-                    &mut data.read_count,
-                    return_value,
-                );
-            }
-            syscalls::SYS_preadv2 => {
-                let data = data_mut!(entry, vector_io);
-                data.fd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-                data.offset = args[3] as i64;
-                data.flags = args[4] as u32;
-
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::Read,
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    Some(&mut data.iov_bufs),
-                    &mut data.read_count,
-                    return_value,
-                );
-            }
-            syscalls::SYS_pwritev2 => {
-                let data = data_mut!(entry, vector_io);
-                data.fd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-                data.offset = args[3] as i64;
-                data.flags = args[4] as u32;
-
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::Write,
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    Some(&mut data.iov_bufs),
-                    &mut data.read_count,
-                    return_value,
-                );
             }
             syscalls::SYS_epoll_pwait => {
                 let data = data_mut!(entry, epoll_pwait);
@@ -654,7 +633,16 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
             syscalls::SYS_close
             | syscalls::SYS_openat
             | syscalls::SYS_read
-            | syscalls::SYS_lseek => {
+            | syscalls::SYS_lseek
+            | syscalls::SYS_write
+            | syscalls::SYS_pread64
+            | syscalls::SYS_pwrite64
+            | syscalls::SYS_readv
+            | syscalls::SYS_writev
+            | syscalls::SYS_preadv
+            | syscalls::SYS_pwritev
+            | syscalls::SYS_preadv2
+            | syscalls::SYS_pwritev2 => {
                 error!(&ctx, "hit migrated syscall {}", syscall_nr);
 
                 entry.discard();

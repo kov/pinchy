@@ -90,6 +90,7 @@ fn main() -> anyhow::Result<()> {
         match name.as_str() {
             "pinchy_reads" => pinchy_reads(),
             "benchmark_trace_loop" => benchmark_trace_loop(),
+            "benchmark_basic_io_wave1" => benchmark_basic_io_wave1(),
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
@@ -519,6 +520,126 @@ fn benchmark_trace_loop() -> anyhow::Result<()> {
             let close_result = libc::close(fd);
             assert_eq!(close_result, 0);
         }
+    }
+
+    Ok(())
+}
+
+fn benchmark_basic_io_wave1() -> anyhow::Result<()> {
+    let loops = std::env::var("PINCHY_BENCH_LOOPS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(250);
+
+    if loops == 0 {
+        return Ok(());
+    }
+
+    let write_buf = [0x41u8; DATA_READ_SIZE];
+    let mut read_buf = [0u8; DATA_READ_SIZE];
+    let mut readv_buf_a = [0u8; 32];
+    let mut readv_buf_b = [0u8; 32];
+    let mut readv2_buf_a = [0u8; 32];
+    let mut readv2_buf_b = [0u8; 32];
+
+    let writev_data_a = b"basic-io-wave1-a";
+    let writev_data_b = b"basic-io-wave1-b";
+
+    unsafe {
+        for _ in 0..loops {
+            let fd = libc::openat(
+                libc::AT_FDCWD,
+                c"/tmp/benchmark_basic_io_wave1".as_ptr(),
+                libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+                0o644,
+            );
+
+            if fd < 0 {
+                bail!("openat failed: {}", std::io::Error::last_os_error());
+            }
+
+            let write_ret = libc::write(fd, write_buf.as_ptr() as *const c_void, write_buf.len());
+            assert_eq!(write_ret, write_buf.len() as isize);
+
+            let pwrite_ret = libc::pwrite64(fd, write_buf.as_ptr() as *const c_void, 16, 8);
+            assert_eq!(pwrite_ret, 16);
+
+            let pread_ret =
+                libc::pread64(fd, read_buf.as_mut_ptr() as *mut c_void, read_buf.len(), 0);
+            assert_eq!(pread_ret, read_buf.len() as isize);
+
+            let write_iov = [
+                libc::iovec {
+                    iov_base: writev_data_a.as_ptr() as *mut c_void,
+                    iov_len: writev_data_a.len(),
+                },
+                libc::iovec {
+                    iov_base: writev_data_b.as_ptr() as *mut c_void,
+                    iov_len: writev_data_b.len(),
+                },
+            ];
+
+            let writev_ret = libc::writev(fd, write_iov.as_ptr(), write_iov.len() as i32);
+            assert_eq!(
+                writev_ret,
+                (writev_data_a.len() + writev_data_b.len()) as isize
+            );
+
+            let lseek_ret = libc::lseek(fd, 0, libc::SEEK_SET);
+            assert_eq!(lseek_ret, 0);
+
+            let read_iov = [
+                libc::iovec {
+                    iov_base: readv_buf_a.as_mut_ptr() as *mut c_void,
+                    iov_len: readv_buf_a.len(),
+                },
+                libc::iovec {
+                    iov_base: readv_buf_b.as_mut_ptr() as *mut c_void,
+                    iov_len: readv_buf_b.len(),
+                },
+            ];
+
+            let readv_ret = libc::readv(fd, read_iov.as_ptr(), read_iov.len() as i32);
+            assert_eq!(readv_ret, (readv_buf_a.len() + readv_buf_b.len()) as isize);
+
+            let preadv_ret = libc::preadv(fd, read_iov.as_ptr(), read_iov.len() as i32, 0);
+            assert_eq!(preadv_ret, (readv_buf_a.len() + readv_buf_b.len()) as isize);
+
+            let pwritev_ret = libc::pwritev(fd, write_iov.as_ptr(), write_iov.len() as i32, 8);
+            assert_eq!(
+                pwritev_ret,
+                (writev_data_a.len() + writev_data_b.len()) as isize
+            );
+
+            let read_iov2 = [
+                libc::iovec {
+                    iov_base: readv2_buf_a.as_mut_ptr() as *mut c_void,
+                    iov_len: readv2_buf_a.len(),
+                },
+                libc::iovec {
+                    iov_base: readv2_buf_b.as_mut_ptr() as *mut c_void,
+                    iov_len: readv2_buf_b.len(),
+                },
+            ];
+
+            let preadv2_ret = libc::preadv2(fd, read_iov2.as_ptr(), read_iov2.len() as i32, 0, 0);
+            assert_eq!(
+                preadv2_ret,
+                (readv2_buf_a.len() + readv2_buf_b.len()) as isize
+            );
+
+            let pwritev2_ret =
+                libc::pwritev2(fd, write_iov.as_ptr(), write_iov.len() as i32, 12, 0);
+            assert_eq!(
+                pwritev2_ret,
+                (writev_data_a.len() + writev_data_b.len()) as isize
+            );
+
+            let close_ret = libc::close(fd);
+            assert_eq!(close_ret, 0);
+        }
+
+        let _ = libc::unlink(c"/tmp/benchmark_basic_io_wave1".as_ptr());
     }
 
     Ok(())

@@ -237,29 +237,21 @@ syscall_compact_test!(
     "22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_write,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_write,
-            pid: 22,
-            tid: 22,
-            return_value: 8192,
-            data: pinchy_common::SyscallEventData {
-                write: WriteData {
-                    fd: 3,
-                    buf: [0u8; DATA_READ_SIZE],
-                    count: 8192,
-                },
-            },
+        let mut data = WriteData {
+            fd: 3,
+            buf: [0u8; DATA_READ_SIZE],
+            count: 8192,
         };
-        let write_data = unsafe { &mut event.data.write };
-        write_data
-            .buf
+
+        data.buf
             .iter_mut()
             .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
             .for_each(|(b, i)| *b = i + 65);
-        event
+
+        make_compact_test_data(SYS_write, 22, 8192, &data)
     },
     "22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192 (bytes)\n"
 );
@@ -487,63 +479,47 @@ syscall_test!(
     "1 close_range(fd: 3, max_fd: 10, flags: 0x0) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_pread,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_pread64,
-            pid: 22,
-            tid: 22,
-            return_value: 4096,
-            data: pinchy_common::SyscallEventData {
-                pread: PreadData {
-                    fd: 3,
-                    buf: [0u8; DATA_READ_SIZE],
-                    count: 4096,
-                    offset: 1024,
-                },
-            },
+        let mut data = PreadData {
+            fd: 3,
+            buf: [0u8; DATA_READ_SIZE],
+            count: 4096,
+            offset: 1024,
         };
-        let pread_data = unsafe { &mut event.data.pread };
-        pread_data
-            .buf
+
+        data.buf
             .iter_mut()
             .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
             .for_each(|(b, i)| *b = i + 65);
-        event
+
+        make_compact_test_data(SYS_pread64, 22, 4096, &data)
     },
     "22 pread64(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (3968 more bytes), count: 4096, offset: 1024) = 4096 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_pwrite,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_pwrite64,
-            pid: 22,
-            tid: 22,
-            return_value: 4096,
-            data: pinchy_common::SyscallEventData {
-                pwrite: PwriteData {
-                    fd: 3,
-                    buf: [0u8; DATA_READ_SIZE],
-                    count: 4096,
-                    offset: 2048,
-                },
-            },
+        let mut data = PwriteData {
+            fd: 3,
+            buf: [0u8; DATA_READ_SIZE],
+            count: 4096,
+            offset: 2048,
         };
-        let pwrite_data = unsafe { &mut event.data.pwrite };
-        pwrite_data
-            .buf
+
+        data.buf
             .iter_mut()
             .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
             .for_each(|(b, i)| *b = i + 65);
-        event
+
+        make_compact_test_data(SYS_pwrite64, 22, 4096, &data)
     },
     "22 pwrite64(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (3968 more bytes), count: 4096, offset: 2048) = 4096 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_readv,
     {
         let mut data = VectorIOData {
@@ -561,18 +537,12 @@ syscall_test!(
         };
         data.iov_bufs[0][..4].copy_from_slice(b"test");
         data.iov_bufs[1][..4].copy_from_slice(b"data");
-        SyscallEvent {
-            syscall_nr: SYS_readv,
-            pid: 1,
-            tid: 1,
-            return_value: 8,
-            data: pinchy_common::SyscallEventData { vector_io: data },
-        }
+        make_compact_test_data(SYS_readv, 1, 8, &data)
     },
     "1 readv(fd: 3, iov: [ iovec { base: 0x1000, len: 4, buf: \"test\" }, iovec { base: 0x1000, len: 4, buf: \"data\" } ], iovcnt: 2) = 8 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_writev,
     {
         let mut data = VectorIOData {
@@ -589,18 +559,12 @@ syscall_test!(
             read_count: 1,
         };
         data.iov_bufs[0][..3].copy_from_slice(b"abc");
-        SyscallEvent {
-            syscall_nr: SYS_writev,
-            pid: 2,
-            tid: 2,
-            return_value: 3,
-            data: pinchy_common::SyscallEventData { vector_io: data },
-        }
+        make_compact_test_data(SYS_writev, 2, 3, &data)
     },
     "2 writev(fd: 4, iov: [ iovec { base: 0x2000, len: 3, buf: \"abc\" } ], iovcnt: 1) = 3 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_preadv2,
     {
         let mut data = VectorIOData {
@@ -617,13 +581,7 @@ syscall_test!(
             read_count: 1,
         };
         data.iov_bufs[0][..5].copy_from_slice(b"hello");
-        SyscallEvent {
-            syscall_nr: SYS_preadv2,
-            pid: 3,
-            tid: 3,
-            return_value: 5,
-            data: pinchy_common::SyscallEventData { vector_io: data },
-        }
+        make_compact_test_data(SYS_preadv2, 3, 5, &data)
     },
     "3 preadv2(fd: 5, iov: [ iovec { base: 0x3000, len: 5, buf: \"hello\" } ], iovcnt: 1, offset: 1234, flags: 0x10) = 5\n"
 );

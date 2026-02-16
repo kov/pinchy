@@ -89,6 +89,7 @@ fn main() -> anyhow::Result<()> {
     if let Some(name) = args.next() {
         match name.as_str() {
             "pinchy_reads" => pinchy_reads(),
+            "benchmark_trace_loop" => benchmark_trace_loop(),
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
@@ -482,6 +483,44 @@ fn pinchy_reads() -> anyhow::Result<()> {
             libc::close(fd_error);
         }
     }
+    Ok(())
+}
+
+fn benchmark_trace_loop() -> anyhow::Result<()> {
+    let loops = std::env::var("PINCHY_BENCH_LOOPS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(250);
+
+    if loops == 0 {
+        return Ok(());
+    }
+
+    let mut buf = [0u8; DATA_READ_SIZE];
+
+    unsafe {
+        for _ in 0..loops {
+            let fd = libc::openat(
+                libc::AT_FDCWD,
+                c"pinchy/tests/GPLv2".as_ptr(),
+                libc::O_RDONLY,
+            );
+
+            if fd < 0 {
+                bail!("openat failed: {}", std::io::Error::last_os_error());
+            }
+
+            let count = libc::read(fd, buf.as_mut_ptr() as *mut c_void, DATA_READ_SIZE);
+            assert_eq!(count, DATA_READ_SIZE as isize);
+
+            let seek_result = libc::lseek(fd, 0, libc::SEEK_SET);
+            assert_eq!(seek_result, 0);
+
+            let close_result = libc::close(fd);
+            assert_eq!(close_result, 0);
+        }
+    }
+
     Ok(())
 }
 

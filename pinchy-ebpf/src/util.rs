@@ -2,7 +2,7 @@ use core::{mem::size_of, ops::DerefMut as _};
 
 use aya_ebpf::{
     bindings::BPF_RB_FORCE_WAKEUP,
-    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user, bpf_probe_read_user_buf},
     maps::ring_buf::RingBufEntry,
     programs::TracePointContext,
     EbpfContext as _,
@@ -14,6 +14,101 @@ use pinchy_common::{
 };
 
 use crate::{ENTER_MAP, EVENTS, SYSCALL_RETURN_OFFSET};
+
+mod efficiency {
+    #[cfg(feature = "efficiency-metrics")]
+    mod enabled {
+        use pinchy_common::{
+            SyscallEvent, TrivialSyscallEvent, EFF_STAT_BYTES_SUBMITTED, EFF_STAT_EVENTS_LEGACY,
+            EFF_STAT_EVENTS_SUBMITTED, EFF_STAT_EVENTS_TRIVIAL, EFF_STAT_RESERVE_FAIL,
+            EFF_STAT_TRIVIAL_OUTPUT_FAIL,
+        };
+
+        use crate::EFFICIENCY_STATS;
+
+        #[inline(always)]
+        fn counter_add(counter: u32, value: u64) {
+            let Some(ptr) = (unsafe { EFFICIENCY_STATS.get_ptr_mut(counter) }) else {
+                return;
+            };
+
+            unsafe {
+                let current = core::ptr::read_volatile(ptr);
+                core::ptr::write_volatile(ptr, current.wrapping_add(value));
+            }
+        }
+
+        #[inline(always)]
+        pub(crate) fn record_reserve_fail() {
+            counter_add(EFF_STAT_RESERVE_FAIL, 1);
+        }
+
+        #[inline(always)]
+        pub(crate) fn record_trivial_output_fail() {
+            counter_add(EFF_STAT_TRIVIAL_OUTPUT_FAIL, 1);
+        }
+
+        #[inline(always)]
+        pub(crate) fn record_trivial_submit() {
+            counter_add(EFF_STAT_EVENTS_SUBMITTED, 1);
+            counter_add(EFF_STAT_EVENTS_TRIVIAL, 1);
+            counter_add(
+                EFF_STAT_BYTES_SUBMITTED,
+                core::mem::size_of::<TrivialSyscallEvent>() as u64,
+            );
+        }
+
+        #[inline(always)]
+        pub(crate) fn record_legacy_submit() {
+            counter_add(EFF_STAT_EVENTS_SUBMITTED, 1);
+            counter_add(EFF_STAT_EVENTS_LEGACY, 1);
+            counter_add(
+                EFF_STAT_BYTES_SUBMITTED,
+                core::mem::size_of::<SyscallEvent>() as u64,
+            );
+        }
+    }
+
+    #[cfg(not(feature = "efficiency-metrics"))]
+    mod disabled {
+        #[inline(always)]
+        pub(crate) fn record_reserve_fail() {}
+
+        #[inline(always)]
+        pub(crate) fn record_trivial_output_fail() {}
+
+        #[inline(always)]
+        pub(crate) fn record_trivial_submit() {}
+
+        #[inline(always)]
+        pub(crate) fn record_legacy_submit() {}
+    }
+
+    #[cfg(not(feature = "efficiency-metrics"))]
+    pub(crate) use disabled::*;
+    #[cfg(feature = "efficiency-metrics")]
+    pub(crate) use enabled::*;
+}
+
+#[inline(always)]
+pub fn record_reserve_fail() {
+    efficiency::record_reserve_fail();
+}
+
+#[inline(always)]
+pub fn record_trivial_output_fail() {
+    efficiency::record_trivial_output_fail();
+}
+
+#[inline(always)]
+pub fn record_trivial_submit() {
+    efficiency::record_trivial_submit();
+}
+
+#[inline(always)]
+pub fn record_legacy_submit() {
+    efficiency::record_legacy_submit();
+}
 
 #[inline(always)]
 pub fn read_timespec(ptr: *const Timespec) -> Timespec {
@@ -125,6 +220,8 @@ pub struct Entry {
 impl Entry {
     pub fn new(ctx: &TracePointContext, syscall_nr: i64) -> Result<Self, u32> {
         let Some(mut entry) = (unsafe { EVENTS.reserve::<SyscallEvent>(0) }) else {
+            record_reserve_fail();
+
             error!(
                 ctx,
                 "Failed to reserve ringbuf entry for syscall {}", syscall_nr
@@ -156,6 +253,7 @@ impl Entry {
     }
 
     pub fn submit(self) -> u32 {
+        record_legacy_submit();
         self.inner.submit(BPF_RB_FORCE_WAKEUP.into());
         0
     }
@@ -250,7 +348,8 @@ pub fn read_iovec_array(
             if to_read > 0 {
                 if let Some(ref mut bufs) = iov_bufs {
                     unsafe {
-                        let _ = bpf_probe_read_user_buf(iov_base as *const u8, &mut bufs[i][..to_read]);
+                        let _ =
+                            bpf_probe_read_user_buf(iov_base as *const u8, &mut bufs[i][..to_read]);
                     }
                 }
             }

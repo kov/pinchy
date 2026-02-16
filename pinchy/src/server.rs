@@ -233,17 +233,14 @@ async fn main() -> anyhow::Result<()> {
         debug!("remove limit on locked memory failed, ret is: {ret}");
     }
 
-    let ebpf_bytes = aya::include_bytes_aligned!(concat!(
-        env!("OUT_DIR"),
-        "/pinchy"
-    ));
+    let ebpf_bytes = aya::include_bytes_aligned!(concat!(env!("OUT_DIR"), "/pinchy"));
 
     let mut loader = EbpfLoader::new();
 
     if let Ok(size_str) = std::env::var("PINCHY_RINGBUF_SIZE") {
-        let size: u32 = size_str.parse().context(
-            "PINCHY_RINGBUF_SIZE must be a valid u32 byte size",
-        )?;
+        let size: u32 = size_str
+            .parse()
+            .context("PINCHY_RINGBUF_SIZE must be a valid u32 byte size")?;
 
         loader.set_max_entries("EVENTS", size);
     }

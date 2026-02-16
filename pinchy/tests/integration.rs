@@ -152,7 +152,11 @@ fn pinchy_reads() {
     let pinchy = PinchyTest::new();
 
     // Run a workload
-    let handle = run_workload(&pinchy, &["openat", "openat2", "read", "lseek"], "pinchy_reads");
+    let handle = run_workload(
+        &pinchy,
+        &["openat", "openat2", "read", "lseek"],
+        "pinchy_reads",
+    );
 
     // Client's output
     let expected_output = escaped_regex(indoc! {r#"
@@ -422,7 +426,11 @@ fn io_multiplexing_syscalls() {
     // Run a workload that exercises I/O multiplexing syscalls
     // Architecture-specific syscalls: select and poll are x86_64 only
     #[cfg(target_arch = "x86_64")]
-    let handle = run_workload(&pinchy, &["select", "poll", "ppoll"], "io_multiplexing_test");
+    let handle = run_workload(
+        &pinchy,
+        &["select", "poll", "ppoll"],
+        "io_multiplexing_test",
+    );
 
     #[cfg(target_arch = "aarch64")]
     let handle = run_workload(&pinchy, &["ppoll"], "io_multiplexing_test");
@@ -459,7 +467,6 @@ fn io_multiplexing_syscalls() {
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
-
 
 fn escaped_regex(expected_output: &str) -> String {
     // Use unique markers to avoid accidental partial replacements
@@ -816,7 +823,11 @@ fn file_descriptor_syscalls() {
     );
 
     #[cfg(target_arch = "aarch64")]
-    let handle = run_workload(&pinchy, &["dup", "dup3", "close_range"], "file_descriptor_test");
+    let handle = run_workload(
+        &pinchy,
+        &["dup", "dup3", "close_range"],
+        "file_descriptor_test",
+    );
 
     // Expected output - we should see dup, dup2, dup3 and close_range calls
     #[cfg(target_arch = "x86_64")]
@@ -1092,7 +1103,11 @@ fn pread_pwrite_syscalls() {
     let pinchy = PinchyTest::new();
 
     // Run a workload that exercises pread and pwrite syscalls
-    let handle = run_workload(&pinchy, &["write", "pread64", "pwrite64"], "pread_pwrite_test");
+    let handle = run_workload(
+        &pinchy,
+        &["write", "pread64", "pwrite64"],
+        "pread_pwrite_test",
+    );
 
     // Expected output - pread and pwrite calls
     let expected_output = escaped_regex(indoc! {r#"
@@ -1763,7 +1778,11 @@ fn key_management_syscalls() {
     let pinchy = PinchyTest::new();
 
     // Run a workload that exercises key management syscalls
-    let handle = run_workload(&pinchy, &["add_key", "request_key", "keyctl"], "key_management_test");
+    let handle = run_workload(
+        &pinchy,
+        &["add_key", "request_key", "keyctl"],
+        "key_management_test",
+    );
 
     // Expected output - we should see key management syscalls being traced
     let expected_output = escaped_regex(indoc! {r#"
@@ -1851,7 +1870,11 @@ fn fanotify_syscalls() {
     let pinchy = PinchyTest::new();
 
     // Run a workload that exercises fanotify syscalls
-    let handle = run_workload(&pinchy, &["fanotify_init", "fanotify_mark"], "fanotify_test");
+    let handle = run_workload(
+        &pinchy,
+        &["fanotify_init", "fanotify_mark"],
+        "fanotify_test",
+    );
 
     // Expected output - fanotify calls (requires CAP_SYS_ADMIN typically)
     let expected_output = escaped_regex(indoc! {r#"
@@ -2101,8 +2124,7 @@ fn auto_quit_timing() {
 
 #[test]
 fn auto_quit_after_client() {
-    let pinchy =
-        PinchyTest::with_mode(TestMode::AutoQuitAfterClient);
+    let pinchy = PinchyTest::with_mode(TestMode::AutoQuitAfterClient);
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2116,8 +2138,7 @@ fn auto_quit_after_client() {
 
 #[test]
 fn auto_quit_after_client_timing() {
-    let pinchy =
-        PinchyTest::with_mode(TestMode::AutoQuitAfterClient);
+    let pinchy = PinchyTest::with_mode(TestMode::AutoQuitAfterClient);
 
     // Read timestamps before wait() which consumes self
     let kill_time = pinchy

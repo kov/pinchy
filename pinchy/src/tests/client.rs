@@ -77,11 +77,7 @@ fn test_parse_syscall_names_unknown() {
 #[cfg(target_arch = "aarch64")]
 fn test_parse_syscall_names_aarch64_aliases() {
     // Test aarch64-specific aliases that map to *at variants
-    let result = parse_syscall_names(&[
-        "open".to_string(),
-        "stat".to_string(),
-        "poll".to_string(),
-    ]);
+    let result = parse_syscall_names(&["open".to_string(), "stat".to_string(), "poll".to_string()]);
     assert!(result.is_ok());
     let syscalls = result.unwrap();
     assert_eq!(syscalls.len(), 3);
@@ -96,11 +92,7 @@ fn test_parse_syscall_names_aarch64_aliases() {
 #[cfg(target_arch = "x86_64")]
 fn test_parse_syscall_names_x86_64_direct() {
     // On x86_64, these syscalls exist directly (not as aliases)
-    let result = parse_syscall_names(&[
-        "open".to_string(),
-        "stat".to_string(),
-        "poll".to_string(),
-    ]);
+    let result = parse_syscall_names(&["open".to_string(), "stat".to_string(), "poll".to_string()]);
     assert!(result.is_ok());
     let syscalls = result.unwrap();
     assert_eq!(syscalls.len(), 3);

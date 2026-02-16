@@ -65,15 +65,9 @@ pub struct PinchyTest {
 
 fn describe_file(path: &Path) -> String {
     match fs::read(path) {
-        Ok(contents) if contents.is_empty() => {
-            "<exists but empty>".to_string()
-        }
-        Ok(contents) => {
-            String::from_utf8_lossy(&contents).into_owned()
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
-            "<file not found>".to_string()
-        }
+        Ok(contents) if contents.is_empty() => "<exists but empty>".to_string(),
+        Ok(contents) => String::from_utf8_lossy(&contents).into_owned(),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => "<file not found>".to_string(),
         Err(e) => {
             format!("<read error: {e}>")
         }
@@ -132,10 +126,7 @@ fn boot_uml(
         "con=null".to_string(),
         format!("PINCHY_TEST_EVENTS={events_str}"),
         format!("PINCHY_TEST_WORKLOAD={workload_str}"),
-        format!(
-            "PINCHY_TEST_OUTDIR={}",
-            output_dir.display()
-        ),
+        format!("PINCHY_TEST_OUTDIR={}", output_dir.display()),
         format!("PINCHY_TEST_BINDIR={}", bdir.display()),
         format!("PINCHY_TEST_PROJDIR={}", proj.display()),
         format!("PINCHY_TEST_MODE={}", mode.as_str()),
@@ -149,10 +140,7 @@ fn boot_uml(
 
     // Save UML console output for debugging
     let console_path = output_dir.join("uml-console.log");
-    let _ = fs::write(
-        &console_path,
-        &output.stdout,
-    );
+    let _ = fs::write(&console_path, &output.stdout);
 
     if !output.status.success() {
         eprintln!(
@@ -166,9 +154,7 @@ fn boot_uml(
     let done_marker = output_dir.join("done");
 
     if !done_marker.exists() {
-        let console = String::from_utf8_lossy(
-            &output.stdout,
-        );
+        let console = String::from_utf8_lossy(&output.stdout);
 
         panic!(
             "UML did not complete: 'done' marker not found \
@@ -187,26 +173,16 @@ fn boot_uml(
             output.status,
             console,
             describe_file(&output_dir.join("pinchyd.out")),
-            describe_file(
-                &output_dir.join("pinchy.stderr")
-            ),
+            describe_file(&output_dir.join("pinchy.stderr")),
         );
     }
 
-    let pinchy_stdout = read_file_or_empty(
-        &output_dir.join("pinchy.stdout"),
-    );
-    let pinchy_stderr = read_file_or_empty(
-        &output_dir.join("pinchy.stderr"),
-    );
-    let pinchy_exit =
-        read_exit_code(&output_dir.join("pinchy.exit"));
+    let pinchy_stdout = read_file_or_empty(&output_dir.join("pinchy.stdout"));
+    let pinchy_stderr = read_file_or_empty(&output_dir.join("pinchy.stderr"));
+    let pinchy_exit = read_exit_code(&output_dir.join("pinchy.exit"));
 
-    let pinchyd_stdout = read_file_or_empty(
-        &output_dir.join("pinchyd.out"),
-    );
-    let pinchyd_exit =
-        read_exit_code(&output_dir.join("pinchyd.exit"));
+    let pinchyd_stdout = read_file_or_empty(&output_dir.join("pinchyd.out"));
+    let pinchyd_exit = read_exit_code(&output_dir.join("pinchyd.exit"));
 
     UmlResult {
         pinchy_output: Output {
@@ -234,9 +210,7 @@ impl PinchyTest {
     }
 
     pub fn with_mode(mode: TestMode) -> Self {
-        let output_dir =
-            tempfile::TempDir::with_prefix("uml-")
-                .expect("Failed to create temp dir");
+        let output_dir = tempfile::TempDir::with_prefix("uml-").expect("Failed to create temp dir");
 
         let result = Arc::new(Mutex::new(None));
 
@@ -250,18 +224,11 @@ impl PinchyTest {
     pub fn read_file(&self, name: &str) -> String {
         self.ensure_booted();
         let path = self.output_dir.path().join(name);
-        fs::read_to_string(&path).unwrap_or_else(|e| {
-            panic!(
-                "Failed to read {}: {e}",
-                path.display()
-            )
-        })
+        fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("Failed to read {}: {e}", path.display()))
     }
 
-    pub fn read_timestamp(
-        &self,
-        name: &str,
-    ) -> Option<u64> {
+    pub fn read_timestamp(&self, name: &str) -> Option<u64> {
         self.ensure_booted();
         let path = self.output_dir.path().join(name);
 
@@ -271,17 +238,10 @@ impl PinchyTest {
     }
 
     fn ensure_booted(&self) {
-        let has_result =
-            self.result.lock().unwrap().is_some();
+        let has_result = self.result.lock().unwrap().is_some();
 
         if !has_result {
-            let result = boot_uml(
-                &self.mode,
-                self.output_dir.path(),
-                None,
-                None,
-                None,
-            );
+            let result = boot_uml(&self.mode, self.output_dir.path(), None, None, None);
 
             *self.result.lock().unwrap() = Some(result);
         }
@@ -290,8 +250,7 @@ impl PinchyTest {
     pub fn wait(self) -> Output {
         self.ensure_booted();
 
-        let mut result =
-            self.result.lock().unwrap().take().unwrap();
+        let mut result = self.result.lock().unwrap().take().unwrap();
 
         std::mem::replace(
             &mut result.pinchyd_output,
@@ -304,11 +263,7 @@ impl PinchyTest {
     }
 }
 
-pub fn run_workload(
-    pinchy: &PinchyTest,
-    events: &[&str],
-    test_name: &str,
-) -> JoinHandle<Output> {
+pub fn run_workload(pinchy: &PinchyTest, events: &[&str], test_name: &str) -> JoinHandle<Output> {
     let events_str = events.join(",");
     let test_name = test_name.to_owned();
     let output_dir = pinchy.output_dir.path().to_path_buf();

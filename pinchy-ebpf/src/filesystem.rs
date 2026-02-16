@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 use aya_ebpf::{
-    helpers::{bpf_probe_read_user_buf, bpf_probe_read_user},
+    helpers::{bpf_probe_read_user, bpf_probe_read_user_buf},
     macros::tracepoint,
     programs::TracePointContext,
 };
@@ -180,8 +180,10 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 if !list_ptr.is_null() && data.size > 0 {
                     let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
                     unsafe {
-                        let _ =
-                            bpf_probe_read_user_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
+                        let _ = bpf_probe_read_user_buf(
+                            list_ptr,
+                            &mut data.xattr_list.data[..read_size],
+                        );
                     }
                     data.xattr_list.size = read_size;
                 }
@@ -199,8 +201,10 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 if !list_ptr.is_null() && data.size > 0 {
                     let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
                     unsafe {
-                        let _ =
-                            bpf_probe_read_user_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
+                        let _ = bpf_probe_read_user_buf(
+                            list_ptr,
+                            &mut data.xattr_list.data[..read_size],
+                        );
                     }
                     data.xattr_list.size = read_size;
                 }
@@ -218,8 +222,10 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 if !list_ptr.is_null() && data.size > 0 {
                     let read_size = core::cmp::min(data.size, DATA_READ_SIZE);
                     unsafe {
-                        let _ =
-                            bpf_probe_read_user_buf(list_ptr, &mut data.xattr_list.data[..read_size]);
+                        let _ = bpf_probe_read_user_buf(
+                            list_ptr,
+                            &mut data.xattr_list.data[..read_size],
+                        );
                     }
                     data.xattr_list.size = read_size;
                 }

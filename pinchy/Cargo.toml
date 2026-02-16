@@ -4,6 +4,10 @@ version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
 
+[features]
+default = []
+efficiency-metrics = []
+
 [dependencies]
 pinchy-client = { path = "../pinchy-client" }
 pinchy-common = { path = "../pinchy-common", features = ["user"] }

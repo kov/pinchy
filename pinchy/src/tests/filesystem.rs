@@ -727,363 +727,304 @@ syscall_compact_test!(
     "53 fremovexattr(fd: 10, name: \"user.foo\") = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_getcwd,
     {
         use pinchy_common::GetcwdData;
 
-        SyscallEvent {
-            syscall_nr: SYS_getcwd,
-            pid: 55,
-            tid: 55,
-            return_value: 16, // Return value is a pointer (success)
-            data: pinchy_common::SyscallEventData {
-                getcwd: GetcwdData {
-                    buf: 0x7ffe12345000,
-                    size: 4096,
-                    path: {
-                        let mut arr = [0u8; DATA_READ_SIZE];
-                        let path = b"/home/user/work\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                },
-            },
-        }
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/home/user/work\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+
+        let data = GetcwdData {
+            buf: 0x7ffe12345000,
+            size: 4096,
+            path,
+        };
+
+        make_compact_test_data(SYS_getcwd, 55, 16, &data)
     },
     "55 getcwd(buf: 0x7ffe12345000, size: 4096, path: \"/home/user/work\") = 16\n"
 );
-syscall_test!(
+
+syscall_compact_test!(
     parse_getcwd_error,
     {
         use pinchy_common::GetcwdData;
 
-        SyscallEvent {
-            syscall_nr: SYS_getcwd,
-            pid: 55,
-            tid: 55,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                getcwd: GetcwdData {
-                    buf: 0x7ffe12345000,
-                    size: 4096,
-                    path: {
-                        let mut arr = [0u8; DATA_READ_SIZE];
-                        let path = b"/home/user/work\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                },
-            },
-        }
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/home/user/work\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+
+        let data = GetcwdData {
+            buf: 0x7ffe12345000,
+            size: 4096,
+            path,
+        };
+
+        make_compact_test_data(SYS_getcwd, 55, -1, &data)
     },
     "55 getcwd(buf: 0x7ffe12345000, size: 4096) = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_chdir,
     {
         use pinchy_common::ChdirData;
 
-        SyscallEvent {
-            syscall_nr: SYS_chdir,
-            pid: 66,
-            tid: 66,
-            return_value: 0, // Success
-            data: pinchy_common::SyscallEventData {
-                chdir: ChdirData {
-                    path: {
-                        let mut arr = [0u8; DATA_READ_SIZE];
-                        let path = b"/home/user/newdir\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                },
-            },
-        }
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/home/user/newdir\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+
+        let data = ChdirData { path };
+
+        make_compact_test_data(SYS_chdir, 66, 0, &data)
     },
     "66 chdir(path: \"/home/user/newdir\") = 0 (success)\n"
 );
-syscall_test!(
+
+syscall_compact_test!(
     parse_chdir_error,
     {
         use pinchy_common::ChdirData;
 
-        SyscallEvent {
-            syscall_nr: SYS_chdir,
-            pid: 66,
-            tid: 66,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                chdir: ChdirData {
-                    path: {
-                        let mut arr = [0u8; DATA_READ_SIZE];
-                        let path = b"/home/user/newdir\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                },
-            },
-        }
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/home/user/newdir\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+
+        let data = ChdirData { path };
+
+        make_compact_test_data(SYS_chdir, 66, -1, &data)
     },
     "66 chdir(path: \"/home/user/newdir\") = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_mkdirat,
     {
-        SyscallEvent {
-            syscall_nr: SYS_mkdirat,
-            pid: 77,
-            tid: 77,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                mkdirat: MkdiratData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname: {
-                        let mut arr = [0u8; DATA_READ_SIZE];
-                        let path = b"/home/user/newdir\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                    mode: 0o755,
-                },
-            },
-        }
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/home/user/newdir\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        let data = MkdiratData {
+            dirfd: libc::AT_FDCWD,
+            pathname,
+            mode: 0o755,
+        };
+
+        make_compact_test_data(SYS_mkdirat, 77, 0, &data)
     },
     "77 mkdirat(dirfd: AT_FDCWD, pathname: \"/home/user/newdir\", mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
 );
-syscall_test!(
+
+syscall_compact_test!(
     parse_mkdirat_dirfd,
     {
-        SyscallEvent {
-            syscall_nr: SYS_mkdirat,
-            pid: 77,
-            tid: 77,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                mkdirat: MkdiratData {
-                    dirfd: 5,
-                    pathname: {
-                        let mut arr = [0u8; DATA_READ_SIZE];
-                        let path = b"/home/user/newdir\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                    mode: 0o700,
-                },
-            },
-        }
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/home/user/newdir\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        let data = MkdiratData {
+            dirfd: 5,
+            pathname,
+            mode: 0o700,
+        };
+
+        make_compact_test_data(SYS_mkdirat, 77, 0, &data)
     },
     "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = 0 (success)\n"
 );
-syscall_test!(
+
+syscall_compact_test!(
     parse_mkdirat_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_mkdirat,
-            pid: 77,
-            tid: 77,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                mkdirat: MkdiratData {
-                    dirfd: 5,
-                    pathname: {
-                        let mut arr = [0u8; DATA_READ_SIZE];
-                        let path = b"/home/user/newdir\0";
-                        arr[..path.len()].copy_from_slice(path);
-                        arr
-                    },
-                    mode: 0o700,
-                },
-            },
-        }
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/home/user/newdir\0";
+        pathname[..path.len()].copy_from_slice(path);
+
+        let data = MkdiratData {
+            dirfd: 5,
+            pathname,
+            mode: 0o700,
+        };
+
+        make_compact_test_data(SYS_mkdirat, 77, -1, &data)
     },
     "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fsync,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fsync,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fsync: FsyncData { fd: 5 },
-            },
-        }
+        let data = FsyncData { fd: 5 };
+
+        make_compact_test_data(SYS_fsync, 123, 0, &data)
     },
     "123 fsync(fd: 5) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fdatasync,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fdatasync,
-            pid: 124,
-            tid: 124,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fdatasync: FdatasyncData { fd: 8 },
-            },
-        }
+        let data = FdatasyncData { fd: 8 };
+
+        make_compact_test_data(SYS_fdatasync, 124, 0, &data)
     },
     "124 fdatasync(fd: 8) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_ftruncate,
     {
-        SyscallEvent {
-            syscall_nr: SYS_ftruncate,
-            pid: 125,
-            tid: 125,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                ftruncate: FtruncateData {
-                    fd: 3,
-                    length: 4096,
-                },
-            },
-        }
+        let data = FtruncateData {
+            fd: 3,
+            length: 4096,
+        };
+
+        make_compact_test_data(SYS_ftruncate, 125, 0, &data)
     },
     "125 ftruncate(fd: 3, length: 4096) = 0 (success)\n"
 );
-syscall_test!(
+
+syscall_compact_test!(
     parse_ftruncate_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_ftruncate,
-            pid: 125,
-            tid: 125,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                ftruncate: FtruncateData {
-                    fd: 3,
-                    length: 4096,
-                },
-            },
-        }
+        let data = FtruncateData {
+            fd: 3,
+            length: 4096,
+        };
+
+        make_compact_test_data(SYS_ftruncate, 125, -1, &data)
     },
     "125 ftruncate(fd: 3, length: 4096) = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fchmod,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fchmod,
-            pid: 126,
-            tid: 126,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fchmod: FchmodData { fd: 3, mode: 0o644 },
-            },
-        }
+        let data = FchmodData { fd: 3, mode: 0o644 };
+
+        make_compact_test_data(SYS_fchmod, 126, 0, &data)
     },
     "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = 0 (success)\n"
 );
-syscall_test!(
+
+syscall_compact_test!(
     parse_fchmod_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fchmod,
-            pid: 126,
-            tid: 126,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                fchmod: FchmodData { fd: 3, mode: 0o644 },
-            },
-        }
+        let data = FchmodData { fd: 3, mode: 0o644 };
+
+        make_compact_test_data(SYS_fchmod, 126, -1, &data)
     },
     "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = -1 (error)\n"
 );
-syscall_test!(
+
+syscall_compact_test!(
     parse_fchmod_mode_755,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fchmod,
-            pid: 126,
-            tid: 126,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fchmod: FchmodData { fd: 3, mode: 0o755 },
-            },
-        }
+        let data = FchmodData { fd: 3, mode: 0o755 };
+
+        make_compact_test_data(SYS_fchmod, 126, 0, &data)
     },
     "126 fchmod(fd: 3, mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fchmodat,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/testfile";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: SYS_fchmodat,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fchmodat: FchmodatData {
-                    dirfd: 3,
-                    pathname,
-                    mode: 0o755,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = FchmodatData {
+            dirfd: 3,
+            pathname,
+            mode: 0o755,
+            flags: 0,
+        };
+
+        make_compact_test_data(SYS_fchmodat, 1001, 0, &data)
     },
     "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: 0) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
+    parse_fchmodat_with_flags,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/tmp/testfile";
+        pathname[0..path.len()].copy_from_slice(path);
+
+        let data = FchmodatData {
+            dirfd: 3,
+            pathname,
+            mode: 0o755,
+            flags: libc::AT_SYMLINK_NOFOLLOW,
+        };
+
+        make_compact_test_data(SYS_fchmodat, 1001, 0, &data)
+    },
+    &format!(
+        "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: {}) = 0 (success)\n",
+        libc::AT_SYMLINK_NOFOLLOW
+    )
+);
+
+syscall_compact_test!(
     parse_fchown,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fchown,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fchown: FchownData {
-                    fd: 3,
-                    uid: 1000,
-                    gid: 1000,
-                },
-            },
-        }
+        let data = FchownData {
+            fd: 3,
+            uid: 1000,
+            gid: 1000,
+        };
+
+        make_compact_test_data(SYS_fchown, 1001, 0, &data)
     },
     "1001 fchown(fd: 3, uid: 1000, gid: 1000) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fchownat,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/etc/passwd";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: SYS_fchownat,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fchownat: FchownatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname,
-                    uid: 1000,
-                    gid: 1000,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = FchownatData {
+            dirfd: libc::AT_FDCWD,
+            pathname,
+            uid: 1000,
+            gid: 1000,
+            flags: 0,
+        };
+
+        make_compact_test_data(SYS_fchownat, 1001, 0, &data)
     },
     "1001 fchownat(dirfd: AT_FDCWD, pathname: \"/etc/passwd\", uid: 1000, gid: 1000, flags: 0) = 0 (success)\n"
+);
+
+syscall_compact_test!(
+    parse_fchownat_with_flags,
+    {
+        let mut pathname = [0u8; DATA_READ_SIZE];
+        let path = b"/etc/passwd";
+        pathname[0..path.len()].copy_from_slice(path);
+
+        let data = FchownatData {
+            dirfd: libc::AT_FDCWD,
+            pathname,
+            uid: 1000,
+            gid: 1000,
+            flags: libc::AT_SYMLINK_NOFOLLOW,
+        };
+
+        make_compact_test_data(SYS_fchownat, 1001, 0, &data)
+    },
+    &format!(
+        "1001 fchownat(dirfd: AT_FDCWD, pathname: \"/etc/passwd\", uid: 1000, gid: 1000, flags: {}) = 0 (success)\n",
+        libc::AT_SYMLINK_NOFOLLOW
+    )
 );
 
 #[cfg(target_arch = "x86_64")]

@@ -13,11 +13,11 @@ use aya_ebpf::{
     EbpfContext as _,
 };
 use aya_log_ebpf::{error, trace};
-use pinchy_common::syscalls;
 #[cfg(feature = "efficiency-metrics")]
 use pinchy_common::EFF_STAT_COUNT;
+use pinchy_common::{syscalls, FchmodData, FchownData, FdatasyncData, FsyncData, FtruncateData};
 
-use crate::util::{get_args, get_syscall_nr};
+use crate::util::{get_args, get_syscall_nr, submit_compact_payload};
 
 mod basic_io;
 mod filesystem;
@@ -194,6 +194,75 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let syscall_nr = get_syscall_nr(&ctx)?;
         let args = get_args(&ctx, syscall_nr)?;
+        let return_value = util::get_return_value(&ctx)?;
+
+        match syscall_nr {
+            syscalls::SYS_fchmod => {
+                submit_compact_payload::<FchmodData, _>(
+                    &ctx,
+                    syscalls::SYS_fchmod,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.mode = args[1] as u32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fsync => {
+                submit_compact_payload::<FsyncData, _>(
+                    &ctx,
+                    syscalls::SYS_fsync,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fdatasync => {
+                submit_compact_payload::<FdatasyncData, _>(
+                    &ctx,
+                    syscalls::SYS_fdatasync,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_ftruncate => {
+                submit_compact_payload::<FtruncateData, _>(
+                    &ctx,
+                    syscalls::SYS_ftruncate,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.length = args[1] as i64;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fchown => {
+                submit_compact_payload::<FchownData, _>(
+                    &ctx,
+                    syscalls::SYS_fchown,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.uid = args[1] as u32;
+                        payload.gid = args[2] as u32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            _ => {}
+        }
 
         let mut entry = util::Entry::new(&ctx, syscall_nr)?;
 
@@ -432,15 +501,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.cmd = args[1] as i32;
                 data.arg = args[2];
             }
-            syscalls::SYS_fchmod => {
-                let data = unsafe { &mut entry.data.fchmod };
-                data.fd = args[0] as i32;
-                data.mode = args[1] as u32;
-            }
-            syscalls::SYS_fsync => {
-                let data = unsafe { &mut entry.data.fsync };
-                data.fd = args[0] as i32;
-            }
             syscalls::SYS_fsmount => {
                 let data = unsafe { &mut entry.data.fsmount };
                 data.fd = args[0] as i32;
@@ -457,21 +517,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.pidfd = args[0] as i32;
                 data.targetfd = args[1] as i32;
                 data.flags = args[2] as u32;
-            }
-            syscalls::SYS_fdatasync => {
-                let data = unsafe { &mut entry.data.fdatasync };
-                data.fd = args[0] as i32;
-            }
-            syscalls::SYS_ftruncate => {
-                let data = unsafe { &mut entry.data.ftruncate };
-                data.fd = args[0] as i32;
-                data.length = args[1] as i64;
-            }
-            syscalls::SYS_fchown => {
-                let data = unsafe { &mut entry.data.fchown };
-                data.fd = args[0] as i32;
-                data.uid = args[1] as u32;
-                data.gid = args[2] as u32;
             }
             #[cfg(x86_64)]
             syscalls::SYS_epoll_create => {
@@ -595,7 +640,13 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.home_node = args[2] as u64;
                 data.flags = args[3] as u64;
             }
-            syscalls::SYS_close | syscalls::SYS_lseek => {
+            syscalls::SYS_close
+            | syscalls::SYS_lseek
+            | syscalls::SYS_fchmod
+            | syscalls::SYS_fsync
+            | syscalls::SYS_fdatasync
+            | syscalls::SYS_ftruncate
+            | syscalls::SYS_fchown => {
                 error!(&ctx, "hit migrated syscall {}", syscall_nr);
             }
             _ => {

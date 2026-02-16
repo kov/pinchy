@@ -94,6 +94,7 @@ fn main() -> anyhow::Result<()> {
             "benchmark_basic_io_wave2" => benchmark_basic_io_wave2(),
             "benchmark_filesystem_wave1" => benchmark_filesystem_wave1(),
             "benchmark_filesystem_wave2" => benchmark_filesystem_wave2(),
+            "benchmark_filesystem_wave3" => benchmark_filesystem_wave3(),
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
@@ -1204,6 +1205,143 @@ fn benchmark_filesystem_wave2() -> anyhow::Result<()> {
 
         let _ = libc::unlink(link_path.as_ptr());
         let _ = libc::unlink(file_path.as_ptr());
+    }
+
+    Ok(())
+}
+
+fn benchmark_filesystem_wave3() -> anyhow::Result<()> {
+    fn is_expected_chown_errno(errno: i32) -> bool {
+        matches!(errno, libc::EPERM | libc::EACCES | libc::EINVAL)
+    }
+
+    fn check_chown_result(operation: &str, result: libc::c_long) -> anyhow::Result<()> {
+        if result == 0 {
+            return Ok(());
+        }
+
+        let error = std::io::Error::last_os_error();
+        let errno = error.raw_os_error().unwrap_or_default();
+
+        if is_expected_chown_errno(errno) {
+            return Ok(());
+        }
+
+        bail!("{operation} failed: {error}");
+    }
+
+    let loops = std::env::var("PINCHY_BENCH_LOOPS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(250);
+
+    if loops == 0 {
+        return Ok(());
+    }
+
+    let base_dir = c"/tmp/benchmark_filesystem_wave3";
+    let nested_dir = c"/tmp/benchmark_filesystem_wave3/nested";
+    let file_path = c"/tmp/benchmark_filesystem_wave3/file";
+
+    unsafe {
+        let _ = libc::unlink(file_path.as_ptr());
+        let _ = libc::rmdir(nested_dir.as_ptr());
+        let _ = libc::rmdir(base_dir.as_ptr());
+
+        if libc::mkdir(base_dir.as_ptr(), 0o755) != 0 {
+            bail!("mkdir base_dir failed: {}", std::io::Error::last_os_error());
+        }
+
+        let fd = libc::openat(
+            libc::AT_FDCWD,
+            file_path.as_ptr(),
+            libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+            0o644,
+        );
+
+        if fd < 0 {
+            bail!("openat failed: {}", std::io::Error::last_os_error());
+        }
+
+        let mut cwd_buf = [0u8; DATA_READ_SIZE];
+
+        for _ in 0..loops {
+            if libc::syscall(libc::SYS_getcwd, cwd_buf.as_mut_ptr(), cwd_buf.len()) < 0 {
+                bail!("getcwd failed: {}", std::io::Error::last_os_error());
+            }
+
+            let _ = libc::rmdir(nested_dir.as_ptr());
+
+            if libc::syscall(
+                libc::SYS_mkdirat,
+                libc::AT_FDCWD,
+                nested_dir.as_ptr(),
+                0o755,
+            ) != 0
+            {
+                bail!("mkdirat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_chdir, nested_dir.as_ptr()) != 0 {
+                bail!("chdir nested failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_chdir, base_dir.as_ptr()) != 0 {
+                bail!("chdir base failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_fchmodat,
+                libc::AT_FDCWD,
+                file_path.as_ptr(),
+                0o600,
+                0,
+            ) != 0
+            {
+                bail!("fchmodat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_fchmod, fd, 0o644) != 0 {
+                bail!("fchmod failed: {}", std::io::Error::last_os_error());
+            }
+
+            check_chown_result(
+                "fchownat",
+                libc::syscall(
+                    libc::SYS_fchownat,
+                    libc::AT_FDCWD,
+                    file_path.as_ptr(),
+                    libc::getuid(),
+                    libc::getgid(),
+                    0,
+                ),
+            )?;
+
+            check_chown_result(
+                "fchown",
+                libc::syscall(libc::SYS_fchown, fd, libc::getuid(), libc::getgid()),
+            )?;
+
+            if libc::syscall(libc::SYS_ftruncate, fd, 1024_i64) != 0 {
+                bail!("ftruncate failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_fsync, fd) != 0 {
+                bail!("fsync failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_fdatasync, fd) != 0 {
+                bail!("fdatasync failed: {}", std::io::Error::last_os_error());
+            }
+        }
+
+        if libc::close(fd) != 0 {
+            bail!("close failed: {}", std::io::Error::last_os_error());
+        }
+
+        let _ = libc::unlink(file_path.as_ptr());
+        let _ = libc::rmdir(nested_dir.as_ptr());
+        let _ = libc::rmdir(base_dir.as_ptr());
     }
 
     Ok(())

@@ -119,6 +119,7 @@ ebpf_submitted="$(extract_value ebpf_submitted)"
 ebpf_bytes="$(extract_value ebpf_bytes)"
 ebpf_reserve_fail="$(extract_value ebpf_reserve_fail)"
 dispatch_send_fail="$(extract_value send_fail)"
+dispatch_send_queue_full="$(extract_value send_queue_full)"
 
 if [[ -z "${ebpf_submitted:-}" || -z "${ebpf_bytes:-}" ]]; then
     echo "Failed to parse eBPF counters from: $last_stats_line"
@@ -157,6 +158,7 @@ echo "latency p50 (ms):         $lat_p50"
 echo "latency p95 (ms):         $lat_p95"
 echo
 echo "dispatch send fail:        ${dispatch_send_fail:-0}"
+echo "dispatch send queue full:  ${dispatch_send_queue_full:-0}"
 echo "eBPF reserve fail:         ${ebpf_reserve_fail:-0}"
 echo
 echo "Last stats line:"

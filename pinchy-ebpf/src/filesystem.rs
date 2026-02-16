@@ -11,10 +11,11 @@ use aya_log_ebpf::error;
 use pinchy_common::kernel_types::LinuxDirent;
 use pinchy_common::{
     kernel_types::{LinuxDirent64, Stat},
-    syscalls, DATA_READ_SIZE,
+    syscalls, FaccessatData, FstatData, FstatfsData, NewfstatatData, ReadlinkatData, StatfsData,
+    DATA_READ_SIZE,
 };
 
-use crate::{data_mut, util};
+use crate::{data_mut, util, util::submit_compact_payload};
 
 #[tracepoint]
 pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
@@ -23,38 +24,163 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
         let args = util::get_args(&ctx, syscall_nr)?;
         let return_value = util::get_return_value(&ctx)?;
 
+        match syscall_nr {
+            syscalls::SYS_fstat => {
+                submit_compact_payload::<FstatData, _>(
+                    &ctx,
+                    syscalls::SYS_fstat,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+
+                        let stat_ptr = args[1] as *const u8;
+
+                        if !stat_ptr.is_null() {
+                            unsafe {
+                                payload.stat = bpf_probe_read_user(stat_ptr as *const _)
+                                    .unwrap_or_else(|_| Stat::default());
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_newfstatat => {
+                submit_compact_payload::<NewfstatatData, _>(
+                    &ctx,
+                    syscalls::SYS_newfstatat,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.flags = args[3] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+                        let stat_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+
+                            if return_value == 0 {
+                                let _ = bpf_probe_read_user_buf(
+                                    stat_ptr,
+                                    core::slice::from_raw_parts_mut(
+                                        &mut payload.stat as *mut _ as *mut u8,
+                                        core::mem::size_of::<Stat>(),
+                                    ),
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_readlinkat => {
+                submit_compact_payload::<ReadlinkatData, _>(
+                    &ctx,
+                    syscalls::SYS_readlinkat,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.bufsiz = args[3] as usize;
+
+                        let pathname_ptr = args[1] as *const u8;
+                        let buf_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(buf_ptr, &mut payload.buf);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_statfs => {
+                submit_compact_payload::<StatfsData, _>(
+                    &ctx,
+                    syscalls::SYS_statfs,
+                    return_value,
+                    |payload| {
+                        let pathname_ptr = args[0] as *const u8;
+                        let buf_ptr = args[1] as *const pinchy_common::kernel_types::Statfs;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+
+                            if return_value == 0 {
+                                if let Ok(val) = bpf_probe_read_user(buf_ptr as *const _) {
+                                    payload.statfs = val;
+                                }
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_faccessat | syscalls::SYS_faccessat2 => {
+                submit_compact_payload::<FaccessatData, _>(
+                    &ctx,
+                    syscall_nr,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.mode = args[2] as i32;
+                        payload.flags = args[3] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fstatfs => {
+                submit_compact_payload::<FstatfsData, _>(
+                    &ctx,
+                    syscalls::SYS_fstatfs,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+
+                        let buf_ptr = args[1] as *const pinchy_common::kernel_types::Statfs;
+
+                        unsafe {
+                            if return_value == 0 {
+                                if let Ok(val) = bpf_probe_read_user(buf_ptr as *const _) {
+                                    payload.statfs = val;
+                                }
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            _ => {}
+        }
+
         let mut entry = util::Entry::new(&ctx, syscall_nr)?;
 
         match syscall_nr {
-            syscalls::SYS_fstat => {
-                let data = data_mut!(entry, fstat);
-                data.fd = args[0] as i32;
-                let stat_ptr = args[1] as *const u8;
-                if !stat_ptr.is_null() {
-                    unsafe {
-                        data.stat = bpf_probe_read_user(stat_ptr as *const _)
-                            .unwrap_or_else(|_| Stat::default());
-                    }
-                }
-            }
-            syscalls::SYS_newfstatat => {
-                let data = data_mut!(entry, newfstatat);
-                data.dirfd = args[0] as i32;
-                let pathname_ptr = args[1] as *const u8;
-                let stat_ptr = args[2] as *const u8;
-                data.flags = args[3] as i32;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
-                    if return_value == 0 {
-                        let _ = bpf_probe_read_user_buf(
-                            stat_ptr,
-                            core::slice::from_raw_parts_mut(
-                                &mut data.stat as *mut _ as *mut u8,
-                                core::mem::size_of::<Stat>(),
-                            ),
-                        );
-                    }
-                }
+            syscalls::SYS_fstat
+            | syscalls::SYS_newfstatat
+            | syscalls::SYS_readlinkat
+            | syscalls::SYS_statfs
+            | syscalls::SYS_faccessat
+            | syscalls::SYS_faccessat2
+            | syscalls::SYS_fstatfs => {
+                error!(
+                    &ctx,
+                    "migrated filesystem syscall {} hit legacy path", syscall_nr
+                );
+                entry.discard();
+                return Ok(());
             }
             syscalls::SYS_getdents64 => {
                 let data = data_mut!(entry, getdents64);
@@ -125,40 +251,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                         data.num_dirents += 1;
                         offset += reclen;
                     }
-                }
-            }
-            syscalls::SYS_readlinkat => {
-                let data = data_mut!(entry, readlinkat);
-                data.dirfd = args[0] as i32;
-                let pathname_ptr = args[1] as *const u8;
-                let buf_ptr = args[2] as *const u8;
-                data.bufsiz = args[3] as usize;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                    let _ = bpf_probe_read_user_buf(buf_ptr, &mut data.buf);
-                }
-            }
-            syscalls::SYS_statfs => {
-                let data = data_mut!(entry, statfs);
-                let pathname_ptr = args[0] as *const u8;
-                let buf_ptr = args[1] as *const pinchy_common::kernel_types::Statfs;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
-                    if return_value == 0 {
-                        if let Ok(val) = bpf_probe_read_user(buf_ptr as *const _) {
-                            data.statfs = val;
-                        }
-                    }
-                }
-            }
-            syscalls::SYS_faccessat | syscalls::SYS_faccessat2 => {
-                let data = data_mut!(entry, faccessat);
-                data.dirfd = args[0] as i32;
-                let pathname_ptr = args[1] as *const u8;
-                data.mode = args[2] as i32;
-                data.flags = args[3] as i32;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr as *const _, &mut data.pathname);
                 }
             }
             syscalls::SYS_inotify_add_watch => {
@@ -656,18 +748,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let pathname_ptr = args[0] as *const u8;
                 unsafe {
                     let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-            }
-            syscalls::SYS_fstatfs => {
-                let data = data_mut!(entry, fstatfs);
-                data.fd = args[0] as i32;
-                let buf_ptr = args[1] as *const pinchy_common::kernel_types::Statfs;
-                unsafe {
-                    if return_value == 0 {
-                        if let Ok(val) = bpf_probe_read_user(buf_ptr as *const _) {
-                            data.statfs = val;
-                        }
-                    }
                 }
             }
             syscalls::SYS_fsopen => {

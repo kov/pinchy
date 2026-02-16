@@ -90,7 +90,7 @@ fn epoll_syscalls() {
         @PID@ epoll_create1(flags: EPOLL_CLOEXEC) = @NUMBER@ (fd)
         @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_ADD, fd: @NUMBER@, event: epoll_event { events: POLLIN, data: @ADDR@ }) = 0 (success)
         @PID@ epoll_pwait(epfd: @NUMBER@, events: [ epoll_event { events: POLLIN, data: @ADDR@ } ], max_events: 8, timeout: 0, sigmask) = 1
-        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_DEL, fd: @NUMBER@, event: epoll_event { events: , data: 0x0 }) = 0 (success)
+        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_DEL, fd: @NUMBER@, event: epoll_event { events: 0, data: 0x0 }) = 0 (success)
         @PID@ epoll_pwait2(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
         @PID@ epoll_wait(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: 0) = 0 (success)
     "#});
@@ -100,7 +100,7 @@ fn epoll_syscalls() {
         @PID@ epoll_create1(flags: EPOLL_CLOEXEC) = @NUMBER@ (fd)
         @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_ADD, fd: @NUMBER@, event: epoll_event { events: POLLIN, data: @ADDR@ }) = 0 (success)
         @PID@ epoll_pwait(epfd: @NUMBER@, events: [ epoll_event { events: POLLIN, data: @ADDR@ } ], max_events: 8, timeout: 0, sigmask) = 1
-        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_DEL, fd: @NUMBER@, event: epoll_event { events: , data: 0x0 }) = 0 (success)
+        @PID@ epoll_ctl(epfd: @NUMBER@, op: EPOLL_CTL_DEL, fd: @NUMBER@, event: epoll_event { events: 0, data: 0x0 }) = 0 (success)
         @PID@ epoll_pwait2(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: { secs: 0, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 0 (success)
         @PID@ epoll_pwait(epfd: @NUMBER@, events: [  ], max_events: 8, timeout: 0, sigmask) = 0 (success)
     "#});
@@ -448,7 +448,7 @@ fn io_multiplexing_syscalls() {
 
     #[cfg(target_arch = "aarch64")]
     let expected_output = escaped_regex(indoc! {r#"
-        @PID@ ppoll(fds: [ { 0,  }, { 1,  }, { 2,  } ], nfds: 3, timeout: { secs: 0, nanos: 0 }, sigmask) = 0 (timeout)
+        @PID@ ppoll(fds: [ { 0 }, { 1 }, { 2 } ], nfds: 3, timeout: { secs: 0, nanos: 0 }, sigmask) = 0 (timeout)
         @PID@ ppoll(fds: [ { @NUMBER@, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: @NUMBER@ }, sigmask) = 1 (ready) [@NUMBER@ = POLLIN]
     "#});
 

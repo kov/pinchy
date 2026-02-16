@@ -274,7 +274,7 @@ pub async fn handle_compact_event(
                         argf!(
                             sf,
                             "events: {}",
-                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                            format_poll_events(epoll_event.events as i16)
                         );
                         argf!(sf, "data: {:#x}", epoll_event.data);
                     });
@@ -303,7 +303,7 @@ pub async fn handle_compact_event(
                         argf!(
                             sf,
                             "events: {}",
-                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                            format_poll_events(epoll_event.events as i16)
                         );
                         argf!(sf, "data: {:#x}", epoll_event.data);
                     });
@@ -330,7 +330,7 @@ pub async fn handle_compact_event(
                         argf!(
                             sf,
                             "events: {}",
-                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                            format_poll_events(epoll_event.events as i16)
                         );
                         argf!(sf, "data: {:#x}", epoll_event.data);
                     });
@@ -357,7 +357,7 @@ pub async fn handle_compact_event(
                 argf!(
                     sf,
                     "events: {}",
-                    poll_bits_to_strs(&(data.event.events as i16)).join("|")
+                    format_poll_events(data.event.events as i16)
                 );
                 argf!(sf, "data: {:#x}", data.event.data);
             });
@@ -372,17 +372,7 @@ pub async fn handle_compact_event(
                     raw!(sf, format!(" {}", data.fds[i]));
 
                     if data.events[i] != 0 {
-                        raw!(
-                            sf,
-                            format!(", {}", poll_bits_to_strs(&data.events[i]).join("|"))
-                        );
-                    }
-
-                    if data.revents[i] != 0 {
-                        raw!(
-                            sf,
-                            format!(", {}", poll_bits_to_strs(&data.revents[i]).join("|"))
-                        );
+                        raw!(sf, format!(", {}", format_poll_events(data.events[i])));
                     }
 
                     raw!(sf, " }");
@@ -400,7 +390,7 @@ pub async fn handle_compact_event(
                     " [{}]",
                     data.fds.iter().zip(data.revents.iter()).join_take_map(
                         data.nfds as usize,
-                        |(fd, event)| format!("{fd} = {}", poll_bits_to_strs(event).join("|"))
+                        |(fd, event)| format!("{fd} = {}", format_poll_events(*event))
                     )
                 )),
             };
@@ -1678,7 +1668,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                         argf!(
                             sf,
                             "events: {}",
-                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                            format_poll_events(epoll_event.events as i16)
                         );
                         argf!(sf, "data: {:#x}", epoll_event.data);
                     });
@@ -1704,7 +1694,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                         argf!(
                             sf,
                             "events: {}",
-                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                            format_poll_events(epoll_event.events as i16)
                         );
                         argf!(sf, "data: {:#x}", epoll_event.data);
                     });
@@ -1730,7 +1720,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(
                     sf,
                     "events: {}",
-                    poll_bits_to_strs(&(data.event.events as i16)).join("|")
+                    format_poll_events(data.event.events as i16)
                 );
                 argf!(sf, "data: {:#x}", data.event.data);
             });
@@ -1752,7 +1742,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                         argf!(
                             sf,
                             "events: {}",
-                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                            format_poll_events(epoll_event.events as i16)
                         );
                         argf!(sf, "data: {:#x}", epoll_event.data);
                     });
@@ -1776,7 +1766,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     .zip(data.events.iter())
                     .take(data.nfds as usize)
                 {
-                    argf!(sf, "{{ {fd}, {} }}", poll_bits_to_strs(events).join("|"));
+                    argf!(sf, "{{ {fd}, {} }}", format_poll_events(*events));
                 }
             });
 
@@ -1795,7 +1785,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     " [{}]",
                     data.fds.iter().zip(data.revents.iter()).join_take_map(
                         data.nfds as usize,
-                        |(fd, event)| format!("{fd} = {}", poll_bits_to_strs(event).join("|"))
+                        |(fd, event)| format!("{fd} = {}", format_poll_events(*event))
                     )
                 )),
             };

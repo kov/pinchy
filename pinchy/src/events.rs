@@ -5,10 +5,13 @@ use std::borrow::Cow;
 
 use log::{error, trace};
 use pinchy_common::{
-    compact_payload_size, kernel_types, syscalls, wire_validation_enabled, CloseData, LseekData,
-    OpenAtData, PreadData, PwriteData, ReadData, SyscallEvent, VectorIOData, WireEventHeader,
-    WriteData,
+    compact_payload_size, kernel_types, syscalls, wire_validation_enabled, CloseData, EpollCtlData,
+    EpollPWait2Data, EpollPWaitData, LseekData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData,
+    PreadData, Pselect6Data, PwriteData, ReadData, SpliceData, SyscallEvent, TeeData, VectorIOData,
+    VmspliceData, WireEventHeader, WriteData,
 };
+#[cfg(target_arch = "x86_64")]
+use pinchy_common::{PollData, SelectData, SendfileData};
 
 use crate::{
     arg, argf, finish,
@@ -36,7 +39,22 @@ pub async fn handle_compact_event(
         | syscalls::SYS_preadv
         | syscalls::SYS_pwritev
         | syscalls::SYS_preadv2
-        | syscalls::SYS_pwritev2 => header.syscall_nr,
+        | syscalls::SYS_pwritev2
+        | syscalls::SYS_openat2
+        | syscalls::SYS_epoll_pwait
+        | syscalls::SYS_epoll_pwait2
+        | syscalls::SYS_epoll_ctl
+        | syscalls::SYS_ppoll
+        | syscalls::SYS_pselect6
+        | syscalls::SYS_pipe2
+        | syscalls::SYS_splice
+        | syscalls::SYS_tee
+        | syscalls::SYS_vmsplice => header.syscall_nr,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_epoll_wait
+        | syscalls::SYS_poll
+        | syscalls::SYS_select
+        | syscalls::SYS_sendfile => header.syscall_nr,
         _ => return Ok(false),
     };
 
@@ -225,6 +243,343 @@ pub async fn handle_compact_event(
 
             finish!(sf, header.return_value);
         }
+        syscalls::SYS_openat2 => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const OpenAt2Data) };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            arg!(sf, "how:");
+            with_struct!(sf, {
+                argf!(sf, "flags: {}", format_flags(data.how.flags as i32));
+                argf!(sf, "mode: {}", format_mode(data.how.mode as u32));
+                argf!(sf, "resolve: {}", format_resolve_flags(data.how.resolve));
+            });
+            argf!(sf, "size: {}", data.size);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_epoll_pwait => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const EpollPWaitData) };
+
+            argf!(sf, "epfd: {}", data.epfd);
+
+            arg!(sf, "events:");
+            with_array!(sf, {
+                let nevents = (header.return_value as usize).min(data.events.len());
+                for i in 0..nevents {
+                    let epoll_event = data.events[i];
+                    arg!(sf, "epoll_event");
+                    with_struct!(sf, {
+                        argf!(
+                            sf,
+                            "events: {}",
+                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                        );
+                        argf!(sf, "data: {:#x}", epoll_event.data);
+                    });
+                }
+            });
+
+            argf!(sf, "max_events: {}", data.max_events);
+            argf!(sf, "timeout: {}", data.timeout);
+            arg!(sf, "sigmask");
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_epoll_wait => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const EpollPWaitData) };
+
+            argf!(sf, "epfd: {}", data.epfd);
+
+            arg!(sf, "events:");
+            with_array!(sf, {
+                let nevents = (header.return_value as usize).min(data.events.len());
+                for i in 0..nevents {
+                    let epoll_event = data.events[i];
+                    arg!(sf, "epoll_event");
+                    with_struct!(sf, {
+                        argf!(
+                            sf,
+                            "events: {}",
+                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                        );
+                        argf!(sf, "data: {:#x}", epoll_event.data);
+                    });
+                }
+            });
+
+            argf!(sf, "max_events: {}", data.max_events);
+            argf!(sf, "timeout: {}", data.timeout);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_epoll_pwait2 => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const EpollPWait2Data) };
+
+            argf!(sf, "epfd: {}", data.epfd);
+
+            arg!(sf, "events:");
+            with_array!(sf, {
+                let nevents = (header.return_value as usize).min(data.events.len());
+                for i in 0..nevents {
+                    let epoll_event = data.events[i];
+                    arg!(sf, "epoll_event");
+                    with_struct!(sf, {
+                        argf!(
+                            sf,
+                            "events: {}",
+                            poll_bits_to_strs(&(epoll_event.events as i16)).join("|")
+                        );
+                        argf!(sf, "data: {:#x}", epoll_event.data);
+                    });
+                }
+            });
+
+            argf!(sf, "max_events: {}", data.max_events);
+
+            arg!(sf, "timeout:");
+            format_timespec(&mut sf, data.timeout).await?;
+
+            argf!(sf, "sigmask: 0x{:x}", data.sigmask);
+            argf!(sf, "sigsetsize: {}", data.sigsetsize);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_epoll_ctl => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const EpollCtlData) };
+
+            argf!(sf, "epfd: {}", data.epfd);
+            argf!(sf, "op: {}", format_epoll_ctl_op(data.op));
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "event: epoll_event");
+            with_struct!(sf, {
+                argf!(
+                    sf,
+                    "events: {}",
+                    poll_bits_to_strs(&(data.event.events as i16)).join("|")
+                );
+                argf!(sf, "data: {:#x}", data.event.data);
+            });
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_ppoll => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const PpollData) };
+            arg!(sf, "fds:");
+            with_array!(sf, {
+                for i in 0..data.nfds as usize {
+                    arg!(sf, "{");
+                    raw!(sf, format!(" {}", data.fds[i]));
+
+                    if data.events[i] != 0 {
+                        raw!(
+                            sf,
+                            format!(", {}", poll_bits_to_strs(&data.events[i]).join("|"))
+                        );
+                    }
+
+                    if data.revents[i] != 0 {
+                        raw!(
+                            sf,
+                            format!(", {}", poll_bits_to_strs(&data.revents[i]).join("|"))
+                        );
+                    }
+
+                    raw!(sf, " }");
+                }
+            });
+            argf!(sf, "nfds: {}", data.nfds);
+            arg!(sf, "timeout:");
+            format_timespec(&mut sf, data.timeout).await?;
+            arg!(sf, "sigmask");
+
+            let extra_info = match header.return_value {
+                0 => None,
+                -1 => None,
+                _ => Some(format!(
+                    " [{}]",
+                    data.fds.iter().zip(data.revents.iter()).join_take_map(
+                        data.nfds as usize,
+                        |(fd, event)| format!("{fd} = {}", poll_bits_to_strs(event).join("|"))
+                    )
+                )),
+            };
+
+            match extra_info {
+                Some(extra) => finish!(sf, header.return_value, extra.as_bytes()),
+                None => finish!(sf, header.return_value),
+            };
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_poll => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const PollData) };
+            arg!(sf, "fds:");
+            with_array!(sf, {
+                for i in 0..data.actual_nfds as usize {
+                    arg!(sf, "pollfd");
+                    with_struct!(sf, {
+                        argf!(sf, "fd: {}", data.fds[i].fd);
+                        argf!(
+                            sf,
+                            "events: {}",
+                            crate::format_helpers::format_poll_events(data.fds[i].events)
+                        );
+                        argf!(
+                            sf,
+                            "revents: {}",
+                            crate::format_helpers::format_poll_events(data.fds[i].revents)
+                        );
+                    });
+                }
+            });
+            argf!(sf, "nfds: {}", data.nfds);
+            argf!(sf, "timeout: {}", data.timeout);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_pselect6 => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const Pselect6Data) };
+
+            argf!(sf, "nfds: {}", data.nfds);
+
+            arg!(sf, "readfds:");
+            if data.has_readfds {
+                format_fdset(&mut sf, &data.readfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "writefds:");
+            if data.has_writefds {
+                format_fdset(&mut sf, &data.writefds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "exceptfds:");
+            if data.has_exceptfds {
+                format_fdset(&mut sf, &data.exceptfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "timeout:");
+            if data.has_timeout {
+                format_timespec(&mut sf, data.timeout).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "sigmask:");
+            if data.has_sigmask {
+                raw!(sf, " <present>");
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_select => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const SelectData) };
+
+            argf!(sf, "nfds: {}", data.nfds);
+
+            arg!(sf, "readfds:");
+            if data.has_readfds {
+                format_fdset(&mut sf, &data.readfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "writefds:");
+            if data.has_writefds {
+                format_fdset(&mut sf, &data.writefds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "exceptfds:");
+            if data.has_exceptfds {
+                format_fdset(&mut sf, &data.exceptfds).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            arg!(sf, "timeout:");
+            if data.has_timeout {
+                format_timeval(&mut sf, &data.timeout).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_pipe2 => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const Pipe2Data) };
+            arg!(sf, "pipefd:");
+            with_array!(sf, {
+                argf!(sf, "{}", data.pipefd[0]);
+                argf!(sf, "{}", data.pipefd[1]);
+            });
+            argf!(sf, "flags: {}", format_pipe2_flags(data.flags));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_splice => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const SpliceData) };
+
+            argf!(sf, "fd_in: {}", data.fd_in);
+            argf!(sf, "off_in: 0x{:x}", data.off_in);
+            argf!(sf, "fd_out: {}", data.fd_out);
+            argf!(sf, "off_out: 0x{:x}", data.off_out);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "flags: {}", format_splice_flags(data.flags));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_tee => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const TeeData) };
+
+            argf!(sf, "fd_in: {}", data.fd_in);
+            argf!(sf, "fd_out: {}", data.fd_out);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "flags: {}", format_splice_flags(data.flags));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_vmsplice => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const VmspliceData) };
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "iov:");
+            format_iovec_array(
+                &mut sf,
+                &data.iovecs,
+                &data.iov_lens,
+                &data.iov_bufs,
+                data.read_count,
+                &IovecFormatOptions::for_io_syscalls(),
+            )
+            .await?;
+            argf!(sf, "iovcnt: {}", data.iovcnt);
+            argf!(sf, "flags: {}", format_splice_flags(data.flags));
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_sendfile => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const SendfileData) };
+
+            argf!(sf, "out_fd: {}", data.out_fd);
+            argf!(sf, "in_fd: {}", data.in_fd);
+
+            if data.offset_is_null != 0 {
+                arg!(sf, "offset: NULL");
+            } else {
+                argf!(sf, "offset: {}", data.offset);
+            }
+
+            argf!(sf, "count: {}", data.count);
+
+            finish!(sf, header.return_value);
+        }
 
         _ => return Ok(false),
     }
@@ -240,7 +595,27 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         return Ok(());
     };
 
+    #[allow(unreachable_patterns)]
     match event.syscall_nr {
+        syscalls::SYS_openat2
+        | syscalls::SYS_epoll_pwait
+        | syscalls::SYS_epoll_pwait2
+        | syscalls::SYS_epoll_ctl
+        | syscalls::SYS_ppoll
+        | syscalls::SYS_pselect6
+        | syscalls::SYS_pipe2
+        | syscalls::SYS_splice
+        | syscalls::SYS_tee
+        | syscalls::SYS_vmsplice => {
+            unreachable!("migrated syscall should be handled by compact path");
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_epoll_wait
+        | syscalls::SYS_poll
+        | syscalls::SYS_select
+        | syscalls::SYS_sendfile => {
+            unreachable!("migrated syscall should be handled by compact path");
+        }
         syscalls::SYS_rt_sigreturn
         | syscalls::SYS_sched_yield
         | syscalls::SYS_getpid

@@ -30,7 +30,7 @@ use pinchy_common::{
 };
 
 use crate::{
-    events::handle_event,
+    events::handle_compact_event,
     format_helpers::{aio_constants, io_uring_constants},
     formatting::{Formatter, FormattingStyle},
     syscall_compact_test, syscall_test,
@@ -89,30 +89,27 @@ syscall_test!(
 
 #[tokio::test]
 async fn parse_epoll_pwait_multiline() {
-    let mut event = SyscallEvent {
-        syscall_nr: SYS_epoll_pwait,
-        pid: 1,
-        tid: 1,
-        return_value: 1,
-        data: pinchy_common::SyscallEventData {
-            epoll_pwait: EpollPWaitData {
-                epfd: 4,
-                events: [EpollEvent::default(); 8],
-                max_events: 10,
-                timeout: -1,
-            },
-        },
+    let mut data = EpollPWaitData {
+        epfd: 4,
+        events: [EpollEvent::default(); 8],
+        max_events: 10,
+        timeout: -1,
     };
 
-    let epoll_events = unsafe { &mut event.data.epoll_pwait.events };
-    epoll_events[0].data = 0xBEEF;
-    epoll_events[0].events = (libc::POLLIN | libc::POLLERR | libc::POLLHUP) as u32;
+    data.events[0].data = 0xBEEF;
+    data.events[0].events = (libc::POLLIN | libc::POLLERR | libc::POLLHUP) as u32;
+
+    let (header, payload) = make_compact_test_data(SYS_epoll_pwait, 1, 1, &data);
 
     let mut output: Vec<u8> = vec![];
     let pin_output = unsafe { Pin::new_unchecked(&mut output) };
     let formatter = Formatter::new(pin_output, FormattingStyle::MultiLine);
 
-    handle_event(&event, formatter).await.unwrap();
+    let handled = handle_compact_event(&header, &payload, formatter)
+        .await
+        .unwrap();
+
+    assert!(handled);
 
     assert_eq!(
         String::from_utf8_lossy(&output),
@@ -134,86 +131,65 @@ async fn parse_epoll_pwait_multiline() {
     );
 }
 
-syscall_test!(
+syscall_compact_test!(
         parse_epoll_pwait,
         {
-            let mut event = SyscallEvent {
-                syscall_nr: SYS_epoll_pwait,
-                pid: 1,
-                tid: 1,
-                return_value: 1,
-                data: pinchy_common::SyscallEventData {
-                    epoll_pwait: EpollPWaitData {
-                        epfd: 4,
-                        events: [EpollEvent::default(); 8],
-                        max_events: 10,
-                        timeout: -1,
-                    },
-                },
+            let mut data = EpollPWaitData {
+                epfd: 4,
+                events: [EpollEvent::default(); 8],
+                max_events: 10,
+                timeout: -1,
             };
-            let epoll_events = unsafe { &mut event.data.epoll_pwait.events };
-            epoll_events[0].data = 0xBEEF;
-            epoll_events[0].events = (libc::POLLIN | libc::POLLERR | libc::POLLHUP) as u32;
-            event
+
+            data.events[0].data = 0xBEEF;
+            data.events[0].events = (libc::POLLIN | libc::POLLERR | libc::POLLHUP) as u32;
+
+            make_compact_test_data(SYS_epoll_pwait, 1, 1, &data)
         },
         "1 epoll_pwait(epfd: 4, events: [ epoll_event { events: POLLIN|POLLERR|POLLHUP, data: 0xbeef } ], max_events: 10, timeout: -1, sigmask) = 1\n"
     );
 
-syscall_test!(
+syscall_compact_test!(
     parse_ppoll,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_ppoll,
-            pid: 22,
-            tid: 22,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                ppoll: PpollData {
-                    fds: [0; 16],
-                    events: [0; 16],
-                    revents: [0; 16],
-                    nfds: 1,
-                    timeout: Timespec {
-                        seconds: 0,
-                        nanos: 0,
-                    },
-                },
+        let mut data = PpollData {
+            fds: [0; 16],
+            events: [0; 16],
+            revents: [0; 16],
+            nfds: 1,
+            timeout: Timespec {
+                seconds: 0,
+                nanos: 0,
             },
         };
-        let ppoll_data = unsafe { &mut event.data.ppoll };
-        ppoll_data.fds[0] = 3;
-        ppoll_data.events[0] = libc::POLLIN;
-        event
+
+        data.fds[0] = 3;
+        data.events[0] = libc::POLLIN;
+
+        make_compact_test_data(SYS_ppoll, 22, 0, &data)
     },
     "22 ppoll(fds: [ { 3, POLLIN } ], nfds: 1, timeout: { secs: 0, nanos: 0 }, sigmask) = 0 (timeout)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_ppoll_ready,
     {
-        let mut event_ready = SyscallEvent {
-            syscall_nr: SYS_ppoll,
-            pid: 22,
-            tid: 22,
-            return_value: 1, // 1 fd ready
-            data: pinchy_common::SyscallEventData {
-                ppoll: PpollData {
-                    fds: [0; 16],
-                    events: [0; 16],
-                    revents: [0; 16],
-                    nfds: 1,
-                    timeout: Timespec {
-                        seconds: 1,
-                        nanos: 0,
-                    },
-                },
+        let mut data = PpollData {
+            fds: [0; 16],
+            events: [0; 16],
+            revents: [0; 16],
+            nfds: 1,
+            timeout: Timespec {
+                seconds: 1,
+                nanos: 0,
             },
         };
-        let ppoll_data_ready = unsafe { &mut event_ready.data.ppoll };
-        ppoll_data_ready.fds[0] = 5;
-        ppoll_data_ready.events[0] = libc::POLLIN;
-        ppoll_data_ready.revents[0] = libc::POLLIN; // Ready for reading
-        event_ready
+
+        data.fds[0] = 5;
+        data.events[0] = libc::POLLIN;
+        data.revents[0] = libc::POLLIN;
+
+        make_compact_test_data(SYS_ppoll, 22, 1, &data)
     },
     "22 ppoll(fds: [ { 5, POLLIN } ], nfds: 1, timeout: { secs: 1, nanos: 0 }, sigmask) = 1 (ready) [5 = POLLIN]\n"
 );
@@ -289,60 +265,46 @@ syscall_compact_test!(
     "22 openat(dfd: AT_FDCWD, pathname: \"/etc/passwd\", flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-)) = 3 (fd)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_openat2,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_openat2,
-            pid: 22,
-            tid: 22,
-            return_value: 3,
-            data: pinchy_common::SyscallEventData {
-                openat2: OpenAt2Data {
-                    dfd: libc::AT_FDCWD,
-                    pathname: [0u8; DATA_READ_SIZE],
-                    how: OpenHow {
-                        flags: (libc::O_RDONLY | libc::O_CLOEXEC) as u64,
-                        mode: 0o666,
-                        resolve: libc::RESOLVE_BENEATH | libc::RESOLVE_NO_SYMLINKS,
-                    },
-                    size: 24, // size of struct open_how
-                },
+        let mut data = OpenAt2Data {
+            dfd: libc::AT_FDCWD,
+            pathname: [0u8; DATA_READ_SIZE],
+            how: OpenHow {
+                flags: (libc::O_RDONLY | libc::O_CLOEXEC) as u64,
+                mode: 0o666,
+                resolve: libc::RESOLVE_BENEATH | libc::RESOLVE_NO_SYMLINKS,
             },
+            size: 24,
         };
-        let openat2_data = unsafe { &mut event.data.openat2 };
+
         let path = c"/etc/passwd".to_bytes_with_nul();
-        openat2_data.pathname[..path.len()].copy_from_slice(path);
-        event
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        make_compact_test_data(SYS_openat2, 22, 3, &data)
     },
     "22 openat2(dfd: AT_FDCWD, pathname: \"/etc/passwd\", how: { flags: 0x80000 (O_RDONLY|O_CLOEXEC), mode: 0o666 (rw-rw-rw-), resolve: 0xc (RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS) }, size: 24) = 3 (fd)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_openat2_no_resolve_flags,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_openat2,
-            pid: 22,
-            tid: 22,
-            return_value: 4,
-            data: pinchy_common::SyscallEventData {
-                openat2: OpenAt2Data {
-                    dfd: libc::AT_FDCWD,
-                    pathname: [0u8; DATA_READ_SIZE],
-                    how: OpenHow {
-                        flags: libc::O_WRONLY as u64,
-                        mode: 0o644,
-                        resolve: 0, // No resolve flags
-                    },
-                    size: 24,
-                },
+        let mut data = OpenAt2Data {
+            dfd: libc::AT_FDCWD,
+            pathname: [0u8; DATA_READ_SIZE],
+            how: OpenHow {
+                flags: libc::O_WRONLY as u64,
+                mode: 0o644,
+                resolve: 0,
             },
+            size: 24,
         };
-        let openat2_data = unsafe { &mut event.data.openat2 };
+
         let path = c"/tmp/test".to_bytes_with_nul();
-        openat2_data.pathname[..path.len()].copy_from_slice(path);
-        event
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        make_compact_test_data(SYS_openat2, 22, 4, &data)
     },
     "22 openat2(dfd: AT_FDCWD, pathname: \"/tmp/test\", how: { flags: 0x1 (O_WRONLY), mode: 0o644 (rw-r--r--), resolve: 0 }, size: 24) = 4 (fd)\n"
 );
@@ -407,21 +369,15 @@ syscall_test!(
     "100 fcntl(fd: 3, cmd: F_DUPFD, arg: 0x4) = 7\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_pipe2,
     {
-        SyscallEvent {
-            syscall_nr: SYS_pipe2,
-            pid: 1,
-            tid: 1,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                pipe2: pinchy_common::Pipe2Data {
-                    pipefd: [3, 4],
-                    flags: libc::O_CLOEXEC,
-                },
-            },
-        }
+        let data = pinchy_common::Pipe2Data {
+            pipefd: [3, 4],
+            flags: libc::O_CLOEXEC,
+        };
+
+        make_compact_test_data(SYS_pipe2, 1, 0, &data)
     },
     "1 pipe2(pipefd: [ 3, 4 ], flags: 0x80000 (O_CLOEXEC)) = 0 (success)\n"
 );
@@ -622,33 +578,26 @@ syscall_test!(
 );
 
 #[cfg(target_arch = "x86_64")]
-syscall_test!(
+syscall_compact_test!(
     parse_epoll_wait,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_epoll_wait,
-            pid: 42,
-            tid: 42,
-            return_value: 1,
-            data: pinchy_common::SyscallEventData {
-                epoll_wait: EpollPWaitData {
-                    epfd: 7,
-                    events: [EpollEvent::default(); 8],
-                    max_events: 8,
-                    timeout: 1000,
-                },
-            },
+        let mut data = EpollPWaitData {
+            epfd: 7,
+            events: [EpollEvent::default(); 8],
+            max_events: 8,
+            timeout: 1000,
         };
-        let epoll_events = unsafe { &mut event.data.epoll_wait.events };
-        epoll_events[0].data = 0x1234;
-        epoll_events[0].events = libc::POLLIN as u32;
-        event
+
+        data.events[0].data = 0x1234;
+        data.events[0].events = libc::POLLIN as u32;
+
+        make_compact_test_data(pinchy_common::syscalls::SYS_epoll_wait, 42, 1, &data)
     },
     "42 epoll_wait(epfd: 7, events: [ epoll_event { events: POLLIN, data: 0x1234 } ], max_events: 8, timeout: 1000) = 1\n"
 );
 
 #[cfg(target_arch = "x86_64")]
-syscall_test!(
+syscall_compact_test!(
     test_poll,
     {
         use pinchy_common::kernel_types::Pollfd;
@@ -663,149 +612,114 @@ syscall_test!(
             events: libc::POLLOUT as i16,
             revents: libc::POLLOUT as i16,
         };
-        SyscallEvent {
-            syscall_nr: SYS_poll,
-            pid: 1001,
-            tid: 1001,
-            return_value: 2, // number of ready fds
-            data: pinchy_common::SyscallEventData {
-                poll: PollData {
-                    fds,
-                    nfds: 2,
-                    timeout: 1000,
-                    actual_nfds: 2,
-                },
-            },
-        }
+        let data = PollData {
+            fds,
+            nfds: 2,
+            timeout: 1000,
+            actual_nfds: 2,
+        };
+
+        make_compact_test_data(SYS_poll, 1001, 2, &data)
     },
     "1001 poll(fds: [ pollfd { fd: 0, events: POLLIN, revents: POLLIN }, pollfd { fd: 1, events: POLLOUT, revents: POLLOUT } ], nfds: 2, timeout: 1000) = 2 (ready)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_epoll_pwait2,
     {
         let mut events = [EpollEvent::default(); 8];
         events[0] = EpollEvent { events: libc::POLLHUP as u32, data: 0x2 };
-        SyscallEvent {
-            syscall_nr: SYS_epoll_pwait2,
-            pid: 1,
-            tid: 1,
-            return_value: 1,
-            data: pinchy_common::SyscallEventData {
-                epoll_pwait2: EpollPWait2Data {
-                    epfd: 3,
-                    events,
-                    max_events: 1,
-                    timeout: Timespec { seconds: 5, nanos: 0 },
-                    sigmask: 0,
-                    sigsetsize: 0,
-                },
-            },
-        }
+
+        let data = EpollPWait2Data {
+            epfd: 3,
+            events,
+            max_events: 1,
+            timeout: Timespec { seconds: 5, nanos: 0 },
+            sigmask: 0,
+            sigsetsize: 0,
+        };
+
+        make_compact_test_data(SYS_epoll_pwait2, 1, 1, &data)
     },
     "1 epoll_pwait2(epfd: 3, events: [ epoll_event { events: POLLHUP, data: 0x2 } ], max_events: 1, timeout: { secs: 5, nanos: 0 }, sigmask: 0x0, sigsetsize: 0) = 1\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_epoll_ctl,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_epoll_ctl,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                epoll_ctl: pinchy_common::EpollCtlData {
-                    epfd: 5,
-                    op: libc::EPOLL_CTL_ADD,
-                    fd: 10,
-                    event: pinchy_common::kernel_types::EpollEvent {
-                        events: libc::EPOLLIN as u32 | libc::EPOLLOUT as u32,
-                        data: 0xdeadbeef,
-                    },
-                },
+        let data = pinchy_common::EpollCtlData {
+            epfd: 5,
+            op: libc::EPOLL_CTL_ADD,
+            fd: 10,
+            event: pinchy_common::kernel_types::EpollEvent {
+                events: libc::EPOLLIN as u32 | libc::EPOLLOUT as u32,
+                data: 0xdeadbeef,
             },
-        }
+        };
+
+        make_compact_test_data(pinchy_common::syscalls::SYS_epoll_ctl, 123, 0, &data)
     },
     "123 epoll_ctl(epfd: 5, op: EPOLL_CTL_ADD, fd: 10, event: epoll_event { events: POLLIN|POLLOUT, data: 0xdeadbeef }) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_splice,
     {
-        SyscallEvent {
-            syscall_nr: SYS_splice,
-            pid: 10,
-            tid: 10,
-            return_value: 42,
-            data: pinchy_common::SyscallEventData {
-                splice: SpliceData {
-                    fd_in: 3,
-                    off_in: 0x1000,
-                    fd_out: 4,
-                    off_out: 0x2000,
-                    len: 4096,
-                    flags: libc::SPLICE_F_MOVE,
-                },
-            },
-        }
+        let data = SpliceData {
+            fd_in: 3,
+            off_in: 0x1000,
+            fd_out: 4,
+            off_out: 0x2000,
+            len: 4096,
+            flags: libc::SPLICE_F_MOVE,
+        };
+
+        make_compact_test_data(SYS_splice, 10, 42, &data)
     },
     "10 splice(fd_in: 3, off_in: 0x1000, fd_out: 4, off_out: 0x2000, len: 4096, flags: 0x1 (SPLICE_F_MOVE)) = 42 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_tee,
     {
-        SyscallEvent {
-            syscall_nr: SYS_tee,
-            pid: 20,
-            tid: 20,
-            return_value: 128,
-            data: pinchy_common::SyscallEventData {
-                tee: TeeData {
-                    fd_in: 5,
-                    fd_out: 6,
-                    len: 128,
-                    flags: libc::SPLICE_F_NONBLOCK,
-                },
-            },
-        }
+        let data = TeeData {
+            fd_in: 5,
+            fd_out: 6,
+            len: 128,
+            flags: libc::SPLICE_F_NONBLOCK,
+        };
+
+        make_compact_test_data(SYS_tee, 20, 128, &data)
     },
     "20 tee(fd_in: 5, fd_out: 6, len: 128, flags: 0x2 (SPLICE_F_NONBLOCK)) = 128 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_vmsplice,
     {
         let mut iov_bufs = [[0u8; LARGER_READ_SIZE]; IOV_COUNT];
         iov_bufs[0][..4].copy_from_slice(b"test");
         iov_bufs[1][..4].copy_from_slice(b"data");
-        SyscallEvent {
-            syscall_nr: SYS_vmsplice,
-            pid: 1,
-            tid: 1,
-            return_value: 8,
-            data: pinchy_common::SyscallEventData {
-                vmsplice: VmspliceData {
-                    fd: 3,
-                    iovecs: [
-                        Iovec { iov_base: 0x1000, iov_len: 4 },
-                        Iovec { iov_base: 0x2000, iov_len: 4 },
-                        Iovec { iov_base: 0, iov_len: 0 },
-                        Iovec { iov_base: 0, iov_len: 0 },
-                        Iovec { iov_base: 0, iov_len: 0 },
-                        Iovec { iov_base: 0, iov_len: 0 },
-                        Iovec { iov_base: 0, iov_len: 0 },
-                        Iovec { iov_base: 0, iov_len: 0 }
-                    ],
-                    iov_lens: [4, 4, 0, 0, 0, 0, 0, 0],
-                    iov_bufs,
-                    iovcnt: 2,
-                    flags: libc::SPLICE_F_GIFT,
-                    read_count: 2,
-                },
-            },
-        }
+        let data = VmspliceData {
+            fd: 3,
+            iovecs: [
+                Iovec { iov_base: 0x1000, iov_len: 4 },
+                Iovec { iov_base: 0x2000, iov_len: 4 },
+                Iovec { iov_base: 0, iov_len: 0 },
+                Iovec { iov_base: 0, iov_len: 0 },
+                Iovec { iov_base: 0, iov_len: 0 },
+                Iovec { iov_base: 0, iov_len: 0 },
+                Iovec { iov_base: 0, iov_len: 0 },
+                Iovec { iov_base: 0, iov_len: 0 }
+            ],
+            iov_lens: [4, 4, 0, 0, 0, 0, 0, 0],
+            iov_bufs,
+            iovcnt: 2,
+            flags: libc::SPLICE_F_GIFT,
+            read_count: 2,
+        };
+
+        make_compact_test_data(SYS_vmsplice, 1, 8, &data)
     },
     "1 vmsplice(fd: 3, iov: [ iovec { base: 0x1000, len: 4, buf: \"test\" }, iovec { base: 0x2000, len: 4, buf: \"data\" } ], iovcnt: 2, flags: 0x8 (SPLICE_F_GIFT)) = 8 (bytes)\n"
 );
@@ -1121,47 +1035,35 @@ syscall_test!(
 );
 
 #[cfg(target_arch = "x86_64")]
-syscall_test!(
+syscall_compact_test!(
     parse_sendfile_with_offset,
     {
-        SyscallEvent {
-            syscall_nr: SYS_sendfile,
-            pid: 400,
-            tid: 400,
-            return_value: 1024,
-            data: SyscallEventData {
-                sendfile: SendfileData {
-                    out_fd: 4,
-                    in_fd: 3,
-                    offset: 512,
-                    offset_is_null: 0,
-                    count: 2048,
-                },
-            },
-        }
+        let data = SendfileData {
+            out_fd: 4,
+            in_fd: 3,
+            offset: 512,
+            offset_is_null: 0,
+            count: 2048,
+        };
+
+        make_compact_test_data(SYS_sendfile, 400, 1024, &data)
     },
     "400 sendfile(out_fd: 4, in_fd: 3, offset: 512, count: 2048) = 1024 (bytes)\n"
 );
 
 #[cfg(target_arch = "x86_64")]
-syscall_test!(
+syscall_compact_test!(
     parse_sendfile_null_offset,
     {
-        SyscallEvent {
-            syscall_nr: SYS_sendfile,
-            pid: 401,
-            tid: 401,
-            return_value: 4096,
-            data: SyscallEventData {
-                sendfile: SendfileData {
-                    out_fd: 5,
-                    in_fd: 3,
-                    offset: 0,
-                    offset_is_null: 1,
-                    count: 8192,
-                },
-            },
-        }
+        let data = SendfileData {
+            out_fd: 5,
+            in_fd: 3,
+            offset: 0,
+            offset_is_null: 1,
+            count: 8192,
+        };
+
+        make_compact_test_data(SYS_sendfile, 401, 4096, &data)
     },
     "401 sendfile(out_fd: 5, in_fd: 3, offset: NULL, count: 8192) = 4096 (bytes)\n"
 );

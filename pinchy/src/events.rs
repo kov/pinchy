@@ -5,13 +5,14 @@ use std::borrow::Cow;
 
 use log::{error, trace};
 use pinchy_common::{
-    compact_payload_size, kernel_types, syscalls, wire_validation_enabled, CloseData, EpollCtlData,
-    EpollPWait2Data, EpollPWaitData, FaccessatData, FgetxattrData, FlistxattrData,
-    FremovexattrData, FsetxattrData, FstatData, FstatfsData, GetxattrData, LgetxattrData,
-    ListxattrData, LlistxattrData, LremovexattrData, LseekData, LsetxattrData, NewfstatatData,
-    OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data, PwriteData, ReadData,
-    ReadlinkatData, RemovexattrData, SetxattrData, SpliceData, StatfsData, SyscallEvent, TeeData,
-    VectorIOData, VmspliceData, WireEventHeader, WriteData,
+    compact_payload_size, kernel_types, syscalls, wire_validation_enabled, ChdirData, CloseData,
+    EpollCtlData, EpollPWait2Data, EpollPWaitData, FaccessatData, FchmodData, FchmodatData,
+    FchownData, FchownatData, FdatasyncData, FgetxattrData, FlistxattrData, FremovexattrData,
+    FsetxattrData, FstatData, FstatfsData, FsyncData, FtruncateData, GetcwdData, GetxattrData,
+    LgetxattrData, ListxattrData, LlistxattrData, LremovexattrData, LseekData, LsetxattrData,
+    MkdiratData, NewfstatatData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData,
+    Pselect6Data, PwriteData, ReadData, ReadlinkatData, RemovexattrData, SetxattrData, SpliceData,
+    StatfsData, SyscallEvent, TeeData, VectorIOData, VmspliceData, WireEventHeader, WriteData,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{PollData, SelectData, SendfileData};
@@ -71,7 +72,17 @@ pub async fn handle_compact_event(
         | syscalls::SYS_fgetxattr
         | syscalls::SYS_removexattr
         | syscalls::SYS_lremovexattr
-        | syscalls::SYS_fremovexattr => header.syscall_nr,
+        | syscalls::SYS_fremovexattr
+        | syscalls::SYS_getcwd
+        | syscalls::SYS_chdir
+        | syscalls::SYS_mkdirat
+        | syscalls::SYS_fsync
+        | syscalls::SYS_fdatasync
+        | syscalls::SYS_ftruncate
+        | syscalls::SYS_fchmod
+        | syscalls::SYS_fchmodat
+        | syscalls::SYS_fchown
+        | syscalls::SYS_fchownat => header.syscall_nr,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_wait
         | syscalls::SYS_poll
@@ -676,6 +687,87 @@ pub async fn handle_compact_event(
 
             finish!(sf, header.return_value);
         }
+        syscalls::SYS_getcwd => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const GetcwdData) };
+
+            argf!(sf, "buf: 0x{:x}", data.buf);
+            argf!(sf, "size: {}", data.size);
+
+            if header.return_value > 0 {
+                argf!(sf, "path: {}", format_path(&data.path, false));
+            }
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_chdir => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const ChdirData) };
+
+            argf!(sf, "path: {}", format_path(&data.path, false));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_mkdirat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const MkdiratData) };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "mode: {}", format_mode(data.mode));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fsync => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FsyncData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fdatasync => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FdatasyncData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_ftruncate => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FtruncateData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "length: {}", data.length);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fchmod => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FchmodData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "mode: {}", format_mode(data.mode));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fchmodat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FchmodatData) };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "mode: {}", format_mode(data.mode));
+            argf!(sf, "flags: {}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fchown => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FchownData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "uid: {}", data.uid);
+            argf!(sf, "gid: {}", data.gid);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fchownat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FchownatData) };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "uid: {}", data.uid);
+            argf!(sf, "gid: {}", data.gid);
+            argf!(sf, "flags: {}", data.flags);
+            finish!(sf, header.return_value);
+        }
         syscalls::SYS_flistxattr => {
             let data =
                 unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FlistxattrData) };
@@ -893,7 +985,17 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_fgetxattr
         | syscalls::SYS_removexattr
         | syscalls::SYS_lremovexattr
-        | syscalls::SYS_fremovexattr => {
+        | syscalls::SYS_fremovexattr
+        | syscalls::SYS_getcwd
+        | syscalls::SYS_chdir
+        | syscalls::SYS_mkdirat
+        | syscalls::SYS_fsync
+        | syscalls::SYS_fdatasync
+        | syscalls::SYS_ftruncate
+        | syscalls::SYS_fchmod
+        | syscalls::SYS_fchmodat
+        | syscalls::SYS_fchown
+        | syscalls::SYS_fchownat => {
             unreachable!("migrated syscall should be handled by compact path");
         }
         #[cfg(target_arch = "x86_64")]
@@ -3163,37 +3265,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "fd: {}", data.fd);
             finish!(sf, event.return_value);
         }
-        syscalls::SYS_fsync => {
-            let data = unsafe { event.data.fsync };
-            argf!(sf, "fd: {}", data.fd);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fdatasync => {
-            let data = unsafe { event.data.fdatasync };
-            argf!(sf, "fd: {}", data.fd);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_ftruncate => {
-            let data = unsafe { event.data.ftruncate };
-            argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "length: {}", data.length);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fchmod => {
-            let data = unsafe { event.data.fchmod };
-            argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "mode: {}", format_mode(data.mode));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fchmodat => {
-            let data = unsafe { event.data.fchmodat };
-
-            argf!(sf, "dirfd: {}", data.dirfd);
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "mode: {}", format_mode(data.mode));
-            argf!(sf, "flags: {}", data.flags);
-            finish!(sf, event.return_value);
-        }
         syscalls::SYS_readlinkat => {
             let data = unsafe { event.data.readlinkat };
 
@@ -3201,35 +3272,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "buf: {}", format_path(&data.buf, false));
             argf!(sf, "bufsiz: {}", data.bufsiz);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_getcwd => {
-            let data = unsafe { event.data.getcwd };
-
-            argf!(sf, "buf: 0x{:x}", data.buf);
-            argf!(sf, "size: {}", data.size);
-
-            // Show the actual path if syscall succeeded
-            if event.return_value > 0 {
-                argf!(sf, "path: {}", format_path(&data.path, false));
-            }
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_chdir => {
-            let data = unsafe { event.data.chdir };
-
-            argf!(sf, "path: {}", format_path(&data.path, false));
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_mkdirat => {
-            let data = unsafe { event.data.mkdirat };
-
-            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "mode: {}", format_mode(data.mode));
 
             finish!(sf, event.return_value);
         }
@@ -3799,22 +3841,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "child_tid: {}", data.child_tid);
             argf!(sf, "tls: {:#x}", data.tls);
 
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fchown => {
-            let data = unsafe { event.data.fchown };
-            argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "uid: {}", data.uid);
-            argf!(sf, "gid: {}", data.gid);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fchownat => {
-            let data = unsafe { event.data.fchownat };
-            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "uid: {}", data.uid);
-            argf!(sf, "gid: {}", data.gid);
-            argf!(sf, "flags: {}", data.flags);
             finish!(sf, event.return_value);
         }
         #[cfg(target_arch = "x86_64")]

@@ -11,10 +11,10 @@ use aya_log_ebpf::error;
 use pinchy_common::kernel_types::LinuxDirent;
 use pinchy_common::{
     kernel_types::{LinuxDirent64, Stat},
-    syscalls, FaccessatData, FgetxattrData, FlistxattrData, FremovexattrData, FsetxattrData,
-    FstatData, FstatfsData, GetxattrData, LgetxattrData, ListxattrData, LlistxattrData,
-    LremovexattrData, LsetxattrData, NewfstatatData, ReadlinkatData, RemovexattrData, SetxattrData,
-    StatfsData, DATA_READ_SIZE,
+    syscalls, ChdirData, FaccessatData, FchmodatData, FchownatData, FgetxattrData, FlistxattrData,
+    FremovexattrData, FsetxattrData, FstatData, FstatfsData, GetcwdData, GetxattrData,
+    LgetxattrData, ListxattrData, LlistxattrData, LremovexattrData, LsetxattrData, MkdiratData,
+    NewfstatatData, ReadlinkatData, RemovexattrData, SetxattrData, StatfsData, DATA_READ_SIZE,
 };
 
 use crate::{data_mut, util, util::submit_compact_payload};
@@ -500,6 +500,103 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 return Ok(());
             }
+            syscalls::SYS_getcwd => {
+                submit_compact_payload::<GetcwdData, _>(
+                    &ctx,
+                    syscalls::SYS_getcwd,
+                    return_value,
+                    |payload| {
+                        payload.buf = args[0] as u64;
+                        payload.size = args[1] as usize;
+
+                        let buf_ptr = args[0] as *const u8;
+
+                        if return_value > 0 {
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(buf_ptr, &mut payload.path);
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_chdir => {
+                submit_compact_payload::<ChdirData, _>(
+                    &ctx,
+                    syscalls::SYS_chdir,
+                    return_value,
+                    |payload| {
+                        let path_ptr = args[0] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(path_ptr, &mut payload.path);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_mkdirat => {
+                submit_compact_payload::<MkdiratData, _>(
+                    &ctx,
+                    syscalls::SYS_mkdirat,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.mode = args[2] as u32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fchmodat => {
+                submit_compact_payload::<FchmodatData, _>(
+                    &ctx,
+                    syscalls::SYS_fchmodat,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.mode = args[2] as u32;
+                        payload.flags = args[3] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_fchownat => {
+                submit_compact_payload::<FchownatData, _>(
+                    &ctx,
+                    syscalls::SYS_fchownat,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.uid = args[2] as u32;
+                        payload.gid = args[3] as u32;
+                        payload.flags = args[4] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
             _ => {}
         }
 
@@ -524,7 +621,12 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
             | syscalls::SYS_fgetxattr
             | syscalls::SYS_removexattr
             | syscalls::SYS_lremovexattr
-            | syscalls::SYS_fremovexattr => {
+            | syscalls::SYS_fremovexattr
+            | syscalls::SYS_getcwd
+            | syscalls::SYS_chdir
+            | syscalls::SYS_mkdirat
+            | syscalls::SYS_fchmodat
+            | syscalls::SYS_fchownat => {
                 error!(
                     &ctx,
                     "migrated filesystem syscall {} hit legacy path", syscall_nr
@@ -612,33 +714,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
-            syscalls::SYS_getcwd => {
-                let data = data_mut!(entry, getcwd);
-                let buf_ptr = args[0] as *const u8;
-                data.buf = buf_ptr as u64;
-                data.size = args[1] as usize;
-                if return_value > 0 {
-                    unsafe {
-                        let _ = bpf_probe_read_user_buf(buf_ptr, &mut data.path);
-                    }
-                }
-            }
-            syscalls::SYS_chdir => {
-                let data = data_mut!(entry, chdir);
-                let path_ptr = args[0] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(path_ptr, &mut data.path);
-                }
-            }
-            syscalls::SYS_mkdirat => {
-                let data = data_mut!(entry, mkdirat);
-                data.dirfd = args[0] as i32;
-                data.mode = args[2] as u32;
-                let pathname_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-            }
             #[cfg(x86_64)]
             syscalls::SYS_chown => {
                 let data = data_mut!(entry, chown);
@@ -698,27 +773,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 unsafe {
                     let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
                     let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
-                }
-            }
-            syscalls::SYS_fchmodat => {
-                let data = data_mut!(entry, fchmodat);
-                data.dirfd = args[0] as i32;
-                data.mode = args[2] as u32;
-                data.flags = args[3] as i32;
-                let pathname_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-            }
-            syscalls::SYS_fchownat => {
-                let data = data_mut!(entry, fchownat);
-                data.dirfd = args[0] as i32;
-                data.uid = args[2] as u32;
-                data.gid = args[3] as u32;
-                data.flags = args[4] as i32;
-                let pathname_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
             #[cfg(x86_64)]

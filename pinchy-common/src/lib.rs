@@ -173,6 +173,16 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_removexattr => Some(core::mem::size_of::<RemovexattrData>()),
         syscalls::SYS_lremovexattr => Some(core::mem::size_of::<LremovexattrData>()),
         syscalls::SYS_fremovexattr => Some(core::mem::size_of::<FremovexattrData>()),
+        syscalls::SYS_getcwd => Some(core::mem::size_of::<GetcwdData>()),
+        syscalls::SYS_chdir => Some(core::mem::size_of::<ChdirData>()),
+        syscalls::SYS_mkdirat => Some(core::mem::size_of::<MkdiratData>()),
+        syscalls::SYS_fsync => Some(core::mem::size_of::<FsyncData>()),
+        syscalls::SYS_fdatasync => Some(core::mem::size_of::<FdatasyncData>()),
+        syscalls::SYS_ftruncate => Some(core::mem::size_of::<FtruncateData>()),
+        syscalls::SYS_fchmod => Some(core::mem::size_of::<FchmodData>()),
+        syscalls::SYS_fchmodat => Some(core::mem::size_of::<FchmodatData>()),
+        syscalls::SYS_fchown => Some(core::mem::size_of::<FchownData>()),
+        syscalls::SYS_fchownat => Some(core::mem::size_of::<FchownatData>()),
         _ => None,
     }
 }

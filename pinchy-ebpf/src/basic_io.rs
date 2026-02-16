@@ -12,7 +12,7 @@ use pinchy_common::{
     kernel_types::{
         AioSigset, FdSet, IoCb, IoEvent, IoUringParams, OpenHow, Pollfd, Sigset, Timespec,
     },
-    syscalls,
+    syscalls, LseekData, ReadData,
 };
 
 #[cfg(x86_64)]
@@ -21,7 +21,7 @@ use crate::{
     data_mut,
     util::{
         get_args, get_return_value, get_syscall_nr, read_epoll_events, read_iovec_array,
-        read_timespec, Entry, IovecOp,
+        read_timespec, submit_compact_payload, Entry, IovecOp,
     },
 };
 
@@ -31,6 +31,48 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
         let syscall_nr = get_syscall_nr(&ctx)?;
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
+
+        match syscall_nr {
+            syscalls::SYS_read => {
+                submit_compact_payload::<ReadData, _>(
+                    &ctx,
+                    syscalls::SYS_read,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.count = args[2];
+
+                        if return_value > 0 {
+                            let to_read = core::cmp::min(return_value as usize, payload.buf.len());
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    args[1] as *const _,
+                                    &mut payload.buf[..to_read],
+                                );
+                            }
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_lseek => {
+                submit_compact_payload::<LseekData, _>(
+                    &ctx,
+                    syscalls::SYS_lseek,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.offset = args[1] as i64;
+                        payload.whence = args[2] as i32;
+                    },
+                )?;
+
+                return Ok(());
+            }
+            _ => {}
+        }
 
         let mut entry = Entry::new(&ctx, syscall_nr)?;
 
@@ -63,20 +105,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                 unsafe {
                     if let Ok(how) = bpf_probe_read_user(how_ptr) {
                         data.how = how;
-                    }
-                }
-            }
-            syscalls::SYS_read => {
-                let data = data_mut!(entry, read);
-                data.fd = args[0] as i32;
-                data.count = args[2];
-
-                let buf_addr = args[1];
-                if return_value > 0 {
-                    let to_read = core::cmp::min(return_value as usize, data.buf.len());
-                    unsafe {
-                        let _ =
-                            bpf_probe_read_user_buf(buf_addr as *const _, &mut data.buf[..to_read]);
                     }
                 }
             }

@@ -34,35 +34,29 @@ use pinchy_common::{
     ReadlinkData, StatData, UtimeData, UtimesData,
 };
 
-use crate::syscall_test;
+use crate::{syscall_compact_test, syscall_test, tests::make_compact_test_data};
 
-syscall_test!(
+syscall_compact_test!(
     parse_fstat_success,
     {
         use pinchy_common::{kernel_types::Stat, FstatData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_fstat,
-            pid: 33,
-            tid: 33,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                fstat: FstatData {
-                    fd: 5,
-                    stat: Stat::default(),
-                },
-            },
+
+        let mut data = FstatData {
+            fd: 5,
+            stat: Stat::default(),
         };
-        let stat_data = unsafe { &mut event.data.fstat.stat };
-        stat_data.st_mode = libc::S_IFREG | 0o644;
-        stat_data.st_size = 12345;
-        stat_data.st_uid = 1000;
-        stat_data.st_gid = 1000;
-        stat_data.st_blocks = 24;
-        stat_data.st_blksize = 4096;
-        stat_data.st_ino = 9876543;
-        event
+
+        data.stat.st_mode = libc::S_IFREG | 0o644;
+        data.stat.st_size = 12345;
+        data.stat.st_uid = 1000;
+        data.stat.st_gid = 1000;
+        data.stat.st_blocks = 24;
+        data.stat.st_blksize = 4096;
+        data.stat.st_ino = 9876543;
+
+        make_compact_test_data(SYS_fstat, 33, 0, &data)
     },
-    &"33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = 0 (success)\n".to_string()
+    "33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -140,99 +134,54 @@ syscall_test!(
     "13 inotify_init1(flags: 0x80800 (IN_NONBLOCK|IN_CLOEXEC)) = 10 (fd)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fstat_error,
     {
         use pinchy_common::{kernel_types::Stat, FstatData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_fstat,
-            pid: 33,
-            tid: 33,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                fstat: FstatData {
-                    fd: 5,
-                    stat: Stat::default(),
-                },
-            },
+
+        let mut data = FstatData {
+            fd: 5,
+            stat: Stat::default(),
         };
-        let stat_data = unsafe { &mut event.data.fstat.stat };
-        stat_data.st_mode = libc::S_IFREG | 0o644;
-        stat_data.st_size = 12345;
-        stat_data.st_uid = 1000;
-        stat_data.st_gid = 1000;
-        stat_data.st_blocks = 24;
-        stat_data.st_blksize = 4096;
-        stat_data.st_ino = 9876543;
-        event
+
+        data.stat.st_mode = libc::S_IFREG | 0o644;
+        data.stat.st_size = 12345;
+        data.stat.st_uid = 1000;
+        data.stat.st_gid = 1000;
+        data.stat.st_blocks = 24;
+        data.stat.st_blksize = 4096;
+        data.stat.st_ino = 9876543;
+
+        make_compact_test_data(SYS_fstat, 33, -1, &data)
     },
-    &"33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = -1 (error)\n".to_string()
+    "33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_statfs_success,
     {
         use pinchy_common::{kernel_types::Statfs, StatfsData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_statfs,
-            pid: 44,
-            tid: 44,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                statfs: StatfsData {
-                    pathname: [0u8; DATA_READ_SIZE],
-                    statfs: Statfs::default(),
-                },
-            },
-        };
-        let statfs_data = unsafe { &mut event.data.statfs };
-        let path = c"/mnt/data".to_bytes_with_nul();
-        statfs_data.pathname[..path.len()].copy_from_slice(path);
-        statfs_data.statfs.f_type = 0x01021994;
-        statfs_data.statfs.f_bsize = 4096;
-        statfs_data.statfs.f_blocks = 1024000;
-        statfs_data.statfs.f_bfree = 512000;
-        statfs_data.statfs.f_bavail = 512000;
-        statfs_data.statfs.f_files = 65536;
-        statfs_data.statfs.f_ffree = 65000;
-        statfs_data.statfs.f_namelen = 255;
-        statfs_data.statfs.f_flags = (libc::ST_NOEXEC | libc::ST_RDONLY) as i64;
-        event
-    },
-    &"44 statfs(pathname: \"/mnt/data\", buf: { type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x9 (ST_RDONLY|ST_NOEXEC) }) = 0 (success)\n".to_string()
-);
 
-syscall_test!(
-    parse_statfs_error,
-    {
-        use pinchy_common::{kernel_types::Statfs, StatfsData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_statfs,
-            pid: 44,
-            tid: 44,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                statfs: StatfsData {
-                    pathname: [0u8; DATA_READ_SIZE],
-                    statfs: Statfs::default(),
-                },
-            },
+        let mut data = StatfsData {
+            pathname: [0u8; DATA_READ_SIZE],
+            statfs: Statfs::default(),
         };
-        let statfs_data = unsafe { &mut event.data.statfs };
+
         let path = c"/mnt/data".to_bytes_with_nul();
-        statfs_data.pathname[..path.len()].copy_from_slice(path);
-        statfs_data.statfs.f_type = 0x01021994;
-        statfs_data.statfs.f_bsize = 4096;
-        statfs_data.statfs.f_blocks = 1024000;
-        statfs_data.statfs.f_bfree = 512000;
-        statfs_data.statfs.f_bavail = 512000;
-        statfs_data.statfs.f_files = 65536;
-        statfs_data.statfs.f_ffree = 65000;
-        statfs_data.statfs.f_namelen = 255;
-        statfs_data.statfs.f_flags = (libc::ST_NOEXEC | libc::ST_RDONLY) as i64;
-        event
+        data.pathname[..path.len()].copy_from_slice(path);
+        data.statfs.f_type = libc::TMPFS_MAGIC as i64;
+        data.statfs.f_bsize = 4096;
+        data.statfs.f_blocks = 1024000;
+        data.statfs.f_bfree = 512000;
+        data.statfs.f_bavail = 512000;
+        data.statfs.f_files = 65536;
+        data.statfs.f_ffree = 65000;
+        data.statfs.f_namelen = 255;
+        data.statfs.f_flags = (libc::ST_NOEXEC | libc::ST_RDONLY) as i64;
+
+        make_compact_test_data(SYS_statfs, 44, 0, &data)
     },
-    "44 statfs(pathname: \"/mnt/data\", buf: <unavailable>) = -1 (error)\n"
+    "44 statfs(pathname: \"/mnt/data\", buf: { type: TMPFS_MAGIC (0x1021994), block_size: 4096, blocks: 1024000, blocks_free: 512000, blocks_available: 512000, files: 65536, files_free: 65000, fsid: [0, 0], name_max: 255, fragment_size: 0, mount_flags: 0x9 (ST_RDONLY|ST_NOEXEC) }) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -302,260 +251,198 @@ syscall_test!(
     &"55 getdents64(fd: 7, count: 1024, entries: [  ]) = 0 (bytes)\n".to_string()
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_faccessat_success,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/etc/hosts.conf";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: SYS_faccessat,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                faccessat: FaccessatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname,
-                    mode: libc::R_OK | libc::W_OK,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = FaccessatData {
+            dirfd: libc::AT_FDCWD,
+            pathname,
+            mode: libc::R_OK | libc::W_OK,
+            flags: 0,
+        };
+
+        make_compact_test_data(SYS_faccessat, 1001, 0, &data)
     },
-    &"1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK) = 0 (success)\n".to_string()
+    "1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_faccessat_with_flags_error,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/etc/hosts";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: SYS_faccessat,
-            pid: 1000,
-            tid: 1001,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                faccessat: FaccessatData {
-                    dirfd: 3,
-                    pathname,
-                    mode: libc::F_OK,
-                    flags: libc::AT_SYMLINK_NOFOLLOW,
-                },
-            },
-        }
+
+        let data = FaccessatData {
+            dirfd: 3,
+            pathname,
+            mode: libc::F_OK,
+            flags: libc::AT_SYMLINK_NOFOLLOW,
+        };
+
+        make_compact_test_data(SYS_faccessat, 1001, -1, &data)
     },
     "1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK) = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_faccessat2_success,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/etc/hosts.conf";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: syscalls::SYS_faccessat2,
-            pid: 1000,
-            tid: 1002,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                faccessat: FaccessatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname,
-                    mode: libc::R_OK | libc::W_OK,
-                    flags: 0,
-                },
-            },
-        }
+        let data = FaccessatData {
+            dirfd: libc::AT_FDCWD,
+            pathname,
+            mode: libc::R_OK | libc::W_OK,
+            flags: 0,
+        };
+
+        make_compact_test_data(syscalls::SYS_faccessat2, 1002, 0, &data)
     },
-    &"1002 faccessat2(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0 (success)\n".to_string()
+    "1002 faccessat2(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_faccessat2_with_flags_error,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/etc/hosts";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_faccessat2,
-            pid: 1000,
-            tid: 1003,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                faccessat: FaccessatData {
-                    dirfd: 3,
-                    pathname,
-                    mode: libc::F_OK,
-                    flags: libc::AT_SYMLINK_NOFOLLOW,
-                },
-            },
-        }
+        let data = FaccessatData {
+            dirfd: 3,
+            pathname,
+            mode: libc::F_OK,
+            flags: libc::AT_SYMLINK_NOFOLLOW,
+        };
+
+        make_compact_test_data(syscalls::SYS_faccessat2, 1003, -1, &data)
     },
     "1003 faccessat2(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_newfstatat_success,
     {
         use pinchy_common::{kernel_types::Stat, NewfstatatData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_newfstatat,
-            pid: 42,
-            tid: 42,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                newfstatat: NewfstatatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname: [0u8; DATA_READ_SIZE],
-                    stat: Stat::default(),
-                    flags: libc::AT_SYMLINK_NOFOLLOW,
-                },
-            },
+
+        let mut data = NewfstatatData {
+            dirfd: libc::AT_FDCWD,
+            pathname: [0u8; DATA_READ_SIZE],
+            stat: Stat::default(),
+            flags: libc::AT_SYMLINK_NOFOLLOW,
         };
+
         let pathname = b"test_file.txt\0";
-        let data = unsafe { &mut event.data.newfstatat };
         data.pathname[..pathname.len()].copy_from_slice(pathname);
-        let stat_data = unsafe { &mut event.data.newfstatat.stat };
-        stat_data.st_mode = libc::S_IFREG | 0o755;
-        stat_data.st_size = 54321;
-        stat_data.st_uid = 500;
-        stat_data.st_gid = 500;
-        stat_data.st_blocks = 108;
-        stat_data.st_blksize = 4096;
-        stat_data.st_ino = 1234567;
-        event
+        data.stat.st_mode = libc::S_IFREG | 0o755;
+        data.stat.st_size = 54321;
+        data.stat.st_uid = 500;
+        data.stat.st_gid = 500;
+        data.stat.st_blocks = 108;
+        data.stat.st_blksize = 4096;
+        data.stat.st_ino = 1234567;
+
+        make_compact_test_data(SYS_newfstatat, 42, 0, &data)
     },
-    &"42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n".to_string()
+    "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_newfstatat_error,
     {
         use pinchy_common::{kernel_types::Stat, NewfstatatData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_newfstatat,
-            pid: 42,
-            tid: 42,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                newfstatat: NewfstatatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname: [0u8; DATA_READ_SIZE],
-                    stat: Stat::default(),
-                    flags: libc::AT_SYMLINK_NOFOLLOW,
-                },
-            },
+
+        let mut data = NewfstatatData {
+            dirfd: libc::AT_FDCWD,
+            pathname: [0u8; DATA_READ_SIZE],
+            stat: Stat::default(),
+            flags: libc::AT_SYMLINK_NOFOLLOW,
         };
+
         let pathname = b"test_file.txt\0";
-        let data = unsafe { &mut event.data.newfstatat };
         data.pathname[..pathname.len()].copy_from_slice(pathname);
-        let stat_data = unsafe { &mut event.data.newfstatat.stat };
-        stat_data.st_mode = libc::S_IFREG | 0o755;
-        stat_data.st_size = 54321;
-        stat_data.st_uid = 500;
-        stat_data.st_gid = 500;
-        stat_data.st_blocks = 108;
-        stat_data.st_blksize = 4096;
-        stat_data.st_ino = 1234567;
-        event
+
+        make_compact_test_data(SYS_newfstatat, 42, -1, &data)
     },
-    &"42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n".to_string()
+    "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_newfstatat_noflags,
     {
         use pinchy_common::{kernel_types::Stat, NewfstatatData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_newfstatat,
-            pid: 42,
-            tid: 42,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                newfstatat: NewfstatatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname: [0u8; DATA_READ_SIZE],
-                    stat: Stat::default(),
-                    flags: 0,
-                },
-            },
+
+        let mut data = NewfstatatData {
+            dirfd: libc::AT_FDCWD,
+            pathname: [0u8; DATA_READ_SIZE],
+            stat: Stat::default(),
+            flags: 0,
         };
+
         let pathname = b"test_file.txt\0";
-        let data = unsafe { &mut event.data.newfstatat };
         data.pathname[..pathname.len()].copy_from_slice(pathname);
-        let stat_data = unsafe { &mut event.data.newfstatat.stat };
-        stat_data.st_mode = libc::S_IFREG | 0o755;
-        stat_data.st_size = 54321;
-        stat_data.st_uid = 500;
-        stat_data.st_gid = 500;
-        stat_data.st_blocks = 108;
-        stat_data.st_blksize = 4096;
-        stat_data.st_ino = 1234567;
-        event
+        data.stat.st_mode = libc::S_IFREG | 0o755;
+        data.stat.st_size = 54321;
+        data.stat.st_uid = 500;
+        data.stat.st_gid = 500;
+        data.stat.st_blocks = 108;
+        data.stat.st_blksize = 4096;
+        data.stat.st_ino = 1234567;
+
+        make_compact_test_data(SYS_newfstatat, 42, 0, &data)
     },
-    &"42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: 0) = 0 (success)\n".to_string()
+    "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: 0) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_newfstatat_dirfd,
     {
         use pinchy_common::{kernel_types::Stat, NewfstatatData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_newfstatat,
-            pid: 42,
-            tid: 42,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                newfstatat: NewfstatatData {
-                    dirfd: 5,
-                    pathname: [0u8; DATA_READ_SIZE],
-                    stat: Stat::default(),
-                    flags: 0,
-                },
-            },
+
+        let mut data = NewfstatatData {
+            dirfd: 5,
+            pathname: [0u8; DATA_READ_SIZE],
+            stat: Stat::default(),
+            flags: 0,
         };
+
         let pathname = b"test_file.txt\0";
-        let data = unsafe { &mut event.data.newfstatat };
         data.pathname[..pathname.len()].copy_from_slice(pathname);
-        let stat_data = unsafe { &mut event.data.newfstatat.stat };
-        stat_data.st_mode = libc::S_IFREG | 0o755;
-        stat_data.st_size = 54321;
-        stat_data.st_uid = 500;
-        stat_data.st_gid = 500;
-        stat_data.st_blocks = 108;
-        stat_data.st_blksize = 4096;
-        stat_data.st_ino = 1234567;
-        event
+        data.stat.st_mode = libc::S_IFREG | 0o755;
+        data.stat.st_size = 54321;
+        data.stat.st_uid = 500;
+        data.stat.st_gid = 500;
+        data.stat.st_blocks = 108;
+        data.stat.st_blksize = 4096;
+        data.stat.st_ino = 1234567;
+
+        make_compact_test_data(SYS_newfstatat, 42, 0, &data)
     },
-    &"42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: 0) = 0 (success)\n".to_string()
+    "42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: 0) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_readlinkat_event,
     {
         let exe_link = b"/proc/self/exe\0";
         let bin_path = b"/usr/bin/pinchy\0";
-        let mut readlinkat = pinchy_common::ReadlinkatData {
+        let mut data = pinchy_common::ReadlinkatData {
             dirfd: 3,
             pathname: [0u8; MEDIUM_READ_SIZE],
             buf: [0u8; MEDIUM_READ_SIZE],
             bufsiz: 16,
         };
-        readlinkat.pathname[..exe_link.len()].copy_from_slice(exe_link);
-        readlinkat.buf[..bin_path.len()].copy_from_slice(bin_path);
-        SyscallEvent {
-            syscall_nr: SYS_readlinkat,
-            pid: 1234,
-            tid: 5678,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData { readlinkat },
-        }
+        data.pathname[..exe_link.len()].copy_from_slice(exe_link);
+        data.buf[..bin_path.len()].copy_from_slice(bin_path);
+
+        make_compact_test_data(SYS_readlinkat, 5678, 0, &data)
     },
-    &"5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 0 (success)\n".to_string()
+    "5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 0 (success)\n"
 );
 
 syscall_test!(
@@ -2236,31 +2123,52 @@ syscall_test!(
     "1017 swapoff(pathname: \"/dev/sda2\") = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_fstatfs_success,
     {
         use pinchy_common::{kernel_types::Statfs, FstatfsData};
-        let mut event = SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fstatfs,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: SyscallEventData {
-                fstatfs: FstatfsData {
-                    fd: 5,
-                    statfs: Statfs::default(),
-                },
-            },
+
+        let mut data = FstatfsData {
+            fd: 5,
+            statfs: Statfs::default(),
         };
-        let statfs_data = unsafe { &mut event.data.fstatfs.statfs };
-        statfs_data.f_type = 0xef53; // ext2/ext3/ext4
-        statfs_data.f_bsize = 4096;
-        statfs_data.f_blocks = 1048576;
-        statfs_data.f_bfree = 524288;
-        statfs_data.f_bavail = 524288;
-        event
+
+        data.statfs.f_type = libc::EXT4_SUPER_MAGIC as i64;
+        data.statfs.f_bsize = 4096;
+        data.statfs.f_blocks = 1048576;
+        data.statfs.f_bfree = 524288;
+        data.statfs.f_bavail = 524288;
+
+        make_compact_test_data(syscalls::SYS_fstatfs, 123, 0, &data)
     },
     "123 fstatfs(fd: 5, buf: { type: EXT4_SUPER_MAGIC (0xef53), block_size: 4096, blocks: 1048576, blocks_free: 524288, blocks_available: 524288, files: 0, files_free: 0, fsid: [0, 0], name_max: 0, fragment_size: 0, mount_flags: 0x0 }) = 0 (success)\n"
+);
+
+syscall_compact_test!(
+    parse_statfs_error,
+    {
+        use pinchy_common::{kernel_types::Statfs, StatfsData};
+
+        let mut data = StatfsData {
+            pathname: [0u8; DATA_READ_SIZE],
+            statfs: Statfs::default(),
+        };
+
+        let path = c"/mnt/data".to_bytes_with_nul();
+        data.pathname[..path.len()].copy_from_slice(path);
+        data.statfs.f_type = libc::TMPFS_MAGIC as i64;
+        data.statfs.f_bsize = 4096;
+        data.statfs.f_blocks = 1024000;
+        data.statfs.f_bfree = 512000;
+        data.statfs.f_bavail = 512000;
+        data.statfs.f_files = 65536;
+        data.statfs.f_ffree = 65000;
+        data.statfs.f_namelen = 255;
+        data.statfs.f_flags = (libc::ST_NOEXEC | libc::ST_RDONLY) as i64;
+
+        make_compact_test_data(SYS_statfs, 44, -1, &data)
+    },
+    "44 statfs(pathname: \"/mnt/data\", buf: <unavailable>) = -1 (error)\n"
 );
 
 syscall_test!(

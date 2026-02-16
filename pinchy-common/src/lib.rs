@@ -154,6 +154,13 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_vmsplice => Some(core::mem::size_of::<VmspliceData>()),
         #[cfg(x86_64)]
         syscalls::SYS_sendfile => Some(core::mem::size_of::<SendfileData>()),
+        syscalls::SYS_fstat => Some(core::mem::size_of::<FstatData>()),
+        syscalls::SYS_newfstatat => Some(core::mem::size_of::<NewfstatatData>()),
+        syscalls::SYS_faccessat => Some(core::mem::size_of::<FaccessatData>()),
+        syscalls::SYS_faccessat2 => Some(core::mem::size_of::<FaccessatData>()),
+        syscalls::SYS_readlinkat => Some(core::mem::size_of::<ReadlinkatData>()),
+        syscalls::SYS_statfs => Some(core::mem::size_of::<StatfsData>()),
+        syscalls::SYS_fstatfs => Some(core::mem::size_of::<FstatfsData>()),
         _ => None,
     }
 }

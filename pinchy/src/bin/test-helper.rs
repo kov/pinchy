@@ -92,6 +92,7 @@ fn main() -> anyhow::Result<()> {
             "benchmark_trace_loop" => benchmark_trace_loop(),
             "benchmark_basic_io_wave1" => benchmark_basic_io_wave1(),
             "benchmark_basic_io_wave2" => benchmark_basic_io_wave2(),
+            "benchmark_filesystem_wave1" => benchmark_filesystem_wave1(),
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
@@ -897,6 +898,113 @@ fn benchmark_basic_io_wave2() -> anyhow::Result<()> {
         }
 
         let _ = libc::unlink(c"/tmp/benchmark_basic_io_wave2".as_ptr());
+    }
+
+    Ok(())
+}
+
+fn benchmark_filesystem_wave1() -> anyhow::Result<()> {
+    let loops = std::env::var("PINCHY_BENCH_LOOPS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(250);
+
+    if loops == 0 {
+        return Ok(());
+    }
+
+    let file_path = c"/tmp/benchmark_filesystem_wave1_file";
+    let link_path = c"/tmp/benchmark_filesystem_wave1_link";
+    let statfs_path = c"/tmp";
+    let mut readlink_buf = [0u8; DATA_READ_SIZE];
+    let mut stat = pinchy_common::kernel_types::Stat::default();
+
+    unsafe {
+        for _ in 0..loops {
+            let fd = libc::openat(
+                libc::AT_FDCWD,
+                file_path.as_ptr(),
+                libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+                0o644,
+            );
+
+            if fd < 0 {
+                bail!("openat failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut fstat_buf: libc::stat = std::mem::zeroed();
+            if libc::fstat(fd, &mut fstat_buf) != 0 {
+                bail!("fstat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_newfstatat,
+                libc::AT_FDCWD,
+                file_path.as_ptr(),
+                &mut stat as *mut pinchy_common::kernel_types::Stat,
+                0,
+            ) != 0
+            {
+                bail!("newfstatat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_faccessat,
+                libc::AT_FDCWD,
+                file_path.as_ptr(),
+                libc::R_OK,
+                0,
+            ) != 0
+            {
+                bail!("faccessat failed: {}", std::io::Error::last_os_error());
+            }
+
+            let _ = libc::syscall(
+                libc::SYS_faccessat2,
+                libc::AT_FDCWD,
+                file_path.as_ptr(),
+                libc::R_OK,
+                0,
+            );
+
+            let _ = libc::unlink(link_path.as_ptr());
+            if libc::symlink(file_path.as_ptr(), link_path.as_ptr()) != 0 {
+                bail!("symlink failed: {}", std::io::Error::last_os_error());
+            }
+
+            let readlink_res = libc::syscall(
+                libc::SYS_readlinkat,
+                libc::AT_FDCWD,
+                link_path.as_ptr(),
+                readlink_buf.as_mut_ptr(),
+                readlink_buf.len(),
+            );
+            if readlink_res < 0 {
+                bail!("readlinkat failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut statfs_buf: libc::statfs = std::mem::zeroed();
+            if libc::syscall(
+                libc::SYS_statfs,
+                statfs_path.as_ptr(),
+                &mut statfs_buf as *mut _,
+            ) != 0
+            {
+                bail!("statfs failed: {}", std::io::Error::last_os_error());
+            }
+
+            let mut fstatfs_buf: libc::statfs = std::mem::zeroed();
+            if libc::syscall(libc::SYS_fstatfs, fd, &mut fstatfs_buf as *mut _) != 0 {
+                bail!("fstatfs failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::close(fd) != 0 {
+                bail!("close failed: {}", std::io::Error::last_os_error());
+            }
+        }
+
+        let _ = libc::unlink(link_path.as_ptr());
+        let _ = libc::unlink(file_path.as_ptr());
     }
 
     Ok(())

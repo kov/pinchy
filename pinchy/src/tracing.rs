@@ -53,7 +53,7 @@ mod efficiency {
             dispatch_events_matched: AtomicU64,
             dispatch_send_ok: AtomicU64,
             dispatch_send_fail: AtomicU64,
-            dispatch_send_full: AtomicU64,
+            dispatch_send_queue_full: AtomicU64,
             dispatch_send_closed: AtomicU64,
             drop_legacy_events: AtomicU64,
             queue_depth_current: AtomicU64,
@@ -74,7 +74,7 @@ mod efficiency {
             dispatch_events_matched: u64,
             dispatch_send_ok: u64,
             dispatch_send_fail: u64,
-            dispatch_send_full: u64,
+            dispatch_send_queue_full: u64,
             dispatch_send_closed: u64,
             drop_legacy_events: u64,
             queue_depth_current: u64,
@@ -133,7 +133,8 @@ mod efficiency {
 
             pub(crate) fn dispatch_send_drop(&self, is_full: bool) {
                 if is_full {
-                    self.dispatch_send_full.fetch_add(1, Ordering::Relaxed);
+                    self.dispatch_send_queue_full
+                        .fetch_add(1, Ordering::Relaxed);
                 } else {
                     self.dispatch_send_closed.fetch_add(1, Ordering::Relaxed);
                 }
@@ -169,7 +170,7 @@ mod efficiency {
                     dispatch_events_matched: self.dispatch_events_matched.load(Ordering::Relaxed),
                     dispatch_send_ok: self.dispatch_send_ok.load(Ordering::Relaxed),
                     dispatch_send_fail: self.dispatch_send_fail.load(Ordering::Relaxed),
-                    dispatch_send_full: self.dispatch_send_full.load(Ordering::Relaxed),
+                    dispatch_send_queue_full: self.dispatch_send_queue_full.load(Ordering::Relaxed),
                     dispatch_send_closed: self.dispatch_send_closed.load(Ordering::Relaxed),
                     drop_legacy_events: self.drop_legacy_events.load(Ordering::Relaxed),
                     queue_depth_current: self.queue_depth_current.load(Ordering::Relaxed),
@@ -208,7 +209,7 @@ mod efficiency {
             queue_snapshot: &str,
         ) {
             let mut line = format!(
-                "EFF userspace ring_items={} ring_bytes={} unexpected={} framed_events={} framed_bytes={} matched={} send_ok={} send_fail={} send_full={} send_closed={} drop_legacy={} qdepth={} qpeak={} writer_events={} writer_bytes={} writer_write_err={} writer_flush_err={}",
+                "EFF userspace ring_items={} ring_bytes={} unexpected={} framed_events={} framed_bytes={} matched={} send_ok={} send_fail={} send_queue_full={} send_closed={} drop_legacy={} qdepth={} qpeak={} writer_events={} writer_bytes={} writer_write_err={} writer_flush_err={}",
                 userspace.ring_items_read,
                 userspace.ring_bytes_read,
                 userspace.ring_items_unexpected,
@@ -217,7 +218,7 @@ mod efficiency {
                 userspace.dispatch_events_matched,
                 userspace.dispatch_send_ok,
                 userspace.dispatch_send_fail,
-                userspace.dispatch_send_full,
+                userspace.dispatch_send_queue_full,
                 userspace.dispatch_send_closed,
                 userspace.drop_legacy_events,
                 userspace.queue_depth_current,

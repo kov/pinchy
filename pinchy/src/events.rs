@@ -6,9 +6,10 @@ use std::borrow::Cow;
 use log::{error, trace};
 use pinchy_common::{
     compact_payload_size, kernel_types, syscalls, wire_validation_enabled, CloseData, EpollCtlData,
-    EpollPWait2Data, EpollPWaitData, LseekData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData,
-    PreadData, Pselect6Data, PwriteData, ReadData, SpliceData, SyscallEvent, TeeData, VectorIOData,
-    VmspliceData, WireEventHeader, WriteData,
+    EpollPWait2Data, EpollPWaitData, FaccessatData, FstatData, FstatfsData, LseekData,
+    NewfstatatData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data,
+    PwriteData, ReadData, ReadlinkatData, SpliceData, StatfsData, SyscallEvent, TeeData,
+    VectorIOData, VmspliceData, WireEventHeader, WriteData,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{PollData, SelectData, SendfileData};
@@ -49,7 +50,14 @@ pub async fn handle_compact_event(
         | syscalls::SYS_pipe2
         | syscalls::SYS_splice
         | syscalls::SYS_tee
-        | syscalls::SYS_vmsplice => header.syscall_nr,
+        | syscalls::SYS_vmsplice
+        | syscalls::SYS_fstat
+        | syscalls::SYS_newfstatat
+        | syscalls::SYS_faccessat
+        | syscalls::SYS_faccessat2
+        | syscalls::SYS_readlinkat
+        | syscalls::SYS_statfs
+        | syscalls::SYS_fstatfs => header.syscall_nr,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_wait
         | syscalls::SYS_poll
@@ -570,6 +578,90 @@ pub async fn handle_compact_event(
 
             finish!(sf, header.return_value);
         }
+        syscalls::SYS_fstat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FstatData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "struct stat:");
+            with_struct!(sf, {
+                format_stat(&mut sf, &data.stat).await?;
+            });
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_newfstatat => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const NewfstatatData) };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            arg!(sf, "struct stat:");
+            if header.return_value == 0 {
+                with_struct!(sf, {
+                    format_stat(&mut sf, &data.stat).await?;
+                });
+            } else {
+                raw!(sf, " <unavailable>");
+            }
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_faccessat | syscalls::SYS_faccessat2 => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FaccessatData) };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "mode: {}", format_access_mode(data.mode));
+
+            if header.syscall_nr == syscalls::SYS_faccessat2 {
+                argf!(sf, "flags: {}", format_at_flags(data.flags));
+            }
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_readlinkat => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const ReadlinkatData) };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "buf: {}", format_path(&data.buf, false));
+            argf!(sf, "bufsiz: {}", data.bufsiz);
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_statfs => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const StatfsData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            arg!(sf, "buf:");
+            if header.return_value == 0 {
+                with_struct!(sf, {
+                    format_statfs(&mut sf, &data.statfs).await?;
+                });
+            } else {
+                raw!(sf, " <unavailable>");
+            }
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_fstatfs => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FstatfsData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "buf:");
+            if header.return_value == 0 {
+                with_struct!(sf, {
+                    format_statfs(&mut sf, &data.statfs).await?;
+                });
+            } else {
+                raw!(sf, " <unavailable>");
+            }
+
+            finish!(sf, header.return_value);
+        }
 
         _ => return Ok(false),
     }
@@ -596,7 +688,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_pipe2
         | syscalls::SYS_splice
         | syscalls::SYS_tee
-        | syscalls::SYS_vmsplice => {
+        | syscalls::SYS_vmsplice
+        | syscalls::SYS_fstat
+        | syscalls::SYS_newfstatat
+        | syscalls::SYS_faccessat
+        | syscalls::SYS_faccessat2
+        | syscalls::SYS_readlinkat
+        | syscalls::SYS_statfs
+        | syscalls::SYS_fstatfs => {
             unreachable!("migrated syscall should be handled by compact path");
         }
         #[cfg(target_arch = "x86_64")]

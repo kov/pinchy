@@ -127,6 +127,15 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_read => Some(core::mem::size_of::<ReadData>()),
         syscalls::SYS_lseek => Some(core::mem::size_of::<LseekData>()),
         syscalls::SYS_openat => Some(core::mem::size_of::<OpenAtData>()),
+        syscalls::SYS_write => Some(core::mem::size_of::<WriteData>()),
+        syscalls::SYS_pread64 => Some(core::mem::size_of::<PreadData>()),
+        syscalls::SYS_pwrite64 => Some(core::mem::size_of::<PwriteData>()),
+        syscalls::SYS_readv => Some(core::mem::size_of::<VectorIOData>()),
+        syscalls::SYS_writev => Some(core::mem::size_of::<VectorIOData>()),
+        syscalls::SYS_preadv => Some(core::mem::size_of::<VectorIOData>()),
+        syscalls::SYS_pwritev => Some(core::mem::size_of::<VectorIOData>()),
+        syscalls::SYS_preadv2 => Some(core::mem::size_of::<VectorIOData>()),
+        syscalls::SYS_pwritev2 => Some(core::mem::size_of::<VectorIOData>()),
         _ => None,
     }
 }

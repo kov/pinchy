@@ -6,7 +6,8 @@ use std::borrow::Cow;
 use log::{error, trace};
 use pinchy_common::{
     compact_payload_size, kernel_types, syscalls, wire_validation_enabled, CloseData, LseekData,
-    OpenAtData, ReadData, SyscallEvent, WireEventHeader,
+    OpenAtData, PreadData, PwriteData, ReadData, SyscallEvent, VectorIOData, WireEventHeader,
+    WriteData,
 };
 
 use crate::{
@@ -23,9 +24,19 @@ pub async fn handle_compact_event(
     formatter: Formatter<'_>,
 ) -> anyhow::Result<bool> {
     let syscall_nr = match header.syscall_nr {
-        syscalls::SYS_close | syscalls::SYS_openat | syscalls::SYS_read | syscalls::SYS_lseek => {
-            header.syscall_nr
-        }
+        syscalls::SYS_close
+        | syscalls::SYS_openat
+        | syscalls::SYS_read
+        | syscalls::SYS_lseek
+        | syscalls::SYS_write
+        | syscalls::SYS_pread64
+        | syscalls::SYS_pwrite64
+        | syscalls::SYS_readv
+        | syscalls::SYS_writev
+        | syscalls::SYS_preadv
+        | syscalls::SYS_pwritev
+        | syscalls::SYS_preadv2
+        | syscalls::SYS_pwritev2 => header.syscall_nr,
         _ => return Ok(false),
     };
 
@@ -95,6 +106,125 @@ pub async fn handle_compact_event(
             argf!(sf, "whence: {}", data.whence);
             finish!(sf, header.return_value);
         }
+        syscalls::SYS_write => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const WriteData) };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if header.return_value >= 0 {
+                let bytes_written = header.return_value as usize;
+                let buf = &data.buf[..bytes_written.min(data.buf.len())];
+
+                let left_over = if header.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        header.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <error>");
+            }
+
+            argf!(sf, "count: {}", data.count);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_pread64 => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const PreadData) };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if header.return_value >= 0 {
+                let bytes_read = header.return_value as usize;
+                let buf = &data.buf[..bytes_read.min(data.buf.len())];
+
+                let left_over = if header.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        header.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <e>");
+            }
+
+            argf!(sf, "count: {}", data.count);
+            argf!(sf, "offset: {}", data.offset);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_pwrite64 => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const PwriteData) };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if header.return_value >= 0 {
+                let bytes_written = header.return_value as usize;
+                let buf = &data.buf[..bytes_written.min(data.buf.len())];
+
+                let left_over = if header.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        header.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <e>");
+            }
+
+            argf!(sf, "count: {}", data.count);
+            argf!(sf, "offset: {}", data.offset);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_readv
+        | syscalls::SYS_writev
+        | syscalls::SYS_preadv
+        | syscalls::SYS_pwritev
+        | syscalls::SYS_preadv2
+        | syscalls::SYS_pwritev2 => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const VectorIOData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            arg!(sf, "iov:");
+
+            format_iovec_array(
+                &mut sf,
+                &data.iovecs,
+                &data.iov_lens,
+                &data.iov_bufs,
+                data.read_count,
+                &IovecFormatOptions::for_io_syscalls(),
+            )
+            .await?;
+
+            argf!(sf, "iovcnt: {}", data.iovcnt);
+
+            if header.syscall_nr == syscalls::SYS_preadv
+                || header.syscall_nr == syscalls::SYS_pwritev
+                || header.syscall_nr == syscalls::SYS_preadv2
+                || header.syscall_nr == syscalls::SYS_pwritev2
+            {
+                argf!(sf, "offset: {}", data.offset);
+            }
+
+            if header.syscall_nr == syscalls::SYS_preadv2
+                || header.syscall_nr == syscalls::SYS_pwritev2
+            {
+                argf!(sf, "flags: 0x{:x}", data.flags);
+            }
+
+            finish!(sf, header.return_value);
+        }
 
         _ => return Ok(false),
     }
@@ -111,39 +241,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
     };
 
     match event.syscall_nr {
-        syscalls::SYS_readv
-        | syscalls::SYS_writev
-        | syscalls::SYS_preadv
-        | syscalls::SYS_pwritev
-        | syscalls::SYS_preadv2
-        | syscalls::SYS_pwritev2 => {
-            let data = unsafe { event.data.vector_io };
-            argf!(sf, "fd: {}", data.fd);
-            arg!(sf, "iov:");
-            format_iovec_array(
-                &mut sf,
-                &data.iovecs,
-                &data.iov_lens,
-                &data.iov_bufs,
-                data.read_count,
-                &IovecFormatOptions::for_io_syscalls(),
-            )
-            .await?;
-            argf!(sf, "iovcnt: {}", data.iovcnt);
-            if event.syscall_nr == syscalls::SYS_preadv
-                || event.syscall_nr == syscalls::SYS_pwritev
-                || event.syscall_nr == syscalls::SYS_preadv2
-                || event.syscall_nr == syscalls::SYS_pwritev2
-            {
-                argf!(sf, "offset: {}", data.offset);
-            }
-            if event.syscall_nr == syscalls::SYS_preadv2
-                || event.syscall_nr == syscalls::SYS_pwritev2
-            {
-                argf!(sf, "flags: 0x{:x}", data.flags);
-            }
-            finish!(sf, event.return_value);
-        }
         syscalls::SYS_rt_sigreturn
         | syscalls::SYS_sched_yield
         | syscalls::SYS_getpid
@@ -1408,89 +1505,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             } else {
                 raw!(sf, " NULL");
             }
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_write => {
-            let data = unsafe { event.data.write };
-
-            argf!(sf, "fd: {}", data.fd);
-
-            if event.return_value >= 0 {
-                let bytes_written = event.return_value as usize;
-                let buf = &data.buf[..bytes_written.min(data.buf.len())];
-
-                let left_over = if event.return_value as usize > buf.len() {
-                    format!(
-                        " ... ({} more bytes)",
-                        event.return_value as usize - buf.len()
-                    )
-                } else {
-                    String::new()
-                };
-
-                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
-            } else {
-                argf!(sf, "buf: <error>");
-            }
-
-            argf!(sf, "count: {}", data.count);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_pread64 => {
-            let data = unsafe { event.data.pread };
-
-            argf!(sf, "fd: {}", data.fd);
-
-            if event.return_value >= 0 {
-                let bytes_read = event.return_value as usize;
-                let buf = &data.buf[..bytes_read.min(data.buf.len())];
-
-                let left_over = if event.return_value as usize > buf.len() {
-                    format!(
-                        " ... ({} more bytes)",
-                        event.return_value as usize - buf.len()
-                    )
-                } else {
-                    String::new()
-                };
-
-                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
-            } else {
-                argf!(sf, "buf: <e>");
-            }
-
-            argf!(sf, "count: {}", data.count);
-            argf!(sf, "offset: {}", data.offset);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_pwrite64 => {
-            let data = unsafe { event.data.pwrite };
-
-            argf!(sf, "fd: {}", data.fd);
-
-            if event.return_value >= 0 {
-                let bytes_written = event.return_value as usize;
-                let buf = &data.buf[..bytes_written.min(data.buf.len())];
-
-                let left_over = if event.return_value as usize > buf.len() {
-                    format!(
-                        " ... ({} more bytes)",
-                        event.return_value as usize - buf.len()
-                    )
-                } else {
-                    String::new()
-                };
-
-                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
-            } else {
-                argf!(sf, "buf: <e>");
-            }
-
-            argf!(sf, "count: {}", data.count);
-            argf!(sf, "offset: {}", data.offset);
 
             finish!(sf, event.return_value);
         }
@@ -4942,7 +4956,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        syscalls::SYS_close | syscalls::SYS_openat | syscalls::SYS_read | syscalls::SYS_lseek => {
+        syscalls::SYS_close
+        | syscalls::SYS_openat
+        | syscalls::SYS_read
+        | syscalls::SYS_lseek
+        | syscalls::SYS_write
+        | syscalls::SYS_pread64
+        | syscalls::SYS_pwrite64
+        | syscalls::SYS_readv
+        | syscalls::SYS_writev
+        | syscalls::SYS_preadv
+        | syscalls::SYS_pwritev
+        | syscalls::SYS_preadv2
+        | syscalls::SYS_pwritev2 => {
             unreachable!();
         }
         _ => {

@@ -10,7 +10,8 @@ use aya_ebpf::{
 use aya_log_ebpf::error;
 use pinchy_common::{
     kernel_types::{EpollEvent, Timespec},
-    SyscallEvent,
+    SyscallEvent, WireEventHeader, WireLegacySyscallEvent, WIRE_KIND_COMPACT_SYSCALL_EVENT,
+    WIRE_KIND_LEGACY_SYSCALL_EVENT, WIRE_VERSION,
 };
 
 use crate::{ENTER_MAP, EVENTS, SYSCALL_RETURN_OFFSET};
@@ -19,9 +20,8 @@ mod efficiency {
     #[cfg(feature = "efficiency-metrics")]
     mod enabled {
         use pinchy_common::{
-            SyscallEvent, TrivialSyscallEvent, EFF_STAT_BYTES_SUBMITTED, EFF_STAT_EVENTS_LEGACY,
-            EFF_STAT_EVENTS_SUBMITTED, EFF_STAT_EVENTS_TRIVIAL, EFF_STAT_RESERVE_FAIL,
-            EFF_STAT_TRIVIAL_OUTPUT_FAIL,
+            WireLegacySyscallEvent, EFF_STAT_BYTES_SUBMITTED, EFF_STAT_EVENTS_LEGACY,
+            EFF_STAT_EVENTS_SUBMITTED, EFF_STAT_RESERVE_FAIL,
         };
 
         use crate::EFFICIENCY_STATS;
@@ -44,28 +44,15 @@ mod efficiency {
         }
 
         #[inline(always)]
-        pub(crate) fn record_trivial_output_fail() {
-            counter_add(EFF_STAT_TRIVIAL_OUTPUT_FAIL, 1);
-        }
-
-        #[inline(always)]
-        pub(crate) fn record_trivial_submit() {
-            counter_add(EFF_STAT_EVENTS_SUBMITTED, 1);
-            counter_add(EFF_STAT_EVENTS_TRIVIAL, 1);
-            counter_add(
-                EFF_STAT_BYTES_SUBMITTED,
-                core::mem::size_of::<TrivialSyscallEvent>() as u64,
-            );
-        }
-
-        #[inline(always)]
         pub(crate) fn record_legacy_submit() {
+            record_legacy_submit_size(core::mem::size_of::<WireLegacySyscallEvent>() as u64);
+        }
+
+        #[inline(always)]
+        pub(crate) fn record_legacy_submit_size(bytes: u64) {
             counter_add(EFF_STAT_EVENTS_SUBMITTED, 1);
             counter_add(EFF_STAT_EVENTS_LEGACY, 1);
-            counter_add(
-                EFF_STAT_BYTES_SUBMITTED,
-                core::mem::size_of::<SyscallEvent>() as u64,
-            );
+            counter_add(EFF_STAT_BYTES_SUBMITTED, bytes);
         }
     }
 
@@ -75,13 +62,10 @@ mod efficiency {
         pub(crate) fn record_reserve_fail() {}
 
         #[inline(always)]
-        pub(crate) fn record_trivial_output_fail() {}
-
-        #[inline(always)]
-        pub(crate) fn record_trivial_submit() {}
-
-        #[inline(always)]
         pub(crate) fn record_legacy_submit() {}
+
+        #[inline(always)]
+        pub(crate) fn record_legacy_submit_size(_bytes: u64) {}
     }
 
     #[cfg(not(feature = "efficiency-metrics"))]
@@ -90,25 +74,7 @@ mod efficiency {
     pub(crate) use enabled::*;
 }
 
-#[inline(always)]
-pub fn record_reserve_fail() {
-    efficiency::record_reserve_fail();
-}
-
-#[inline(always)]
-pub fn record_trivial_output_fail() {
-    efficiency::record_trivial_output_fail();
-}
-
-#[inline(always)]
-pub fn record_trivial_submit() {
-    efficiency::record_trivial_submit();
-}
-
-#[inline(always)]
-pub fn record_legacy_submit() {
-    efficiency::record_legacy_submit();
-}
+pub(crate) use efficiency::{record_legacy_submit, record_legacy_submit_size, record_reserve_fail};
 
 #[inline(always)]
 pub fn read_timespec(ptr: *const Timespec) -> Timespec {
@@ -214,12 +180,12 @@ macro_rules! data_mut {
 }
 
 pub struct Entry {
-    inner: RingBufEntry<SyscallEvent>,
+    inner: RingBufEntry<WireLegacySyscallEvent>,
 }
 
 impl Entry {
     pub fn new(ctx: &TracePointContext, syscall_nr: i64) -> Result<Self, u32> {
-        let Some(mut entry) = (unsafe { EVENTS.reserve::<SyscallEvent>(0) }) else {
+        let Some(mut entry) = (unsafe { EVENTS.reserve::<WireLegacySyscallEvent>(0) }) else {
             record_reserve_fail();
 
             error!(
@@ -230,26 +196,37 @@ impl Entry {
         };
 
         let event = entry.deref_mut();
-        event.write(unsafe { core::mem::zeroed::<SyscallEvent>() });
+        event.write(unsafe { core::mem::zeroed::<WireLegacySyscallEvent>() });
 
         let event = unsafe { event.assume_init_mut() };
 
-        event.pid = ctx.pid();
-        event.tid = ctx.tgid();
-        event.syscall_nr = syscall_nr;
-        event.return_value = match get_return_value(&ctx) {
+        event.payload.pid = ctx.pid();
+        event.payload.tid = ctx.tgid();
+        event.payload.syscall_nr = syscall_nr;
+        let return_value = match get_return_value(&ctx) {
             Ok(return_value) => return_value,
             Err(e) => {
                 entry.discard(0);
                 return Err(e);
             }
         };
+        event.payload.return_value = return_value;
+
+        event.header = WireEventHeader {
+            version: WIRE_VERSION,
+            kind: WIRE_KIND_LEGACY_SYSCALL_EVENT,
+            payload_len: core::mem::size_of::<SyscallEvent>() as u32,
+            syscall_nr,
+            pid: event.payload.pid,
+            tid: event.payload.tid,
+            return_value,
+        };
 
         Ok(Entry { inner: entry })
     }
 
     fn event_mut(&mut self) -> &mut SyscallEvent {
-        unsafe { self.inner.deref_mut().assume_init_mut() }
+        unsafe { &mut self.inner.deref_mut().assume_init_mut().payload }
     }
 
     pub fn submit(self) -> u32 {
@@ -263,11 +240,61 @@ impl Entry {
     }
 }
 
+#[repr(C)]
+struct WireCompactPayload<T> {
+    header: WireEventHeader,
+    payload: T,
+}
+
+pub fn submit_compact_payload<T, F>(
+    ctx: &TracePointContext,
+    syscall_nr: i64,
+    return_value: i64,
+    initialize_payload: F,
+) -> Result<(), u32>
+where
+    T: 'static,
+    F: FnOnce(&mut T),
+{
+    let Some(mut entry) = (unsafe { EVENTS.reserve::<WireCompactPayload<T>>(0) }) else {
+        record_reserve_fail();
+
+        error!(
+            ctx,
+            "Failed to reserve ringbuf entry for syscall {}", syscall_nr
+        );
+
+        return Err(1);
+    };
+
+    let event = entry.deref_mut();
+    event.write(unsafe { core::mem::zeroed::<WireCompactPayload<T>>() });
+
+    let event = unsafe { event.assume_init_mut() };
+    event.header = WireEventHeader {
+        version: WIRE_VERSION,
+        kind: WIRE_KIND_COMPACT_SYSCALL_EVENT,
+        payload_len: core::mem::size_of::<T>() as u32,
+        syscall_nr,
+        pid: ctx.pid(),
+        tid: ctx.tgid(),
+        return_value,
+    };
+
+    initialize_payload(&mut event.payload);
+
+    record_legacy_submit_size(core::mem::size_of::<WireCompactPayload<T>>() as u64);
+
+    entry.submit(BPF_RB_FORCE_WAKEUP.into());
+
+    Ok(())
+}
+
 impl core::ops::Deref for Entry {
     type Target = SyscallEvent;
 
     fn deref(&self) -> &Self::Target {
-        unsafe { self.inner.assume_init_ref() }
+        unsafe { &self.inner.assume_init_ref().payload }
     }
 }
 

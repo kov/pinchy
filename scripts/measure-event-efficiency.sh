@@ -118,7 +118,6 @@ extract_value() {
 ebpf_submitted="$(extract_value ebpf_submitted)"
 ebpf_bytes="$(extract_value ebpf_bytes)"
 ebpf_reserve_fail="$(extract_value ebpf_reserve_fail)"
-ebpf_trivial_output_fail="$(extract_value ebpf_trivial_output_fail)"
 dispatch_send_fail="$(extract_value send_fail)"
 
 if [[ -z "${ebpf_submitted:-}" || -z "${ebpf_bytes:-}" ]]; then
@@ -159,7 +158,6 @@ echo "latency p95 (ms):         $lat_p95"
 echo
 echo "dispatch send fail:        ${dispatch_send_fail:-0}"
 echo "eBPF reserve fail:         ${ebpf_reserve_fail:-0}"
-echo "eBPF trivial output fail:  ${ebpf_trivial_output_fail:-0}"
 echo
 echo "Last stats line:"
 echo "$last_stats_line"

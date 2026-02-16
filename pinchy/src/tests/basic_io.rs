@@ -33,7 +33,8 @@ use crate::{
     events::handle_event,
     format_helpers::{aio_constants, io_uring_constants},
     formatting::{Formatter, FormattingStyle},
-    syscall_test,
+    syscall_compact_test, syscall_test,
+    tests::make_compact_test_data,
 };
 
 syscall_test!(
@@ -223,29 +224,21 @@ syscall_test!(
     "22 ppoll(fds: [ { 5, POLLIN } ], nfds: 1, timeout: { secs: 1, nanos: 0 }, sigmask) = 1 (ready) [5 = POLLIN]\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_read,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_read,
-            pid: 22,
-            tid: 22,
-            return_value: 8192,
-            data: pinchy_common::SyscallEventData {
-                read: ReadData {
-                    fd: 3,
-                    buf: [0u8; DATA_READ_SIZE],
-                    count: 8192,
-                },
-            },
+        let mut data = ReadData {
+            fd: 3,
+            buf: [0u8; DATA_READ_SIZE],
+            count: 8192,
         };
-        let read_data = unsafe { &mut event.data.read };
-        read_data
-            .buf
+
+        data.buf
             .iter_mut()
             .zip((0..).flat_map(|n: u8| std::iter::repeat_n(n, 10)))
             .for_each(|(b, i)| *b = i + 65);
-        event
+
+        make_compact_test_data(SYS_read, 22, 8192, &data)
     },
     "22 read(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192 (bytes)\n"
 );
@@ -277,22 +270,16 @@ syscall_test!(
     "22 write(fd: 3, buf: \"AAAAAAAAAABBBBBBBBBBCCCCCCCCCCDDDDDDDDDDEEEEEEEEEEFFFFFFFFFFGGGGGGGGGGHHHHHHHHHHIIIIIIIIIIJJJJJJJJJJKKKKKKKKKKLLLLLLLLLLMMMMMMMM\" ... (8064 more bytes), count: 8192) = 8192 (bytes)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_lseek,
     {
-        SyscallEvent {
-            syscall_nr: SYS_lseek,
-            pid: 22,
-            tid: 22,
-            return_value: 18092,
-            data: pinchy_common::SyscallEventData {
-                lseek: LseekData {
-                    fd: 3,
-                    offset: 0,
-                    whence: libc::SEEK_END,
-                },
-            },
-        }
+        let data = LseekData {
+            fd: 3,
+            offset: 0,
+            whence: libc::SEEK_END,
+        };
+
+        make_compact_test_data(SYS_lseek, 22, 18092, &data)
     },
     "22 lseek(fd: 3, offset: 0, whence: 2) = 18092\n"
 );

@@ -4,7 +4,10 @@
 use std::borrow::Cow;
 
 use log::{error, trace};
-use pinchy_common::{kernel_types, syscalls, SyscallEvent};
+use pinchy_common::{
+    compact_payload_size, kernel_types, syscalls, LseekData, ReadData, SyscallEvent,
+    WireEventHeader,
+};
 
 use crate::{
     arg, argf, finish,
@@ -13,6 +16,72 @@ use crate::{
     ioctls::format_ioctl_request,
     raw, with_array, with_struct,
 };
+
+pub async fn handle_compact_event(
+    header: &WireEventHeader,
+    payload: &[u8],
+    formatter: Formatter<'_>,
+) -> anyhow::Result<bool> {
+    let syscall_nr = match header.syscall_nr {
+        syscalls::SYS_read | syscalls::SYS_lseek => header.syscall_nr,
+        _ => return Ok(false),
+    };
+
+    let Some(expected_payload_size) = compact_payload_size(header.syscall_nr) else {
+        return Ok(false);
+    };
+
+    if payload.len() != expected_payload_size {
+        return Ok(true);
+    }
+
+    let Ok(mut sf) = formatter.push_syscall(header.tid, syscall_nr).await else {
+        error!("{} unknown syscall {}", header.tid, syscall_nr);
+        return Ok(true);
+    };
+
+    match header.syscall_nr {
+        syscalls::SYS_read => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const ReadData) };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if header.return_value >= 0 {
+                let bytes_read = header.return_value as usize;
+                let buf = &data.buf[..bytes_read.min(data.buf.len())];
+
+                let left_over = if header.return_value as usize > buf.len() {
+                    format!(
+                        " ... ({} more bytes)",
+                        header.return_value as usize - buf.len()
+                    )
+                } else {
+                    String::new()
+                };
+
+                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
+            } else {
+                argf!(sf, "buf: <error>");
+            }
+
+            argf!(sf, "count: {}", data.count);
+            finish!(sf, header.return_value);
+        }
+
+        syscalls::SYS_lseek => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const LseekData) };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "offset: {}", data.offset);
+            argf!(sf, "whence: {}", data.whence);
+            finish!(sf, header.return_value);
+        }
+
+        _ => return Ok(false),
+    }
+
+    Ok(true)
+}
 
 pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> anyhow::Result<()> {
     trace!("handle_event for syscall {}", event.syscall_nr);
@@ -1329,33 +1398,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        syscalls::SYS_read => {
-            let data = unsafe { event.data.read };
-
-            argf!(sf, "fd: {}", data.fd);
-
-            if event.return_value >= 0 {
-                let bytes_read = event.return_value as usize;
-                let buf = &data.buf[..bytes_read.min(data.buf.len())];
-
-                let left_over = if event.return_value as usize > buf.len() {
-                    format!(
-                        " ... ({} more bytes)",
-                        event.return_value as usize - buf.len()
-                    )
-                } else {
-                    String::new()
-                };
-
-                argf!(sf, "buf: {}{}", format_bytes(buf), left_over);
-            } else {
-                argf!(sf, "buf: <error>");
-            }
-
-            argf!(sf, "count: {}", data.count);
-
-            finish!(sf, event.return_value);
-        }
         syscalls::SYS_write => {
             let data = unsafe { event.data.write };
 
@@ -1436,15 +1478,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "count: {}", data.count);
             argf!(sf, "offset: {}", data.offset);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_lseek => {
-            let data = unsafe { event.data.lseek };
-
-            argf!(sf, "fd: {}", data.fd);
-            argf!(sf, "offset: {}", data.offset);
-            argf!(sf, "whence: {}", data.whence);
 
             finish!(sf, event.return_value);
         }
@@ -4905,6 +4938,9 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
 
             finish!(sf, event.return_value);
+        }
+        syscalls::SYS_read | syscalls::SYS_lseek => {
+            unreachable!();
         }
         _ => {
             let data = unsafe { event.data.generic };

@@ -1,7 +1,6 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     collections::HashMap,
-    convert::TryFrom,
     os::fd::{AsRawFd as _, OwnedFd},
     sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -15,8 +14,8 @@ use aya::{
     Ebpf,
 };
 use pinchy_common::{
-    syscalls, SyscallEvent, TrivialSyscallEvent, WireEventHeader, WIRE_KIND_LEGACY_SYSCALL_EVENT,
-    WIRE_KIND_TRIVIAL_SYSCALL_EVENT, WIRE_VERSION,
+    compact_payload_size, syscalls, SyscallEvent, WireEventHeader, WIRE_KIND_COMPACT_SYSCALL_EVENT,
+    WIRE_KIND_LEGACY_SYSCALL_EVENT, WIRE_VERSION,
 };
 use tokio::{
     io::{unix::AsyncFd, AsyncWriteExt},
@@ -39,8 +38,7 @@ mod efficiency {
         use aya::{maps::Array, Ebpf};
         use pinchy_common::{
             EFF_STAT_BYTES_SUBMITTED, EFF_STAT_COUNT, EFF_STAT_EVENTS_LEGACY,
-            EFF_STAT_EVENTS_SUBMITTED, EFF_STAT_EVENTS_TRIVIAL, EFF_STAT_RESERVE_FAIL,
-            EFF_STAT_TRIVIAL_OUTPUT_FAIL,
+            EFF_STAT_EVENTS_SUBMITTED, EFF_STAT_RESERVE_FAIL,
         };
 
         pub(crate) type EbpfCounters = [u64; EFF_STAT_COUNT as usize];
@@ -50,7 +48,6 @@ mod efficiency {
             ring_items_read: AtomicU64,
             ring_bytes_read: AtomicU64,
             ring_items_unexpected: AtomicU64,
-            ring_items_frame_fail: AtomicU64,
             framed_events: AtomicU64,
             framed_bytes: AtomicU64,
             dispatch_events_matched: AtomicU64,
@@ -59,7 +56,6 @@ mod efficiency {
             dispatch_send_full: AtomicU64,
             dispatch_send_closed: AtomicU64,
             drop_legacy_events: AtomicU64,
-            drop_trivial_events: AtomicU64,
             queue_depth_current: AtomicU64,
             queue_depth_peak: AtomicU64,
             writer_events_written: AtomicU64,
@@ -73,7 +69,6 @@ mod efficiency {
             ring_items_read: u64,
             ring_bytes_read: u64,
             ring_items_unexpected: u64,
-            ring_items_frame_fail: u64,
             framed_events: u64,
             framed_bytes: u64,
             dispatch_events_matched: u64,
@@ -82,7 +77,6 @@ mod efficiency {
             dispatch_send_full: u64,
             dispatch_send_closed: u64,
             drop_legacy_events: u64,
-            drop_trivial_events: u64,
             queue_depth_current: u64,
             queue_depth_peak: u64,
             writer_events_written: u64,
@@ -120,10 +114,6 @@ mod efficiency {
                 self.ring_items_unexpected.fetch_add(1, Ordering::Relaxed);
             }
 
-            pub(crate) fn ring_item_frame_fail(&self) {
-                self.ring_items_frame_fail.fetch_add(1, Ordering::Relaxed);
-            }
-
             pub(crate) fn framed_event(&self, bytes: usize) {
                 self.framed_events.fetch_add(1, Ordering::Relaxed);
                 self.framed_bytes.fetch_add(bytes as u64, Ordering::Relaxed);
@@ -141,18 +131,14 @@ mod efficiency {
                 }
             }
 
-            pub(crate) fn dispatch_send_drop(&self, kind: u16, is_full: bool) {
+            pub(crate) fn dispatch_send_drop(&self, is_full: bool) {
                 if is_full {
                     self.dispatch_send_full.fetch_add(1, Ordering::Relaxed);
                 } else {
                     self.dispatch_send_closed.fetch_add(1, Ordering::Relaxed);
                 }
 
-                if kind == pinchy_common::WIRE_KIND_TRIVIAL_SYSCALL_EVENT {
-                    self.drop_trivial_events.fetch_add(1, Ordering::Relaxed);
-                } else {
-                    self.drop_legacy_events.fetch_add(1, Ordering::Relaxed);
-                }
+                self.drop_legacy_events.fetch_add(1, Ordering::Relaxed);
             }
 
             pub(crate) fn queue_depth_increment(&self) {
@@ -178,7 +164,6 @@ mod efficiency {
                     ring_items_read: self.ring_items_read.load(Ordering::Relaxed),
                     ring_bytes_read: self.ring_bytes_read.load(Ordering::Relaxed),
                     ring_items_unexpected: self.ring_items_unexpected.load(Ordering::Relaxed),
-                    ring_items_frame_fail: self.ring_items_frame_fail.load(Ordering::Relaxed),
                     framed_events: self.framed_events.load(Ordering::Relaxed),
                     framed_bytes: self.framed_bytes.load(Ordering::Relaxed),
                     dispatch_events_matched: self.dispatch_events_matched.load(Ordering::Relaxed),
@@ -187,7 +172,6 @@ mod efficiency {
                     dispatch_send_full: self.dispatch_send_full.load(Ordering::Relaxed),
                     dispatch_send_closed: self.dispatch_send_closed.load(Ordering::Relaxed),
                     drop_legacy_events: self.drop_legacy_events.load(Ordering::Relaxed),
-                    drop_trivial_events: self.drop_trivial_events.load(Ordering::Relaxed),
                     queue_depth_current: self.queue_depth_current.load(Ordering::Relaxed),
                     queue_depth_peak: self.queue_depth_peak.load(Ordering::Relaxed),
                     writer_events_written: self.writer_events_written.load(Ordering::Relaxed),
@@ -224,11 +208,10 @@ mod efficiency {
             queue_snapshot: &str,
         ) {
             let mut line = format!(
-                "EFF userspace ring_items={} ring_bytes={} unexpected={} frame_fail={} framed_events={} framed_bytes={} matched={} send_ok={} send_fail={} send_full={} send_closed={} drop_legacy={} drop_trivial={} qdepth={} qpeak={} writer_events={} writer_bytes={} writer_write_err={} writer_flush_err={}",
+                "EFF userspace ring_items={} ring_bytes={} unexpected={} framed_events={} framed_bytes={} matched={} send_ok={} send_fail={} send_full={} send_closed={} drop_legacy={} qdepth={} qpeak={} writer_events={} writer_bytes={} writer_write_err={} writer_flush_err={}",
                 userspace.ring_items_read,
                 userspace.ring_bytes_read,
                 userspace.ring_items_unexpected,
-                userspace.ring_items_frame_fail,
                 userspace.framed_events,
                 userspace.framed_bytes,
                 userspace.dispatch_events_matched,
@@ -237,7 +220,6 @@ mod efficiency {
                 userspace.dispatch_send_full,
                 userspace.dispatch_send_closed,
                 userspace.drop_legacy_events,
-                userspace.drop_trivial_events,
                 userspace.queue_depth_current,
                 userspace.queue_depth_peak,
                 userspace.writer_events_written,
@@ -248,12 +230,10 @@ mod efficiency {
 
             if let Some(ebpf) = ebpf {
                 line.push_str(&format!(
-                    " ebpf_submitted={} ebpf_bytes={} ebpf_reserve_fail={} ebpf_trivial_output_fail={} ebpf_trivial_events={} ebpf_legacy_events={}",
+                    " ebpf_submitted={} ebpf_bytes={} ebpf_reserve_fail={} ebpf_legacy_events={}",
                     ebpf[EFF_STAT_EVENTS_SUBMITTED as usize],
                     ebpf[EFF_STAT_BYTES_SUBMITTED as usize],
                     ebpf[EFF_STAT_RESERVE_FAIL as usize],
-                    ebpf[EFF_STAT_TRIVIAL_OUTPUT_FAIL as usize],
-                    ebpf[EFF_STAT_EVENTS_TRIVIAL as usize],
                     ebpf[EFF_STAT_EVENTS_LEGACY as usize],
                 ));
             }
@@ -294,15 +274,13 @@ mod efficiency {
 
             pub(crate) fn ring_item_unexpected(&self) {}
 
-            pub(crate) fn ring_item_frame_fail(&self) {}
-
             pub(crate) fn framed_event(&self, _bytes: usize) {}
 
             pub(crate) fn dispatch_event_matched(&self) {}
 
             pub(crate) fn dispatch_send(&self, _ok: bool) {}
 
-            pub(crate) fn dispatch_send_drop(&self, _kind: u16, _is_full: bool) {}
+            pub(crate) fn dispatch_send_drop(&self, _is_full: bool) {}
 
             pub(crate) fn queue_depth_increment(&self) {}
 
@@ -467,13 +445,6 @@ struct Client {
     queue_stats: Arc<ClientQueueStats>,
 }
 
-#[derive(Clone, Copy)]
-struct EventMetadata {
-    pid: u32,
-    syscall_nr: i64,
-    kind: u16,
-}
-
 #[derive(Debug)]
 struct PidTimeout {
     #[allow(unused)]
@@ -495,60 +466,68 @@ pub struct EventDispatch {
     stats: Arc<DispatchStats>,
 }
 
-fn parse_event_metadata(event: &[u8]) -> Option<EventMetadata> {
-    if event.len() == std::mem::size_of::<SyscallEvent>() {
-        let event = unsafe { std::ptr::read_unaligned(event.as_ptr() as *const SyscallEvent) };
+fn parse_event_metadata(event: &[u8]) -> Option<WireEventHeader> {
+    let header_size = std::mem::size_of::<WireEventHeader>();
 
-        return Some(EventMetadata {
-            pid: event.pid,
-            syscall_nr: event.syscall_nr,
-            kind: WIRE_KIND_LEGACY_SYSCALL_EVENT,
-        });
-    }
+    if event.len() >= header_size {
+        let header = unsafe { std::ptr::read_unaligned(event.as_ptr() as *const WireEventHeader) };
 
-    if event.len() == std::mem::size_of::<TrivialSyscallEvent>() {
-        let event =
-            unsafe { std::ptr::read_unaligned(event.as_ptr() as *const TrivialSyscallEvent) };
+        if header.version == WIRE_VERSION {
+            let payload_len = header.payload_len as usize;
+            let total_size = header_size.checked_add(payload_len)?;
 
-        if event.magic == pinchy_common::TRIVIAL_EVENT_MAGIC && event.version == WIRE_VERSION {
-            return Some(EventMetadata {
-                pid: event.pid,
-                syscall_nr: event.syscall_nr,
-                kind: WIRE_KIND_TRIVIAL_SYSCALL_EVENT,
-            });
+            if total_size == event.len() {
+                let payload = &event[header_size..];
+
+                match header.kind {
+                    WIRE_KIND_LEGACY_SYSCALL_EVENT => {
+                        if payload.len() != std::mem::size_of::<SyscallEvent>() {
+                            return None;
+                        }
+
+                        return Some(header);
+                    }
+
+                    WIRE_KIND_COMPACT_SYSCALL_EVENT => {
+                        let expected_payload_size = compact_payload_size(header.syscall_nr)?;
+
+                        if payload.len() != expected_payload_size {
+                            return None;
+                        }
+
+                        return Some(header);
+                    }
+
+                    _ => {
+                        return None;
+                    }
+                }
+            }
         }
     }
 
     None
 }
 
-fn frame_event(kind: u16, payload: &[u8]) -> Option<Arc<[u8]>> {
-    let payload_len: u32 = payload.len().try_into().ok()?;
-
-    let header = WireEventHeader {
-        version: WIRE_VERSION,
-        kind,
-        payload_len,
-    };
-
+fn parse_trusted_wire_metadata(event: &[u8]) -> Option<WireEventHeader> {
     let header_size = std::mem::size_of::<WireEventHeader>();
-    let mut framed = vec![0u8; header_size + payload.len()];
 
-    unsafe {
-        std::ptr::copy_nonoverlapping(
-            &header as *const WireEventHeader as *const u8,
-            framed.as_mut_ptr(),
-            header_size,
-        );
-
-        std::ptr::copy_nonoverlapping(
-            payload.as_ptr(),
-            framed.as_mut_ptr().add(header_size),
-            payload.len(),
-        );
+    if event.len() < header_size {
+        return None;
     }
 
-    Some(framed.into())
+    let header = unsafe { std::ptr::read_unaligned(event.as_ptr() as *const WireEventHeader) };
+
+    assert_eq!(header.version, WIRE_VERSION);
+
+    Some(header)
+}
+
+fn parse_wire_validation_enabled() -> bool {
+    match std::env::var("PINCHY_VALIDATE_WIRE") {
+        Ok(value) => value == "1" || value.eq_ignore_ascii_case("true"),
+        Err(_) => cfg!(debug_assertions),
+    }
 }
 
 fn parse_client_queue_capacity() -> usize {
@@ -571,6 +550,7 @@ impl EventDispatch {
 
         let stats_enabled = efficiency::stats_enabled_from_env();
         let client_queue_capacity = parse_client_queue_capacity();
+        let validate_wire = parse_wire_validation_enabled();
 
         // Create channels for internal communication
         let (cleanup_tx, mut cleanup_rx) = tokio::sync::mpsc::channel(128);
@@ -671,22 +651,24 @@ impl EventDispatch {
 
                                     event_stats.ring_item_read(event.len());
 
-                                    let Some(metadata) = parse_event_metadata(event) else {
+                                    let parsed = if validate_wire {
+                                        parse_event_metadata(event)
+                                    } else {
+                                        parse_trusted_wire_metadata(event)
+                                    };
+
+                                    let Some(header) = parsed else {
                                         event_stats.ring_item_unexpected();
                                         log::trace!("RingBuf item had unexpected size, discarded...");
                                         continue;
                                     };
 
-                                    let Some(framed_event) = frame_event(metadata.kind, event) else {
-                                        event_stats.ring_item_frame_fail();
-                                        log::trace!("RingBuf item could not be framed, discarded...");
-                                        continue;
-                                    };
+                                    let framed_event = Arc::<[u8]>::from(event.to_vec());
 
                                     event_stats.framed_event(framed_event.len());
 
                                     log::trace!("Read {} bytes from ringbuf...", event.len());
-                                    event_dispatch.read().await.dispatch_event(metadata, framed_event);
+                                    event_dispatch.read().await.dispatch_event(header, framed_event);
                                 }
                                 guard.clear_ready();
                             }
@@ -709,11 +691,11 @@ impl EventDispatch {
         Ok(shared_dispatch)
     }
 
-    fn dispatch_event(&self, metadata: EventMetadata, event_bytes: Arc<[u8]>) {
-        if let Some(clients) = self.clients_map.get(&metadata.pid) {
+    fn dispatch_event(&self, header: WireEventHeader, event_bytes: Arc<[u8]>) {
+        if let Some(clients) = self.clients_map.get(&header.pid) {
             let interested_clients: Vec<_> = clients
                 .iter()
-                .filter(|client| client.syscalls.contains(&metadata.syscall_nr))
+                .filter(|client| client.syscalls.contains(&header.syscall_nr))
                 .collect();
 
             if !interested_clients.is_empty() {
@@ -729,18 +711,18 @@ impl EventDispatch {
                         Err(TrySendError::Full(_)) => {
                             client.queue_stats.record_full_drop();
                             self.stats.dispatch_send(false);
-                            self.stats.dispatch_send_drop(metadata.kind, true);
+                            self.stats.dispatch_send_drop(true);
                         }
                         Err(TrySendError::Closed(_)) => {
                             client.queue_stats.record_closed_drop();
                             self.stats.dispatch_send(false);
-                            self.stats.dispatch_send_drop(metadata.kind, false);
+                            self.stats.dispatch_send_drop(false);
                         }
                     }
                 }
 
                 // Reset timeout for this PID if it has one
-                self.reset_pid_timeout(metadata.pid);
+                self.reset_pid_timeout(header.pid);
             }
         }
     }

@@ -14,6 +14,8 @@ use aya_ebpf::{
 };
 use aya_log_ebpf::{error, trace};
 use pinchy_common::syscalls;
+#[cfg(feature = "efficiency-metrics")]
+use pinchy_common::EFF_STAT_COUNT;
 
 use crate::util::{get_args, get_syscall_nr};
 
@@ -37,6 +39,10 @@ static mut PID_FILTER: HashMap<u32, u8> = HashMap::with_max_entries(1024, 0);
 // Treated as a bitmap for syscalls.
 #[map]
 static mut SYSCALL_FILTER: Array<u8> = Array::with_max_entries(64, 0);
+
+#[cfg(feature = "efficiency-metrics")]
+#[map]
+static mut EFFICIENCY_STATS: Array<u64> = Array::with_max_entries(EFF_STAT_COUNT, 0);
 
 #[map] // 80MiB output buffer
 static mut EVENTS: RingBuf = RingBuf::with_byte_size(83886080, 0);
@@ -205,12 +211,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
             syscalls::SYS_close => {
                 let data = unsafe { &mut entry.data.close };
                 data.fd = args[0] as i32;
-            }
-            syscalls::SYS_lseek => {
-                let data = unsafe { &mut entry.data.lseek };
-                data.fd = args[0] as i32;
-                data.offset = args[1] as i64;
-                data.whence = args[2] as i32;
             }
             syscalls::SYS_brk => {
                 let data = unsafe { &mut entry.data.brk };
@@ -598,6 +598,9 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 data.len = args[1] as u64;
                 data.home_node = args[2] as u64;
                 data.flags = args[3] as u64;
+            }
+            syscalls::SYS_lseek => {
+                error!(&ctx, "hit migrated syscall {}", syscall_nr);
             }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);

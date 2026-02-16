@@ -96,20 +96,25 @@ pub const Q_XQUOTASYNC: i32 = 0x5807;
 pub const Q_XGETQSTATV: i32 = 0x5808;
 pub const Q_XGETNEXTQUOTA: i32 = 0x5809;
 
-pub const WIRE_VERSION: u16 = 1;
+pub const WIRE_VERSION: u16 = 3;
 
 pub const WIRE_KIND_LEGACY_SYSCALL_EVENT: u16 = 1;
-pub const WIRE_KIND_TRIVIAL_SYSCALL_EVENT: u16 = 2;
-
-pub const TRIVIAL_EVENT_MAGIC: u32 = 0x5054_5256; // "PTRV"
+pub const WIRE_KIND_COMPACT_SYSCALL_EVENT: u16 = 2;
 
 pub const EFF_STAT_EVENTS_SUBMITTED: u32 = 0;
 pub const EFF_STAT_BYTES_SUBMITTED: u32 = 1;
 pub const EFF_STAT_RESERVE_FAIL: u32 = 2;
-pub const EFF_STAT_TRIVIAL_OUTPUT_FAIL: u32 = 3;
-pub const EFF_STAT_EVENTS_TRIVIAL: u32 = 4;
-pub const EFF_STAT_EVENTS_LEGACY: u32 = 5;
-pub const EFF_STAT_COUNT: u32 = 6;
+pub const EFF_STAT_EVENTS_LEGACY: u32 = 3;
+pub const EFF_STAT_COUNT: u32 = 4;
+
+#[inline]
+pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
+    match syscall_nr {
+        syscalls::SYS_read => Some(core::mem::size_of::<ReadData>()),
+        syscalls::SYS_lseek => Some(core::mem::size_of::<LseekData>()),
+        _ => None,
+    }
+}
 
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
@@ -117,19 +122,10 @@ pub struct WireEventHeader {
     pub version: u16,
     pub kind: u16,
     pub payload_len: u32,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy, Debug, Default)]
-pub struct TrivialSyscallEvent {
-    pub magic: u32,
-    pub version: u16,
-    pub _reserved: u16,
     pub syscall_nr: i64,
     pub pid: u32,
     pub tid: u32,
     pub return_value: i64,
-    pub args: [u64; 6],
 }
 
 #[repr(C)]
@@ -139,6 +135,12 @@ pub struct SyscallEvent {
     pub tid: u32,
     pub return_value: i64,
     pub data: SyscallEventData,
+}
+
+#[repr(C)]
+pub struct WireLegacySyscallEvent {
+    pub header: WireEventHeader,
+    pub payload: SyscallEvent,
 }
 
 #[repr(C)]

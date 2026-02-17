@@ -1,23 +1,20 @@
-use pinchy_common::{SyscallEvent, SyscallEventData};
-
 use crate::syscall_test;
 
 syscall_test!(
     parse_shmat_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmat,
-            pid: 1111,
-            tid: 1111,
-            return_value: 0x7fabc000,
-            data: SyscallEventData {
-                shmat: pinchy_common::ShmatData {
-                    shmid: 123,
-                    shmaddr: 0,
-                    shmflg: libc::SHM_RDONLY,
-                },
-            },
-        }
+        let data = pinchy_common::ShmatData {
+            shmid: 123,
+            shmaddr: 0,
+            shmflg: libc::SHM_RDONLY,
+        };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_shmat,
+            1111,
+            0x7fabc000,
+            &data,
+        )
     },
     "1111 shmat(shmid: 123, shmaddr: 0x0, shmflg: SHM_NORESERVE|SHM_RDONLY) = 0x7fabc000\n"
 );
@@ -25,19 +22,13 @@ syscall_test!(
 syscall_test!(
     parse_shmat_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmat,
-            pid: 2222,
-            tid: 2222,
-            return_value: -1,
-            data: SyscallEventData {
-                shmat: pinchy_common::ShmatData {
-                    shmid: 456,
-                    shmaddr: 0x1000,
-                    shmflg: 0,
-                },
-            },
-        }
+        let data = pinchy_common::ShmatData {
+            shmid: 456,
+            shmaddr: 0x1000,
+            shmflg: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmat, 2222, -1, &data)
     },
     "2222 shmat(shmid: 456, shmaddr: 0x1000, shmflg: 0x0) = -1 (error)\n"
 );
@@ -45,17 +36,11 @@ syscall_test!(
 syscall_test!(
     parse_shmdt_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmdt,
-            pid: 3333,
-            tid: 3333,
-            return_value: 0,
-            data: SyscallEventData {
-                shmdt: pinchy_common::ShmdtData {
-                    shmaddr: 0x7fabc000,
-                },
-            },
-        }
+        let data = pinchy_common::ShmdtData {
+            shmaddr: 0x7fabc000,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmdt, 3333, 0, &data)
     },
     "3333 shmdt(shmaddr: 0x7fabc000) = 0 (success)\n"
 );
@@ -63,17 +48,11 @@ syscall_test!(
 syscall_test!(
     parse_shmdt_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmdt,
-            pid: 4444,
-            tid: 4444,
-            return_value: -1,
-            data: SyscallEventData {
-                shmdt: pinchy_common::ShmdtData {
-                    shmaddr: 0xdeadbeef,
-                },
-            },
-        }
+        let data = pinchy_common::ShmdtData {
+            shmaddr: 0xdeadbeef,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmdt, 4444, -1, &data)
     },
     "4444 shmdt(shmaddr: 0xdeadbeef) = -1 (error)\n"
 );
@@ -81,19 +60,13 @@ syscall_test!(
 syscall_test!(
     parse_shmget_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmget,
-            pid: 5555,
-            tid: 5555,
-            return_value: 77,
-            data: SyscallEventData {
-                shmget: pinchy_common::ShmgetData {
-                    key: 0x1234,
-                    size: 4096,
-                    shmflg: libc::IPC_CREAT | libc::IPC_EXCL,
-                },
-            },
-        }
+        let data = pinchy_common::ShmgetData {
+            key: 0x1234,
+            size: 4096,
+            shmflg: libc::IPC_CREAT | libc::IPC_EXCL,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmget, 5555, 77, &data)
     },
     "5555 shmget(key: 0x1234, size: 4096, shmflg: IPC_CREAT|IPC_EXCL) = 77 (shmid)\n"
 );
@@ -101,19 +74,13 @@ syscall_test!(
 syscall_test!(
     parse_shmget_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmget,
-            pid: 6666,
-            tid: 6666,
-            return_value: -1,
-            data: SyscallEventData {
-                shmget: pinchy_common::ShmgetData {
-                    key: 0xbeef,
-                    size: 8192,
-                    shmflg: 0,
-                },
-            },
-        }
+        let data = pinchy_common::ShmgetData {
+            key: 0xbeef,
+            size: 8192,
+            shmflg: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmget, 6666, -1, &data)
     },
     "6666 shmget(key: 0xbeef, size: 8192, shmflg: 0x0) = -1 (error)\n"
 );
@@ -121,13 +88,7 @@ syscall_test!(
 syscall_test!(
     parse_shmctl_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmctl,
-            pid: 7777,
-            tid: 7777,
-            return_value: 0,
-            data: SyscallEventData {
-                shmctl: pinchy_common::ShmctlData {
+        let data = pinchy_common::ShmctlData {
                     shmid: 55,
                     cmd: libc::IPC_STAT,
                     buf: pinchy_common::kernel_types::ShmidDs {
@@ -150,9 +111,9 @@ syscall_test!(
                         shm_nattch: 2,
                     },
                     has_buf: true,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmctl, 7777, 0, &data)
     },
     "7777 shmctl(shmid: 55, cmd: IPC_STAT, buf: { ipc_perm { key: 0x12345678, uid: 1000, gid: 1000, cuid: 1000, cgid: 1000, mode: 0o666 (rw-rw-rw-), seq: 42 }, segsz: 4096, atime: 1620000000, dtime: 1620001000, ctime: 1620002000, cpid: 1234, lpid: 5678, nattch: 2 }) = 0 (success)\n"
 );
@@ -160,20 +121,14 @@ syscall_test!(
 syscall_test!(
     parse_shmctl_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_shmctl,
-            pid: 8888,
-            tid: 8888,
-            return_value: -1,
-            data: SyscallEventData {
-                shmctl: pinchy_common::ShmctlData {
-                    shmid: 99,
-                    cmd: libc::IPC_RMID,
-                    buf: pinchy_common::kernel_types::ShmidDs::default(),
-                    has_buf: false,
-                },
-            },
-        }
+        let data = pinchy_common::ShmctlData {
+            shmid: 99,
+            cmd: libc::IPC_RMID,
+            buf: pinchy_common::kernel_types::ShmidDs::default(),
+            has_buf: false,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmctl, 8888, -1, &data)
     },
     "8888 shmctl(shmid: 99, cmd: IPC_RMID, buf: NULL) = -1 (error)\n"
 );
@@ -181,18 +136,12 @@ syscall_test!(
 syscall_test!(
     parse_msgget_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_msgget,
-            pid: 10101,
-            tid: 10101,
-            return_value: 42,
-            data: SyscallEventData {
-                msgget: pinchy_common::MsggetData {
-                    key: 0xbeef,
-                    msgflg: libc::IPC_CREAT | libc::IPC_EXCL,
-                },
-            },
-        }
+        let data = pinchy_common::MsggetData {
+            key: 0xbeef,
+            msgflg: libc::IPC_CREAT | libc::IPC_EXCL,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_msgget, 10101, 42, &data)
     },
     "10101 msgget(key: 0xbeef, msgflg: IPC_CREAT|IPC_EXCL) = 42 (msqid)\n"
 );
@@ -200,20 +149,14 @@ syscall_test!(
 syscall_test!(
     parse_msgsnd_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_msgsnd,
-            pid: 10202,
-            tid: 10202,
-            return_value: 0,
-            data: SyscallEventData {
-                msgsnd: pinchy_common::MsgsndData {
+        let data = pinchy_common::MsgsndData {
                     msqid: 123,
                     msgp: 0x7fff0000,
                     msgsz: 128,
                     msgflg: libc::IPC_NOWAIT | libc::MSG_NOERROR,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_msgsnd, 10202, 0, &data)
     },
     "10202 msgsnd(msqid: 123, msgp: 0x7fff0000, msgsz: 128, msgflg: IPC_NOWAIT|MSG_NOERROR) = 0 (success)\n"
 );
@@ -221,21 +164,15 @@ syscall_test!(
 syscall_test!(
     parse_msgrcv_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_msgrcv,
-            pid: 10303,
-            tid: 10303,
-            return_value: 64,
-            data: SyscallEventData {
-                msgrcv: pinchy_common::MsgrcvData {
-                    msqid: 321,
-                    msgp: 0x7fff1000,
-                    msgsz: 64,
-                    msgtyp: 2,
-                    msgflg: libc::MSG_NOERROR,
-                },
-            },
-        }
+        let data = pinchy_common::MsgrcvData {
+            msqid: 321,
+            msgp: 0x7fff1000,
+            msgsz: 64,
+            msgtyp: 2,
+            msgflg: libc::MSG_NOERROR,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_msgrcv, 10303, 64, &data)
     },
     "10303 msgrcv(msqid: 321, msgp: 0x7fff1000, msgsz: 64, msgtyp: 2, msgflg: MSG_NOERROR) = 64\n"
 );
@@ -243,13 +180,7 @@ syscall_test!(
 syscall_test!(
     parse_msgctl_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_msgctl,
-            pid: 10404,
-            tid: 10404,
-            return_value: 0,
-            data: SyscallEventData {
-                msgctl: pinchy_common::MsgctlData {
+        let data = pinchy_common::MsgctlData {
                     msqid: 555,
                     op: libc::IPC_STAT,
                     buf: pinchy_common::kernel_types::MsqidDs {
@@ -273,9 +204,9 @@ syscall_test!(
                         msg_lrpid: 8765,
                     },
                     has_buf: true,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_msgctl, 10404, 0, &data)
     },
     "10404 msgctl(msqid: 555, cmd: IPC_STAT, buf: { ipc_perm { key: 0x123456, uid: 1001, gid: 1002, cuid: 1003, cgid: 1004, mode: 0o600 (rw-------), seq: 99 }, stime: 1620000000, rtime: 1620001000, ctime: 1620002000, cbytes: 256, qnum: 3, qbytes: 8192, lspid: 4321, lrpid: 8765 }) = 0 (success)\n"
 );
@@ -283,20 +214,14 @@ syscall_test!(
 syscall_test!(
     parse_msgctl_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_msgctl,
-            pid: 10505,
-            tid: 10505,
-            return_value: -1,
-            data: SyscallEventData {
-                msgctl: pinchy_common::MsgctlData {
-                    msqid: 666,
-                    op: libc::IPC_RMID,
-                    buf: pinchy_common::kernel_types::MsqidDs::default(),
-                    has_buf: false,
-                },
-            },
-        }
+        let data = pinchy_common::MsgctlData {
+            msqid: 666,
+            op: libc::IPC_RMID,
+            buf: pinchy_common::kernel_types::MsqidDs::default(),
+            has_buf: false,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_msgctl, 10505, -1, &data)
     },
     "10505 msgctl(msqid: 666, cmd: IPC_RMID, buf: NULL) = -1 (error)\n"
 );
@@ -304,19 +229,13 @@ syscall_test!(
 syscall_test!(
     parse_semget_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semget,
-            pid: 20001,
-            tid: 20001,
-            return_value: 123,
-            data: SyscallEventData {
-                semget: pinchy_common::SemgetData {
-                    key: 0xfeed,
-                    nsems: 4,
-                    semflg: libc::IPC_CREAT | libc::IPC_EXCL,
-                },
-            },
-        }
+        let data = pinchy_common::SemgetData {
+            key: 0xfeed,
+            nsems: 4,
+            semflg: libc::IPC_CREAT | libc::IPC_EXCL,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semget, 20001, 123, &data)
     },
     "20001 semget(key: 0xfeed, nsems: 4, semflg: IPC_CREAT|IPC_EXCL) = 123 (semid)\n"
 );
@@ -324,19 +243,13 @@ syscall_test!(
 syscall_test!(
     parse_semget_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semget,
-            pid: 20002,
-            tid: 20002,
-            return_value: -1,
-            data: SyscallEventData {
-                semget: pinchy_common::SemgetData {
-                    key: 0xbeef,
-                    nsems: 2,
-                    semflg: 0,
-                },
-            },
-        }
+        let data = pinchy_common::SemgetData {
+            key: 0xbeef,
+            nsems: 2,
+            semflg: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semget, 20002, -1, &data)
     },
     "20002 semget(key: 0xbeef, nsems: 2, semflg: 0x0) = -1 (error)\n"
 );
@@ -344,19 +257,13 @@ syscall_test!(
 syscall_test!(
     parse_semop_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semop,
-            pid: 20003,
-            tid: 20003,
-            return_value: 0,
-            data: SyscallEventData {
-                semop: pinchy_common::SemopData {
-                    semid: 321,
-                    sops: 0x7fff2000,
-                    nsops: 2,
-                },
-            },
-        }
+        let data = pinchy_common::SemopData {
+            semid: 321,
+            sops: 0x7fff2000,
+            nsops: 2,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semop, 20003, 0, &data)
     },
     "20003 semop(semid: 321, sops: 0x7fff2000, nsops: 2) = 0 (success)\n"
 );
@@ -364,19 +271,13 @@ syscall_test!(
 syscall_test!(
     parse_semop_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semop,
-            pid: 20004,
-            tid: 20004,
-            return_value: -1,
-            data: SyscallEventData {
-                semop: pinchy_common::SemopData {
-                    semid: 654,
-                    sops: 0x7fff3000,
-                    nsops: 1,
-                },
-            },
-        }
+        let data = pinchy_common::SemopData {
+            semid: 654,
+            sops: 0x7fff3000,
+            nsops: 1,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semop, 20004, -1, &data)
     },
     "20004 semop(semid: 654, sops: 0x7fff3000, nsops: 1) = -1 (error)\n"
 );
@@ -384,22 +285,16 @@ syscall_test!(
 syscall_test!(
     parse_semctl_setval,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semctl,
-            pid: 20005,
-            tid: 20005,
-            return_value: 0,
-            data: SyscallEventData {
-                semctl: pinchy_common::SemctlData {
-                    semid: 42,
-                    semnum: 1,
-                    op: libc::SETVAL,
-                    has_arg: true,
-                    arg: pinchy_common::kernel_types::Semun { val: 123 },
-                    array: [0u16; 16],
-                },
-            },
-        }
+        let data = pinchy_common::SemctlData {
+            semid: 42,
+            semnum: 1,
+            op: libc::SETVAL,
+            has_arg: true,
+            arg: pinchy_common::kernel_types::Semun { val: 123 },
+            array: [0u16; 16],
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semctl, 20005, 0, &data)
     },
     "20005 semctl(semid: 42, semnum: 1, op: SETVAL, val: 123) = 0 (success)\n"
 );
@@ -407,22 +302,16 @@ syscall_test!(
 syscall_test!(
     parse_semctl_setall,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semctl,
-            pid: 20006,
-            tid: 20006,
-            return_value: 0,
-            data: SyscallEventData {
-                semctl: pinchy_common::SemctlData {
-                    semid: 99,
-                    semnum: 0,
-                    op: libc::SETALL,
-                    has_arg: true,
-                    arg: pinchy_common::kernel_types::Semun { array: 0x7fff4000 },
-                    array: [1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                },
-            },
-        }
+        let data = pinchy_common::SemctlData {
+            semid: 99,
+            semnum: 0,
+            op: libc::SETALL,
+            has_arg: true,
+            arg: pinchy_common::kernel_types::Semun { array: 0x7fff4000 },
+            array: [1, 2, 3, 4, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semctl, 20006, 0, &data)
     },
     "20006 semctl(semid: 99, semnum: 0, op: SETALL, array: 0x7fff4000) = 0 (success)\n"
 );
@@ -430,13 +319,7 @@ syscall_test!(
 syscall_test!(
     parse_semctl_stat,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semctl,
-            pid: 20007,
-            tid: 20007,
-            return_value: 0,
-            data: SyscallEventData {
-                semctl: pinchy_common::SemctlData {
+        let data = pinchy_common::SemctlData {
                     semid: 77,
                     semnum: 0,
                     op: libc::IPC_STAT,
@@ -459,9 +342,9 @@ syscall_test!(
                         },
                     },
                     array: [0u16; 16],
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semctl, 20007, 0, &data)
     },
     "20007 semctl(semid: 77, semnum: 0, op: IPC_STAT, buf: { ipc_perm { key: 0xabcdef, uid: 1000, gid: 1000, cuid: 1000, cgid: 1000, mode: 0o600 (rw-------), seq: 7 }, otime: 1620000000, ctime: 1620001000, nsems: 4 }) = 0 (success)\n"
 );
@@ -469,22 +352,16 @@ syscall_test!(
 syscall_test!(
     parse_semctl_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semctl,
-            pid: 20008,
-            tid: 20008,
-            return_value: -1,
-            data: SyscallEventData {
-                semctl: pinchy_common::SemctlData {
-                    semid: 88,
-                    semnum: 2,
-                    op: libc::SETVAL,
-                    has_arg: false,
-                    arg: pinchy_common::kernel_types::Semun { val: 0 },
-                    array: [0u16; 16],
-                },
-            },
-        }
+        let data = pinchy_common::SemctlData {
+            semid: 88,
+            semnum: 2,
+            op: libc::SETVAL,
+            has_arg: false,
+            arg: pinchy_common::kernel_types::Semun { val: 0 },
+            array: [0u16; 16],
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semctl, 20008, -1, &data)
     },
     "20008 semctl(semid: 88, semnum: 2, op: SETVAL, val: 0) = -1 (error)\n"
 );
@@ -493,18 +370,12 @@ syscall_test!(
 syscall_test!(
     parse_eventfd_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_eventfd,
-            pid: 5555,
-            tid: 5555,
-            return_value: 7,
-            data: SyscallEventData {
-                eventfd: pinchy_common::EventfdData {
-                    initval: 0,
-                    flags: 0,
-                },
-            },
-        }
+        let data = pinchy_common::EventfdData {
+            initval: 0,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_eventfd, 5555, 7, &data)
     },
     "5555 eventfd(initval: 0, flags: 0) = 7 (fd)\n"
 );
@@ -513,18 +384,12 @@ syscall_test!(
 syscall_test!(
     parse_eventfd_with_flags,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_eventfd,
-            pid: 6666,
-            tid: 6666,
-            return_value: 8,
-            data: SyscallEventData {
-                eventfd: pinchy_common::EventfdData {
-                    initval: 5,
-                    flags: libc::O_CLOEXEC, // EFD_CLOEXEC
-                },
-            },
-        }
+        let data = pinchy_common::EventfdData {
+            initval: 5,
+            flags: libc::O_CLOEXEC, // EFD_CLOEXEC
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_eventfd, 6666, 8, &data)
     },
     "6666 eventfd(initval: 5, flags: 0x80000 (EFD_CLOEXEC)) = 8 (fd)\n"
 );
@@ -533,18 +398,12 @@ syscall_test!(
 syscall_test!(
     parse_eventfd_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_eventfd,
-            pid: 7777,
-            tid: 7777,
-            return_value: -1,
-            data: SyscallEventData {
-                eventfd: pinchy_common::EventfdData {
+        let data = pinchy_common::EventfdData {
                     initval: 100,
                     flags: -1, // invalid flags
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_eventfd, 7777, -1, &data)
     },
     "7777 eventfd(initval: 100, flags: 0xffffffff (EFD_CLOEXEC|EFD_NONBLOCK|UNKNOWN)) = -1 (error)\n"
 );
@@ -552,18 +411,12 @@ syscall_test!(
 syscall_test!(
     parse_eventfd2_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_eventfd2,
-            pid: 8888,
-            tid: 8888,
-            return_value: 9,
-            data: SyscallEventData {
-                eventfd2: pinchy_common::Eventfd2Data {
-                    initval: 0,
-                    flags: libc::O_NONBLOCK, // EFD_NONBLOCK
-                },
-            },
-        }
+        let data = pinchy_common::Eventfd2Data {
+            initval: 0,
+            flags: libc::O_NONBLOCK, // EFD_NONBLOCK
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_eventfd2, 8888, 9, &data)
     },
     "8888 eventfd2(initval: 0, flags: 0x800 (EFD_NONBLOCK)) = 9 (fd)\n"
 );
@@ -571,18 +424,12 @@ syscall_test!(
 syscall_test!(
     parse_eventfd2_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_eventfd2,
-            pid: 9999,
-            tid: 9999,
-            return_value: -1,
-            data: SyscallEventData {
-                eventfd2: pinchy_common::Eventfd2Data {
-                    initval: 42,
-                    flags: 999999, // invalid flags
-                },
-            },
-        }
+        let data = pinchy_common::Eventfd2Data {
+            initval: 42,
+            flags: 999999, // invalid flags
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_eventfd2, 9999, -1, &data)
     },
     "9999 eventfd2(initval: 42, flags: 0xf423f (EFD_CLOEXEC|UNKNOWN)) = -1 (error)\n"
 );
@@ -590,21 +437,15 @@ syscall_test!(
 syscall_test!(
     parse_mq_open_success_no_attr,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_open,
-            pid: 1234,
-            tid: 1234,
-            return_value: 3,
-            data: SyscallEventData {
-                mq_open: pinchy_common::MqOpenData {
-                    name: 0x7fff1234,
-                    flags: libc::O_RDONLY,
-                    mode: 0,
-                    attr: pinchy_common::kernel_types::MqAttr::default(),
-                    has_attr: false,
-                },
-            },
-        }
+        let data = pinchy_common::MqOpenData {
+            name: 0x7fff1234,
+            flags: libc::O_RDONLY,
+            mode: 0,
+            attr: pinchy_common::kernel_types::MqAttr::default(),
+            has_attr: false,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_open, 1234, 3, &data)
     },
     "1234 mq_open(name: 0x7fff1234, flags: 0x0 (O_RDONLY), mode: 0, attr: NULL) = 3\n"
 );
@@ -612,13 +453,7 @@ syscall_test!(
 syscall_test!(
     parse_mq_open_success_with_attr,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_open,
-            pid: 1234,
-            tid: 1234,
-            return_value: 4,
-            data: SyscallEventData {
-                mq_open: pinchy_common::MqOpenData {
+        let data = pinchy_common::MqOpenData {
                     name: 0x7fff5678,
                     flags: libc::O_RDWR | libc::O_CREAT | libc::O_EXCL,
                     mode: 0o644,
@@ -629,9 +464,9 @@ syscall_test!(
                         mq_curmsgs: 0,
                     },
                     has_attr: true,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_open, 1234, 4, &data)
     },
     "1234 mq_open(name: 0x7fff5678, flags: 0xc2 (O_RDWR|O_CREAT|O_EXCL), mode: 0o644 (rw-r--r--), attr: { mq_flags: 0, mq_maxmsg: 10, mq_msgsize: 8192, mq_curmsgs: 0 }) = 4\n"
 );
@@ -639,21 +474,15 @@ syscall_test!(
 syscall_test!(
     parse_mq_open_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_open,
-            pid: 5678,
-            tid: 5678,
-            return_value: -1,
-            data: SyscallEventData {
-                mq_open: pinchy_common::MqOpenData {
+        let data = pinchy_common::MqOpenData {
                     name: 0x7fff9abc,
                     flags: libc::O_WRONLY | libc::O_NONBLOCK,
                     mode: 0o600,
                     attr: pinchy_common::kernel_types::MqAttr::default(),
                     has_attr: false,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_open, 5678, -1, &data)
     },
     "5678 mq_open(name: 0x7fff9abc, flags: 0x801 (O_WRONLY|O_NONBLOCK), mode: 0o600 (rw-------), attr: NULL) = -1 (error)\n"
 );
@@ -661,15 +490,9 @@ syscall_test!(
 syscall_test!(
     parse_mq_unlink_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_unlink,
-            pid: 2345,
-            tid: 2345,
-            return_value: 0,
-            data: SyscallEventData {
-                mq_unlink: pinchy_common::MqUnlinkData { name: 0x7fff2345 },
-            },
-        }
+        let data = pinchy_common::MqUnlinkData { name: 0x7fff2345 };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_unlink, 2345, 0, &data)
     },
     "2345 mq_unlink(name: 0x7fff2345) = 0 (success)\n"
 );
@@ -677,15 +500,14 @@ syscall_test!(
 syscall_test!(
     parse_mq_unlink_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_unlink,
-            pid: 3456,
-            tid: 3456,
-            return_value: -1,
-            data: SyscallEventData {
-                mq_unlink: pinchy_common::MqUnlinkData { name: 0x7fff3456 },
-            },
-        }
+        let data = pinchy_common::MqUnlinkData { name: 0x7fff3456 };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_mq_unlink,
+            3456,
+            -1,
+            &data,
+        )
     },
     "3456 mq_unlink(name: 0x7fff3456) = -1 (error)\n"
 );
@@ -693,21 +515,15 @@ syscall_test!(
 syscall_test!(
     parse_mq_timedsend_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_timedsend,
-            pid: 4567,
-            tid: 4567,
-            return_value: 0,
-            data: SyscallEventData {
-                mq_timedsend: pinchy_common::MqTimedsendData {
+        let data = pinchy_common::MqTimedsendData {
                     mqdes: 3,
                     msg_ptr: 0x7fff4567,
                     msg_len: 1024,
                     msg_prio: 5,
                     abs_timeout: 0x7fff5678,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_timedsend, 4567, 0, &data)
     },
     "4567 mq_timedsend(mqdes: 3, msg_ptr: 0x7fff4567, msg_len: 1024, msg_prio: 5, abs_timeout: 0x7fff5678) = 0 (success)\n"
 );
@@ -715,21 +531,15 @@ syscall_test!(
 syscall_test!(
     parse_mq_timedsend_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_timedsend,
-            pid: 5678,
-            tid: 5678,
-            return_value: -1,
-            data: SyscallEventData {
-                mq_timedsend: pinchy_common::MqTimedsendData {
+        let data = pinchy_common::MqTimedsendData {
                     mqdes: 4,
                     msg_ptr: 0x7fff6789,
                     msg_len: 2048,
                     msg_prio: 10,
                     abs_timeout: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_timedsend, 5678, -1, &data)
     },
     "5678 mq_timedsend(mqdes: 4, msg_ptr: 0x7fff6789, msg_len: 2048, msg_prio: 10, abs_timeout: 0x0) = -1 (error)\n"
 );
@@ -737,21 +547,15 @@ syscall_test!(
 syscall_test!(
     parse_mq_timedreceive_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_timedreceive,
-            pid: 6789,
-            tid: 6789,
-            return_value: 512,
-            data: SyscallEventData {
-                mq_timedreceive: pinchy_common::MqTimedreceiveData {
+        let data = pinchy_common::MqTimedreceiveData {
                     mqdes: 3,
                     msg_ptr: 0x7fff789a,
                     msg_len: 8192,
                     msg_prio: 0,
                     abs_timeout: 0x7fff89ab,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_timedreceive, 6789, 512, &data)
     },
     "6789 mq_timedreceive(mqdes: 3, msg_ptr: 0x7fff789a, msg_len: 8192, msg_prio: 0, abs_timeout: 0x7fff89ab) = 512\n"
 );
@@ -759,21 +563,15 @@ syscall_test!(
 syscall_test!(
     parse_mq_timedreceive_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_timedreceive,
-            pid: 7890,
-            tid: 7890,
-            return_value: -1,
-            data: SyscallEventData {
-                mq_timedreceive: pinchy_common::MqTimedreceiveData {
+        let data = pinchy_common::MqTimedreceiveData {
                     mqdes: 5,
                     msg_ptr: 0x7fff9abc,
                     msg_len: 4096,
                     msg_prio: 1,
                     abs_timeout: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_timedreceive, 7890, -1, &data)
     },
     "7890 mq_timedreceive(mqdes: 5, msg_ptr: 0x7fff9abc, msg_len: 4096, msg_prio: 1, abs_timeout: 0x0) = -1 (error)\n"
 );
@@ -781,18 +579,12 @@ syscall_test!(
 syscall_test!(
     parse_mq_notify_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_notify,
-            pid: 8901,
-            tid: 8901,
-            return_value: 0,
-            data: SyscallEventData {
-                mq_notify: pinchy_common::MqNotifyData {
-                    mqdes: 3,
-                    sevp: 0x7fffabcd,
-                },
-            },
-        }
+        let data = pinchy_common::MqNotifyData {
+            mqdes: 3,
+            sevp: 0x7fffabcd,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_notify, 8901, 0, &data)
     },
     "8901 mq_notify(mqdes: 3, sevp: 0x7fffabcd) = 0 (success)\n"
 );
@@ -800,15 +592,14 @@ syscall_test!(
 syscall_test!(
     parse_mq_notify_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_notify,
-            pid: 9012,
-            tid: 9012,
-            return_value: -1,
-            data: SyscallEventData {
-                mq_notify: pinchy_common::MqNotifyData { mqdes: 4, sevp: 0 },
-            },
-        }
+        let data = pinchy_common::MqNotifyData { mqdes: 4, sevp: 0 };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_mq_notify,
+            9012,
+            -1,
+            &data,
+        )
     },
     "9012 mq_notify(mqdes: 4, sevp: 0x0) = -1 (error)\n"
 );
@@ -816,13 +607,7 @@ syscall_test!(
 syscall_test!(
     parse_mq_getsetattr_success,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_getsetattr,
-            pid: 1357,
-            tid: 1357,
-            return_value: 0,
-            data: SyscallEventData {
-                mq_getsetattr: pinchy_common::MqGetsetattrData {
+        let data = pinchy_common::MqGetsetattrData {
                     mqdes: 3,
                     newattr: pinchy_common::kernel_types::MqAttr {
                         mq_flags: libc::O_NONBLOCK as i64,
@@ -838,9 +623,9 @@ syscall_test!(
                     },
                     has_newattr: true,
                     has_oldattr: true,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_getsetattr, 1357, 0, &data)
     },
     "1357 mq_getsetattr(mqdes: 3, newattr: { mq_flags: 2048, mq_maxmsg: 0, mq_msgsize: 0, mq_curmsgs: 0 }, oldattr: { mq_flags: 0, mq_maxmsg: 10, mq_msgsize: 8192, mq_curmsgs: 2 }) = 0 (success)\n"
 );
@@ -848,21 +633,20 @@ syscall_test!(
 syscall_test!(
     parse_mq_getsetattr_error,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mq_getsetattr,
-            pid: 2468,
-            tid: 2468,
-            return_value: -1,
-            data: SyscallEventData {
-                mq_getsetattr: pinchy_common::MqGetsetattrData {
-                    mqdes: 99,
-                    newattr: pinchy_common::kernel_types::MqAttr::default(),
-                    oldattr: pinchy_common::kernel_types::MqAttr::default(),
-                    has_newattr: false,
-                    has_oldattr: false,
-                },
-            },
-        }
+        let data = pinchy_common::MqGetsetattrData {
+            mqdes: 99,
+            newattr: pinchy_common::kernel_types::MqAttr::default(),
+            oldattr: pinchy_common::kernel_types::MqAttr::default(),
+            has_newattr: false,
+            has_oldattr: false,
+        };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_mq_getsetattr,
+            2468,
+            -1,
+            &data,
+        )
     },
     "2468 mq_getsetattr(mqdes: 99, newattr: NULL, oldattr: NULL) = -1 (error)\n"
 );
@@ -870,15 +654,10 @@ syscall_test!(
 syscall_test!(
     parse_semtimedop_success,
     {
+
         use pinchy_common::kernel_types::{Sembuf, Timespec};
 
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semtimedop,
-            pid: 300,
-            tid: 300,
-            return_value: 0,
-            data: SyscallEventData {
-                semtimedop: pinchy_common::SemtimedopData {
+        let data = pinchy_common::SemtimedopData {
                     semid: 123,
                     sops: [
                         Sembuf {
@@ -900,9 +679,9 @@ syscall_test!(
                         nanos: 500000000,
                     },
                     timeout_is_null: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semtimedop, 300, 0, &data)
     },
     "300 semtimedop(semid: 123, sops: [ sembuf { sem_num: 0, sem_op: -1, sem_flg: 0x0 }, sembuf { sem_num: 1, sem_op: 1, sem_flg: 0x800 } ], nsops: 2, timeout: {tv_sec: 5, tv_nsec: 500000000}) = 0 (success)\n"
 );
@@ -910,15 +689,10 @@ syscall_test!(
 syscall_test!(
     parse_semtimedop_null_timeout,
     {
+
         use pinchy_common::kernel_types::{Sembuf, Timespec};
 
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_semtimedop,
-            pid: 301,
-            tid: 301,
-            return_value: 0,
-            data: SyscallEventData {
-                semtimedop: pinchy_common::SemtimedopData {
+        let data = pinchy_common::SemtimedopData {
                     semid: 456,
                     sops: [
                         Sembuf {
@@ -933,9 +707,9 @@ syscall_test!(
                     nsops: 1,
                     timeout: Timespec::default(),
                     timeout_is_null: 1,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semtimedop, 301, 0, &data)
     },
     "301 semtimedop(semid: 456, sops: [ sembuf { sem_num: 0, sem_op: 1, sem_flg: 0x0 } ], nsops: 1, timeout: NULL) = 0 (success)\n"
 );

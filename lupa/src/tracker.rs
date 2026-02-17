@@ -2,14 +2,16 @@ use std::{
     collections::HashMap,
     ffi::OsStr,
     fs,
-    io::{self, Read as _},
+    io::{self, ErrorKind, Read as _},
     os::unix::ffi::OsStrExt as _,
     path::PathBuf,
     sync::{Arc, RwLock, mpsc::Sender},
     time::{Duration, Instant},
 };
 
-use pinchy_common::syscalls;
+use pinchy_common::{
+    CloseData, OpenAtData, ReadData, WIRE_VERSION, WireEventHeader, WriteData, syscalls,
+};
 
 #[derive(Debug)]
 pub enum TrackerNotification {
@@ -126,38 +128,81 @@ pub fn run(
     mut reader: std::io::BufReader<std::fs::File>,
     notify_tx: Sender<TrackerNotification>,
 ) {
-    let mut buf = [0u8; std::mem::size_of::<pinchy_common::SyscallEvent>()];
-    loop {
-        match reader.read_exact(&mut buf) {
-            Ok(_) => {
-                let event: pinchy_common::SyscallEvent =
-                    unsafe { std::ptr::read(buf.as_ptr() as *const pinchy_common::SyscallEvent) };
+    let mut header_buf = [0u8; std::mem::size_of::<WireEventHeader>()];
 
-                match event.syscall_nr {
+    loop {
+        match reader.read_exact(&mut header_buf) {
+            Ok(_) => {
+                let header: WireEventHeader = unsafe {
+                    std::ptr::read_unaligned(header_buf.as_ptr() as *const WireEventHeader)
+                };
+
+                if header.version != WIRE_VERSION {
+                    notify_tx
+                        .send(TrackerNotification::Error(io::Error::new(
+                            ErrorKind::InvalidData,
+                            "invalid wire header",
+                        )))
+                        .expect("Trying to send error notification");
+                    break;
+                }
+
+                let mut payload = vec![0u8; header.payload_len as usize];
+
+                if let Err(e) = reader.read_exact(&mut payload) {
+                    if e.kind() == ErrorKind::UnexpectedEof {
+                        break;
+                    }
+
+                    notify_tx
+                        .send(TrackerNotification::Error(e))
+                        .expect("Trying to send error notification");
+                    break;
+                }
+
+                match header.syscall_nr {
                     syscalls::SYS_openat => {
-                        let data = unsafe { event.data.openat };
+                        if payload.len() != std::mem::size_of::<OpenAtData>() {
+                            continue;
+                        }
+
+                        let data = unsafe {
+                            std::ptr::read_unaligned(payload.as_ptr() as *const OpenAtData)
+                        };
                         let (path, integrity) = get_path(&data.pathname);
 
-                        if event.return_value >= 0 {
+                        if header.return_value >= 0 {
                             let _meta = open_files.write().unwrap().add_fd(
-                                event.return_value as u32,
+                                header.return_value as u32,
                                 path,
                                 &integrity,
                             );
                         }
                     }
                     syscalls::SYS_close => {
-                        let data = unsafe { event.data.close };
-                        let _ = open_files.write().unwrap().rm_fd(data.fd as u32);
-                    }
-                    syscalls::SYS_read => {
-                        if event.return_value < 0 {
+                        if payload.len() != std::mem::size_of::<CloseData>() {
                             continue;
                         }
 
-                        let data = unsafe { event.data.read };
+                        let data = unsafe {
+                            std::ptr::read_unaligned(payload.as_ptr() as *const CloseData)
+                        };
+                        let _ = open_files.write().unwrap().rm_fd(data.fd as u32);
+                    }
+                    syscalls::SYS_read => {
+                        if header.return_value < 0 {
+                            continue;
+                        }
+
+                        if payload.len() != std::mem::size_of::<ReadData>() {
+                            continue;
+                        }
+
+                        let data = unsafe {
+                            std::ptr::read_unaligned(payload.as_ptr() as *const ReadData)
+                        };
                         if let Some(meta) = open_files.write().unwrap().mut_fd(data.fd as u32) {
-                            let bytes = event.return_value as usize;
+                            let bytes = header.return_value as usize;
                             meta.bytes_read += bytes;
 
                             meta.cur_reads
@@ -170,13 +215,19 @@ pub fn run(
                         }
                     }
                     syscalls::SYS_write => {
-                        if event.return_value < 0 {
+                        if header.return_value < 0 {
                             continue;
                         }
 
-                        let data = unsafe { event.data.write };
+                        if payload.len() != std::mem::size_of::<WriteData>() {
+                            continue;
+                        }
+
+                        let data = unsafe {
+                            std::ptr::read_unaligned(payload.as_ptr() as *const WriteData)
+                        };
                         if let Some(meta) = open_files.write().unwrap().mut_fd(data.fd as u32) {
-                            let bytes = event.return_value as usize;
+                            let bytes = header.return_value as usize;
                             meta.bytes_written += bytes;
 
                             meta.cur_writes

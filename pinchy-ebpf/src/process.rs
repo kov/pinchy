@@ -13,7 +13,7 @@ use pinchy_common::{
     syscalls, SMALL_READ_SIZE,
 };
 
-use crate::{data_mut, PID_FILTER, SYSCALL_ARGS_OFFSET};
+use crate::{PID_FILTER, SYSCALL_ARGS_OFFSET};
 
 #[map]
 static mut EXECVE_ENTER_MAP: HashMap<u32, ExecveEnterData> =
@@ -53,47 +53,56 @@ pub struct ExecveatEnterData {
 pub fn syscall_exit_execve(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let tid = ctx.pid();
+        let return_value = crate::util::get_return_value(&ctx)?;
 
         // On x86_64, execveat becomes execve after the process has been replaced, so we need to
         // use the same handler for both and check which map has the entry to decide which one was
         // traced.
         let enter_data = unsafe { EXECVE_ENTER_MAP.get(&tid) };
         if let Some(enter_data) = enter_data {
-            let mut entry = crate::util::Entry::new(&ctx, pinchy_common::syscalls::SYS_execve)?;
-            let data = data_mut!(entry, execve);
-            *data = pinchy_common::ExecveData {
-                filename: enter_data.filename,
-                filename_truncated: enter_data.filename_truncated,
-                argv: enter_data.argv,
-                argv_len: enter_data.argv_len,
-                argc: enter_data.argc,
-                envp: enter_data.envp,
-                envp_len: enter_data.envp_len,
-                envc: enter_data.envc,
-            };
+            crate::util::submit_compact_payload::<pinchy_common::ExecveData, _>(
+                &ctx,
+                pinchy_common::syscalls::SYS_execve,
+                return_value,
+                |payload| {
+                    payload.filename = enter_data.filename;
+                    payload.filename_truncated = enter_data.filename_truncated;
+                    payload.argv = enter_data.argv;
+                    payload.argv_len = enter_data.argv_len;
+                    payload.argc = enter_data.argc;
+                    payload.envp = enter_data.envp;
+                    payload.envp_len = enter_data.envp_len;
+                    payload.envc = enter_data.envc;
+                },
+            )?;
+
             let _ = unsafe { EXECVE_ENTER_MAP.remove(&tid) };
-            entry.submit();
+
             return Ok(());
         }
 
         let enter_data = unsafe { EXECVEAT_ENTER_MAP.get(&tid) };
         if let Some(enter_data) = enter_data {
-            let mut entry = crate::util::Entry::new(&ctx, pinchy_common::syscalls::SYS_execveat)?;
-            let data = data_mut!(entry, execveat);
-            *data = pinchy_common::ExecveatData {
-                dirfd: enter_data.dirfd,
-                pathname: enter_data.pathname,
-                pathname_truncated: enter_data.pathname_truncated,
-                argv: enter_data.argv,
-                argv_len: enter_data.argv_len,
-                argc: enter_data.argc,
-                envp: enter_data.envp,
-                envp_len: enter_data.envp_len,
-                envc: enter_data.envc,
-                flags: enter_data.flags,
-            };
+            crate::util::submit_compact_payload::<pinchy_common::ExecveatData, _>(
+                &ctx,
+                pinchy_common::syscalls::SYS_execveat,
+                return_value,
+                |payload| {
+                    payload.dirfd = enter_data.dirfd;
+                    payload.pathname = enter_data.pathname;
+                    payload.pathname_truncated = enter_data.pathname_truncated;
+                    payload.argv = enter_data.argv;
+                    payload.argv_len = enter_data.argv_len;
+                    payload.argc = enter_data.argc;
+                    payload.envp = enter_data.envp;
+                    payload.envp_len = enter_data.envp_len;
+                    payload.envc = enter_data.envc;
+                    payload.flags = enter_data.flags;
+                },
+            )?;
+
             let _ = unsafe { EXECVEAT_ENTER_MAP.remove(&tid) };
-            entry.submit();
+
             return Ok(());
         }
 
@@ -309,282 +318,354 @@ pub fn syscall_exit_process(ctx: TracePointContext) -> u32 {
         let args = crate::util::get_args(&ctx, syscall_nr)?;
         let return_value = crate::util::get_return_value(&ctx)?;
 
-        let mut entry = crate::util::Entry::new(&ctx, syscall_nr)?;
-
         match syscall_nr {
             pinchy_common::syscalls::SYS_wait4 => {
-                let data = crate::data_mut!(entry, wait4);
-                data.pid = args[0] as i32;
-                let wstatus_ptr = args[1] as *const i32;
-                data.options = args[2] as i32;
-                let rusage_ptr = args[3] as *const Rusage;
+                crate::util::submit_compact_payload::<pinchy_common::Wait4Data, _>(
+                    &ctx,
+                    pinchy_common::syscalls::SYS_wait4,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        let wstatus_ptr = args[1] as *const i32;
+                        payload.options = args[2] as i32;
+                        let rusage_ptr = args[3] as *const Rusage;
 
-                data.wstatus = 0i32;
-                data.rusage = Rusage::default();
-                data.has_rusage = false;
+                        payload.wstatus = 0i32;
+                        payload.rusage = Rusage::default();
+                        payload.has_rusage = false;
 
-                if return_value >= 0 && !wstatus_ptr.is_null() {
-                    unsafe {
-                        if let Ok(status) = bpf_probe_read_user::<i32>(wstatus_ptr) {
-                            data.wstatus = status;
+                        if return_value >= 0 && !wstatus_ptr.is_null() {
+                            unsafe {
+                                if let Ok(status) = bpf_probe_read_user::<i32>(wstatus_ptr) {
+                                    payload.wstatus = status;
+                                }
+                            }
                         }
-                    }
-                }
-                if return_value >= 0 && !rusage_ptr.is_null() {
-                    unsafe {
-                        if let Ok(usage) = bpf_probe_read_user::<Rusage>(rusage_ptr) {
-                            data.rusage = usage;
-                            data.has_rusage = true;
+
+                        if return_value >= 0 && !rusage_ptr.is_null() {
+                            unsafe {
+                                if let Ok(usage) = bpf_probe_read_user::<Rusage>(rusage_ptr) {
+                                    payload.rusage = usage;
+                                    payload.has_rusage = true;
+                                }
+                            }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_waitid => {
-                let data = crate::data_mut!(entry, waitid);
-                data.idtype = args[0] as u32;
-                data.id = args[1] as u32;
-                let infop_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
-                data.options = args[3] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::WaitidData, _>(
+                    &ctx,
+                    syscalls::SYS_waitid,
+                    return_value,
+                    |payload| {
+                        payload.idtype = args[0] as u32;
+                        payload.id = args[1] as u32;
+                        let infop_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
+                        payload.options = args[3] as i32;
 
-                data.infop = pinchy_common::kernel_types::Siginfo::default();
-                data.has_infop = false;
+                        payload.infop = pinchy_common::kernel_types::Siginfo::default();
+                        payload.has_infop = false;
 
-                if return_value >= 0 && !infop_ptr.is_null() {
-                    unsafe {
-                        if let Ok(siginfo) =
-                            bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(infop_ptr)
-                        {
-                            data.infop = siginfo;
-                            data.has_infop = true;
+                        if return_value >= 0 && !infop_ptr.is_null() {
+                            unsafe {
+                                if let Ok(siginfo) = bpf_probe_read_user::<
+                                    pinchy_common::kernel_types::Siginfo,
+                                >(infop_ptr)
+                                {
+                                    payload.infop = siginfo;
+                                    payload.has_infop = true;
+                                }
+                            }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_getrusage => {
-                let data = crate::data_mut!(entry, getrusage);
-                data.who = args[0] as i32;
-                let usage_ptr = args[1] as *const Rusage;
-                data.rusage = Rusage::default();
-                if return_value >= 0 && !usage_ptr.is_null() {
-                    unsafe {
-                        if let Ok(usage) = bpf_probe_read_user::<Rusage>(usage_ptr) {
-                            data.rusage = usage;
+                crate::util::submit_compact_payload::<pinchy_common::GetrusageData, _>(
+                    &ctx,
+                    syscalls::SYS_getrusage,
+                    return_value,
+                    |payload| {
+                        payload.who = args[0] as i32;
+                        let usage_ptr = args[1] as *const Rusage;
+                        payload.rusage = Rusage::default();
+                        if return_value >= 0 && !usage_ptr.is_null() {
+                            unsafe {
+                                if let Ok(usage) = bpf_probe_read_user::<Rusage>(usage_ptr) {
+                                    payload.rusage = usage;
+                                }
+                            }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_clone3 => {
-                let data = crate::data_mut!(entry, clone3);
-                let cl_args_ptr = args[0] as *const CloneArgs;
-                data.size = args[1] as u64;
-                data.cl_args = CloneArgs::default();
+                crate::util::submit_compact_payload::<pinchy_common::Clone3Data, _>(
+                    &ctx,
+                    syscalls::SYS_clone3,
+                    return_value,
+                    |payload| {
+                        let cl_args_ptr = args[0] as *const CloneArgs;
+                        payload.size = args[1] as u64;
+                        payload.cl_args = CloneArgs::default();
 
-                unsafe {
-                    let read_size =
-                        core::cmp::min(data.size as usize, core::mem::size_of::<CloneArgs>());
-                    if read_size > 0 {
-                        let _ = bpf_probe_read_user_buf(
-                            cl_args_ptr as *const u8,
-                            &mut core::slice::from_raw_parts_mut(
-                                &mut data.cl_args as *mut CloneArgs as *mut u8,
-                                read_size,
-                            ),
-                        );
-                    }
-                    if data.cl_args.set_tid != 0 && data.cl_args.set_tid_size > 0 {
-                        let set_tid_ptr = data.cl_args.set_tid as *const i32;
-                        let max_count = core::cmp::min(
-                            data.cl_args.set_tid_size as usize,
-                            pinchy_common::CLONE_SET_TID_MAX,
-                        );
-                        for i in 0..max_count {
-                            if let Ok(pid) = bpf_probe_read_user::<i32>(set_tid_ptr.add(i)) {
-                                data.set_tid_array[i] = pid;
-                                data.set_tid_count += 1;
-                            } else {
-                                break;
+                        unsafe {
+                            let read_size = core::cmp::min(
+                                payload.size as usize,
+                                core::mem::size_of::<CloneArgs>(),
+                            );
+                            if read_size > 0 {
+                                let _ = bpf_probe_read_user_buf(
+                                    cl_args_ptr as *const u8,
+                                    &mut core::slice::from_raw_parts_mut(
+                                        &mut payload.cl_args as *mut CloneArgs as *mut u8,
+                                        read_size,
+                                    ),
+                                );
+                            }
+                            if payload.cl_args.set_tid != 0 && payload.cl_args.set_tid_size > 0 {
+                                let set_tid_ptr = payload.cl_args.set_tid as *const i32;
+                                let max_count = core::cmp::min(
+                                    payload.cl_args.set_tid_size as usize,
+                                    pinchy_common::CLONE_SET_TID_MAX,
+                                );
+                                for i in 0..max_count {
+                                    if let Ok(pid) = bpf_probe_read_user::<i32>(set_tid_ptr.add(i))
+                                    {
+                                        payload.set_tid_array[i] = pid;
+                                        payload.set_tid_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_clone => {
-                let data = crate::data_mut!(entry, clone);
-                data.flags = args[0] as u64;
-                data.stack = args[1];
-                data.tls = args[4] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::CloneData, _>(
+                    &ctx,
+                    syscalls::SYS_clone,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as u64;
+                        payload.stack = args[1];
+                        payload.tls = args[4] as u64;
 
-                let parent_tid_ptr = args[2] as *const i32;
-                data.parent_tid = if !parent_tid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(parent_tid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        let parent_tid_ptr = args[2] as *const i32;
+                        payload.parent_tid = if !parent_tid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(parent_tid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
 
-                let child_tid_ptr = args[3] as *const i32;
-                data.child_tid = if !child_tid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(child_tid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        let child_tid_ptr = args[3] as *const i32;
+                        payload.child_tid = if !child_tid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(child_tid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
+                    },
+                )?;
             }
             syscalls::SYS_pidfd_send_signal => {
-                let data = crate::data_mut!(entry, pidfd_send_signal);
-                data.pidfd = args[0] as i32;
-                data.sig = args[1] as i32;
-                data.info_ptr = args[2];
-                data.flags = args[3] as u32;
-                let info_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
-                if !info_ptr.is_null() {
-                    unsafe {
-                        if let Ok(info) =
-                            bpf_probe_read_user::<pinchy_common::kernel_types::Siginfo>(info_ptr)
-                        {
-                            data.info = info;
+                crate::util::submit_compact_payload::<pinchy_common::PidfdSendSignalData, _>(
+                    &ctx,
+                    syscalls::SYS_pidfd_send_signal,
+                    return_value,
+                    |payload| {
+                        payload.pidfd = args[0] as i32;
+                        payload.sig = args[1] as i32;
+                        payload.info_ptr = args[2];
+                        payload.flags = args[3] as u32;
+                        let info_ptr = args[2] as *const pinchy_common::kernel_types::Siginfo;
+                        if !info_ptr.is_null() {
+                            unsafe {
+                                if let Ok(info) = bpf_probe_read_user::<
+                                    pinchy_common::kernel_types::Siginfo,
+                                >(info_ptr)
+                                {
+                                    payload.info = info;
+                                }
+                            }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_prlimit64 => {
-                let data = crate::data_mut!(entry, prlimit);
-                data.pid = args[0] as i32;
-                data.resource = args[1] as i32;
-                let new_limit_ptr = args[2] as *const Rlimit;
-                let old_limit_ptr = args[3] as *const Rlimit;
+                crate::util::submit_compact_payload::<pinchy_common::PrlimitData, _>(
+                    &ctx,
+                    syscalls::SYS_prlimit64,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.resource = args[1] as i32;
+                        let new_limit_ptr = args[2] as *const Rlimit;
+                        let old_limit_ptr = args[3] as *const Rlimit;
 
-                data.has_new = !new_limit_ptr.is_null();
-                data.has_old = !old_limit_ptr.is_null();
-                data.new_limit = Rlimit::default();
-                data.old_limit = Rlimit::default();
+                        payload.has_new = !new_limit_ptr.is_null();
+                        payload.has_old = !old_limit_ptr.is_null();
+                        payload.new_limit = Rlimit::default();
+                        payload.old_limit = Rlimit::default();
 
-                if data.has_new {
-                    if let Ok(limit) =
-                        unsafe { bpf_probe_read_user::<Rlimit>(new_limit_ptr as *const _) }
-                    {
-                        data.new_limit = limit;
-                    }
-                }
-                if data.has_old && return_value == 0 {
-                    if let Ok(limit) =
-                        unsafe { bpf_probe_read_user::<Rlimit>(old_limit_ptr as *const _) }
-                    {
-                        data.old_limit = limit;
-                    }
-                }
+                        if payload.has_new {
+                            if let Ok(limit) =
+                                unsafe { bpf_probe_read_user::<Rlimit>(new_limit_ptr as *const _) }
+                            {
+                                payload.new_limit = limit;
+                            }
+                        }
+                        if payload.has_old && return_value == 0 {
+                            if let Ok(limit) =
+                                unsafe { bpf_probe_read_user::<Rlimit>(old_limit_ptr as *const _) }
+                            {
+                                payload.old_limit = limit;
+                            }
+                        }
+                    },
+                )?;
             }
             syscalls::SYS_kcmp => {
-                let data = data_mut!(entry, kcmp);
-                data.pid1 = args[0] as i32;
-                data.pid2 = args[1] as i32;
-                data.type_ = args[2] as i32;
-                data.idx1 = args[3] as u64;
-                data.idx2 = args[4] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::KcmpData, _>(
+                    &ctx,
+                    syscalls::SYS_kcmp,
+                    return_value,
+                    |payload| {
+                        payload.pid1 = args[0] as i32;
+                        payload.pid2 = args[1] as i32;
+                        payload.type_ = args[2] as i32;
+                        payload.idx1 = args[3] as u64;
+                        payload.idx2 = args[4] as u64;
+                    },
+                )?;
             }
             syscalls::SYS_getgroups => {
-                let data = data_mut!(entry, getgroups);
-                data.size = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::GetgroupsData, _>(
+                    &ctx,
+                    syscalls::SYS_getgroups,
+                    return_value,
+                    |payload| {
+                        payload.size = args[0] as i32;
 
-                let list_ptr = args[1] as *const u32;
+                        let list_ptr = args[1] as *const u32;
 
-                if return_value >= 0 && !list_ptr.is_null() && data.size > 0 {
-                    let max_to_read = core::cmp::min(
-                        pinchy_common::GROUP_ARRAY_CAP,
-                        core::cmp::min(data.size as usize, return_value as usize),
-                    );
+                        if return_value >= 0 && !list_ptr.is_null() && payload.size > 0 {
+                            let max_to_read = core::cmp::min(
+                                pinchy_common::GROUP_ARRAY_CAP,
+                                core::cmp::min(payload.size as usize, return_value as usize),
+                            );
 
-                    for i in 0..max_to_read {
-                        unsafe {
-                            let ptr = list_ptr.add(i);
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    let ptr = list_ptr.add(i);
 
-                            if let Ok(gid) = bpf_probe_read_user(ptr) {
-                                data.groups[i] = gid;
-                                data.groups_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(gid) = bpf_probe_read_user(ptr) {
+                                        payload.groups[i] = gid;
+                                        payload.groups_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_setgroups => {
-                let data = data_mut!(entry, setgroups);
-                data.size = args[0] as usize;
+                crate::util::submit_compact_payload::<pinchy_common::SetgroupsData, _>(
+                    &ctx,
+                    syscalls::SYS_setgroups,
+                    return_value,
+                    |payload| {
+                        payload.size = args[0] as usize;
 
-                let list_ptr = args[1] as *const u32;
+                        let list_ptr = args[1] as *const u32;
 
-                if !list_ptr.is_null() && data.size > 0 {
-                    let max_to_read = core::cmp::min(pinchy_common::GROUP_ARRAY_CAP, data.size);
+                        if !list_ptr.is_null() && payload.size > 0 {
+                            let max_to_read =
+                                core::cmp::min(pinchy_common::GROUP_ARRAY_CAP, payload.size);
 
-                    for i in 0..max_to_read {
-                        unsafe {
-                            let ptr = list_ptr.add(i);
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    let ptr = list_ptr.add(i);
 
-                            if let Ok(gid) = bpf_probe_read_user(ptr) {
-                                data.groups[i] = gid;
-                                data.groups_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(gid) = bpf_probe_read_user(ptr) {
+                                        payload.groups[i] = gid;
+                                        payload.groups_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_getresuid => {
-                let data = data_mut!(entry, getresuid);
-                let ruid_ptr = args[0] as *const u32;
-                let euid_ptr = args[1] as *const u32;
-                let suid_ptr = args[2] as *const u32;
+                crate::util::submit_compact_payload::<pinchy_common::GetresuidData, _>(
+                    &ctx,
+                    syscalls::SYS_getresuid,
+                    return_value,
+                    |payload| {
+                        let ruid_ptr = args[0] as *const u32;
+                        let euid_ptr = args[1] as *const u32;
+                        let suid_ptr = args[2] as *const u32;
 
-                data.ruid = if return_value >= 0 && !ruid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(ruid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        payload.ruid = if return_value >= 0 && !ruid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(ruid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
 
-                data.euid = if return_value >= 0 && !euid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(euid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        payload.euid = if return_value >= 0 && !euid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(euid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
 
-                data.suid = if return_value >= 0 && !suid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(suid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        payload.suid = if return_value >= 0 && !suid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(suid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
+                    },
+                )?;
             }
             syscalls::SYS_getresgid => {
-                let data = data_mut!(entry, getresgid);
-                let rgid_ptr = args[0] as *const u32;
-                let egid_ptr = args[1] as *const u32;
-                let sgid_ptr = args[2] as *const u32;
+                crate::util::submit_compact_payload::<pinchy_common::GetresgidData, _>(
+                    &ctx,
+                    syscalls::SYS_getresgid,
+                    return_value,
+                    |payload| {
+                        let rgid_ptr = args[0] as *const u32;
+                        let egid_ptr = args[1] as *const u32;
+                        let sgid_ptr = args[2] as *const u32;
 
-                data.rgid = if return_value >= 0 && !rgid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(rgid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        payload.rgid = if return_value >= 0 && !rgid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(rgid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
 
-                data.egid = if return_value >= 0 && !egid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(egid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        payload.egid = if return_value >= 0 && !egid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(egid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
 
-                data.sgid = if return_value >= 0 && !sgid_ptr.is_null() {
-                    unsafe { bpf_probe_read_user(sgid_ptr).unwrap_or(0) }
-                } else {
-                    0
-                };
+                        payload.sgid = if return_value >= 0 && !sgid_ptr.is_null() {
+                            unsafe { bpf_probe_read_user(sgid_ptr).unwrap_or(0) }
+                        } else {
+                            0
+                        };
+                    },
+                )?;
             }
-
-            _ => {
-                entry.discard();
-                return Ok(());
-            }
+            _ => {}
         }
 
-        entry.submit();
         Ok(())
     }
 

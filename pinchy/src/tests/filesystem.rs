@@ -20,8 +20,8 @@ use pinchy_common::{
     FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData, FsyncData, FtruncateData,
     InotifyAddWatchData, InotifyInit1Data, InotifyRmWatchData, LinkatData, LookupDcookieData,
     MkdiratData, MknodatData, NameToHandleAtData, NfsservctlData, OpenByHandleAtData,
-    QuotactlFdData, Renameat2Data, RenameatData, SyncFileRangeData, SyncfsData, SyscallEvent,
-    SyscallEventData, UtimensatData, DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
+    QuotactlFdData, Renameat2Data, RenameatData, SyncFileRangeData, SyncfsData, UtimensatData,
+    DATA_READ_SIZE, MEDIUM_READ_SIZE, SMALLISH_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
@@ -34,9 +34,9 @@ use pinchy_common::{
     ReadlinkData, StatData, UtimeData, UtimesData,
 };
 
-use crate::{syscall_compact_test, syscall_test, tests::make_compact_test_data};
+use crate::{syscall_test, tests::make_compact_test_data};
 
-syscall_compact_test!(
+syscall_test!(
     parse_fstat_success,
     {
         use pinchy_common::{FstatData, kernel_types::Stat};
@@ -62,23 +62,18 @@ syscall_compact_test!(
 syscall_test!(
     parse_inotify_add_watch,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let p = b"/tmp/watch";
         pathname[..p.len()].copy_from_slice(p);
 
-        SyscallEvent {
-            syscall_nr: SYS_inotify_add_watch,
-            pid: 10,
-            tid: 10,
-            return_value: 3,
-            data: SyscallEventData {
-                inotify_add_watch: InotifyAddWatchData {
+        let data = InotifyAddWatchData {
                     fd: 5,
                     pathname,
                     mask: (libc::IN_CREATE | libc::IN_DELETE | libc::IN_MODIFY),
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_inotify_add_watch, 10, 3, &data)
     },
     "10 inotify_add_watch(fd: 5, pathname: \"/tmp/watch\", mask: 0x302 (IN_MODIFY|IN_CREATE|IN_DELETE)) = 3 (wd)\n"
 );
@@ -86,15 +81,9 @@ syscall_test!(
 syscall_test!(
     parse_inotify_rm_watch,
     {
-        SyscallEvent {
-            syscall_nr: SYS_inotify_rm_watch,
-            pid: 11,
-            tid: 11,
-            return_value: 0,
-            data: SyscallEventData {
-                inotify_rm_watch: InotifyRmWatchData { fd: 5, wd: 7 },
-            },
-        }
+        let data = InotifyRmWatchData { fd: 5, wd: 7 };
+
+        crate::tests::make_compact_test_data(SYS_inotify_rm_watch, 11, 0, &data)
     },
     "11 inotify_rm_watch(fd: 5, wd: 7) = 0 (success)\n"
 );
@@ -103,15 +92,14 @@ syscall_test!(
 syscall_test!(
     parse_inotify_init,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_inotify_init,
-            pid: 12,
-            tid: 12,
-            return_value: 9,
-            data: SyscallEventData {
-                inotify_init: pinchy_common::InotifyInitData {},
-            },
-        }
+        let data = pinchy_common::InotifyInitData {};
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_inotify_init,
+            12,
+            9,
+            &data,
+        )
     },
     "12 inotify_init() = 9 (fd)\n"
 );
@@ -119,22 +107,16 @@ syscall_test!(
 syscall_test!(
     parse_inotify_init1,
     {
-        SyscallEvent {
-            syscall_nr: SYS_inotify_init1,
-            pid: 13,
-            tid: 13,
-            return_value: 10,
-            data: SyscallEventData {
-                inotify_init1: InotifyInit1Data {
-                    flags: libc::IN_NONBLOCK | libc::IN_CLOEXEC,
-                },
-            },
-        }
+        let data = InotifyInit1Data {
+            flags: libc::IN_NONBLOCK | libc::IN_CLOEXEC,
+        };
+
+        crate::tests::make_compact_test_data(SYS_inotify_init1, 13, 10, &data)
     },
     "13 inotify_init1(flags: 0x80800 (IN_NONBLOCK|IN_CLOEXEC)) = 10 (fd)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fstat_error,
     {
         use pinchy_common::{FstatData, kernel_types::Stat};
@@ -157,7 +139,7 @@ syscall_compact_test!(
     "33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_statfs_success,
     {
         use pinchy_common::{StatfsData, kernel_types::Statfs};
@@ -188,42 +170,35 @@ syscall_test!(
     parse_getdents64_populated,
     {
         use pinchy_common::{kernel_types::LinuxDirent64, Getdents64Data};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_getdents64,
-            pid: 55,
-            tid: 55,
-            return_value: 3,
-            data: pinchy_common::SyscallEventData {
-                getdents64: Getdents64Data {
-                    fd: 7,
-                    count: 1024,
-                    dirents: [LinuxDirent64::default(); 4],
-                    num_dirents: 3,
-                },
-            },
+        let mut data = Getdents64Data {
+            fd: 7,
+            count: 1024,
+            dirents: [LinuxDirent64::default(); 4],
+            num_dirents: 3,
         };
+
         {
-            let getdents_data = unsafe { &mut event.data.getdents64 };
-            getdents_data.dirents[0].d_ino = 123456;
-            getdents_data.dirents[0].d_off = 1;
-            getdents_data.dirents[0].d_reclen = 24;
-            getdents_data.dirents[0].d_type = 4;
+            data.dirents[0].d_ino = 123456;
+            data.dirents[0].d_off = 1;
+            data.dirents[0].d_reclen = 24;
+            data.dirents[0].d_type = 4;
             let dot = c".".to_bytes_with_nul();
-            getdents_data.dirents[0].d_name[..dot.len()].copy_from_slice(dot);
-            getdents_data.dirents[1].d_ino = 123457;
-            getdents_data.dirents[1].d_off = 2;
-            getdents_data.dirents[1].d_reclen = 25;
-            getdents_data.dirents[1].d_type = 4;
+            data.dirents[0].d_name[..dot.len()].copy_from_slice(dot);
+            data.dirents[1].d_ino = 123457;
+            data.dirents[1].d_off = 2;
+            data.dirents[1].d_reclen = 25;
+            data.dirents[1].d_type = 4;
             let dot_dot = c"..".to_bytes_with_nul();
-            getdents_data.dirents[1].d_name[..dot_dot.len()].copy_from_slice(dot_dot);
-            getdents_data.dirents[2].d_ino = 123458;
-            getdents_data.dirents[2].d_off = 3;
-            getdents_data.dirents[2].d_reclen = 32;
-            getdents_data.dirents[2].d_type = 8;
+            data.dirents[1].d_name[..dot_dot.len()].copy_from_slice(dot_dot);
+            data.dirents[2].d_ino = 123458;
+            data.dirents[2].d_off = 3;
+            data.dirents[2].d_reclen = 32;
+            data.dirents[2].d_type = 8;
             let filename = c"file.txt".to_bytes();
-            getdents_data.dirents[2].d_name[..filename.len()].copy_from_slice(filename);
+            data.dirents[2].d_name[..filename.len()].copy_from_slice(filename);
         }
-        event
+
+        crate::tests::make_compact_test_data(SYS_getdents64, 55, 3, &data)
     },
     &"55 getdents64(fd: 7, count: 1024, entries: [ dirent { ino: 123456, off: 1, reclen: 24, type: 4, name: \".\" }, dirent { ino: 123457, off: 2, reclen: 25, type: 4, name: \"..\" }, dirent { ino: 123458, off: 3, reclen: 32, type: 8, name: \"file.txt\" ... (truncated) } ]) = 3 (bytes)\n".to_string()
 );
@@ -233,25 +208,19 @@ syscall_test!(
     {
         use pinchy_common::{kernel_types::LinuxDirent64, Getdents64Data};
 
-        SyscallEvent {
-            syscall_nr: SYS_getdents64,
-            pid: 55,
-            tid: 55,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                getdents64: Getdents64Data {
-                    fd: 7,
-                    count: 1024,
-                    dirents: [LinuxDirent64::default(); 4],
-                    num_dirents: 0,
-                },
-            },
-        }
+        let data = Getdents64Data {
+            fd: 7,
+            count: 1024,
+            dirents: [LinuxDirent64::default(); 4],
+            num_dirents: 0,
+        };
+
+        crate::tests::make_compact_test_data(SYS_getdents64, 55, 0, &data)
     },
     &"55 getdents64(fd: 7, count: 1024, entries: [  ]) = 0 (bytes)\n".to_string()
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_faccessat_success,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -270,7 +239,7 @@ syscall_compact_test!(
     "1001 faccessat(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_faccessat_with_flags_error,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -289,7 +258,7 @@ syscall_compact_test!(
     "1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_faccessat2_success,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -307,7 +276,7 @@ syscall_compact_test!(
     "1002 faccessat2(dirfd: AT_FDCWD, pathname: \"/etc/hosts.conf\", mode: R_OK|W_OK, flags: 0) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_faccessat2_with_flags_error,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -325,7 +294,7 @@ syscall_compact_test!(
     "1003 faccessat2(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_newfstatat_success,
     {
         use pinchy_common::{NewfstatatData, kernel_types::Stat};
@@ -352,7 +321,7 @@ syscall_compact_test!(
     "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_newfstatat_error,
     {
         use pinchy_common::{NewfstatatData, kernel_types::Stat};
@@ -372,7 +341,7 @@ syscall_compact_test!(
     "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_newfstatat_noflags,
     {
         use pinchy_common::{NewfstatatData, kernel_types::Stat};
@@ -399,7 +368,7 @@ syscall_compact_test!(
     "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: 0) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_newfstatat_dirfd,
     {
         use pinchy_common::{NewfstatatData, kernel_types::Stat};
@@ -426,7 +395,7 @@ syscall_compact_test!(
     "42 newfstatat(dirfd: 5, pathname: \"test_file.txt\", struct stat: { mode: 0o755 (rwxr-xr-x), ino: 1234567, dev: 0, nlink: 0, uid: 500, gid: 500, size: 54321, blksize: 4096, blocks: 108, atime: 0, mtime: 0, ctime: 0 }, flags: 0) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_readlinkat_event,
     {
         let exe_link = b"/proc/self/exe\0";
@@ -445,7 +414,7 @@ syscall_compact_test!(
     "5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 15\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_flistxattr,
     {
         use pinchy_common::{kernel_types::XattrList, syscalls::SYS_flistxattr, FlistxattrData};
@@ -467,7 +436,7 @@ syscall_compact_test!(
     "42 flistxattr(fd: 7, list: [ user.attr1, user.attr2 ], size: 256) = 22\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_listxattr,
     {
         use pinchy_common::{kernel_types::XattrList, syscalls::SYS_listxattr, ListxattrData};
@@ -493,7 +462,7 @@ syscall_compact_test!(
     "43 listxattr(pathname: \"/tmp/testfile\", list: [ user.attr1, user.attr2 ], size: 128) = 22\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_llistxattr,
     {
         use pinchy_common::{kernel_types::XattrList, syscalls::SYS_llistxattr, LlistxattrData};
@@ -519,7 +488,7 @@ syscall_compact_test!(
     "44 llistxattr(pathname: \"/tmp/testlink\", list: [ user.attr1, user.attr2 ], size: 64) = 22\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_setxattr,
     {
         use pinchy_common::{
@@ -546,7 +515,7 @@ syscall_compact_test!(
     "45 setxattr(pathname: \"/tmp/myfile\", name: \"user.attr\", value: \"value\\0\", size: 6, flags: 0) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_lsetxattr,
     {
         use pinchy_common::{
@@ -573,7 +542,7 @@ syscall_compact_test!(
     "46 lsetxattr(pathname: \"/tmp/mylink\", name: \"user.test\", value: \"test\", size: 4, flags: 0x1 (XATTR_CREATE)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fsetxattr,
     {
         use pinchy_common::{
@@ -598,7 +567,7 @@ syscall_compact_test!(
     "47 fsetxattr(fd: 8, name: \"user.foo\", value: \"bar\", size: 3, flags: 0x2 (XATTR_REPLACE)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_getxattr,
     {
         use pinchy_common::{
@@ -624,7 +593,7 @@ syscall_compact_test!(
     "48 getxattr(pathname: \"/tmp/myfile\", name: \"user.attr\", value: \"value\\0\", size: 100) = 6\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_lgetxattr,
     {
         use pinchy_common::{
@@ -650,7 +619,7 @@ syscall_compact_test!(
     "49 lgetxattr(pathname: \"/tmp/mylink\", name: \"user.test\", value: \"test\", size: 50) = 4\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fgetxattr,
     {
         use pinchy_common::{
@@ -674,7 +643,7 @@ syscall_compact_test!(
     "50 fgetxattr(fd: 9, name: \"user.foo\", value: \"bar\", size: 10) = 3\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_removexattr,
     {
         use pinchy_common::{
@@ -693,7 +662,7 @@ syscall_compact_test!(
     "51 removexattr(pathname: \"/tmp/myfile\", name: \"user.attr\") = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_lremovexattr,
     {
         use pinchy_common::{
@@ -712,7 +681,7 @@ syscall_compact_test!(
     "52 lremovexattr(pathname: \"/tmp/mylink\", name: \"user.test\") = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fremovexattr,
     {
         use pinchy_common::{syscalls::SYS_fremovexattr, FremovexattrData, MEDIUM_READ_SIZE};
@@ -727,7 +696,7 @@ syscall_compact_test!(
     "53 fremovexattr(fd: 10, name: \"user.foo\") = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_getcwd,
     {
         use pinchy_common::GetcwdData;
@@ -747,7 +716,7 @@ syscall_compact_test!(
     "55 getcwd(buf: 0x7ffe12345000, size: 4096, path: \"/home/user/work\") = 16\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_getcwd_error,
     {
         use pinchy_common::GetcwdData;
@@ -767,7 +736,7 @@ syscall_compact_test!(
     "55 getcwd(buf: 0x7ffe12345000, size: 4096) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_chdir,
     {
         use pinchy_common::ChdirData;
@@ -783,7 +752,7 @@ syscall_compact_test!(
     "66 chdir(path: \"/home/user/newdir\") = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_chdir_error,
     {
         use pinchy_common::ChdirData;
@@ -799,7 +768,7 @@ syscall_compact_test!(
     "66 chdir(path: \"/home/user/newdir\") = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_mkdirat,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -817,7 +786,7 @@ syscall_compact_test!(
     "77 mkdirat(dirfd: AT_FDCWD, pathname: \"/home/user/newdir\", mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_mkdirat_dirfd,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -835,7 +804,7 @@ syscall_compact_test!(
     "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_mkdirat_error,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -853,7 +822,7 @@ syscall_compact_test!(
     "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fsync,
     {
         let data = FsyncData { fd: 5 };
@@ -863,7 +832,7 @@ syscall_compact_test!(
     "123 fsync(fd: 5) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fdatasync,
     {
         let data = FdatasyncData { fd: 8 };
@@ -873,7 +842,7 @@ syscall_compact_test!(
     "124 fdatasync(fd: 8) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_ftruncate,
     {
         let data = FtruncateData {
@@ -886,7 +855,7 @@ syscall_compact_test!(
     "125 ftruncate(fd: 3, length: 4096) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_ftruncate_error,
     {
         let data = FtruncateData {
@@ -899,7 +868,7 @@ syscall_compact_test!(
     "125 ftruncate(fd: 3, length: 4096) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchmod,
     {
         let data = FchmodData { fd: 3, mode: 0o644 };
@@ -909,7 +878,7 @@ syscall_compact_test!(
     "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchmod_error,
     {
         let data = FchmodData { fd: 3, mode: 0o644 };
@@ -919,7 +888,7 @@ syscall_compact_test!(
     "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchmod_mode_755,
     {
         let data = FchmodData { fd: 3, mode: 0o755 };
@@ -929,7 +898,7 @@ syscall_compact_test!(
     "126 fchmod(fd: 3, mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchmodat,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -948,7 +917,7 @@ syscall_compact_test!(
     "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: 0) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchmodat_with_flags,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -967,7 +936,7 @@ syscall_compact_test!(
     "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchown,
     {
         let data = FchownData {
@@ -981,7 +950,7 @@ syscall_compact_test!(
     "1001 fchown(fd: 3, uid: 1000, gid: 1000) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchownat,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -1001,7 +970,7 @@ syscall_compact_test!(
     "1001 fchownat(dirfd: AT_FDCWD, pathname: \"/etc/passwd\", uid: 1000, gid: 1000, flags: 0) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fchownat_with_flags,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -1028,19 +997,14 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/home/user";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_chown,
-            pid: 2000,
-            tid: 2001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                chown: pinchy_common::ChownData {
-                    pathname,
-                    uid: 1000,
-                    gid: 1000,
-                },
-            },
-        }
+
+        let data = pinchy_common::ChownData {
+            pathname,
+            uid: 1000,
+            gid: 1000,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_chown, 2001, 0, &data)
     },
     "2001 chown(pathname: \"/home/user\", uid: 1000, gid: 1000) = 0 (success)\n"
 );
@@ -1052,19 +1016,14 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/var/log";
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_lchown,
-            pid: 3000,
-            tid: 3001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                chown: pinchy_common::ChownData {
-                    pathname,
-                    uid: 2000,
-                    gid: 2000,
-                },
-            },
-        }
+
+        let data = pinchy_common::ChownData {
+            pathname,
+            uid: 2000,
+            gid: 2000,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_lchown, 3001, 0, &data)
     },
     "3001 lchown(pathname: \"/var/log\", uid: 2000, gid: 2000) = 0 (success)\n"
 );
@@ -1075,18 +1034,13 @@ syscall_test!(
         let path = b"/tmp/testfile\0";
         let mut pathname = [0u8; DATA_READ_SIZE];
         pathname[0..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: SYS_truncate,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                truncate: pinchy_common::TruncateData {
-                    pathname,
-                    length: 1024,
-                },
-            },
-        }
+
+        let data = pinchy_common::TruncateData {
+            pathname,
+            length: 1024,
+        };
+
+        crate::tests::make_compact_test_data(SYS_truncate, 123, 0, &data)
     },
     "123 truncate(pathname: \"/tmp/testfile\", length: 1024) = 0 (success)\n"
 );
@@ -1099,20 +1053,15 @@ syscall_test!(
         let mut newpath = [0u8; SMALLISH_READ_SIZE];
         oldpath[..10].copy_from_slice(b"/old/path\0");
         newpath[..10].copy_from_slice(b"/new/path\0");
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_rename,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                rename: pinchy_common::RenameData { oldpath, newpath },
-            },
-        }
+
+        let data = pinchy_common::RenameData { oldpath, newpath };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_rename, 1001, 0, &data)
     },
     "1001 rename(oldpath: \"/old/path\", newpath: \"/new/path\") = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_renameat,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -1132,7 +1081,7 @@ syscall_compact_test!(
     "1001 renameat(olddirfd: AT_FDCWD, oldpath: \"/old/path\", newdirfd: AT_FDCWD, newpath: \"/new/path\") = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_renameat2,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -1160,15 +1109,10 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/testdir\0";
         pathname[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_rmdir,
-            pid: 1,
-            tid: 1,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                rmdir: pinchy_common::RmdirData { pathname },
-            },
-        }
+
+        let data = pinchy_common::RmdirData { pathname };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_rmdir, 1, 0, &data)
     },
     "1 rmdir(pathname: \"/tmp/testdir\") = 0 (success)\n"
 );
@@ -1180,15 +1124,10 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/testfile\0";
         pathname[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_unlink,
-            pid: 200,
-            tid: 201,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                unlink: pinchy_common::UnlinkData { pathname },
-            },
-        }
+
+        let data = pinchy_common::UnlinkData { pathname };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_unlink, 201, 0, &data)
     },
     "201 unlink(pathname: \"/tmp/testfile\") = 0 (success)\n"
 );
@@ -1200,20 +1139,15 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/nonexistent\0";
         pathname[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_unlink,
-            pid: 300,
-            tid: 301,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                unlink: pinchy_common::UnlinkData { pathname },
-            },
-        }
+
+        let data = pinchy_common::UnlinkData { pathname };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_unlink, 301, -1, &data)
     },
     "301 unlink(pathname: \"/tmp/nonexistent\") = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_unlinkat,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -1231,7 +1165,7 @@ syscall_compact_test!(
     "401 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/testdir\", flags: AT_EACCESS|AT_REMOVEDIR (0x200)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_unlinkat_error,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
@@ -1259,15 +1193,10 @@ syscall_test!(
         let linkpath_bytes = b"/link\0";
         target[..target_bytes.len()].copy_from_slice(target_bytes);
         linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_symlink,
-            pid: 600,
-            tid: 601,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                symlink: pinchy_common::SymlinkData { target, linkpath },
-            },
-        }
+
+        let data = pinchy_common::SymlinkData { target, linkpath };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_symlink, 601, 0, &data)
     },
     "601 symlink(target: \"/target\", linkpath: \"/link\") = 0 (success)\n"
 );
@@ -1282,20 +1211,15 @@ syscall_test!(
         let linkpath_bytes = b"/link\0";
         target[..target_bytes.len()].copy_from_slice(target_bytes);
         linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_symlink,
-            pid: 600,
-            tid: 601,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                symlink: pinchy_common::SymlinkData { target, linkpath },
-            },
-        }
+
+        let data = pinchy_common::SymlinkData { target, linkpath };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_symlink, 601, -1, &data)
     },
     "601 symlink(target: \"/target\", linkpath: \"/link\") = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_symlinkat,
     {
         let mut target = [0u8; DATA_READ_SIZE];
@@ -1316,7 +1240,7 @@ syscall_compact_test!(
     "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_symlinkat_error,
     {
         let mut target = [0u8; DATA_READ_SIZE];
@@ -1343,15 +1267,10 @@ syscall_test!(
         let mut filename = [0u8; DATA_READ_SIZE];
         let path = b"/var/log/account\0";
         filename[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: SYS_acct,
-            pid: 800,
-            tid: 801,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                acct: AcctData { filename },
-            },
-        }
+
+        let data = AcctData { filename };
+
+        crate::tests::make_compact_test_data(SYS_acct, 801, 0, &data)
     },
     "801 acct(filename: \"/var/log/account\") = 0 (success)\n"
 );
@@ -1362,15 +1281,10 @@ syscall_test!(
         let mut filename = [0u8; DATA_READ_SIZE];
         let path = b"/var/log/account\0";
         filename[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: SYS_acct,
-            pid: 900,
-            tid: 901,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                acct: AcctData { filename },
-            },
-        }
+
+        let data = AcctData { filename };
+
+        crate::tests::make_compact_test_data(SYS_acct, 901, -1, &data)
     },
     "901 acct(filename: \"/var/log/account\") = -1 (error)\n"
 );
@@ -1378,14 +1292,10 @@ syscall_test!(
 syscall_test!(
     parse_statx_success,
     {
+
         use pinchy_common::{StatxData, kernel_types::Statx};
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_statx,
-            pid: 42,
-            tid: 42,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                statx: StatxData {
+
+        let data = StatxData {
                     dirfd: 3,
                     pathname: {
                         let mut arr = [0u8; DATA_READ_SIZE];
@@ -1406,9 +1316,9 @@ syscall_test!(
                         stx_blksize: 4096,
                         ..Default::default()
                     },
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_statx, 42, 0, &data)
     },
     "42 statx(dirfd: 3, pathname: \"/tmp/testfile\", flags: 0x0, mask: 0xfff, statxbuf: 0x12345678, struct statx: { mask: 0xfff, blksize: 4096, attributes: 0x0, nlink: 0, uid: 1000, gid: 1000, mode: 0100644, ino: 0, size: 98765, blocks: 20, attributes_mask: 0x0, atime: 0.0, btime: 0.0, ctime: 0.0, mtime: 0.0, rdev: 0:0, dev: 0:0 }) = 0 (success)\n"
 );
@@ -1417,22 +1327,18 @@ syscall_test!(
 syscall_test!(
     parse_mknod_regular_file,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/testfile\0";
         pathname[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: syscalls::SYS_mknod,
-            pid: 100,
-            tid: 100,
-            return_value: 0,
-            data: SyscallEventData {
-                mknod: pinchy_common::MknodData {
+
+        let data = pinchy_common::MknodData {
                     pathname,
                     mode: libc::S_IFREG | 0o644,
                     dev: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(syscalls::SYS_mknod, 100, 0, &data)
     },
     "100 mknod(pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = 0 (success)\n"
 );
@@ -1440,24 +1346,19 @@ syscall_test!(
 syscall_test!(
     parse_mknodat_regular_file,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/testfile\0";
         pathname[..path.len()].copy_from_slice(path);
 
-        SyscallEvent {
-            syscall_nr: syscalls::SYS_mknodat,
-            pid: 200,
-            tid: 200,
-            return_value: 0,
-            data: SyscallEventData {
-                mknodat: MknodatData {
+        let data = MknodatData {
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     mode: libc::S_IFREG | 0o644,
                     dev: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(syscalls::SYS_mknodat, 200, 0, &data)
     },
     "200 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = 0 (success)\n"
 );
@@ -1465,24 +1366,19 @@ syscall_test!(
 syscall_test!(
     parse_mknodat_device_file,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/dev/mydevice\0";
         pathname[..path.len()].copy_from_slice(path);
 
-        SyscallEvent {
-            syscall_nr: syscalls::SYS_mknodat,
-            pid: 201,
-            tid: 201,
-            return_value: 0,
-            data: SyscallEventData {
-                mknodat: MknodatData {
+        let data = MknodatData {
                     dirfd: 5,
                     pathname,
                     mode: libc::S_IFCHR | 0o666,
-                    dev: (1 << 8) | 5, // major=1, minor=5
-                },
-            },
-        }
+                    dev: (1 << 8) | 5,
+                };
+
+        crate::tests::make_compact_test_data(syscalls::SYS_mknodat, 201, 0, &data)
     },
     "201 mknodat(dirfd: 5, pathname: \"/dev/mydevice\", mode: 0o666 (rw-rw-rw-) (S_IFCHR), dev: 1:5) = 0 (success)\n"
 );
@@ -1490,24 +1386,19 @@ syscall_test!(
 syscall_test!(
     parse_mknodat_fifo,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/myfifo\0";
         pathname[..path.len()].copy_from_slice(path);
 
-        SyscallEvent {
-            syscall_nr: syscalls::SYS_mknodat,
-            pid: 202,
-            tid: 202,
-            return_value: 0,
-            data: SyscallEventData {
-                mknodat: MknodatData {
+        let data = MknodatData {
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     mode: libc::S_IFIFO | 0o600,
                     dev: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(syscalls::SYS_mknodat, 202, 0, &data)
     },
     "202 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/myfifo\", mode: 0o600 (rw-------) (S_IFIFO), dev: 0) = 0 (success)\n"
 );
@@ -1515,24 +1406,19 @@ syscall_test!(
 syscall_test!(
     parse_mknodat_error,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/testfile\0";
         pathname[..path.len()].copy_from_slice(path);
 
-        SyscallEvent {
-            syscall_nr: syscalls::SYS_mknodat,
-            pid: 203,
-            tid: 203,
-            return_value: -1,
-            data: SyscallEventData {
-                mknodat: MknodatData {
+        let data = MknodatData {
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     mode: libc::S_IFREG | 0o644,
                     dev: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(syscalls::SYS_mknodat, 203, -1, &data)
     },
     "203 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = -1 (error)\n"
 );
@@ -1549,15 +1435,15 @@ syscall_test!(
         let put_old_bytes = b"/mnt/old\0";
         new_root[..new_root_bytes.len()].copy_from_slice(new_root_bytes);
         put_old[..put_old_bytes.len()].copy_from_slice(put_old_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_pivot_root,
-            pid: 1000,
-            tid: 1000,
-            return_value: 0,
-            data: SyscallEventData {
-                pivot_root: PivotRootData { new_root, put_old },
-            },
-        }
+
+        let data = PivotRootData { new_root, put_old };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_pivot_root,
+            1000,
+            0,
+            &data,
+        )
     },
     "1000 pivot_root(new_root: \"/mnt/root\", put_old: \"/mnt/old\") = 0 (success)\n"
 );
@@ -1572,15 +1458,15 @@ syscall_test!(
         let put_old_bytes = b"/mnt/old\0";
         new_root[..new_root_bytes.len()].copy_from_slice(new_root_bytes);
         put_old[..put_old_bytes.len()].copy_from_slice(put_old_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_pivot_root,
-            pid: 1001,
-            tid: 1001,
-            return_value: -1,
-            data: SyscallEventData {
-                pivot_root: PivotRootData { new_root, put_old },
-            },
-        }
+
+        let data = PivotRootData { new_root, put_old };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_pivot_root,
+            1001,
+            -1,
+            &data,
+        )
     },
     "1001 pivot_root(new_root: \"/mnt/root\", put_old: \"/mnt/old\") = -1 (error)\n"
 );
@@ -1592,15 +1478,10 @@ syscall_test!(
         let mut path = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/new/root\0";
         path[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_chroot,
-            pid: 1002,
-            tid: 1002,
-            return_value: 0,
-            data: SyscallEventData {
-                chroot: ChrootData { path },
-            },
-        }
+
+        let data = ChrootData { path };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_chroot, 1002, 0, &data)
     },
     "1002 chroot(path: \"/new/root\") = 0 (success)\n"
 );
@@ -1612,15 +1493,10 @@ syscall_test!(
         let mut path = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/bad/path\0";
         path[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_chroot,
-            pid: 1003,
-            tid: 1003,
-            return_value: -1,
-            data: SyscallEventData {
-                chroot: ChrootData { path },
-            },
-        }
+
+        let data = ChrootData { path };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_chroot, 1003, -1, &data)
     },
     "1003 chroot(path: \"/bad/path\") = -1 (error)\n"
 );
@@ -1628,23 +1504,19 @@ syscall_test!(
 syscall_test!(
     parse_open_tree,
     {
+
         use pinchy_common::OpenTreeData;
         let mut pathname = [0u8; DATA_READ_SIZE];
         let pathname_bytes = b"/mnt/source\0";
         pathname[..pathname_bytes.len()].copy_from_slice(pathname_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_open_tree,
-            pid: 1004,
-            tid: 1004,
-            return_value: 5,
-            data: SyscallEventData {
-                open_tree: OpenTreeData {
+
+        let data = OpenTreeData {
                     dfd: libc::AT_FDCWD,
                     pathname,
-                    flags: 1, // OPEN_TREE_CLONE
-                },
-            },
-        }
+                    flags: 1,
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_open_tree, 1004, 5, &data)
     },
     "1004 open_tree(dfd: AT_FDCWD, pathname: \"/mnt/source\", flags: 0x1 (OPEN_TREE_CLONE)) = 5 (fd)\n"
 );
@@ -1652,6 +1524,7 @@ syscall_test!(
 syscall_test!(
     parse_mount,
     {
+
         use pinchy_common::MountData;
         let mut source = [0u8; DATA_READ_SIZE];
         let mut target = [0u8; DATA_READ_SIZE];
@@ -1662,21 +1535,16 @@ syscall_test!(
         source[..source_bytes.len()].copy_from_slice(source_bytes);
         target[..target_bytes.len()].copy_from_slice(target_bytes);
         filesystemtype[..fs_bytes.len()].copy_from_slice(fs_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mount,
-            pid: 1005,
-            tid: 1005,
-            return_value: 0,
-            data: SyscallEventData {
-                mount: MountData {
+
+        let data = MountData {
                     source,
                     target,
                     filesystemtype,
                     mountflags: libc::MS_RDONLY,
                     data: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mount, 1005, 0, &data)
     },
     "1005 mount(source: \"/dev/sda1\", target: \"/mnt/disk\", filesystemtype: \"ext4\", mountflags: 0x1 (ST_RDONLY), data: NULL) = 0 (success)\n"
 );
@@ -1684,6 +1552,7 @@ syscall_test!(
 syscall_test!(
     parse_mount_with_data,
     {
+
         use pinchy_common::MountData;
         let mut source = [0u8; DATA_READ_SIZE];
         let mut target = [0u8; DATA_READ_SIZE];
@@ -1694,21 +1563,16 @@ syscall_test!(
         source[..source_bytes.len()].copy_from_slice(source_bytes);
         target[..target_bytes.len()].copy_from_slice(target_bytes);
         filesystemtype[..fs_bytes.len()].copy_from_slice(fs_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mount,
-            pid: 1006,
-            tid: 1006,
-            return_value: 0,
-            data: SyscallEventData {
-                mount: MountData {
+
+        let data = MountData {
                     source,
                     target,
                     filesystemtype,
                     mountflags: libc::MS_NOSUID | libc::MS_NODEV,
                     data: 0x12345678,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mount, 1006, 0, &data)
     },
     "1006 mount(source: \"/dev/sdb2\", target: \"/mnt/test\", filesystemtype: \"ext4\", mountflags: 0x6 (ST_NOSUID|ST_NODEV), data: 0x12345678) = 0 (success)\n"
 );
@@ -1716,6 +1580,7 @@ syscall_test!(
 syscall_test!(
     parse_mount_null_source,
     {
+
         use pinchy_common::MountData;
         let source = [0u8; DATA_READ_SIZE];
         let mut target = [0u8; DATA_READ_SIZE];
@@ -1725,21 +1590,16 @@ syscall_test!(
         let fs_bytes = b"proc\0";
         target[..target_bytes.len()].copy_from_slice(target_bytes);
         filesystemtype[..fs_bytes.len()].copy_from_slice(fs_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mount,
-            pid: 1007,
-            tid: 1007,
-            return_value: 0,
-            data: SyscallEventData {
-                mount: MountData {
+
+        let data = MountData {
                     source,
                     target,
                     filesystemtype,
                     mountflags: 0,
                     data: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mount, 1007, 0, &data)
     },
     "1007 mount(source: NULL, target: \"/proc\", filesystemtype: \"proc\", mountflags: 0x0, data: NULL) = 0 (success)\n"
 );
@@ -1751,18 +1611,13 @@ syscall_test!(
         let mut target = [0u8; DATA_READ_SIZE];
         let target_bytes = b"/mnt/disk\0";
         target[..target_bytes.len()].copy_from_slice(target_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_umount2,
-            pid: 1008,
-            tid: 1008,
-            return_value: 0,
-            data: SyscallEventData {
-                umount2: Umount2Data {
-                    target,
-                    flags: libc::MNT_FORCE,
-                },
-            },
-        }
+
+        let data = Umount2Data {
+            target,
+            flags: libc::MNT_FORCE,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_umount2, 1008, 0, &data)
     },
     "1008 umount2(target: \"/mnt/disk\", flags: 0x1 (MNT_FORCE)) = 0 (success)\n"
 );
@@ -1774,18 +1629,13 @@ syscall_test!(
         let mut target = [0u8; DATA_READ_SIZE];
         let target_bytes = b"/mnt/test\0";
         target[..target_bytes.len()].copy_from_slice(target_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_umount2,
-            pid: 1009,
-            tid: 1009,
-            return_value: 0,
-            data: SyscallEventData {
-                umount2: Umount2Data {
-                    target,
-                    flags: libc::MNT_DETACH,
-                },
-            },
-        }
+
+        let data = Umount2Data {
+            target,
+            flags: libc::MNT_DETACH,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_umount2, 1009, 0, &data)
     },
     "1009 umount2(target: \"/mnt/test\", flags: 0x2 (MNT_DETACH)) = 0 (success)\n"
 );
@@ -1793,31 +1643,27 @@ syscall_test!(
 syscall_test!(
     parse_mount_setattr,
     {
+
         use pinchy_common::{MountSetattrData, kernel_types::MountAttr};
         let mut path = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/mnt/test\0";
         path[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_mount_setattr,
-            pid: 1010,
-            tid: 1010,
-            return_value: 0,
-            data: SyscallEventData {
-                mount_setattr: MountSetattrData {
+
+        let data = MountSetattrData {
                     dfd: libc::AT_FDCWD,
                     path,
-                    flags: 0x8000, // AT_RECURSIVE
+                    flags: 0x8000,
                     size: std::mem::size_of::<MountAttr>(),
                     has_attr: true,
                     attr: MountAttr {
-                        attr_set: 0x1 | 0x2, // RDONLY|NOSUID
-                        attr_clr: 0x4,       // NODEV
+                        attr_set: 0x1 | 0x2,
+                        attr_clr: 0x4,
                         propagation: libc::MS_SHARED,
                         userns_fd: 42,
                     },
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mount_setattr, 1010, 0, &data)
     },
     "1010 mount_setattr(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0x8000 (AT_RECURSIVE), mount_attr: { attr_set: 0x3 (RDONLY|NOSUID), attr_clr: 0x4 (NODEV), propagation: MS_SHARED, userns_fd: 42 }, size: 32) = 0 (success)\n"
 );
@@ -1825,6 +1671,7 @@ syscall_test!(
 syscall_test!(
     parse_move_mount,
     {
+
         use pinchy_common::MoveMountData;
         let mut from_pathname = [0u8; DATA_READ_SIZE];
         let mut to_pathname = [0u8; DATA_READ_SIZE];
@@ -1832,21 +1679,16 @@ syscall_test!(
         let to_bytes = b"/mnt/target\0";
         from_pathname[..from_bytes.len()].copy_from_slice(from_bytes);
         to_pathname[..to_bytes.len()].copy_from_slice(to_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_move_mount,
-            pid: 1011,
-            tid: 1011,
-            return_value: 0,
-            data: SyscallEventData {
-                move_mount: MoveMountData {
+
+        let data = MoveMountData {
                     from_dfd: libc::AT_FDCWD,
                     from_pathname,
                     to_dfd: libc::AT_FDCWD,
                     to_pathname,
-                    flags: 0x00000001, // MOVE_MOUNT_F_SYMLINKS
-                },
-            },
-        }
+                    flags: 0x00000001,
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_move_mount, 1011, 0, &data)
     },
     "1011 move_mount(from_dfd: AT_FDCWD, from_pathname: \"/mnt/source\", to_dfd: AT_FDCWD, to_pathname: \"/mnt/target\", flags: 0x1 (MOVE_MOUNT_F_SYMLINKS)) = 0 (success)\n"
 );
@@ -1854,6 +1696,7 @@ syscall_test!(
 syscall_test!(
     parse_move_mount_error,
     {
+
         use pinchy_common::MoveMountData;
         let mut from_pathname = [0u8; DATA_READ_SIZE];
         let mut to_pathname = [0u8; DATA_READ_SIZE];
@@ -1861,21 +1704,16 @@ syscall_test!(
         let to_bytes = b"/mnt/target\0";
         from_pathname[..from_bytes.len()].copy_from_slice(from_bytes);
         to_pathname[..to_bytes.len()].copy_from_slice(to_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_move_mount,
-            pid: 1012,
-            tid: 1012,
-            return_value: -1,
-            data: SyscallEventData {
-                move_mount: MoveMountData {
+
+        let data = MoveMountData {
                     from_dfd: 5,
                     from_pathname,
                     to_dfd: 7,
                     to_pathname,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_move_mount, 1012, -1, &data)
     },
     "1012 move_mount(from_dfd: 5, from_pathname: \"/mnt/source\", to_dfd: 7, to_pathname: \"/mnt/target\", flags: 0x0) = -1 (error)\n"
 );
@@ -1887,15 +1725,10 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/tmp/swapfile\0";
         pathname[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_swapon,
-            pid: 1013,
-            tid: 1013,
-            return_value: 0,
-            data: SyscallEventData {
-                swapon: SwaponData { pathname, flags: 0 },
-            },
-        }
+
+        let data = SwaponData { pathname, flags: 0 };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_swapon, 1013, 0, &data)
     },
     "1013 swapon(pathname: \"/tmp/swapfile\", flags: 0x0) = 0 (success)\n"
 );
@@ -1907,18 +1740,13 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/dev/sda2\0";
         pathname[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_swapon,
-            pid: 1014,
-            tid: 1014,
-            return_value: 0,
-            data: SyscallEventData {
-                swapon: SwaponData {
-                    pathname,
-                    flags: 0x8005, // SWAP_FLAG_PREFER | priority 5
-                },
-            },
-        }
+
+        let data = SwaponData {
+            pathname,
+            flags: 0x8005,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_swapon, 1014, 0, &data)
     },
     "1014 swapon(pathname: \"/dev/sda2\", flags: 0x8005 (SWAP_FLAG_PREFER|PRIO=5)) = 0 (success)\n"
 );
@@ -1930,18 +1758,13 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/tmp/badfile\0";
         pathname[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_swapon,
-            pid: 1015,
-            tid: 1015,
-            return_value: -1,
-            data: SyscallEventData {
-                swapon: SwaponData {
-                    pathname,
-                    flags: 0x10000, // SWAP_FLAG_DISCARD
-                },
-            },
-        }
+
+        let data = SwaponData {
+            pathname,
+            flags: 0x10000,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_swapon, 1015, -1, &data)
     },
     "1015 swapon(pathname: \"/tmp/badfile\", flags: 0x10000 (SWAP_FLAG_DISCARD)) = -1 (error)\n"
 );
@@ -1953,15 +1776,10 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/tmp/swapfile\0";
         pathname[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_swapoff,
-            pid: 1016,
-            tid: 1016,
-            return_value: 0,
-            data: SyscallEventData {
-                swapoff: SwapoffData { pathname },
-            },
-        }
+
+        let data = SwapoffData { pathname };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_swapoff, 1016, 0, &data)
     },
     "1016 swapoff(pathname: \"/tmp/swapfile\") = 0 (success)\n"
 );
@@ -1973,20 +1791,15 @@ syscall_test!(
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/dev/sda2\0";
         pathname[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_swapoff,
-            pid: 1017,
-            tid: 1017,
-            return_value: -1,
-            data: SyscallEventData {
-                swapoff: SwapoffData { pathname },
-            },
-        }
+
+        let data = SwapoffData { pathname };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_swapoff, 1017, -1, &data)
     },
     "1017 swapoff(pathname: \"/dev/sda2\") = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_fstatfs_success,
     {
         use pinchy_common::{FstatfsData, kernel_types::Statfs};
@@ -2007,7 +1820,7 @@ syscall_compact_test!(
     "123 fstatfs(fd: 5, buf: { type: EXT4_SUPER_MAGIC (0xef53), block_size: 4096, blocks: 1048576, blocks_free: 524288, blocks_available: 524288, files: 0, files_free: 0, fsid: [0, 0], name_max: 0, fragment_size: 0, mount_flags: 0x0 }) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_statfs_error,
     {
         use pinchy_common::{kernel_types::Statfs, StatfsData};
@@ -2041,15 +1854,10 @@ syscall_test!(
         let mut fsname = [0u8; DATA_READ_SIZE];
         let name_bytes = b"ext4\0";
         fsname[..name_bytes.len()].copy_from_slice(name_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fsopen,
-            pid: 456,
-            tid: 456,
-            return_value: 7,
-            data: SyscallEventData {
-                fsopen: FsopenData { fsname, flags: 0 },
-            },
-        }
+
+        let data = FsopenData { fsname, flags: 0 };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fsopen, 456, 7, &data)
     },
     "456 fsopen(fsname: \"ext4\", flags: 0) = 7 (fd)\n"
 );
@@ -2057,6 +1865,7 @@ syscall_test!(
 syscall_test!(
     parse_fsconfig_success,
     {
+
         use pinchy_common::FsconfigData;
         let mut key = [0u8; MEDIUM_READ_SIZE];
         let mut value = [0u8; DATA_READ_SIZE];
@@ -2064,21 +1873,16 @@ syscall_test!(
         let value_bytes = b"/dev/sda1\0";
         key[..key_bytes.len()].copy_from_slice(key_bytes);
         value[..value_bytes.len()].copy_from_slice(value_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fsconfig,
-            pid: 789,
-            tid: 789,
-            return_value: 0,
-            data: SyscallEventData {
-                fsconfig: FsconfigData {
+
+        let data = FsconfigData {
                     fd: 7,
                     cmd: 0,
                     key,
                     value,
                     aux: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fsconfig, 789, 0, &data)
     },
     "789 fsconfig(fd: 7, cmd: FSCONFIG_SET_FLAG, key: \"source\", value: \"/dev/sda1\", aux: 0) = 0 (success)\n"
 );
@@ -2087,19 +1891,14 @@ syscall_test!(
     parse_fsmount_success,
     {
         use pinchy_common::FsmountData;
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fsmount,
-            pid: 101,
-            tid: 101,
-            return_value: 8,
-            data: SyscallEventData {
-                fsmount: FsmountData {
-                    fd: 7,
-                    flags: 0,
-                    attr_flags: 0,
-                },
-            },
-        }
+
+        let data = FsmountData {
+            fd: 7,
+            flags: 0,
+            attr_flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fsmount, 101, 8, &data)
     },
     "101 fsmount(fd: 7, flags: 0, attr_flags: 0) = 8 (fd)\n"
 );
@@ -2111,19 +1910,14 @@ syscall_test!(
         let mut path = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/mnt/test\0";
         path[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fspick,
-            pid: 202,
-            tid: 202,
-            return_value: 9,
-            data: SyscallEventData {
-                fspick: FspickData {
-                    dfd: -100, // AT_FDCWD
-                    path,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = FspickData {
+            dfd: -100,
+            path,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fspick, 202, 9, &data)
     },
     "202 fspick(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0) = 9 (fd)\n"
 );
@@ -2137,18 +1931,13 @@ syscall_test!(
         let mut fsname = [0u8; DATA_READ_SIZE];
         let name_bytes = b"ext4\0";
         fsname[..name_bytes.len()].copy_from_slice(name_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fsopen,
-            pid: 456,
-            tid: 456,
-            return_value: 7,
-            data: SyscallEventData {
-                fsopen: FsopenData {
-                    fsname,
-                    flags: fs_constants::FSOPEN_CLOEXEC,
-                },
-            },
-        }
+
+        let data = FsopenData {
+            fsname,
+            flags: fs_constants::FSOPEN_CLOEXEC,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fsopen, 456, 7, &data)
     },
     "456 fsopen(fsname: \"ext4\", flags: 0x1 (FSOPEN_CLOEXEC)) = 7 (fd)\n"
 );
@@ -2156,6 +1945,7 @@ syscall_test!(
 syscall_test!(
     parse_fsconfig_with_string_cmd,
     {
+
         use pinchy_common::FsconfigData;
 
         use crate::format_helpers::fs_constants;
@@ -2165,21 +1955,16 @@ syscall_test!(
         let value_bytes = b"/dev/sda1\0";
         key[..key_bytes.len()].copy_from_slice(key_bytes);
         value[..value_bytes.len()].copy_from_slice(value_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fsconfig,
-            pid: 789,
-            tid: 789,
-            return_value: 0,
-            data: SyscallEventData {
-                fsconfig: FsconfigData {
+
+        let data = FsconfigData {
                     fd: 7,
                     cmd: fs_constants::FSCONFIG_SET_STRING,
                     key,
                     value,
                     aux: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fsconfig, 789, 0, &data)
     },
     "789 fsconfig(fd: 7, cmd: FSCONFIG_SET_STRING, key: \"source\", value: \"/dev/sda1\", aux: 0) = 0 (success)\n"
 );
@@ -2187,22 +1972,18 @@ syscall_test!(
 syscall_test!(
     parse_fsmount_with_flags,
     {
+
         use pinchy_common::FsmountData;
 
         use crate::format_helpers::fs_constants;
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fsmount,
-            pid: 101,
-            tid: 101,
-            return_value: 8,
-            data: SyscallEventData {
-                fsmount: FsmountData {
+
+        let data = FsmountData {
                     fd: 7,
                     flags: fs_constants::FSMOUNT_CLOEXEC,
                     attr_flags: libc::MOUNT_ATTR_RDONLY as u32 | libc::MOUNT_ATTR_NOSUID as u32,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fsmount, 101, 8, &data)
     },
     "101 fsmount(fd: 7, flags: 0x1 (FSMOUNT_CLOEXEC), attr_flags: 0x3 (MOUNT_ATTR_RDONLY|MOUNT_ATTR_NOSUID)) = 8 (fd)\n"
 );
@@ -2210,25 +1991,21 @@ syscall_test!(
 syscall_test!(
     parse_fspick_with_flags,
     {
+
         use pinchy_common::FspickData;
 
         use crate::format_helpers::fs_constants;
         let mut path = [0u8; DATA_READ_SIZE];
         let path_bytes = b"/mnt/test\0";
         path[..path_bytes.len()].copy_from_slice(path_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_fspick,
-            pid: 202,
-            tid: 202,
-            return_value: 9,
-            data: SyscallEventData {
-                fspick: FspickData {
-                    dfd: -100, // AT_FDCWD
+
+        let data = FspickData {
+                    dfd: -100,
                     path,
                     flags: fs_constants::FSPICK_CLOEXEC | fs_constants::FSPICK_SYMLINK_NOFOLLOW,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fspick, 202, 9, &data)
     },
     "202 fspick(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0x3 (FSPICK_CLOEXEC|FSPICK_SYMLINK_NOFOLLOW)) = 9 (fd)\n"
 );
@@ -2236,20 +2013,14 @@ syscall_test!(
 syscall_test!(
     parse_fallocate_default_mode,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fallocate,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: SyscallEventData {
-                fallocate: FallocateData {
-                    fd: 5,
-                    mode: 0,
-                    offset: 1024,
-                    size: 4096,
-                },
-            },
-        }
+        let data = FallocateData {
+            fd: 5,
+            mode: 0,
+            offset: 1024,
+            size: 4096,
+        };
+
+        crate::tests::make_compact_test_data(SYS_fallocate, 123, 0, &data)
     },
     "123 fallocate(fd: 5, mode: 0, offset: 1024, size: 4096) = 0 (success)\n"
 );
@@ -2257,20 +2028,14 @@ syscall_test!(
 syscall_test!(
     parse_fallocate_keep_size,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fallocate,
-            pid: 456,
-            tid: 456,
-            return_value: 0,
-            data: SyscallEventData {
-                fallocate: FallocateData {
-                    fd: 8,
-                    mode: libc::FALLOC_FL_KEEP_SIZE,
-                    offset: 0,
-                    size: 2048,
-                },
-            },
-        }
+        let data = FallocateData {
+            fd: 8,
+            mode: libc::FALLOC_FL_KEEP_SIZE,
+            offset: 0,
+            size: 2048,
+        };
+
+        crate::tests::make_compact_test_data(SYS_fallocate, 456, 0, &data)
     },
     "456 fallocate(fd: 8, mode: 0x1 (FALLOC_FL_KEEP_SIZE), offset: 0, size: 2048) = 0 (success)\n"
 );
@@ -2278,20 +2043,14 @@ syscall_test!(
 syscall_test!(
     parse_fallocate_punch_hole,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fallocate,
-            pid: 789,
-            tid: 789,
-            return_value: 0,
-            data: SyscallEventData {
-                fallocate: FallocateData {
+        let data = FallocateData {
                     fd: 12,
                     mode: libc::FALLOC_FL_PUNCH_HOLE | libc::FALLOC_FL_KEEP_SIZE,
                     offset: 512,
                     size: 1024,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_fallocate, 789, 0, &data)
     },
     "789 fallocate(fd: 12, mode: 0x3 (FALLOC_FL_KEEP_SIZE|FALLOC_FL_PUNCH_HOLE), offset: 512, size: 1024) = 0 (success)\n"
 );
@@ -2299,20 +2058,14 @@ syscall_test!(
 syscall_test!(
     parse_fallocate_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fallocate,
-            pid: 999,
-            tid: 999,
-            return_value: -1,
-            data: SyscallEventData {
-                fallocate: FallocateData {
+        let data = FallocateData {
                     fd: 3,
                     mode: libc::FALLOC_FL_ZERO_RANGE,
                     offset: 100,
                     size: 500,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_fallocate, 999, -1, &data)
     },
     "999 fallocate(fd: 3, mode: 0x10 (FALLOC_FL_ZERO_RANGE), offset: 100, size: 500) = -1 (error)\n"
 );
@@ -2327,15 +2080,10 @@ syscall_test!(
         let newpath_bytes = b"/new/link\0";
         oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
         newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
-        SyscallEvent {
-            syscall_nr: SYS_link,
-            pid: 800,
-            tid: 801,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                link: LinkData { oldpath, newpath },
-            },
-        }
+
+        let data = LinkData { oldpath, newpath };
+
+        crate::tests::make_compact_test_data(SYS_link, 801, 0, &data)
     },
     "801 link(oldpath: \"/old/file\", newpath: \"/new/link\") = 0 (success)\n"
 );
@@ -2350,20 +2098,15 @@ syscall_test!(
         let newpath_bytes = b"/link\0";
         oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
         newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
-        SyscallEvent {
-            syscall_nr: SYS_link,
-            pid: 800,
-            tid: 801,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                link: LinkData { oldpath, newpath },
-            },
-        }
+
+        let data = LinkData { oldpath, newpath };
+
+        crate::tests::make_compact_test_data(SYS_link, 801, -1, &data)
     },
     "801 link(oldpath: \"/nonexistent\", newpath: \"/link\") = -1 (error)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_linkat,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -2386,7 +2129,7 @@ syscall_compact_test!(
     "901 linkat(olddirfd: AT_FDCWD, oldpath: \"file.txt\", newdirfd: AT_FDCWD, newpath: \"link.txt\", flags: 0) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_linkat_with_flags,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -2409,7 +2152,7 @@ syscall_compact_test!(
     "951 linkat(olddirfd: 5, oldpath: \"symlink\", newdirfd: 6, newpath: \"hardlink\", flags: AT_SYMLINK_FOLLOW (0x400)) = 0 (success)\n"
 );
 
-syscall_compact_test!(
+syscall_test!(
     parse_linkat_error,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -2437,18 +2180,12 @@ syscall_compact_test!(
 syscall_test!(
     parse_fanotify_init_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fanotify_init,
-            pid: 9000,
-            tid: 9000,
-            return_value: 3,
-            data: SyscallEventData {
-                fanotify_init: FanotifyInitData {
-                    flags: 0,
-                    event_f_flags: libc::O_RDONLY as u32,
-                },
-            },
-        }
+        let data = FanotifyInitData {
+            flags: 0,
+            event_f_flags: libc::O_RDONLY as u32,
+        };
+
+        crate::tests::make_compact_test_data(SYS_fanotify_init, 9000, 3, &data)
     },
     "9000 fanotify_init(flags: 0, event_f_flags: 0x0 (O_RDONLY)) = 3 (fd)\n"
 );
@@ -2456,18 +2193,12 @@ syscall_test!(
 syscall_test!(
     parse_fanotify_init_with_flags,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fanotify_init,
-            pid: 9001,
-            tid: 9001,
-            return_value: 4,
-            data: SyscallEventData {
-                fanotify_init: FanotifyInitData {
+        let data = FanotifyInitData {
                     flags: libc::FAN_CLOEXEC | libc::FAN_NONBLOCK,
                     event_f_flags: (libc::O_RDONLY | libc::O_CLOEXEC | libc::O_NONBLOCK) as u32,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_fanotify_init, 9001, 4, &data)
     },
     "9001 fanotify_init(flags: 0x3 (CLASS_NOTIF|CLOEXEC|NONBLOCK), event_f_flags: 0x80800 (O_RDONLY|O_NONBLOCK|O_CLOEXEC|O_NDELAY)) = 4 (fd)\n"
 );
@@ -2475,18 +2206,12 @@ syscall_test!(
 syscall_test!(
     parse_fanotify_init_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fanotify_init,
-            pid: 9002,
-            tid: 9002,
-            return_value: -1,
-            data: SyscallEventData {
-                fanotify_init: FanotifyInitData {
-                    flags: 0,
-                    event_f_flags: libc::O_RDONLY as u32,
-                },
-            },
-        }
+        let data = FanotifyInitData {
+            flags: 0,
+            event_f_flags: libc::O_RDONLY as u32,
+        };
+
+        crate::tests::make_compact_test_data(SYS_fanotify_init, 9002, -1, &data)
     },
     "9002 fanotify_init(flags: 0, event_f_flags: 0x0 (O_RDONLY)) = -1 (error)\n"
 );
@@ -2494,25 +2219,20 @@ syscall_test!(
 syscall_test!(
     parse_fanotify_mark_success,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/watch";
         pathname[..path.len()].copy_from_slice(path);
 
-        SyscallEvent {
-            syscall_nr: SYS_fanotify_mark,
-            pid: 9100,
-            tid: 9100,
-            return_value: 0,
-            data: SyscallEventData {
-                fanotify_mark: FanotifyMarkData {
+        let data = FanotifyMarkData {
                     fanotify_fd: 3,
                     flags: libc::FAN_MARK_ADD,
                     mask: libc::FAN_ACCESS | libc::FAN_MODIFY,
                     dirfd: libc::AT_FDCWD,
                     pathname,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_fanotify_mark, 9100, 0, &data)
     },
     "9100 fanotify_mark(fanotify_fd: 3, flags: 0x1 (INODE|ADD), mask: 0x3 (ACCESS|MODIFY), dirfd: AT_FDCWD, pathname: \"/tmp/watch\") = 0 (success)\n"
 );
@@ -2520,25 +2240,20 @@ syscall_test!(
 syscall_test!(
     parse_fanotify_mark_with_dirfd,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"subdir/file.txt";
         pathname[..path.len()].copy_from_slice(path);
 
-        SyscallEvent {
-            syscall_nr: SYS_fanotify_mark,
-            pid: 9101,
-            tid: 9101,
-            return_value: 0,
-            data: SyscallEventData {
-                fanotify_mark: FanotifyMarkData {
+        let data = FanotifyMarkData {
                     fanotify_fd: 4,
                     flags: libc::FAN_MARK_ADD | libc::FAN_MARK_DONT_FOLLOW,
                     mask: libc::FAN_OPEN | libc::FAN_CLOSE_WRITE,
                     dirfd: 5,
                     pathname,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_fanotify_mark, 9101, 0, &data)
     },
     "9101 fanotify_mark(fanotify_fd: 4, flags: 0x5 (INODE|ADD|DONT_FOLLOW), mask: 0x28 (CLOSE_WRITE|OPEN), dirfd: 5, pathname: \"subdir/file.txt\") = 0 (success)\n"
 );
@@ -2546,23 +2261,18 @@ syscall_test!(
 syscall_test!(
     parse_fanotify_mark_error,
     {
+
         let pathname = [0u8; DATA_READ_SIZE];
 
-        SyscallEvent {
-            syscall_nr: SYS_fanotify_mark,
-            pid: 9102,
-            tid: 9102,
-            return_value: -9,
-            data: SyscallEventData {
-                fanotify_mark: FanotifyMarkData {
+        let data = FanotifyMarkData {
                     fanotify_fd: 999,
                     flags: libc::FAN_MARK_ADD,
                     mask: libc::FAN_ACCESS,
                     dirfd: libc::AT_FDCWD,
                     pathname,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_fanotify_mark, 9102, -9, &data)
     },
     "9102 fanotify_mark(fanotify_fd: 999, flags: 0x1 (INODE|ADD), mask: 0x1 (ACCESS), dirfd: AT_FDCWD, pathname: (null)) = -9 (error)\n"
 );
@@ -2570,25 +2280,20 @@ syscall_test!(
 syscall_test!(
     parse_name_to_handle_at_success,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let p = b"/tmp/test_file.txt";
         pathname[..p.len()].copy_from_slice(p);
 
-        SyscallEvent {
-            syscall_nr: SYS_name_to_handle_at,
-            pid: 9200,
-            tid: 9200,
-            return_value: 0,
-            data: SyscallEventData {
-                name_to_handle_at: NameToHandleAtData {
+        let data = NameToHandleAtData {
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     handle: 0x7fff12345678,
                     mount_id: 0x7fff87654321,
                     flags: libc::AT_SYMLINK_FOLLOW,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_name_to_handle_at, 9200, 0, &data)
     },
     "9200 name_to_handle_at(dirfd: AT_FDCWD, pathname: \"/tmp/test_file.txt\", handle: 0x7fff12345678, mount_id: 0x7fff87654321, flags: AT_SYMLINK_FOLLOW (0x400)) = 0 (success)\n"
 );
@@ -2596,23 +2301,18 @@ syscall_test!(
 syscall_test!(
     parse_name_to_handle_at_empty_path,
     {
+
         let pathname = [0u8; DATA_READ_SIZE];
 
-        SyscallEvent {
-            syscall_nr: SYS_name_to_handle_at,
-            pid: 9201,
-            tid: 9201,
-            return_value: 0,
-            data: SyscallEventData {
-                name_to_handle_at: NameToHandleAtData {
+        let data = NameToHandleAtData {
                     dirfd: 5,
                     pathname,
                     handle: 0x7fff00000000,
                     mount_id: 0x7fff11111111,
                     flags: libc::AT_EMPTY_PATH,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_name_to_handle_at, 9201, 0, &data)
     },
     "9201 name_to_handle_at(dirfd: 5, pathname: (null), handle: 0x7fff00000000, mount_id: 0x7fff11111111, flags: AT_EMPTY_PATH (0x1000)) = 0 (success)\n"
 );
@@ -2620,25 +2320,20 @@ syscall_test!(
 syscall_test!(
     parse_name_to_handle_at_error,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let p = b"/nonexistent";
         pathname[..p.len()].copy_from_slice(p);
 
-        SyscallEvent {
-            syscall_nr: SYS_name_to_handle_at,
-            pid: 9202,
-            tid: 9202,
-            return_value: -2,
-            data: SyscallEventData {
-                name_to_handle_at: NameToHandleAtData {
+        let data = NameToHandleAtData {
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     handle: 0,
                     mount_id: 0,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_name_to_handle_at, 9202, -2, &data)
     },
     "9202 name_to_handle_at(dirfd: AT_FDCWD, pathname: \"/nonexistent\", handle: 0x0, mount_id: 0x0, flags: 0) = -2 (error)\n"
 );
@@ -2646,19 +2341,13 @@ syscall_test!(
 syscall_test!(
     parse_open_by_handle_at_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_open_by_handle_at,
-            pid: 9300,
-            tid: 9300,
-            return_value: 7,
-            data: SyscallEventData {
-                open_by_handle_at: OpenByHandleAtData {
-                    mount_fd: 3,
-                    handle: 0x7fff12345678,
-                    flags: libc::O_RDONLY,
-                },
-            },
-        }
+        let data = OpenByHandleAtData {
+            mount_fd: 3,
+            handle: 0x7fff12345678,
+            flags: libc::O_RDONLY,
+        };
+
+        crate::tests::make_compact_test_data(SYS_open_by_handle_at, 9300, 7, &data)
     },
     "9300 open_by_handle_at(mount_fd: 3, handle: 0x7fff12345678, flags: 0x0 (O_RDONLY)) = 7 (fd)\n"
 );
@@ -2666,19 +2355,13 @@ syscall_test!(
 syscall_test!(
     parse_open_by_handle_at_rdwr,
     {
-        SyscallEvent {
-            syscall_nr: SYS_open_by_handle_at,
-            pid: 9301,
-            tid: 9301,
-            return_value: 8,
-            data: SyscallEventData {
-                open_by_handle_at: OpenByHandleAtData {
+        let data = OpenByHandleAtData {
                     mount_fd: libc::AT_FDCWD,
                     handle: 0x7fff87654321,
                     flags: libc::O_RDWR | libc::O_CLOEXEC,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_open_by_handle_at, 9301, 8, &data)
     },
     "9301 open_by_handle_at(mount_fd: AT_FDCWD, handle: 0x7fff87654321, flags: 0x80002 (O_RDWR|O_CLOEXEC)) = 8 (fd)\n"
 );
@@ -2686,19 +2369,13 @@ syscall_test!(
 syscall_test!(
     parse_open_by_handle_at_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_open_by_handle_at,
-            pid: 9302,
-            tid: 9302,
-            return_value: -1,
-            data: SyscallEventData {
-                open_by_handle_at: OpenByHandleAtData {
+        let data = OpenByHandleAtData {
                     mount_fd: 999,
                     handle: 0xbadbadbad,
                     flags: libc::O_RDONLY,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_open_by_handle_at, 9302, -1, &data)
     },
     "9302 open_by_handle_at(mount_fd: 999, handle: 0xbadbadbad, flags: 0x0 (O_RDONLY)) = -1 (error)\n"
 );
@@ -2706,13 +2383,7 @@ syscall_test!(
 syscall_test!(
     parse_copy_file_range_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_copy_file_range,
-            pid: 9400,
-            tid: 9400,
-            return_value: 4096,
-            data: SyscallEventData {
-                copy_file_range: CopyFileRangeData {
+        let data = CopyFileRangeData {
                     fd_in: 3,
                     off_in: 0x1000,
                     off_in_is_null: 0,
@@ -2721,9 +2392,9 @@ syscall_test!(
                     off_out_is_null: 0,
                     len: 4096,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_copy_file_range, 9400, 4096, &data)
     },
     "9400 copy_file_range(fd_in: 3, off_in: 4096, fd_out: 4, off_out: 8192, len: 4096, flags: 0) = 4096 (bytes)\n"
 );
@@ -2731,13 +2402,7 @@ syscall_test!(
 syscall_test!(
     parse_copy_file_range_null_offsets,
     {
-        SyscallEvent {
-            syscall_nr: SYS_copy_file_range,
-            pid: 9401,
-            tid: 9401,
-            return_value: 1024,
-            data: SyscallEventData {
-                copy_file_range: CopyFileRangeData {
+        let data = CopyFileRangeData {
                     fd_in: 5,
                     off_in: 0,
                     off_in_is_null: 1,
@@ -2746,9 +2411,9 @@ syscall_test!(
                     off_out_is_null: 1,
                     len: 8192,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_copy_file_range, 9401, 1024, &data)
     },
     "9401 copy_file_range(fd_in: 5, off_in: NULL, fd_out: 6, off_out: NULL, len: 8192, flags: 0) = 1024 (bytes)\n"
 );
@@ -2756,13 +2421,7 @@ syscall_test!(
 syscall_test!(
     parse_copy_file_range_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_copy_file_range,
-            pid: 9402,
-            tid: 9402,
-            return_value: -1,
-            data: SyscallEventData {
-                copy_file_range: CopyFileRangeData {
+        let data = CopyFileRangeData {
                     fd_in: 999,
                     off_in: 0,
                     off_in_is_null: 1,
@@ -2771,9 +2430,9 @@ syscall_test!(
                     off_out_is_null: 1,
                     len: 0,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_copy_file_range, 9402, -1, &data)
     },
     "9402 copy_file_range(fd_in: 999, off_in: NULL, fd_out: 998, off_out: NULL, len: 0, flags: 0) = -1 (error)\n"
 );
@@ -2781,20 +2440,14 @@ syscall_test!(
 syscall_test!(
     parse_sync_file_range_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_sync_file_range,
-            pid: 9500,
-            tid: 9500,
-            return_value: 0,
-            data: SyscallEventData {
-                sync_file_range: SyncFileRangeData {
+        let data = SyncFileRangeData {
                     fd: 3,
                     offset: 0,
                     nbytes: 4096,
                     flags: libc::SYNC_FILE_RANGE_WRITE,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_sync_file_range, 9500, 0, &data)
     },
     "9500 sync_file_range(fd: 3, offset: 0, nbytes: 4096, flags: 0x2 (SYNC_FILE_RANGE_WRITE)) = 0 (success)\n"
 );
@@ -2802,22 +2455,16 @@ syscall_test!(
 syscall_test!(
     parse_sync_file_range_all_flags,
     {
-        SyscallEvent {
-            syscall_nr: SYS_sync_file_range,
-            pid: 9501,
-            tid: 9501,
-            return_value: 0,
-            data: SyscallEventData {
-                sync_file_range: SyncFileRangeData {
+        let data = SyncFileRangeData {
                     fd: 5,
                     offset: 1024,
                     nbytes: 8192,
                     flags: libc::SYNC_FILE_RANGE_WAIT_BEFORE
                         | libc::SYNC_FILE_RANGE_WRITE
                         | libc::SYNC_FILE_RANGE_WAIT_AFTER,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_sync_file_range, 9501, 0, &data)
     },
     "9501 sync_file_range(fd: 5, offset: 1024, nbytes: 8192, flags: 0x7 (SYNC_FILE_RANGE_WAIT_BEFORE|SYNC_FILE_RANGE_WRITE|SYNC_FILE_RANGE_WAIT_AFTER)) = 0 (success)\n"
 );
@@ -2825,20 +2472,14 @@ syscall_test!(
 syscall_test!(
     parse_sync_file_range_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_sync_file_range,
-            pid: 9502,
-            tid: 9502,
-            return_value: -9,
-            data: SyscallEventData {
-                sync_file_range: SyncFileRangeData {
-                    fd: 999,
-                    offset: 0,
-                    nbytes: 0,
-                    flags: 0,
-                },
-            },
-        }
+        let data = SyncFileRangeData {
+            fd: 999,
+            offset: 0,
+            nbytes: 0,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(SYS_sync_file_range, 9502, -9, &data)
     },
     "9502 sync_file_range(fd: 999, offset: 0, nbytes: 0, flags: 0) = -9 (error)\n"
 );
@@ -2846,15 +2487,9 @@ syscall_test!(
 syscall_test!(
     parse_syncfs_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_syncfs,
-            pid: 9600,
-            tid: 9600,
-            return_value: 0,
-            data: SyscallEventData {
-                syncfs: SyncfsData { fd: 3 },
-            },
-        }
+        let data = SyncfsData { fd: 3 };
+
+        crate::tests::make_compact_test_data(SYS_syncfs, 9600, 0, &data)
     },
     "9600 syncfs(fd: 3) = 0 (success)\n"
 );
@@ -2862,15 +2497,9 @@ syscall_test!(
 syscall_test!(
     parse_syncfs_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_syncfs,
-            pid: 9601,
-            tid: 9601,
-            return_value: -9,
-            data: SyscallEventData {
-                syncfs: SyncfsData { fd: 999 },
-            },
-        }
+        let data = SyncfsData { fd: 999 };
+
+        crate::tests::make_compact_test_data(SYS_syncfs, 9601, -9, &data)
     },
     "9601 syncfs(fd: 999) = -9 (error)\n"
 );
@@ -2878,17 +2507,12 @@ syscall_test!(
 syscall_test!(
     parse_utimensat_success,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let p = b"/tmp/file.txt";
         pathname[..p.len()].copy_from_slice(p);
 
-        SyscallEvent {
-            syscall_nr: SYS_utimensat,
-            pid: 9700,
-            tid: 9700,
-            return_value: 0,
-            data: SyscallEventData {
-                utimensat: UtimensatData {
+        let data = UtimensatData {
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     times: [
@@ -2903,9 +2527,9 @@ syscall_test!(
                     ],
                     times_is_null: 0,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_utimensat, 9700, 0, &data)
     },
     "9700 utimensat(dirfd: AT_FDCWD, pathname: \"/tmp/file.txt\", times: [{secs: 1234567890, nanos: 123456789}, {secs: 1234567891, nanos: 987654321}], flags: 0) = 0 (success)\n"
 );
@@ -2913,25 +2537,20 @@ syscall_test!(
 syscall_test!(
     parse_utimensat_null_times,
     {
+
         let mut pathname = [0u8; DATA_READ_SIZE];
         let p = b"/var/log/app.log";
         pathname[..p.len()].copy_from_slice(p);
 
-        SyscallEvent {
-            syscall_nr: SYS_utimensat,
-            pid: 9701,
-            tid: 9701,
-            return_value: 0,
-            data: SyscallEventData {
-                utimensat: UtimensatData {
+        let data = UtimensatData {
                     dirfd: 5,
                     pathname,
                     times: [Timespec::default(); 2],
                     times_is_null: 1,
                     flags: libc::AT_SYMLINK_NOFOLLOW,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_utimensat, 9701, 0, &data)
     },
     "9701 utimensat(dirfd: 5, pathname: \"/var/log/app.log\", times: NULL, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
 );
@@ -2939,19 +2558,14 @@ syscall_test!(
 syscall_test!(
     parse_utimensat_error,
     {
+
         use crate::format_helpers::time_constants;
 
         let mut pathname = [0u8; DATA_READ_SIZE];
         let p = b"/nonexistent";
         pathname[..p.len()].copy_from_slice(p);
 
-        SyscallEvent {
-            syscall_nr: SYS_utimensat,
-            pid: 9702,
-            tid: 9702,
-            return_value: -2,
-            data: SyscallEventData {
-                utimensat: UtimensatData {
+        let data = UtimensatData {
                     dirfd: libc::AT_FDCWD,
                     pathname,
                     times: [
@@ -2966,9 +2580,9 @@ syscall_test!(
                     ],
                     times_is_null: 0,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_utimensat, 9702, -2, &data)
     },
     "9702 utimensat(dirfd: AT_FDCWD, pathname: \"/nonexistent\", times: [UTIME_NOW, UTIME_OMIT], flags: 0) = -2 (error)\n"
 );
@@ -2977,24 +2591,16 @@ syscall_test!(
     parse_quotactl_getquota,
     {
         use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_quotactl,
-            pid: 10001,
-            tid: 10001,
-            return_value: 0,
-            data: SyscallEventData {
-                quotactl: QuotactlData {
-                    op: pinchy_common::Q_GETQUOTA,
-                    special: [0u8; MEDIUM_READ_SIZE],
-                    id: 1000,
-                    addr: 0x7fff87654321,
-                },
-            },
+        let mut data = QuotactlData {
+            op: pinchy_common::Q_GETQUOTA,
+            special: [0u8; MEDIUM_READ_SIZE],
+            id: 1000,
+            addr: 0x7fff87654321,
         };
         let special = b"/dev/sda1\0";
-        let data = unsafe { &mut event.data.quotactl };
         data.special[..special.len()].copy_from_slice(special);
-        event
+
+        crate::tests::make_compact_test_data(SYS_quotactl, 10001, 0, &data)
     },
     "10001 quotactl(op: 0x800007 (QCMD(Q_GETQUOTA, USRQUOTA)), special: \"/dev/sda1\", id: 1000, addr: 0x7fff87654321) = 0 (success)\n"
 );
@@ -3003,24 +2609,16 @@ syscall_test!(
     parse_quotactl_getnextquota,
     {
         use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_quotactl,
-            pid: 10002,
-            tid: 10002,
-            return_value: 0,
-            data: SyscallEventData {
-                quotactl: QuotactlData {
-                    op: pinchy_common::Q_GETNEXTQUOTA,
-                    special: [0u8; MEDIUM_READ_SIZE],
-                    id: 100,
-                    addr: 0x7fff00002000,
-                },
-            },
+        let mut data = QuotactlData {
+            op: pinchy_common::Q_GETNEXTQUOTA,
+            special: [0u8; MEDIUM_READ_SIZE],
+            id: 100,
+            addr: 0x7fff00002000,
         };
         let special = b"/dev/sdb1\0";
-        let data = unsafe { &mut event.data.quotactl };
         data.special[..special.len()].copy_from_slice(special);
-        event
+
+        crate::tests::make_compact_test_data(SYS_quotactl, 10002, 0, &data)
     },
     "10002 quotactl(op: 0x800009 (QCMD(Q_GETNEXTQUOTA, USRQUOTA)), special: \"/dev/sdb1\", id: 100, addr: 0x7fff00002000) = 0 (success)\n"
 );
@@ -3029,24 +2627,16 @@ syscall_test!(
     parse_quotactl_sync,
     {
         use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_quotactl,
-            pid: 10003,
-            tid: 10003,
-            return_value: 0,
-            data: SyscallEventData {
-                quotactl: QuotactlData {
-                    op: pinchy_common::Q_SYNC,
-                    special: [0u8; MEDIUM_READ_SIZE],
-                    id: 0,
-                    addr: 0,
-                },
-            },
+        let mut data = QuotactlData {
+            op: pinchy_common::Q_SYNC,
+            special: [0u8; MEDIUM_READ_SIZE],
+            id: 0,
+            addr: 0,
         };
         let special = b"/\0";
-        let data = unsafe { &mut event.data.quotactl };
         data.special[..special.len()].copy_from_slice(special);
-        event
+
+        crate::tests::make_compact_test_data(SYS_quotactl, 10003, 0, &data)
     },
     "10003 quotactl(op: 0x800001 (QCMD(Q_SYNC, USRQUOTA)), special: \"/\", id: 0, addr: 0x0) = 0 (success)\n"
 );
@@ -3055,24 +2645,16 @@ syscall_test!(
     parse_quotactl_error,
     {
         use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_quotactl,
-            pid: 10004,
-            tid: 10004,
-            return_value: -1,
-            data: SyscallEventData {
-                quotactl: QuotactlData {
-                    op: pinchy_common::Q_GETINFO,
-                    special: [0u8; MEDIUM_READ_SIZE],
-                    id: 500,
-                    addr: 0x7fff00003000,
-                },
-            },
+        let mut data = QuotactlData {
+            op: pinchy_common::Q_GETINFO,
+            special: [0u8; MEDIUM_READ_SIZE],
+            id: 500,
+            addr: 0x7fff00003000,
         };
         let special = b"/dev/sdc1\0";
-        let data = unsafe { &mut event.data.quotactl };
         data.special[..special.len()].copy_from_slice(special);
-        event
+
+        crate::tests::make_compact_test_data(SYS_quotactl, 10004, -1, &data)
     },
     "10004 quotactl(op: 0x800005 (QCMD(Q_GETINFO, USRQUOTA)), special: \"/dev/sdc1\", id: 500, addr: 0x7fff00003000) = -1 (error)\n"
 );
@@ -3080,20 +2662,14 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_fd_getquota,
     {
-        SyscallEvent {
-            syscall_nr: SYS_quotactl_fd,
-            pid: 10005,
-            tid: 10005,
-            return_value: 0,
-            data: SyscallEventData {
-                quotactl_fd: QuotactlFdData {
+        let data = QuotactlFdData {
                     fd: 3,
                     cmd: pinchy_common::Q_GETQUOTA as u32,
                     id: 1000,
                     addr: 0x7fff12340000,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_quotactl_fd, 10005, 0, &data)
     },
     "10005 quotactl_fd(fd: 3, cmd: 0x800007 (QCMD(Q_GETQUOTA, USRQUOTA)), id: 1000, addr: 0x7fff12340000) = 0 (success)\n"
 );
@@ -3101,20 +2677,14 @@ syscall_test!(
 syscall_test!(
     parse_quotactl_fd_xfs,
     {
-        SyscallEvent {
-            syscall_nr: SYS_quotactl_fd,
-            pid: 10006,
-            tid: 10006,
-            return_value: 0,
-            data: SyscallEventData {
-                quotactl_fd: QuotactlFdData {
+        let data = QuotactlFdData {
                     fd: 5,
                     cmd: pinchy_common::Q_XGETQUOTA as u32,
                     id: 2000,
                     addr: 0x7fff56780000,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_quotactl_fd, 10006, 0, &data)
     },
     "10006 quotactl_fd(fd: 5, cmd: 0x5803 (Q_XGETQUOTA), id: 2000, addr: 0x7fff56780000) = 0 (success)\n"
 );
@@ -3123,26 +2693,16 @@ syscall_test!(
     parse_quotactl_getquota_grpquota,
     {
         use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
-        // Test QCMD(Q_GETQUOTA, GRPQUOTA) = (0x800007 << 8) | 1 = 0x80000701
-        // Note: This wraps to a negative i32 value
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_quotactl,
-            pid: 10007,
-            tid: 10007,
-            return_value: 0,
-            data: SyscallEventData {
-                quotactl: QuotactlData {
-                    op: (((pinchy_common::Q_GETQUOTA as i64) << 8) | 1) as i32,
-                    special: [0u8; MEDIUM_READ_SIZE],
-                    id: 500,
-                    addr: 0x7fff11111111,
-                },
-            },
+        let mut data = QuotactlData {
+            op: (((pinchy_common::Q_GETQUOTA as i64) << 8) | 1) as i32,
+            special: [0u8; MEDIUM_READ_SIZE],
+            id: 500,
+            addr: 0x7fff11111111,
         };
         let special = b"/dev/sda1\0";
-        let data = unsafe { &mut event.data.quotactl };
         data.special[..special.len()].copy_from_slice(special);
-        event
+
+        crate::tests::make_compact_test_data(SYS_quotactl, 10007, 0, &data)
     },
     "10007 quotactl(op: 0x80000701 (QCMD(Q_GETQUOTA, GRPQUOTA)), special: \"/dev/sda1\", id: 500, addr: 0x7fff11111111) = 0 (success)\n"
 );
@@ -3151,26 +2711,16 @@ syscall_test!(
     parse_quotactl_setquota_prjquota,
     {
         use pinchy_common::{MEDIUM_READ_SIZE, QuotactlData};
-        // Test QCMD(Q_SETQUOTA, PRJQUOTA) = (0x800008 << 8) | 2 = 0x80000802
-        // Note: This wraps to a negative i32 value
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_quotactl,
-            pid: 10008,
-            tid: 10008,
-            return_value: 0,
-            data: SyscallEventData {
-                quotactl: QuotactlData {
-                    op: (((pinchy_common::Q_SETQUOTA as i64) << 8) | 2) as i32,
-                    special: [0u8; MEDIUM_READ_SIZE],
-                    id: 1001,
-                    addr: 0x7fff22222222,
-                },
-            },
+        let mut data = QuotactlData {
+            op: (((pinchy_common::Q_SETQUOTA as i64) << 8) | 2) as i32,
+            special: [0u8; MEDIUM_READ_SIZE],
+            id: 1001,
+            addr: 0x7fff22222222,
         };
         let special = b"/dev/sdc1\0";
-        let data = unsafe { &mut event.data.quotactl };
         data.special[..special.len()].copy_from_slice(special);
-        event
+
+        crate::tests::make_compact_test_data(SYS_quotactl, 10008, 0, &data)
     },
     "10008 quotactl(op: 0x80000802 (QCMD(Q_SETQUOTA, PRJQUOTA)), special: \"/dev/sdc1\", id: 1001, addr: 0x7fff22222222) = 0 (success)\n"
 );
@@ -3178,19 +2728,13 @@ syscall_test!(
 syscall_test!(
     parse_lookup_dcookie_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_lookup_dcookie,
-            pid: 123,
-            tid: 123,
-            return_value: 10,
-            data: SyscallEventData {
-                lookup_dcookie: LookupDcookieData {
+        let data = LookupDcookieData {
                     cookie: 0x123456789abcdef0,
                     buffer: *b"/proc/sys\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                     size: 64,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_lookup_dcookie, 123, 10, &data)
     },
     "123 lookup_dcookie(cookie: 1311768467463790320, buffer: \"/proc/sys\", size: 64) = 10 (bytes)\n"
 );
@@ -3198,19 +2742,13 @@ syscall_test!(
 syscall_test!(
     parse_lookup_dcookie_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_lookup_dcookie,
-            pid: 123,
-            tid: 123,
-            return_value: -1,
-            data: SyscallEventData {
-                lookup_dcookie: LookupDcookieData {
-                    cookie: 0x123456789abcdef0,
-                    buffer: [0; MEDIUM_READ_SIZE],
-                    size: 64,
-                },
-            },
-        }
+        let data = LookupDcookieData {
+            cookie: 0x123456789abcdef0,
+            buffer: [0; MEDIUM_READ_SIZE],
+            size: 64,
+        };
+
+        crate::tests::make_compact_test_data(SYS_lookup_dcookie, 123, -1, &data)
     },
     "123 lookup_dcookie(cookie: 1311768467463790320, buffer: \"\", size: 64) = -1 (error)\n"
 );
@@ -3218,19 +2756,13 @@ syscall_test!(
 syscall_test!(
     parse_nfsservctl_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_nfsservctl,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: SyscallEventData {
-                nfsservctl: NfsservctlData {
-                    cmd: 1,
-                    argp: 0x7fff1000,
-                    resp: 0x7fff2000,
-                },
-            },
-        }
+        let data = NfsservctlData {
+            cmd: 1,
+            argp: 0x7fff1000,
+            resp: 0x7fff2000,
+        };
+
+        crate::tests::make_compact_test_data(SYS_nfsservctl, 123, 0, &data)
     },
     "123 nfsservctl(cmd: 1, argp: 0x7fff1000, resp: 0x7fff2000) = 0 (success)\n"
 );
@@ -3239,15 +2771,10 @@ syscall_test!(
 syscall_test!(
     parse_utime_with_times,
     {
+
         use pinchy_common::kernel_types::Utimbuf;
 
-        SyscallEvent {
-            syscall_nr: SYS_utime,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: SyscallEventData {
-                utime: UtimeData {
+        let data = UtimeData {
                     filename: {
                         let mut filename = [0u8; DATA_READ_SIZE];
                         let name = b"/tmp/foo";
@@ -3260,9 +2787,9 @@ syscall_test!(
                         modtime: 1234567900,
                     },
                     times_is_null: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_utime, 123, 0, &data)
     },
     "123 utime(filename: \"/tmp/foo\", times: {actime: 1234567890, modtime: 1234567900}) = 0 (success)\n"
 );
@@ -3273,25 +2800,19 @@ syscall_test!(
     {
         use pinchy_common::kernel_types::Utimbuf;
 
-        SyscallEvent {
-            syscall_nr: SYS_utime,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: SyscallEventData {
-                utime: UtimeData {
-                    filename: {
-                        let mut filename = [0u8; DATA_READ_SIZE];
-                        let name = b"/tmp/bar";
-                        filename[..name.len()].copy_from_slice(name);
+        let data = UtimeData {
+            filename: {
+                let mut filename = [0u8; DATA_READ_SIZE];
+                let name = b"/tmp/bar";
+                filename[..name.len()].copy_from_slice(name);
 
-                        filename
-                    },
-                    times: Utimbuf::default(),
-                    times_is_null: 1,
-                },
+                filename
             },
-        }
+            times: Utimbuf::default(),
+            times_is_null: 1,
+        };
+
+        crate::tests::make_compact_test_data(SYS_utime, 123, 0, &data)
     },
     "123 utime(filename: \"/tmp/bar\", times: NULL) = 0 (success)\n"
 );
@@ -3300,18 +2821,12 @@ syscall_test!(
 syscall_test!(
     parse_access_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_access,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: SyscallEventData {
-                access: AccessData {
-                    pathname: *b"/tmp/foo",
-                    mode: libc::R_OK | libc::W_OK,
-                },
-            },
-        }
+        let data = AccessData {
+            pathname: *b"/tmp/foo",
+            mode: libc::R_OK | libc::W_OK,
+        };
+
+        crate::tests::make_compact_test_data(SYS_access, 123, 0, &data)
     },
     "123 access(pathname: \"/tmp/foo\" ... (truncated), mode: R_OK|W_OK) = 0 (success)\n"
 );
@@ -3320,18 +2835,12 @@ syscall_test!(
 syscall_test!(
     parse_access_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_access,
-            pid: 124,
-            tid: 124,
-            return_value: -1,
-            data: SyscallEventData {
-                access: AccessData {
-                    pathname: *b"/root/.s",
-                    mode: libc::X_OK,
-                },
-            },
-        }
+        let data = AccessData {
+            pathname: *b"/root/.s",
+            mode: libc::X_OK,
+        };
+
+        crate::tests::make_compact_test_data(SYS_access, 124, -1, &data)
     },
     "124 access(pathname: \"/root/.s\" ... (truncated), mode: X_OK) = -1 (error)\n"
 );
@@ -3340,18 +2849,12 @@ syscall_test!(
 syscall_test!(
     parse_access_f_ok,
     {
-        SyscallEvent {
-            syscall_nr: SYS_access,
-            pid: 125,
-            tid: 125,
-            return_value: 0,
-            data: SyscallEventData {
-                access: AccessData {
-                    pathname: *b"/tmp/tes",
-                    mode: libc::F_OK,
-                },
-            },
-        }
+        let data = AccessData {
+            pathname: *b"/tmp/tes",
+            mode: libc::F_OK,
+        };
+
+        crate::tests::make_compact_test_data(SYS_access, 125, 0, &data)
     },
     "125 access(pathname: \"/tmp/tes\" ... (truncated), mode: F_OK) = 0 (success)\n"
 );
@@ -3360,18 +2863,12 @@ syscall_test!(
 syscall_test!(
     parse_chmod_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_chmod,
-            pid: 126,
-            tid: 126,
-            return_value: 0,
-            data: SyscallEventData {
-                chmod: ChmodData {
-                    pathname: *b"/tmp/foo",
-                    mode: 0o755,
-                },
-            },
-        }
+        let data = ChmodData {
+            pathname: *b"/tmp/foo",
+            mode: 0o755,
+        };
+
+        crate::tests::make_compact_test_data(SYS_chmod, 126, 0, &data)
     },
     "126 chmod(pathname: \"/tmp/foo\" ... (truncated), mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
 );
@@ -3380,18 +2877,12 @@ syscall_test!(
 syscall_test!(
     parse_creat_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_creat,
-            pid: 127,
-            tid: 127,
-            return_value: 3,
-            data: SyscallEventData {
-                creat: CreatData {
-                    pathname: *b"/tmp/new",
-                    mode: 0o644,
-                },
-            },
-        }
+        let data = CreatData {
+            pathname: *b"/tmp/new",
+            mode: 0o644,
+        };
+
+        crate::tests::make_compact_test_data(SYS_creat, 127, 3, &data)
     },
     "127 creat(pathname: \"/tmp/new\" ... (truncated), mode: 0o644 (rw-r--r--)) = 3 (fd)\n"
 );
@@ -3400,18 +2891,12 @@ syscall_test!(
 syscall_test!(
     parse_mkdir_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_mkdir,
-            pid: 128,
-            tid: 128,
-            return_value: 0,
-            data: SyscallEventData {
-                mkdir: MkdirData {
-                    pathname: *b"/tmp/dir",
-                    mode: 0o755,
-                },
-            },
-        }
+        let data = MkdirData {
+            pathname: *b"/tmp/dir",
+            mode: 0o755,
+        };
+
+        crate::tests::make_compact_test_data(SYS_mkdir, 128, 0, &data)
     },
     "128 mkdir(pathname: \"/tmp/dir\" ... (truncated), mode: 0o755 (rwxr-xr-x)) = 0 (success)\n"
 );
@@ -3420,19 +2905,13 @@ syscall_test!(
 syscall_test!(
     parse_readlink_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_readlink,
-            pid: 128,
-            tid: 128,
-            return_value: 8,
-            data: SyscallEventData {
-                readlink: ReadlinkData {
+        let data = ReadlinkData {
                     pathname: *b"/tmp/lnk",
                     buf: *b"/tmp/foo\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0\0",
                     bufsiz: 64,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_readlink, 128, 8, &data)
     },
     "128 readlink(pathname: \"/tmp/lnk\" ... (truncated), buf: \"/tmp/foo\", bufsiz: 64) = 8 (bytes)\n"
 );
@@ -3441,19 +2920,13 @@ syscall_test!(
 syscall_test!(
     parse_readlink_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_readlink,
-            pid: 129,
-            tid: 129,
-            return_value: -1,
-            data: SyscallEventData {
-                readlink: ReadlinkData {
-                    pathname: *b"/tmp/not",
-                    buf: [0; MEDIUM_READ_SIZE],
-                    bufsiz: 64,
-                },
-            },
-        }
+        let data = ReadlinkData {
+            pathname: *b"/tmp/not",
+            buf: [0; MEDIUM_READ_SIZE],
+            bufsiz: 64,
+        };
+
+        crate::tests::make_compact_test_data(SYS_readlink, 129, -1, &data)
     },
     "129 readlink(pathname: \"/tmp/not\" ... (truncated), buf: \"\", bufsiz: 64) = -1 (error)\n"
 );
@@ -3462,20 +2935,12 @@ syscall_test!(
 syscall_test!(
     parse_stat_success,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_stat,
-            pid: 130,
-            tid: 130,
-            return_value: 0,
-            data: SyscallEventData {
-                stat: StatData {
-                    pathname: *b"/tmp/foo",
-                    statbuf: Stat::default(),
-                },
-            },
+        let mut data = StatData {
+            pathname: *b"/tmp/foo",
+            statbuf: Stat::default(),
         };
 
-        let stat_data = unsafe { &mut event.data.stat.statbuf };
+        let stat_data = &mut data.statbuf;
 
         stat_data.st_mode = libc::S_IFREG | 0o644;
         stat_data.st_size = 1024;
@@ -3484,7 +2949,8 @@ syscall_test!(
         stat_data.st_blocks = 8;
         stat_data.st_blksize = 4096;
         stat_data.st_ino = 12345;
-        event
+
+        crate::tests::make_compact_test_data(SYS_stat, 130, 0, &data)
     },
     &"130 stat(pathname: \"/tmp/foo\" ... (truncated), statbuf:, mode: 0o644 (rw-r--r--), ino: 12345, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 1024, blksize: 4096, blocks: 8, atime: 0, mtime: 0, ctime: 0) = 0 (success)\n".to_string()
 );
@@ -3493,20 +2959,12 @@ syscall_test!(
 syscall_test!(
     parse_lstat_success,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_lstat,
-            pid: 131,
-            tid: 131,
-            return_value: 0,
-            data: SyscallEventData {
-                lstat: LstatData {
-                    pathname: *b"/tmp/lnk",
-                    statbuf: Stat::default(),
-                },
-            },
+        let mut data = LstatData {
+            pathname: *b"/tmp/lnk",
+            statbuf: Stat::default(),
         };
 
-        let stat_data = unsafe { &mut event.data.lstat.statbuf };
+        let stat_data = &mut data.statbuf;
 
         stat_data.st_mode = libc::S_IFLNK | 0o777;
         stat_data.st_size = 8;
@@ -3515,7 +2973,8 @@ syscall_test!(
         stat_data.st_blocks = 0;
         stat_data.st_blksize = 4096;
         stat_data.st_ino = 54321;
-        event
+
+        crate::tests::make_compact_test_data(SYS_lstat, 131, 0, &data)
     },
     &"131 lstat(pathname: \"/tmp/lnk\" ... (truncated), statbuf:, mode: 0o777 (rwxrwxrwx), ino: 54321, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 8, blksize: 4096, blocks: 0, atime: 0, mtime: 0, ctime: 0) = 0 (success)\n".to_string()
 );
@@ -3524,15 +2983,10 @@ syscall_test!(
 syscall_test!(
     parse_utimes_with_times,
     {
+
         use pinchy_common::kernel_types::Timeval;
 
-        SyscallEvent {
-            syscall_nr: SYS_utimes,
-            pid: 132,
-            tid: 132,
-            return_value: 0,
-            data: SyscallEventData {
-                utimes: UtimesData {
+        let data = UtimesData {
                     filename: *b"/tmp/foo",
                     times: [
                         Timeval {
@@ -3545,9 +2999,9 @@ syscall_test!(
                         },
                     ],
                     times_is_null: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_utimes, 132, 0, &data)
     },
     "132 utimes(filename: \"/tmp/foo\" ... (truncated), times: [{tv_sec: 1234567890, tv_usec: 123456}, {tv_sec: 1234567900, tv_usec: 654321}]) = 0 (success)\n"
 );
@@ -3558,19 +3012,13 @@ syscall_test!(
     {
         use pinchy_common::kernel_types::Timeval;
 
-        SyscallEvent {
-            syscall_nr: SYS_utimes,
-            pid: 133,
-            tid: 133,
-            return_value: 0,
-            data: SyscallEventData {
-                utimes: UtimesData {
-                    filename: *b"/tmp/bar",
-                    times: [Timeval::default(), Timeval::default()],
-                    times_is_null: 1,
-                },
-            },
-        }
+        let data = UtimesData {
+            filename: *b"/tmp/bar",
+            times: [Timeval::default(), Timeval::default()],
+            times_is_null: 1,
+        };
+
+        crate::tests::make_compact_test_data(SYS_utimes, 133, 0, &data)
     },
     "133 utimes(filename: \"/tmp/bar\" ... (truncated), times: NULL) = 0 (success)\n"
 );
@@ -3579,15 +3027,10 @@ syscall_test!(
 syscall_test!(
     parse_futimesat_with_times,
     {
+
         use pinchy_common::kernel_types::Timeval;
 
-        SyscallEvent {
-            syscall_nr: SYS_futimesat,
-            pid: 134,
-            tid: 134,
-            return_value: 0,
-            data: SyscallEventData {
-                futimesat: FutimesatData {
+        let data = FutimesatData {
                     dirfd: libc::AT_FDCWD,
                     pathname: *b"/tmp/foo",
                     times: [
@@ -3601,9 +3044,9 @@ syscall_test!(
                         },
                     ],
                     times_is_null: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_futimesat, 134, 0, &data)
     },
     "134 futimesat(dirfd: AT_FDCWD, pathname: \"/tmp/foo\" ... (truncated), times: [{tv_sec: 1111111111, tv_usec: 111111}, {tv_sec: 2222222222, tv_usec: 222222}]) = 0 (success)\n"
 );
@@ -3612,15 +3055,10 @@ syscall_test!(
 syscall_test!(
     parse_futimesat_fd,
     {
+
         use pinchy_common::kernel_types::Timeval;
 
-        SyscallEvent {
-            syscall_nr: SYS_futimesat,
-            pid: 135,
-            tid: 135,
-            return_value: 0,
-            data: SyscallEventData {
-                futimesat: FutimesatData {
+        let data = FutimesatData {
                     dirfd: 5,
                     pathname: *b"/tmp/foo",
                     times: [
@@ -3634,9 +3072,9 @@ syscall_test!(
                         },
                     ],
                     times_is_null: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_futimesat, 135, 0, &data)
     },
     "135 futimesat(dirfd: 5, pathname: \"/tmp/foo\" ... (truncated), times: [{tv_sec: 3333333333, tv_usec: 333333}, {tv_sec: 4444444444, tv_usec: 444444}]) = 0 (success)\n"
 );
@@ -3645,22 +3083,12 @@ syscall_test!(
 syscall_test!(
     parse_getdents_success,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_getdents,
-            pid: 200,
-            tid: 200,
-            return_value: 48,
-            data: SyscallEventData {
-                getdents: GetdentsData {
-                    fd: 3,
-                    count: 1024,
-                    dirents: [LinuxDirent::default(); 4],
-                    num_dirents: 2,
-                },
-            },
+        let mut data = GetdentsData {
+            fd: 3,
+            count: 1024,
+            dirents: [LinuxDirent::default(); 4],
+            num_dirents: 2,
         };
-
-        let data = unsafe { &mut event.data.getdents };
 
         data.dirents[0].d_ino = 12345;
         data.dirents[0].d_off = 24;
@@ -3673,7 +3101,7 @@ syscall_test!(
         data.dirents[1].d_name[0] = b'.';
         data.dirents[1].d_name[1] = b'.';
 
-        event
+        crate::tests::make_compact_test_data(SYS_getdents, 200, 48, &data)
     },
     "200 getdents(fd: 3, count: 1024, entries: [ dirent { ino: 12345, off: 24, reclen: 24, name: \".\" }, dirent { ino: 12346, off: 48, reclen: 24, name: \"..\" } ]) = 48 (bytes)\n"
 );

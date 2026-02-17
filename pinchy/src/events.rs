@@ -5,15 +5,15 @@ use std::borrow::Cow;
 
 use log::{error, trace};
 use pinchy_common::{
-    compact_payload_size, kernel_types, syscalls, wire_validation_enabled, ChdirData, CloseData,
-    EpollCtlData, EpollPWait2Data, EpollPWaitData, FaccessatData, FchmodData, FchmodatData,
-    FchownData, FchownatData, FdatasyncData, FgetxattrData, FlistxattrData, FremovexattrData,
-    FsetxattrData, FstatData, FstatfsData, FsyncData, FtruncateData, GetcwdData, GetxattrData,
-    LgetxattrData, LinkatData, ListxattrData, LlistxattrData, LremovexattrData, LseekData,
-    LsetxattrData, MkdiratData, NewfstatatData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData,
-    PreadData, Pselect6Data, PwriteData, ReadData, ReadlinkatData, RemovexattrData, Renameat2Data,
-    RenameatData, SetxattrData, SpliceData, StatfsData, SymlinkatData, SyscallEvent, TeeData,
-    UnlinkatData, VectorIOData, VmspliceData, WireEventHeader, WriteData,
+    kernel_types, syscalls, ChdirData, CloseData, EpollCtlData, EpollPWait2Data, EpollPWaitData,
+    FaccessatData, FchmodData, FchmodatData, FchownData, FchownatData, FdatasyncData,
+    FgetxattrData, FlistxattrData, FremovexattrData, FsetxattrData, FstatData, FstatfsData,
+    FsyncData, FtruncateData, GetcwdData, GetxattrData, LgetxattrData, LinkatData, ListxattrData,
+    LlistxattrData, LremovexattrData, LseekData, LsetxattrData, MkdiratData, NewfstatatData,
+    OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data, PwriteData, ReadData,
+    ReadlinkatData, RemovexattrData, Renameat2Data, RenameatData, SetxattrData, SpliceData,
+    StatfsData, SymlinkatData, TeeData, UnlinkatData, VectorIOData, VmspliceData, WireEventHeader,
+    WriteData,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{PollData, SelectData, SendfileData};
@@ -26,90 +26,16 @@ use crate::{
     raw, with_array, with_struct,
 };
 
-pub async fn handle_compact_event(
+pub async fn handle_event(
     header: &WireEventHeader,
     payload: &[u8],
     formatter: Formatter<'_>,
-) -> anyhow::Result<bool> {
-    let syscall_nr = match header.syscall_nr {
-        syscalls::SYS_close
-        | syscalls::SYS_openat
-        | syscalls::SYS_read
-        | syscalls::SYS_lseek
-        | syscalls::SYS_write
-        | syscalls::SYS_pread64
-        | syscalls::SYS_pwrite64
-        | syscalls::SYS_readv
-        | syscalls::SYS_writev
-        | syscalls::SYS_preadv
-        | syscalls::SYS_pwritev
-        | syscalls::SYS_preadv2
-        | syscalls::SYS_pwritev2
-        | syscalls::SYS_openat2
-        | syscalls::SYS_epoll_pwait
-        | syscalls::SYS_epoll_pwait2
-        | syscalls::SYS_epoll_ctl
-        | syscalls::SYS_ppoll
-        | syscalls::SYS_pselect6
-        | syscalls::SYS_pipe2
-        | syscalls::SYS_splice
-        | syscalls::SYS_tee
-        | syscalls::SYS_vmsplice
-        | syscalls::SYS_fstat
-        | syscalls::SYS_newfstatat
-        | syscalls::SYS_faccessat
-        | syscalls::SYS_faccessat2
-        | syscalls::SYS_readlinkat
-        | syscalls::SYS_statfs
-        | syscalls::SYS_fstatfs
-        | syscalls::SYS_flistxattr
-        | syscalls::SYS_listxattr
-        | syscalls::SYS_llistxattr
-        | syscalls::SYS_setxattr
-        | syscalls::SYS_lsetxattr
-        | syscalls::SYS_fsetxattr
-        | syscalls::SYS_getxattr
-        | syscalls::SYS_lgetxattr
-        | syscalls::SYS_fgetxattr
-        | syscalls::SYS_removexattr
-        | syscalls::SYS_lremovexattr
-        | syscalls::SYS_fremovexattr
-        | syscalls::SYS_getcwd
-        | syscalls::SYS_chdir
-        | syscalls::SYS_mkdirat
-        | syscalls::SYS_fsync
-        | syscalls::SYS_fdatasync
-        | syscalls::SYS_ftruncate
-        | syscalls::SYS_fchmod
-        | syscalls::SYS_fchmodat
-        | syscalls::SYS_fchown
-        | syscalls::SYS_fchownat
-        | syscalls::SYS_renameat
-        | syscalls::SYS_renameat2
-        | syscalls::SYS_unlinkat
-        | syscalls::SYS_symlinkat
-        | syscalls::SYS_linkat => header.syscall_nr,
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_epoll_wait
-        | syscalls::SYS_poll
-        | syscalls::SYS_select
-        | syscalls::SYS_sendfile => header.syscall_nr,
-        _ => return Ok(false),
-    };
+) -> anyhow::Result<()> {
+    trace!("handle_event for syscall {}", header.syscall_nr);
 
-    if wire_validation_enabled() {
-        let Some(expected_payload_size) = compact_payload_size(header.syscall_nr) else {
-            return Ok(false);
-        };
-
-        if payload.len() != expected_payload_size {
-            return Ok(true);
-        }
-    }
-
-    let Ok(mut sf) = formatter.push_syscall(header.tid, syscall_nr).await else {
-        error!("{} unknown syscall {}", header.tid, syscall_nr);
-        return Ok(true);
+    let Ok(mut sf) = formatter.push_syscall(header.tid, header.syscall_nr).await else {
+        error!("{} unknown syscall {}", header.tid, header.syscall_nr);
+        return Ok(());
     };
 
     match header.syscall_nr {
@@ -1008,76 +934,6 @@ pub async fn handle_compact_event(
 
             finish!(sf, header.return_value);
         }
-
-        _ => return Ok(false),
-    }
-
-    Ok(true)
-}
-
-pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> anyhow::Result<()> {
-    trace!("handle_event for syscall {}", event.syscall_nr);
-
-    let Ok(mut sf) = formatter.push_syscall(event.tid, event.syscall_nr).await else {
-        error!("{} unknown syscall {}", event.tid, event.syscall_nr);
-        return Ok(());
-    };
-
-    #[allow(unreachable_patterns)]
-    match event.syscall_nr {
-        syscalls::SYS_openat2
-        | syscalls::SYS_epoll_pwait
-        | syscalls::SYS_epoll_pwait2
-        | syscalls::SYS_epoll_ctl
-        | syscalls::SYS_ppoll
-        | syscalls::SYS_pselect6
-        | syscalls::SYS_pipe2
-        | syscalls::SYS_splice
-        | syscalls::SYS_tee
-        | syscalls::SYS_vmsplice
-        | syscalls::SYS_fstat
-        | syscalls::SYS_newfstatat
-        | syscalls::SYS_faccessat
-        | syscalls::SYS_faccessat2
-        | syscalls::SYS_readlinkat
-        | syscalls::SYS_statfs
-        | syscalls::SYS_fstatfs
-        | syscalls::SYS_flistxattr
-        | syscalls::SYS_listxattr
-        | syscalls::SYS_llistxattr
-        | syscalls::SYS_setxattr
-        | syscalls::SYS_lsetxattr
-        | syscalls::SYS_fsetxattr
-        | syscalls::SYS_getxattr
-        | syscalls::SYS_lgetxattr
-        | syscalls::SYS_fgetxattr
-        | syscalls::SYS_removexattr
-        | syscalls::SYS_lremovexattr
-        | syscalls::SYS_fremovexattr
-        | syscalls::SYS_getcwd
-        | syscalls::SYS_chdir
-        | syscalls::SYS_mkdirat
-        | syscalls::SYS_fsync
-        | syscalls::SYS_fdatasync
-        | syscalls::SYS_ftruncate
-        | syscalls::SYS_fchmod
-        | syscalls::SYS_fchmodat
-        | syscalls::SYS_fchown
-        | syscalls::SYS_fchownat
-        | syscalls::SYS_renameat
-        | syscalls::SYS_renameat2
-        | syscalls::SYS_unlinkat
-        | syscalls::SYS_symlinkat
-        | syscalls::SYS_linkat => {
-            unreachable!("migrated syscall should be handled by compact path");
-        }
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_epoll_wait
-        | syscalls::SYS_poll
-        | syscalls::SYS_select
-        | syscalls::SYS_sendfile => {
-            unreachable!("migrated syscall should be handled by compact path");
-        }
         syscalls::SYS_rt_sigreturn
         | syscalls::SYS_sched_yield
         | syscalls::SYS_getpid
@@ -1091,13 +947,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_sync
         | syscalls::SYS_setsid
         | syscalls::SYS_vhangup => {
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_flock => {
-            let data = unsafe { event.data.flock };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FlockData)
+            };
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "operation: {}", format_flock_operation(data.operation));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_pause
@@ -1105,10 +963,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_getpgrp
         | syscalls::SYS_fork
         | syscalls::SYS_vfork => {
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_capget | syscalls::SYS_capset => {
-            let data = unsafe { event.data.capsetget };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::CapsetgetData)
+            };
 
             arg!(sf, "header:");
             with_struct!(sf, {
@@ -1160,245 +1020,305 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 )
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mlock => {
-            let data = unsafe { event.data.mlock };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MlockData)
+            };
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "len: {}", data.len);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mlock2 => {
-            let data = unsafe { event.data.mlock2 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Mlock2Data)
+            };
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "len: {}", data.len);
             argf!(sf, "flags: {}", format_mlock2_flags(data.flags as u32));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mlockall => {
-            let data = unsafe { event.data.mlockall };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MlockallData)
+            };
             argf!(sf, "flags: {}", format_mlockall_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_membarrier => {
-            let data = unsafe { event.data.membarrier };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MembarrierData)
+            };
             argf!(sf, "cmd: {}", format_membarrier_cmd(data.cmd));
             argf!(sf, "flags: {}", format_membarrier_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mremap => {
-            let data = unsafe { event.data.mremap };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MremapData)
+            };
             argf!(sf, "old_address: 0x{:x}", data.old_address);
             argf!(sf, "old_size: {}", data.old_size);
             argf!(sf, "new_size: {}", data.new_size);
             argf!(sf, "flags: {}", format_mremap_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_msync => {
-            let data = unsafe { event.data.msync };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MsyncData)
+            };
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
             argf!(sf, "flags: {}", format_msync_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_munlock => {
-            let data = unsafe { event.data.munlock };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MunlockData)
+            };
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "len: {}", data.len);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_readahead => {
-            let data = unsafe { event.data.readahead };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ReadaheadData)
+            };
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "offset: {}", data.offset);
             argf!(sf, "count: {}", data.count);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setns => {
-            let data = unsafe { event.data.setns };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetnsData)
+            };
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "nstype: {}", format_clone_flags(data.nstype as u64));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_unshare => {
-            let data = unsafe { event.data.unshare };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UnshareData)
+            };
             argf!(sf, "flags: {}", format_clone_flags(data.flags as u64));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_memfd_secret => {
-            let data = unsafe { event.data.memfd_secret };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MemfdSecretData)
+            };
             argf!(sf, "flags: {}", format_memfd_secret_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_userfaultfd => {
-            let data = unsafe { event.data.userfaultfd };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UserfaultfdData)
+            };
             argf!(sf, "flags: {}", format_userfaultfd_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_pkey_alloc => {
-            let data = unsafe { event.data.pkey_alloc };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PkeyAllocData)
+            };
             argf!(sf, "flags: {}", format_pkey_alloc_flags(data.flags));
             argf!(
                 sf,
                 "access_rights: {}",
                 format_pkey_access_rights(data.access_rights)
             );
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_pkey_free => {
-            let data = unsafe { event.data.pkey_free };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PkeyFreeData)
+            };
             argf!(sf, "pkey: {}", data.pkey);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_eventfd => {
-            let data = unsafe { event.data.eventfd };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::EventfdData)
+            };
             argf!(sf, "initval: {}", data.initval);
             argf!(sf, "flags: {}", format_eventfd_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_eventfd2 => {
-            let data = unsafe { event.data.eventfd2 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Eventfd2Data)
+            };
             argf!(sf, "initval: {}", data.initval);
             argf!(sf, "flags: {}", format_eventfd_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_exit_group => {
-            let data = unsafe { event.data.exit_group };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ExitGroupData)
+            };
             argf!(sf, "status: {}", data.status);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_pipe2 => {
-            let data = unsafe { event.data.pipe2 };
-            arg!(sf, "pipefd:");
-            with_array!(sf, {
-                argf!(sf, "{}", data.pipefd[0]);
-                argf!(sf, "{}", data.pipefd[1]);
-            });
-            argf!(sf, "flags: {}", format_pipe2_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_dup3 => {
-            let data = unsafe { event.data.dup3 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Dup3Data)
+            };
 
             argf!(sf, "oldfd: {}", data.oldfd);
             argf!(sf, "newfd: {}", data.newfd);
             argf!(sf, "flags: {}", format_dup3_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_dup => {
-            let data = unsafe { event.data.dup };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::DupData)
+            };
 
             argf!(sf, "oldfd: {}", data.oldfd);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_dup2 => {
-            let data = unsafe { event.data.dup2 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Dup2Data)
+            };
 
             argf!(sf, "oldfd: {}", data.oldfd);
             argf!(sf, "newfd: {}", data.newfd);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setuid => {
-            let data = unsafe { event.data.setuid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetuidData)
+            };
 
             argf!(sf, "uid: {}", data.uid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setgid => {
-            let data = unsafe { event.data.setgid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetgidData)
+            };
 
             argf!(sf, "gid: {}", data.gid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_close_range => {
-            let data = unsafe { event.data.close_range };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::CloseRangeData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "max_fd: {}", data.max_fd);
             argf!(sf, "flags: 0x{:x}", data.flags);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getpgid => {
-            let data = unsafe { event.data.getpgid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetpgidData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getsid => {
-            let data = unsafe { event.data.getsid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetsidData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setpgid => {
-            let data = unsafe { event.data.setpgid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetpgidData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "pgid: {}", data.pgid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_umask => {
-            let data = unsafe { event.data.umask };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UmaskData)
+            };
 
             argf!(sf, "mask: 0o{:o}", data.mask);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_ioprio_get => {
-            let data = unsafe { event.data.ioprio_get };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoprioGetData)
+            };
 
             argf!(sf, "which: {}", data.which);
             argf!(sf, "who: {}", data.who);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_ioprio_set => {
-            let data = unsafe { event.data.ioprio_set };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoprioSetData)
+            };
 
             argf!(sf, "which: {}", data.which);
             argf!(sf, "who: {}", data.who);
             argf!(sf, "ioprio: {}", data.ioprio);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setregid => {
-            let data = unsafe { event.data.setregid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetregidData)
+            };
 
             argf!(sf, "rgid: {}", data.rgid);
             argf!(sf, "egid: {}", data.egid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setresgid => {
-            let data = unsafe { event.data.setresgid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetresgidData)
+            };
 
             argf!(sf, "rgid: {}", data.rgid);
             argf!(sf, "egid: {}", data.egid);
             argf!(sf, "sgid: {}", data.sgid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setresuid => {
-            let data = unsafe { event.data.setresuid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetresuidData)
+            };
 
             argf!(sf, "ruid: {}", data.ruid);
             argf!(sf, "euid: {}", data.euid);
             argf!(sf, "suid: {}", data.suid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setreuid => {
-            let data = unsafe { event.data.setreuid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetreuidData)
+            };
 
             argf!(sf, "ruid: {}", data.ruid);
             argf!(sf, "euid: {}", data.euid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_alarm => {
-            let data = unsafe { event.data.alarm };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::AlarmData)
+            };
 
             argf!(sf, "seconds: {}", data.seconds);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_times => {
-            let data = unsafe { event.data.times };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TimesData)
+            };
 
             arg!(sf, "buf:");
             if data.has_buf {
@@ -1409,16 +1329,20 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_personality => {
-            let data = unsafe { event.data.personality };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PersonalityData)
+            };
 
             argf!(sf, "persona: 0x{:x}", data.persona);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sysinfo => {
-            let data = unsafe { event.data.sysinfo };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SysinfoData)
+            };
 
             arg!(sf, "info:");
             if data.has_info {
@@ -1429,10 +1353,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_gettimeofday => {
-            let data = unsafe { event.data.gettimeofday };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GettimeofdayData)
+            };
 
             arg!(sf, "tv:");
             if data.has_tv {
@@ -1452,10 +1378,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_settimeofday => {
-            let data = unsafe { event.data.settimeofday };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SettimeofdayData)
+            };
 
             arg!(sf, "tv:");
             if data.has_tv {
@@ -1475,28 +1403,40 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_inotify_add_watch => {
-            let data = unsafe { event.data.inotify_add_watch };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::InotifyAddWatchData
+                )
+            };
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "mask: {}", format_inotify_mask(data.mask));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_inotify_rm_watch => {
-            let data = unsafe { event.data.inotify_rm_watch };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::InotifyRmWatchData
+                )
+            };
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "wd: {}", data.wd);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_inotify_init1 => {
-            let data = unsafe { event.data.inotify_init1 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::InotifyInit1Data)
+            };
             argf!(sf, "flags: {}", format_inotify_init1_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_reboot => {
-            let data = unsafe { event.data.reboot };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RebootData)
+            };
 
             argf!(sf, "magic1: {}", format_reboot_magic(data.magic1));
             argf!(sf, "magic2: {}", format_reboot_magic(data.magic2));
@@ -1507,10 +1447,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(sf, "restart2: {}", format_path(&data.restart2, false));
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_nanosleep => {
-            let data = unsafe { event.data.nanosleep };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::NanosleepData)
+            };
 
             arg!(sf, "req:");
             format_timespec(&mut sf, data.req).await?;
@@ -1522,10 +1464,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_clock_nanosleep => {
-            let data = unsafe { event.data.clock_nanosleep };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::ClockNanosleepData
+                )
+            };
 
             argf!(sf, "clockid: {}", format_clockid(data.clockid));
             argf!(sf, "flags: {}", format_clock_nanosleep_flags(data.flags));
@@ -1540,31 +1486,37 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_adjtimex => {
-            let data = unsafe { event.data.adjtimex };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::AdjtimexData)
+            };
 
             arg!(sf, "timex:");
             format_timex(&mut sf, &data.timex).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_clock_adjtime => {
-            let data = unsafe { event.data.clock_adjtime };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ClockAdjtimeData)
+            };
 
             argf!(sf, "clockid: {}", format_clockid(data.clockid));
             arg!(sf, "timex:");
             format_timex(&mut sf, &data.timex).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_clock_getres | syscalls::SYS_clock_gettime | syscalls::SYS_clock_settime => {
-            let data = unsafe { event.data.clock_time };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ClockTimeData)
+            };
 
             argf!(sf, "clockid: {}", format_clockid(data.clockid));
 
-            if event.syscall_nr == syscalls::SYS_clock_getres {
+            if header.syscall_nr == syscalls::SYS_clock_getres {
                 arg!(sf, "res:");
             } else {
                 arg!(sf, "tp:");
@@ -1576,10 +1528,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timer_create => {
-            let data = unsafe { event.data.timer_create };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TimerCreateData)
+            };
 
             argf!(sf, "clockid: {}", format_clockid(data.clockid));
 
@@ -1610,33 +1564,43 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             arg!(sf, "timerid: <output>");
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timer_delete => {
-            let data = unsafe { event.data.timer_delete };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TimerDeleteData)
+            };
 
             argf!(sf, "timerid: {:#x}", data.timerid);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timer_getoverrun => {
-            let data = unsafe { event.data.timer_getoverrun };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::TimerGetoverrunData
+                )
+            };
 
             argf!(sf, "timerid: {:#x}", data.timerid);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timer_gettime => {
-            let data = unsafe { event.data.timer_gettime };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TimerGettimeData)
+            };
 
             argf!(sf, "timerid: {:#x}", data.timerid);
             arg!(sf, "curr_value:");
             format_itimerspec(&mut sf, data.curr_value).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timer_settime => {
-            let data = unsafe { event.data.timer_settime };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TimerSettimeData)
+            };
 
             argf!(sf, "timerid: {:#x}", data.timerid);
             argf!(sf, "flags: {}", format_timer_settime_flags(data.flags));
@@ -1655,27 +1619,37 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "old_value: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timerfd_create => {
-            let data = unsafe { event.data.timerfd_create };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TimerfdCreateData)
+            };
 
             argf!(sf, "clockid: {}", format_clockid(data.clockid));
             argf!(sf, "flags: {}", format_timerfd_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timerfd_gettime => {
-            let data = unsafe { event.data.timerfd_gettime };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::TimerfdGettimeData
+                )
+            };
 
             argf!(sf, "fd: {}", data.fd);
             arg!(sf, "curr_value:");
             format_itimerspec(&mut sf, data.curr_value).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_timerfd_settime => {
-            let data = unsafe { event.data.timerfd_settime };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::TimerfdSettimeData
+                )
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "flags: {}", format_timer_settime_flags(data.flags));
@@ -1694,20 +1668,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "old_value: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getitimer => {
-            let data = unsafe { event.data.getitimer };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetItimerData)
+            };
 
             argf!(sf, "which: {}", format_timer_which(data.which));
 
             arg!(sf, "curr_value:");
             format_itimerval(&mut sf, &data.curr_value).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setitimer => {
-            let data = unsafe { event.data.setitimer };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetItimerData)
+            };
 
             argf!(sf, "which: {}", format_timer_which(data.which));
 
@@ -1721,47 +1699,61 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "old_value: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getpriority => {
-            let data = unsafe { event.data.getpriority };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetpriorityData)
+            };
 
             argf!(sf, "which: {}", format_priority_which(data.which as u32));
             argf!(sf, "who: {}", data.who);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setpriority => {
-            let data = unsafe { event.data.setpriority };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetpriorityData)
+            };
 
             argf!(sf, "which: {}", format_priority_which(data.which as u32));
             argf!(sf, "who: {}", data.who);
             argf!(sf, "prio: {}", data.prio);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_tkill => {
-            let data = unsafe { event.data.tkill };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TkillData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "sig: {}", format_signal_number(data.signal));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_tgkill => {
-            let data = unsafe { event.data.tgkill };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TgkillData)
+            };
 
             argf!(sf, "tgid: {}", data.tgid);
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "sig: {}", format_signal_number(data.signal));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_kill => {
-            let data = unsafe { event.data.kill };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::KillData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "sig: {}", format_signal_number(data.signal));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_pidfd_send_signal => {
-            let data = unsafe { event.data.pidfd_send_signal };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::PidfdSendSignalData
+                )
+            };
 
             argf!(sf, "pidfd: {}", data.pidfd);
             argf!(sf, "sig: {}", format_signal_number(data.sig));
@@ -1771,10 +1763,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "flags: 0x{:x}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sigaltstack => {
-            let data = unsafe { event.data.sigaltstack };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SigaltstackData)
+            };
 
             argf!(sf, "ss_ptr: 0x{:x}", data.ss_ptr);
 
@@ -1802,11 +1796,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "old_ss: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_signalfd => {
-            let data = unsafe { event.data.signalfd };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SignalfdData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
 
@@ -1822,10 +1818,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "flags: {}", format_signalfd_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_signalfd4 => {
-            let data = unsafe { event.data.signalfd4 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Signalfd4Data)
+            };
 
             argf!(sf, "fd: {}", data.fd);
 
@@ -1841,28 +1839,42 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "flags: {}", format_signalfd_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_process_mrelease => {
-            let data = unsafe { event.data.process_mrelease };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::ProcessMreleaseData
+                )
+            };
             argf!(sf, "pidfd: {}", data.pidfd);
             argf!(sf, "flags: 0x{:x}", data.flags);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_exit => {
-            let data = unsafe { event.data.exit };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ExitData)
+            };
 
             argf!(sf, "status: {}", data.status);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_getscheduler => {
-            let data = unsafe { event.data.sched_getscheduler };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SchedGetschedulerData
+                )
+            };
 
             argf!(sf, "pid: {}", data.pid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_setscheduler => {
-            let data = unsafe { event.data.sched_setscheduler };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SchedSetschedulerData
+                )
+            };
 
             argf!(sf, "pid: {}", data.pid);
 
@@ -1889,24 +1901,34 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(sf, "param: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_getaffinity => {
-            let data = unsafe { event.data.sched_getaffinity };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SchedGetaffinityData
+                )
+            };
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "cpusetsize: {}", data.cpusetsize);
             argf!(sf, "mask: 0x{:x}", data.mask);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_setaffinity => {
-            let data = unsafe { event.data.sched_setaffinity };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SchedSetaffinityData
+                )
+            };
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "cpusetsize: {}", data.cpusetsize);
             argf!(sf, "mask: 0x{:x}", data.mask);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_getparam => {
-            let data = unsafe { event.data.sched_getparam };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SchedGetparamData)
+            };
             argf!(sf, "pid: {}", data.pid);
             if data.has_param {
                 arg!(sf, "param:");
@@ -1916,10 +1938,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             } else {
                 argf!(sf, "param: NULL");
             }
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_getattr => {
-            let data = unsafe { event.data.sched_getattr };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SchedGetattrData)
+            };
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "size: {}", data.size);
             argf!(
@@ -1929,10 +1953,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             );
             arg!(sf, "attr:");
             format_sched_attr(&mut sf, &data.attr).await?;
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_setattr => {
-            let data = unsafe { event.data.sched_setattr };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SchedSetattrData)
+            };
             argf!(sf, "pid: {}", data.pid);
             argf!(
                 sf,
@@ -1941,10 +1967,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             );
             arg!(sf, "attr:");
             format_sched_attr(&mut sf, &data.attr).await?;
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_setparam => {
-            let data = unsafe { event.data.sched_setparam };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SchedSetparamData)
+            };
             argf!(sf, "pid: {}", data.pid);
             if data.has_param {
                 arg!(sf, "param:");
@@ -1954,121 +1982,66 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             } else {
                 argf!(sf, "param: NULL");
             }
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_rr_get_interval => {
-            let data = unsafe { event.data.sched_rr_get_interval };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SchedRrGetIntervalData
+                )
+            };
             argf!(sf, "pid: {}", data.pid);
             arg!(sf, "interval:");
             format_timespec(&mut sf, data.interval).await?;
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setfsuid => {
-            let data = unsafe { event.data.setfsuid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetfsuidData)
+            };
 
             argf!(sf, "uid: {}", data.uid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setfsgid => {
-            let data = unsafe { event.data.setfsgid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetfsgidData)
+            };
 
             argf!(sf, "gid: {}", data.gid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_get_priority_max => {
-            let data = unsafe { event.data.sched_get_priority_max };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SchedGetPriorityMaxData
+                )
+            };
 
             argf!(sf, "policy: {}", format_sched_policy(data.policy));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sched_get_priority_min => {
-            let data = unsafe { event.data.sched_get_priority_min };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SchedGetPriorityMinData
+                )
+            };
 
             argf!(sf, "policy: {}", format_sched_policy(data.policy));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_epoll_pwait => {
-            let data = unsafe { event.data.epoll_pwait };
-
-            argf!(sf, "epfd: {}", data.epfd);
-            arg!(sf, "events:");
-
-            with_array!(sf, {
-                let nevents = (event.return_value as usize).min(data.events.len());
-                for i in 0..nevents {
-                    let epoll_event = data.events[i];
-                    arg!(sf, "epoll_event");
-                    with_struct!(sf, {
-                        argf!(
-                            sf,
-                            "events: {}",
-                            format_poll_events(epoll_event.events as i16)
-                        );
-                        argf!(sf, "data: {:#x}", epoll_event.data);
-                    });
-                }
-            });
-
-            argf!(sf, "max_events: {}", data.max_events);
-            argf!(sf, "timeout: {}", data.timeout);
-            arg!(sf, "sigmask");
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_epoll_pwait2 => {
-            let data = unsafe { event.data.epoll_pwait2 };
-            argf!(sf, "epfd: {}", data.epfd);
-            arg!(sf, "events:");
-            with_array!(sf, {
-                let nevents = (event.return_value as usize).min(data.events.len());
-                for i in 0..nevents {
-                    let epoll_event = data.events[i];
-                    arg!(sf, "epoll_event");
-                    with_struct!(sf, {
-                        argf!(
-                            sf,
-                            "events: {}",
-                            format_poll_events(epoll_event.events as i16)
-                        );
-                        argf!(sf, "data: {:#x}", epoll_event.data);
-                    });
-                }
-            });
-            argf!(sf, "max_events: {}", data.max_events);
-
-            arg!(sf, "timeout:");
-            format_timespec(&mut sf, data.timeout).await?;
-
-            argf!(sf, "sigmask: 0x{:x}", data.sigmask);
-            argf!(sf, "sigsetsize: {}", data.sigsetsize);
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_epoll_ctl => {
-            let data = unsafe { event.data.epoll_ctl };
-            argf!(sf, "epfd: {}", data.epfd);
-            argf!(sf, "op: {}", format_epoll_ctl_op(data.op));
-            argf!(sf, "fd: {}", data.fd);
-            arg!(sf, "event: epoll_event");
-            with_struct!(sf, {
-                argf!(
-                    sf,
-                    "events: {}",
-                    format_poll_events(data.event.events as i16)
-                );
-                argf!(sf, "data: {:#x}", data.event.data);
-            });
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_wait => {
-            let data = unsafe { event.data.epoll_wait };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::EpollPWaitData)
+            };
 
             argf!(sf, "epfd: {}", data.epfd);
             arg!(sf, "events:");
 
             with_array!(sf, {
-                let nevents = (event.return_value as usize).min(data.events.len());
+                let nevents = (header.return_value as usize).min(data.events.len());
                 for i in 0..nevents {
                     let epoll_event = data.events[i];
                     arg!(sf, "epoll_event");
@@ -2086,144 +2059,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "max_events: {}", data.max_events);
             argf!(sf, "timeout: {}", data.timeout);
 
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_ppoll => {
-            let data = unsafe { event.data.ppoll };
-
-            arg!(sf, "fds:");
-
-            with_array!(sf, {
-                for (fd, events) in data
-                    .fds
-                    .iter()
-                    .zip(data.events.iter())
-                    .take(data.nfds as usize)
-                {
-                    argf!(sf, "{{ {fd}, {} }}", format_poll_events(*events));
-                }
-            });
-
-            argf!(sf, "nfds: {}", data.nfds);
-            arg!(sf, "timeout:");
-
-            format_timespec(&mut sf, data.timeout).await?;
-
-            arg!(sf, "sigmask");
-
-            // For ppoll, provide detailed ready state information as extra output
-            let extra_info = match event.return_value {
-                0 => None,  // Timeout case
-                -1 => None, // Error case
-                _ => Some(format!(
-                    " [{}]",
-                    data.fds.iter().zip(data.revents.iter()).join_take_map(
-                        data.nfds as usize,
-                        |(fd, event)| format!("{fd} = {}", format_poll_events(*event))
-                    )
-                )),
-            };
-
-            match extra_info {
-                Some(extra) => finish!(sf, event.return_value, extra.as_bytes()),
-                None => finish!(sf, event.return_value),
-            };
-        }
-        syscalls::SYS_pselect6 => {
-            let data = unsafe { event.data.pselect6 };
-
-            argf!(sf, "nfds: {}", data.nfds);
-
-            arg!(sf, "readfds:");
-            if data.has_readfds {
-                format_fdset(&mut sf, &data.readfds).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            arg!(sf, "writefds:");
-            if data.has_writefds {
-                format_fdset(&mut sf, &data.writefds).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            arg!(sf, "exceptfds:");
-            if data.has_exceptfds {
-                format_fdset(&mut sf, &data.exceptfds).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            arg!(sf, "timeout:");
-            if data.has_timeout {
-                format_timespec(&mut sf, data.timeout).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            arg!(sf, "sigmask:");
-            if data.has_sigmask {
-                raw!(sf, " <present>");
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            finish!(sf, event.return_value);
-        }
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_select => {
-            let data = unsafe { event.data.select };
-
-            argf!(sf, "nfds: {}", data.nfds);
-
-            arg!(sf, "readfds:");
-            if data.has_readfds {
-                format_fdset(&mut sf, &data.readfds).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            arg!(sf, "writefds:");
-            if data.has_writefds {
-                format_fdset(&mut sf, &data.writefds).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            arg!(sf, "exceptfds:");
-            if data.has_exceptfds {
-                format_fdset(&mut sf, &data.exceptfds).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            arg!(sf, "timeout:");
-            if data.has_timeout {
-                format_timeval(&mut sf, &data.timeout).await?;
-            } else {
-                raw!(sf, " NULL");
-            }
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_openat2 => {
-            let data = unsafe { event.data.openat2 };
-
-            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            arg!(sf, "how:");
-            with_struct!(sf, {
-                argf!(sf, "flags: {}", format_flags(data.how.flags as i32));
-                argf!(sf, "mode: {}", format_mode(data.how.mode as u32));
-                argf!(sf, "resolve: {}", format_resolve_flags(data.how.resolve));
-            });
-            argf!(sf, "size: {}", data.size);
-
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_futex => {
-            let data = unsafe { event.data.futex };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FutexData)
+            };
 
             argf!(sf, "uaddr: 0x{:x}", data.uaddr);
             argf!(sf, "op: {}", data.op);
@@ -2234,10 +2075,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             arg!(sf, "timeout:");
             format_timespec(&mut sf, data.timeout).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_futex_waitv => {
-            let data = unsafe { event.data.futex_waitv };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FutexWaitvData)
+            };
 
             arg!(sf, "waiters:");
             with_array!(sf, {
@@ -2265,14 +2108,16 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "clockid: {}", format_clockid(data.clockid));
 
-            if event.return_value > 0 {
-                finish!(sf, event.return_value, b" (woken)");
+            if header.return_value > 0 {
+                finish!(sf, header.return_value, b" (woken)");
             } else {
-                finish!(sf, event.return_value);
+                finish!(sf, header.return_value);
             }
         }
         syscalls::SYS_ioctl => {
-            let data = unsafe { event.data.ioctl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoctlData)
+            };
             let request = format_ioctl_request(data.request);
 
             argf!(sf, "fd: {}", data.fd);
@@ -2285,20 +2130,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             );
             argf!(sf, "arg: 0x{}", data.arg);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fcntl => {
-            let data = unsafe { event.data.fcntl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FcntlData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "cmd: {}", format_fcntl_cmd(data.cmd));
             argf!(sf, "arg: 0x{:x}", data.arg);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_execve => {
             use std::{ffi::OsString, os::unix::ffi::OsStringExt};
-            let data = unsafe { event.data.execve };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ExecveData)
+            };
 
             // Format filename, showing ... if truncated
             let filename = format_path(&data.filename, data.filename_truncated);
@@ -2347,11 +2196,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "argv: [{}]", argv_str);
             argf!(sf, "envp: [{}]", envp_str);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_execveat => {
             use std::{ffi::OsString, os::unix::ffi::OsStringExt};
-            let data = unsafe { event.data.execveat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ExecveatData)
+            };
 
             // Format dirfd
             let dirfd_str = format_dirfd(data.dirfd);
@@ -2408,38 +2259,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "envp: [{}]", envp_str);
             argf!(sf, "flags: {}", flags_str);
 
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fstat => {
-            let data = unsafe { event.data.fstat };
-
-            argf!(sf, "fd: {}", data.fd);
-            arg!(sf, "struct stat:");
-            with_struct!(sf, {
-                format_stat(&mut sf, &data.stat).await?;
-            });
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_newfstatat => {
-            let data = unsafe { event.data.newfstatat };
-
-            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            arg!(sf, "struct stat:");
-            if event.return_value == 0 {
-                with_struct!(sf, {
-                    format_stat(&mut sf, &data.stat).await?;
-                });
-            } else {
-                raw!(sf, " <unavailable>");
-            }
-            argf!(sf, "flags: {}", format_at_flags(data.flags));
-
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getdents64 => {
-            let data = unsafe { event.data.getdents64 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Getdents64Data)
+            };
             let mut entries = Vec::new();
 
             argf!(sf, "fd: {}", data.fd);
@@ -2459,7 +2284,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 }
             });
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
 
             for dirent in data.dirents.iter().take(data.num_dirents as usize) {
                 // Use the format_path_display helper which handles truncation
@@ -2473,7 +2298,9 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_getdents => {
-            let data = unsafe { event.data.getdents };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetdentsData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "count: {}", data.count);
@@ -2491,10 +2318,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 }
             });
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_semtimedop => {
-            let data = unsafe { event.data.semtimedop };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SemtimedopData)
+            };
 
             argf!(sf, "semid: {}", data.semid);
             arg!(sf, "sops:");
@@ -2523,11 +2352,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 );
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_sendfile => {
-            let data = unsafe { event.data.sendfile };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SendfileData)
+            };
 
             argf!(sf, "out_fd: {}", data.out_fd);
             argf!(sf, "in_fd: {}", data.in_fd);
@@ -2540,10 +2371,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "count: {}", data.count);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mmap => {
-            let data = unsafe { event.data.mmap };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MmapData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
@@ -2552,36 +2385,46 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "offset: 0x{:x}", data.offset);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_munmap => {
-            let data = unsafe { event.data.munmap };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MunmapData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mprotect => {
-            let data = unsafe { event.data.mprotect };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MprotectData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
             argf!(sf, "prot: {}", format_mmap_prot(data.prot));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_madvise => {
-            let data = unsafe { event.data.madvise };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MadviseData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
             argf!(sf, "advice: {}", format_madvise_advice(data.advice));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_process_madvise => {
-            let data = unsafe { event.data.process_madvise };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::ProcessMadviseData
+                )
+            };
 
             argf!(sf, "pidfd: {}", data.pidfd);
             arg!(sf, "iov:");
@@ -2598,10 +2441,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "advice: {}", format_madvise_advice(data.advice));
             argf!(sf, "flags: {}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_process_vm_readv => {
-            let data = unsafe { event.data.process_vm };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ProcessVmData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             arg!(sf, "local_iov:");
@@ -2628,10 +2473,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "riovcnt: {}", data.remote_iovcnt);
             argf!(sf, "flags: {}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_process_vm_writev => {
-            let data = unsafe { event.data.process_vm };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ProcessVmData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             arg!(sf, "local_iov:");
@@ -2658,10 +2505,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "riovcnt: {}", data.remote_iovcnt);
             argf!(sf, "flags: {}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mbind => {
-            let data = unsafe { event.data.mbind };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MbindData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "len: {}", data.len);
@@ -2674,10 +2523,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "maxnode: {}", data.maxnode);
             argf!(sf, "flags: {}", format_mpol_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_get_mempolicy => {
-            let data = unsafe { event.data.get_mempolicy };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetMempolicyData)
+            };
 
             if data.mode_valid {
                 argf!(sf, "mode: {}", format_mpol_mode(data.mode_out));
@@ -2698,10 +2549,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "flags: {}", format_get_mempolicy_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_set_mempolicy => {
-            let data = unsafe { event.data.set_mempolicy };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetMempolicyData)
+            };
 
             argf!(sf, "mode: {}", format_mpol_mode(data.mode));
             argf!(
@@ -2711,10 +2564,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             );
             argf!(sf, "maxnode: {}", data.maxnode);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_set_mempolicy_home_node => {
-            let data = unsafe { event.data.set_mempolicy_home_node };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::SetMempolicyHomeNodeData
+                )
+            };
 
             argf!(sf, "start: 0x{:x}", data.start);
             argf!(sf, "len: {}", data.len);
@@ -2722,10 +2579,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             // Note: kernel requires flags == 0, reserved for future use
             argf!(sf, "flags: {}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_migrate_pages => {
-            let data = unsafe { event.data.migrate_pages };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MigratePagesData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "maxnode: {}", data.maxnode);
@@ -2740,10 +2599,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 format_nodemask(&data.new_nodes, data.new_nodes_read_count)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_move_pages => {
-            let data = unsafe { event.data.move_pages };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MovePagesData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "count: {}", data.count);
@@ -2812,10 +2673,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
             argf!(sf, "flags: {}", format_mpol_flags(data.flags as u32));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mincore => {
-            let data = unsafe { event.data.mincore };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MincoreData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "length: {}", data.length);
@@ -2843,39 +2706,49 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "vec: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_memfd_create => {
-            let data = unsafe { event.data.memfd_create };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MemfdCreateData)
+            };
 
             let name = format_path(&data.name, false);
 
             argf!(sf, "name: {}", name);
             argf!(sf, "flags: {}", format_memfd_create_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_pkey_mprotect => {
-            let data = unsafe { event.data.pkey_mprotect };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PkeyMprotectData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "len: {}", data.len);
             argf!(sf, "prot: {}", format_mmap_prot(data.prot));
             argf!(sf, "pkey: {}", data.pkey);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mseal => {
-            let data = unsafe { event.data.mseal };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MsealData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "len: {}", data.len);
             argf!(sf, "flags: {}", format_mseal_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_remap_file_pages => {
-            let data = unsafe { event.data.remap_file_pages };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::RemapFilePagesData
+                )
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
             argf!(sf, "size: {}", data.size);
@@ -2883,58 +2756,53 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "pgoff: {}", data.pgoff);
             argf!(sf, "flags: {}", format_mmap_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getrandom => {
-            let data = unsafe { event.data.getrandom };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetrandomData)
+            };
 
             argf!(sf, "buf: 0x{:x}", data.buf);
             argf!(sf, "buflen: {}", data.buflen);
             argf!(sf, "flags: {}", format_getrandom_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_brk => {
-            let data = unsafe { event.data.brk };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::BrkData)
+            };
 
             argf!(sf, "addr: 0x{:x}", data.addr);
 
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_statfs => {
-            let data = unsafe { event.data.statfs };
-
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            arg!(sf, "buf:");
-            if event.return_value == 0 {
-                with_struct!(sf, {
-                    format_statfs(&mut sf, &data.statfs).await?;
-                });
-            } else {
-                raw!(sf, " <unavailable>");
-            }
-
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_statx => {
-            let data = unsafe { event.data.statx };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::StatxData)
+            };
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "flags: 0x{:x}", data.flags);
             argf!(sf, "mask: 0x{:x}", data.mask);
             argf!(sf, "statxbuf: 0x{:x}", data.statxbuf);
             arg!(sf, "struct statx:");
-            if event.return_value == 0 {
+            if header.return_value == 0 {
                 with_struct!(sf, {
                     format_statx(&mut sf, &data.statx).await?;
                 });
             } else {
                 raw!(sf, " <unavailable>");
             }
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_prctl => {
-            let data = unsafe { event.data.generic };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::GenericSyscallData
+                )
+            };
             let op_code = data.args[0] as i32;
             let op_name = format_prctl_op(op_code);
 
@@ -2946,45 +2814,38 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(sf, "0x{:x}", data.args[i]);
             }
 
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_faccessat | syscalls::SYS_faccessat2 => {
-            let data = unsafe { event.data.faccessat };
-
-            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "mode: {}", format_access_mode(data.mode));
-
-            if event.syscall_nr == syscalls::SYS_faccessat2 {
-                argf!(sf, "flags: {}", format_at_flags(data.flags));
-            }
-
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fallocate => {
-            let data = unsafe { event.data.fallocate };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FallocateData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "mode: {}", format_fallocate_mode(data.mode));
             argf!(sf, "offset: {}", data.offset);
             argf!(sf, "size: {}", data.size);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_set_robust_list => {
-            let data = unsafe { event.data.set_robust_list };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetRobustListData)
+            };
 
             argf!(sf, "head: 0x{:x}", data.head);
             argf!(sf, "len: {}", data.len);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_get_robust_list => {
-            let data = unsafe { event.data.get_robust_list };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetRobustListData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
 
-            if event.return_value == 0 {
+            if header.return_value == 0 {
                 argf!(sf, "head: 0x{:x}", data.head);
                 argf!(sf, "len: {}", data.len);
             } else {
@@ -2992,17 +2853,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "len: (content unavailable)");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_set_tid_address => {
-            let data = unsafe { event.data.set_tid_address };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetTidAddressData)
+            };
 
             argf!(sf, "tidptr: 0x{:x}", data.tidptr);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rt_sigprocmask => {
-            let data = unsafe { event.data.rt_sigprocmask };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RtSigprocmaskData)
+            };
 
             argf!(sf, "how: {}", format_sigprocmask_how(data.how));
 
@@ -3032,20 +2897,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rt_sigaction => {
-            let data = unsafe { event.data.rt_sigaction };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RtSigactionData)
+            };
 
             argf!(sf, "signum: {}", format_signal_number(data.signum));
             argf!(sf, "act: 0x{:x}", data.act);
             argf!(sf, "oldact: 0x{:x}", data.oldact);
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rt_sigpending => {
-            let data = unsafe { event.data.rt_sigpending };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RtSigpendingData)
+            };
 
             if data.has_set_data {
                 argf!(
@@ -3060,19 +2929,25 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rt_sigqueueinfo => {
-            let data = unsafe { event.data.rt_sigqueueinfo };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::RtSigqueueinfoData
+                )
+            };
 
             argf!(sf, "tgid: {}", data.tgid);
             argf!(sf, "sig: {}", format_signal_number(data.sig));
             argf!(sf, "uinfo: 0x{:x}", data.uinfo);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rt_sigsuspend => {
-            let data = unsafe { event.data.rt_sigsuspend };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RtSigsuspendData)
+            };
 
             if data.has_mask_data {
                 argf!(
@@ -3087,10 +2962,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rt_sigtimedwait => {
-            let data = unsafe { event.data.rt_sigtimedwait };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::RtSigtimedwaitData
+                )
+            };
 
             if data.has_set_data {
                 argf!(
@@ -3118,20 +2997,26 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "sigsetsize: {}", data.sigsetsize);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rt_tgsigqueueinfo => {
-            let data = unsafe { event.data.rt_tgsigqueueinfo };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::RtTgsigqueueinfoData
+                )
+            };
 
             argf!(sf, "tgid: {}", data.tgid);
             argf!(sf, "tid: {}", data.tid);
             argf!(sf, "sig: {}", format_signal_number(data.sig));
             argf!(sf, "uinfo: 0x{:x}", data.uinfo);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setrlimit => {
-            let data = unsafe { event.data.rlimit };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RlimitData)
+            };
 
             argf!(sf, "resource: {}", format_resource_type(data.resource));
 
@@ -3144,15 +3029,17 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "limit: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getrlimit => {
-            let data = unsafe { event.data.rlimit };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RlimitData)
+            };
 
             argf!(sf, "resource: {}", format_resource_type(data.resource));
 
             arg!(sf, "limit:");
-            if data.has_limit && event.return_value == 0 {
+            if data.has_limit && header.return_value == 0 {
                 with_struct!(sf, {
                     format_rlimit(&mut sf, &data.limit).await?;
                 });
@@ -3162,10 +3049,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_prlimit64 => {
-            let data = unsafe { event.data.prlimit };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PrlimitData)
+            };
 
             argf!(sf, "pid: {}", data.pid);
             argf!(
@@ -3186,7 +3075,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             // Handle old_limit
             arg!(sf, "old_limit:");
-            if data.has_old && event.return_value == 0 {
+            if data.has_old && header.return_value == 0 {
                 with_struct!(sf, {
                     crate::format_helpers::format_rlimit(&mut sf, &data.old_limit).await?;
                 });
@@ -3196,10 +3085,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_kcmp => {
-            let data = unsafe { event.data.kcmp };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::KcmpData)
+            };
 
             argf!(sf, "pid1: {}", data.pid1);
             argf!(sf, "pid2: {}", data.pid2);
@@ -3211,10 +3102,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "idx1: {}", data.idx1);
             argf!(sf, "idx2: {}", data.idx2);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getgroups => {
-            let data = unsafe { event.data.getgroups };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetgroupsData)
+            };
 
             argf!(sf, "size: {}", data.size);
 
@@ -3224,15 +3117,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     .map(|g| g.to_string())
                     .collect();
 
-                if data.groups_read_count < event.return_value as u32
-                    && event.return_value > pinchy_common::GROUP_ARRAY_CAP as i64
+                if data.groups_read_count < header.return_value as u32
+                    && header.return_value > pinchy_common::GROUP_ARRAY_CAP as i64
                 {
                     argf!(
                         sf,
                         "list: [{}... (showing {} of {})]",
                         groups.join(", "),
                         data.groups_read_count,
-                        event.return_value
+                        header.return_value
                     );
                 } else {
                     argf!(sf, "list: [{}]", groups.join(", "));
@@ -3243,10 +3136,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(sf, "list: []");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setgroups => {
-            let data = unsafe { event.data.setgroups };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetgroupsData)
+            };
 
             argf!(sf, "size: {}", data.size);
 
@@ -3273,28 +3168,34 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(sf, "list: []");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getresuid => {
-            let data = unsafe { event.data.getresuid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetresuidData)
+            };
 
             argf!(sf, "ruid: {}", data.ruid);
             argf!(sf, "euid: {}", data.euid);
             argf!(sf, "suid: {}", data.suid);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getresgid => {
-            let data = unsafe { event.data.getresgid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetresgidData)
+            };
 
             argf!(sf, "rgid: {}", data.rgid);
             argf!(sf, "egid: {}", data.egid);
             argf!(sf, "sgid: {}", data.sgid);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_rseq => {
-            let data = unsafe { event.data.rseq };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RseqData)
+            };
 
             argf!(
                 sf,
@@ -3321,36 +3222,32 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 });
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_uname => {
-            let data = unsafe { event.data.uname };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UnameData)
+            };
 
             arg!(sf, "struct utsname:");
             with_struct!(sf, {
                 format_utsname(&mut sf, &data.utsname).await?;
             });
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fchdir => {
-            let data = unsafe { event.data.fchdir };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FchdirData)
+            };
             argf!(sf, "fd: {}", data.fd);
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_readlinkat => {
-            let data = unsafe { event.data.readlinkat };
-
-            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "buf: {}", format_path(&data.buf, false));
-            argf!(sf, "bufsiz: {}", data.bufsiz);
-
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_mknod => {
-            let data = unsafe { event.data.mknod };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MknodData)
+            };
 
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(
@@ -3361,11 +3258,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             );
             argf!(sf, "dev: {}", format_dev(data.dev));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_mknodat => {
-            let data = unsafe { event.data.mknodat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MknodatData)
+            };
 
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
@@ -3377,34 +3276,42 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             );
             argf!(sf, "dev: {}", format_dev(data.dev));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_pivot_root => {
-            let data = unsafe { event.data.pivot_root };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PivotRootData)
+            };
 
             argf!(sf, "new_root: {}", format_path(&data.new_root, false));
             argf!(sf, "put_old: {}", format_path(&data.put_old, false));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_chroot => {
-            let data = unsafe { event.data.chroot };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ChrootData)
+            };
 
             argf!(sf, "path: {}", format_path(&data.path, false));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_open_tree => {
-            let data = unsafe { event.data.open_tree };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::OpenTreeData)
+            };
 
             argf!(sf, "dfd: {}", format_dirfd(data.dfd));
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "flags: {}", format_open_tree_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mount => {
-            let data = unsafe { event.data.mount };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MountData)
+            };
 
             if data.source[0] != 0 {
                 argf!(sf, "source: {}", format_path(&data.source, false));
@@ -3428,18 +3335,22 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "data: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_umount2 => {
-            let data = unsafe { event.data.umount2 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Umount2Data)
+            };
 
             argf!(sf, "target: {}", format_path(&data.target, false));
             argf!(sf, "flags: {}", format_umount_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mount_setattr => {
-            let data = unsafe { event.data.mount_setattr };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MountSetattrData)
+            };
 
             argf!(sf, "dfd: {}", format_dirfd(data.dfd));
             argf!(sf, "path: {}", format_path(&data.path, false));
@@ -3470,10 +3381,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
             argf!(sf, "size: {}", data.size);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_move_mount => {
-            let data = unsafe { event.data.move_mount };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MoveMountData)
+            };
 
             argf!(sf, "from_dfd: {}", format_dirfd(data.from_dfd));
             argf!(
@@ -3485,10 +3398,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "to_pathname: {}", format_path(&data.to_pathname, false));
             argf!(sf, "flags: {}", format_move_mount_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_recvmsg => {
-            let data = unsafe { event.data.recvmsg };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RecvmsgData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             arg!(sf, "msg:");
@@ -3497,19 +3412,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             });
             argf!(sf, "flags: {}", format_recvmsg_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_recvfrom => {
-            let data = unsafe { event.data.recvfrom };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RecvfromData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
 
-            if event.return_value > 0 {
+            if header.return_value > 0 {
                 let buf = &data.received_data[..data.received_len];
-                let left_over = if event.return_value as usize > buf.len() {
+                let left_over = if header.return_value as usize > buf.len() {
                     format!(
                         " ... ({} more bytes)",
-                        event.return_value as usize - buf.len()
+                        header.return_value as usize - buf.len()
                     )
                 } else {
                     String::new()
@@ -3533,10 +3450,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "addrlen: {}", data.addrlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sendto => {
-            let data = unsafe { event.data.sendto };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SendtoData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
 
@@ -3566,10 +3485,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "addrlen: {}", data.addrlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sendmsg => {
-            let data = unsafe { event.data.sendmsg };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SendmsgData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             arg!(sf, "msg:");
@@ -3578,10 +3499,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             });
             argf!(sf, "flags: {}", format_sendmsg_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_recvmmsg => {
-            let data = unsafe { event.data.recvmmsg };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RecvMmsgData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             arg!(sf, "msgvec:");
@@ -3609,10 +3532,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 arg!(sf, "timeout: NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sendmmsg => {
-            let data = unsafe { event.data.sendmmsg };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SendMmsgData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             arg!(sf, "msgvec:");
@@ -3630,10 +3555,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "vlen: {}", data.vlen);
             argf!(sf, "flags: {}", format_sendmsg_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_accept => {
-            let data = unsafe { event.data.accept };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::AcceptData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
 
@@ -3648,10 +3575,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "addrlen: {}", data.addrlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_accept4 => {
-            let data = unsafe { event.data.accept4 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Accept4Data)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
 
@@ -3667,10 +3596,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "addrlen: {}", data.addrlen);
             argf!(sf, "flags: {}", format_accept4_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_bind | syscalls::SYS_connect => {
-            let data = unsafe { event.data.sockaddr };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SockaddrData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             arg!(sf, "addr:");
@@ -3679,51 +3610,61 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             });
             argf!(sf, "addrlen: {}", data.addrlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_socket => {
-            let data = unsafe { event.data.socket };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SocketData)
+            };
 
             argf!(sf, "domain: {}", format_socket_domain(data.domain));
             argf!(sf, "type: {}", format_socket_type(data.type_));
             argf!(sf, "protocol: {}", data.protocol);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_listen => {
-            let data = unsafe { event.data.listen };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ListenData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             argf!(sf, "backlog: {}", data.backlog);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_shutdown => {
-            let data = unsafe { event.data.shutdown };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ShutdownData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             argf!(sf, "how: {}", format_shutdown_how(data.how));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_socketpair => {
-            let data = unsafe { event.data.socketpair };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SocketpairData)
+            };
 
             argf!(sf, "domain: {}", format_socket_domain(data.domain));
             argf!(sf, "type: {}", format_socket_type(data.type_));
             argf!(sf, "protocol: {}", data.protocol);
 
             // Show the resulting file descriptors only if successful
-            if event.return_value == 0 {
+            if header.return_value == 0 {
                 argf!(sf, "sv: [{}, {}]", data.sv[0], data.sv[1]);
             } else {
                 arg!(sf, "sv: [?, ?]");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getsockname => {
-            let data = unsafe { event.data.getsockname };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetSocknameData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
 
@@ -3738,10 +3679,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "addrlen: {}", data.addrlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getpeername => {
-            let data = unsafe { event.data.getpeername };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetpeernameData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
 
@@ -3756,10 +3699,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "addrlen: {}", data.addrlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setsockopt => {
-            let data = unsafe { event.data.setsockopt };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetsockoptData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             argf!(sf, "level: {}", format_socket_level(data.level));
@@ -3779,10 +3724,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "optlen: {}", data.optlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getsockopt => {
-            let data = unsafe { event.data.getsockopt };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetsockoptData)
+            };
 
             argf!(sf, "sockfd: {}", data.sockfd);
             argf!(sf, "level: {}", format_socket_level(data.level));
@@ -3792,7 +3739,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 format_socket_option(data.level, data.optname)
             );
 
-            if event.return_value >= 0 && data.optlen > 0 {
+            if header.return_value >= 0 && data.optlen > 0 {
                 let actual_len =
                     core::cmp::min(data.optlen as usize, pinchy_common::MEDIUM_READ_SIZE);
                 argf!(sf, "optval: {}", format_bytes(&data.optval[..actual_len]));
@@ -3802,15 +3749,17 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "optlen: {}", data.optlen);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_wait4 => {
-            let data = unsafe { event.data.wait4 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Wait4Data)
+            };
 
             argf!(sf, "pid: {}", data.pid);
 
             // Show wait status (only if successful)
-            if event.return_value >= 0 {
+            if header.return_value >= 0 {
                 argf!(sf, "wstatus: {}", format_wait_status(data.wstatus));
             } else {
                 argf!(sf, "wstatus: 0x{:x}", data.wstatus);
@@ -3827,10 +3776,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_waitid => {
-            let data = unsafe { event.data.waitid };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::WaitidData)
+            };
 
             argf!(sf, "idtype: {}", format_waitid_idtype(data.idtype));
 
@@ -3844,7 +3795,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
 
             arg!(sf, "infop:");
-            if data.has_infop && event.return_value >= 0 {
+            if data.has_infop && header.return_value >= 0 {
                 format_siginfo(&mut sf, &data.infop).await?;
             } else {
                 raw!(sf, " NULL");
@@ -3852,15 +3803,17 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "options: {}", format_wait_options(data.options));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getrusage => {
-            let data = unsafe { event.data.getrusage };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetrusageData)
+            };
 
             argf!(sf, "who: {}", format_rusage_who(data.who));
 
             arg!(sf, "rusage:");
-            if event.return_value >= 0 {
+            if header.return_value >= 0 {
                 with_struct!(sf, {
                     format_rusage(&mut sf, &data.rusage).await?;
                 });
@@ -3868,10 +3821,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL"); // For failed calls, just show NULL
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_clone3 => {
-            let data = unsafe { event.data.clone3 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Clone3Data)
+            };
 
             arg!(sf, "cl_args:");
             with_struct!(sf, {
@@ -3903,10 +3858,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "size: {}", data.size);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_clone => {
-            let data = unsafe { event.data.clone };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::CloneData)
+            };
 
             argf!(sf, "flags: {}", format_clone_flags(data.flags));
             argf!(sf, "stack: {:#x}", data.stack);
@@ -3914,32 +3871,40 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "child_tid: {}", data.child_tid);
             argf!(sf, "tls: {:#x}", data.tls);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_chown | syscalls::SYS_lchown => {
-            let data = unsafe { event.data.chown };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ChownData)
+            };
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "uid: {}", data.uid);
             argf!(sf, "gid: {}", data.gid);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_truncate => {
-            let data = unsafe { event.data.truncate };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TruncateData)
+            };
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "length: {}", data.length);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_rename => {
-            let data = unsafe { event.data.rename };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RenameData)
+            };
             argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
             argf!(sf, "newpath: {}", format_path(&data.newpath, false));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_poll => {
-            let data = unsafe { event.data.poll };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PollData)
+            };
             arg!(sf, "fds:");
             with_array!(sf, {
                 for i in 0..data.actual_nfds as usize {
@@ -3961,118 +3926,99 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             });
             argf!(sf, "nfds: {}", data.nfds);
             argf!(sf, "timeout: {}", data.timeout);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_create => {
-            let data = unsafe { event.data.epoll_create };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::EpollCreateData)
+            };
             argf!(sf, "size: {}", data.size);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_epoll_create1 => {
-            let data = unsafe { event.data.epoll_create1 };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::EpollCreate1Data)
+            };
             argf!(sf, "flags: {}", format_epoll_create1_flags(data.flags));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_splice => {
-            let data = unsafe { event.data.splice };
-
-            argf!(sf, "fd_in: {}", data.fd_in);
-            argf!(sf, "off_in: 0x{:x}", data.off_in);
-            argf!(sf, "fd_out: {}", data.fd_out);
-            argf!(sf, "off_out: 0x{:x}", data.off_out);
-            argf!(sf, "len: {}", data.len);
-            argf!(sf, "flags: {}", format_splice_flags(data.flags));
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_tee => {
-            let data = unsafe { event.data.tee };
-
-            argf!(sf, "fd_in: {}", data.fd_in);
-            argf!(sf, "fd_out: {}", data.fd_out);
-            argf!(sf, "len: {}", data.len);
-            argf!(sf, "flags: {}", format_splice_flags(data.flags));
-
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_vmsplice => {
-            let data = unsafe { event.data.vmsplice };
-            argf!(sf, "fd: {}", data.fd);
-            arg!(sf, "iov:");
-            format_iovec_array(
-                &mut sf,
-                &data.iovecs,
-                &data.iov_lens,
-                &data.iov_bufs,
-                data.read_count,
-                &IovecFormatOptions::for_io_syscalls(),
-            )
-            .await?;
-            argf!(sf, "iovcnt: {}", data.iovcnt);
-            argf!(sf, "flags: {}", format_splice_flags(data.flags));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_rmdir => {
-            let data = unsafe { event.data.rmdir };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RmdirData)
+            };
 
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_unlink => {
-            let data = unsafe { event.data.unlink };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UnlinkData)
+            };
 
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_symlink => {
-            let data = unsafe { event.data.symlink };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SymlinkData)
+            };
             argf!(sf, "target: {}", format_path(&data.target, false));
             argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_link => {
-            let data = unsafe { event.data.link };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::LinkData)
+            };
             argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
             argf!(sf, "newpath: {}", format_path(&data.newpath, false));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_shmat => {
-            let data = unsafe { event.data.shmat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ShmatData)
+            };
 
             argf!(sf, "shmid: {}", data.shmid);
             argf!(sf, "shmaddr: 0x{:x}", data.shmaddr);
             argf!(sf, "shmflg: {}", format_shmflg(data.shmflg));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_shmdt => {
-            let data = unsafe { event.data.shmdt };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ShmdtData)
+            };
 
             argf!(sf, "shmaddr: 0x{:x}", data.shmaddr);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_shmget => {
-            let data = unsafe { event.data.shmget };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ShmgetData)
+            };
 
             argf!(sf, "key: 0x{:x}", data.key);
             argf!(sf, "size: {}", data.size);
             argf!(sf, "shmflg: {}", format_shmflg(data.shmflg));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_shmctl => {
-            let data = unsafe { event.data.shmctl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ShmctlData)
+            };
 
             argf!(sf, "shmid: {}", data.shmid);
             argf!(sf, "cmd: {}", format_shmctl_cmd(data.cmd));
@@ -4084,30 +4030,36 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_msgget => {
-            let data = unsafe { event.data.msgget };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MsggetData)
+            };
 
             argf!(sf, "key: 0x{:x}", data.key);
             argf!(sf, "msgflg: {}", format_msgflg(data.msgflg));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_msgsnd => {
-            let data = unsafe { event.data.msgsnd };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MsgsndData)
+            };
 
             argf!(sf, "msqid: {}", data.msqid);
             argf!(sf, "msgp: 0x{:x}", data.msgp);
             argf!(sf, "msgsz: {}", data.msgsz);
             argf!(sf, "msgflg: {}", format_msgflg(data.msgflg));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_msgrcv => {
-            let data = unsafe { event.data.msgrcv };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MsgrcvData)
+            };
 
             argf!(sf, "msqid: {}", data.msqid);
             argf!(sf, "msgp: 0x{:x}", data.msgp);
@@ -4115,11 +4067,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "msgtyp: {}", data.msgtyp);
             argf!(sf, "msgflg: {}", format_msgflg(data.msgflg));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_msgctl => {
-            let data = unsafe { event.data.msgctl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MsgctlData)
+            };
 
             argf!(sf, "msqid: {}", data.msqid);
             argf!(sf, "cmd: {}", format_msgctl_cmd(data.op));
@@ -4131,30 +4085,36 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_semget => {
-            let data = unsafe { event.data.semget };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SemgetData)
+            };
 
             argf!(sf, "key: 0x{:x}", data.key);
             argf!(sf, "nsems: {}", data.nsems);
             argf!(sf, "semflg: {}", format_semflg(data.semflg));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_semop => {
-            let data = unsafe { event.data.semop };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SemopData)
+            };
 
             argf!(sf, "semid: {}", data.semid);
             argf!(sf, "sops: 0x{:x}", data.sops);
             argf!(sf, "nsops: {}", data.nsops);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
 
         syscalls::SYS_semctl => {
-            let data = unsafe { event.data.semctl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SemctlData)
+            };
 
             argf!(sf, "semid: {}", data.semid);
             argf!(sf, "semnum: {}", data.semnum);
@@ -4194,10 +4154,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 }
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mq_open => {
-            let data = unsafe { event.data.mq_open };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MqOpenData)
+            };
 
             argf!(sf, "name: 0x{:x}", data.name);
             argf!(sf, "flags: {}", format_mq_open_flags(data.flags));
@@ -4210,17 +4172,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mq_unlink => {
-            let data = unsafe { event.data.mq_unlink };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MqUnlinkData)
+            };
 
             argf!(sf, "name: 0x{:x}", data.name);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mq_timedsend => {
-            let data = unsafe { event.data.mq_timedsend };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MqTimedsendData)
+            };
 
             argf!(sf, "mqdes: {}", data.mqdes);
             argf!(sf, "msg_ptr: 0x{:x}", data.msg_ptr);
@@ -4228,10 +4194,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "msg_prio: {}", data.msg_prio);
             argf!(sf, "abs_timeout: 0x{:x}", data.abs_timeout);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mq_timedreceive => {
-            let data = unsafe { event.data.mq_timedreceive };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::MqTimedreceiveData
+                )
+            };
 
             argf!(sf, "mqdes: {}", data.mqdes);
             argf!(sf, "msg_ptr: 0x{:x}", data.msg_ptr);
@@ -4239,18 +4209,22 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "msg_prio: {}", data.msg_prio);
             argf!(sf, "abs_timeout: 0x{:x}", data.abs_timeout);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mq_notify => {
-            let data = unsafe { event.data.mq_notify };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MqNotifyData)
+            };
 
             argf!(sf, "mqdes: {}", data.mqdes);
             argf!(sf, "sevp: 0x{:x}", data.sevp);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_mq_getsetattr => {
-            let data = unsafe { event.data.mq_getsetattr };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MqGetsetattrData)
+            };
 
             argf!(sf, "mqdes: {}", data.mqdes);
 
@@ -4268,15 +4242,19 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 raw!(sf, " NULL");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_acct => {
-            let data = unsafe { event.data.acct };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::AcctData)
+            };
             argf!(sf, "filename: {}", format_path(&data.filename, false));
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_getcpu => {
-            let data = unsafe { event.data.getcpu };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetcpuData)
+            };
             let cpu_val = if data.has_cpu {
                 Cow::Owned(data.cpu.to_string())
             } else {
@@ -4290,62 +4268,59 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "cpu: {}", cpu_val);
             argf!(sf, "node: {}", node_val);
             argf!(sf, "tcache: 0x{:x}", data.tcache);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_pidfd_open => {
-            let data = unsafe { event.data.pidfd_open };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PidfdOpenData)
+            };
             argf!(sf, "pid: {}", data.pid);
             argf!(sf, "flags: {}", format_pidfd_open_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_pidfd_getfd => {
-            let data = unsafe { event.data.pidfd_getfd };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PidfdGetfdData)
+            };
             argf!(sf, "pidfd: {}", data.pidfd);
             argf!(sf, "targetfd: {}", data.targetfd);
             argf!(sf, "flags: 0x{:x}", data.flags);
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_swapon => {
-            let data = unsafe { event.data.swapon };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SwaponData)
+            };
 
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "flags: {}", format_swapon_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_swapoff => {
-            let data = unsafe { event.data.swapoff };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SwapoffData)
+            };
 
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
 
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_fstatfs => {
-            let data = unsafe { event.data.fstatfs };
-
-            argf!(sf, "fd: {}", data.fd);
-            arg!(sf, "buf:");
-            if event.return_value == 0 {
-                with_struct!(sf, {
-                    format_statfs(&mut sf, &data.statfs).await?;
-                });
-            } else {
-                raw!(sf, " <unavailable>");
-            }
-
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fsopen => {
-            let data = unsafe { event.data.fsopen };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FsopenData)
+            };
 
             argf!(sf, "fsname: {}", format_path(&data.fsname, false));
             argf!(sf, "flags: {}", format_fsopen_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fsconfig => {
-            let data = unsafe { event.data.fsconfig };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FsconfigData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "cmd: {}", format_fsconfig_cmd(data.cmd));
@@ -4353,10 +4328,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "value: {}", format_path(&data.value, false));
             argf!(sf, "aux: {}", data.aux);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fsmount => {
-            let data = unsafe { event.data.fsmount };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FsmountData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "flags: {}", format_fsmount_flags(data.flags));
@@ -4366,19 +4343,23 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 format_fsmount_attr_flags(data.attr_flags)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fspick => {
-            let data = unsafe { event.data.fspick };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FspickData)
+            };
 
             argf!(sf, "dfd: {}", format_dirfd(data.dfd));
             argf!(sf, "path: {}", format_path(&data.path, false));
             argf!(sf, "flags: {}", format_fspick_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_init_module => {
-            let data = unsafe { event.data.init_module };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::InitModuleData)
+            };
 
             argf!(sf, "module_image: 0x{:x}", data.module_image);
             argf!(sf, "len: {}", data.len);
@@ -4388,10 +4369,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 format_path(&data.param_values, false)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_finit_module => {
-            let data = unsafe { event.data.finit_module };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FinitModuleData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(
@@ -4401,34 +4384,42 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             );
             argf!(sf, "flags: {}", format_finit_module_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_delete_module => {
-            let data = unsafe { event.data.delete_module };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::DeleteModuleData)
+            };
 
             argf!(sf, "name: {}", format_path(&data.name, false));
             argf!(sf, "flags: {}", format_delete_module_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sethostname => {
-            let data = unsafe { event.data.sethostname };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SethostnameData)
+            };
 
             argf!(sf, "name: {}", format_path(&data.name, false));
             argf!(sf, "len: {}", data.len);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_setdomainname => {
-            let data = unsafe { event.data.setdomainname };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SetdomainnameData)
+            };
 
             argf!(sf, "name: {}", format_path(&data.name, false));
             argf!(sf, "len: {}", data.len);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_uring_setup => {
-            let data = unsafe { event.data.io_uring_setup };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoUringSetupData)
+            };
 
             argf!(sf, "entries: {}", data.entries);
             argf!(sf, "params_ptr: 0x{:x}", data.params_ptr);
@@ -4454,10 +4445,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 });
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_uring_enter => {
-            let data = unsafe { event.data.io_uring_enter };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoUringEnterData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "to_submit: {}", data.to_submit);
@@ -4466,10 +4459,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "sig: 0x{:x}", data.sig);
             argf!(sf, "sigsz: {}", data.sigsz);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_uring_register => {
-            let data = unsafe { event.data.io_uring_register };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::IoUringRegisterData
+                )
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "opcode: {}", format_io_uring_register_op(data.opcode));
@@ -4480,25 +4477,31 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 format_io_uring_register_nr_args(data.nr_args)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_setup => {
-            let data = unsafe { event.data.io_setup };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoSetupData)
+            };
 
             argf!(sf, "nr_events: {}", data.nr_events);
             argf!(sf, "ctx_idp: 0x{:x}", data.ctx_idp);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_destroy => {
-            let data = unsafe { event.data.io_destroy };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoDestroyData)
+            };
 
             argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_submit => {
-            let data = unsafe { event.data.io_submit };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoSubmitData)
+            };
 
             argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
             argf!(sf, "nr: {}", data.nr);
@@ -4529,10 +4532,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 });
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_cancel => {
-            let data = unsafe { event.data.io_cancel };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoCancelData)
+            };
 
             argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
             argf!(sf, "iocb: 0x{:x}", data.iocb);
@@ -4548,10 +4553,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 });
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_getevents => {
-            let data = unsafe { event.data.io_getevents };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoGeteventsData)
+            };
 
             argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
             argf!(sf, "min_nr: {}", data.min_nr);
@@ -4581,10 +4588,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 });
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_io_pgetevents => {
-            let data = unsafe { event.data.io_pgetevents };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoPgeteventsData)
+            };
 
             argf!(sf, "ctx_id: 0x{:x}", data.ctx_id);
             argf!(sf, "min_nr: {}", data.min_nr);
@@ -4631,19 +4640,27 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 });
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_landlock_create_ruleset => {
-            let data = unsafe { event.data.landlock_create_ruleset };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::LandlockCreateRulesetData
+                )
+            };
 
             argf!(sf, "attr: 0x{:x}", data.attr);
             argf!(sf, "size: {}", data.size);
             argf!(sf, "flags: {}", format_landlock_ruleset_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_landlock_add_rule => {
-            let data = unsafe { event.data.landlock_add_rule };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::LandlockAddRuleData
+                )
+            };
 
             argf!(sf, "ruleset_fd: {}", data.ruleset_fd);
             argf!(
@@ -4678,18 +4695,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "flags: {}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_landlock_restrict_self => {
-            let data = unsafe { event.data.landlock_restrict_self };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::LandlockRestrictSelfData
+                )
+            };
 
             argf!(sf, "ruleset_fd: {}", data.ruleset_fd);
             argf!(sf, "flags: {}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_add_key => {
-            let data = unsafe { event.data.add_key };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::AddKeyData)
+            };
 
             let key_type = crate::format_helpers::extract_cstring_with_truncation(&data.key_type);
             let description =
@@ -4712,10 +4735,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_key_spec_id(data.keyring)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_request_key => {
-            let data = unsafe { event.data.request_key };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RequestKeyData)
+            };
 
             let key_type = crate::format_helpers::extract_cstring_with_truncation(&data.key_type);
             let description =
@@ -4739,10 +4764,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_key_spec_id(data.dest_keyring)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_keyctl => {
-            let data = unsafe { event.data.keyctl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::KeyctlData)
+            };
 
             let operation = data.operation;
 
@@ -4752,7 +4779,7 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_keyctl_operation(operation)
             );
 
-            let suffix: Option<&'static [u8]> = if event.return_value < 0 {
+            let suffix: Option<&'static [u8]> = if header.return_value < 0 {
                 Some(b" (error)")
             } else {
                 let op_u32 = operation as u32;
@@ -4910,13 +4937,15 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             }
 
             if let Some(suffix) = suffix {
-                finish!(sf, event.return_value, suffix);
+                finish!(sf, header.return_value, suffix);
             } else {
-                finish!(sf, event.return_value);
+                finish!(sf, header.return_value);
             }
         }
         syscalls::SYS_perf_event_open => {
-            let data = unsafe { event.data.perf_event_open };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PerfEventOpenData)
+            };
 
             arg!(sf, "attr:");
             format_perf_event_attr(&mut sf, &data.attr).await?;
@@ -4930,10 +4959,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_perf_event_open_flags(data.flags)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_bpf => {
-            let data = unsafe { event.data.bpf };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::BpfData)
+            };
 
             argf!(
                 sf,
@@ -4996,23 +5027,27 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     | crate::format_helpers::bpf_constants::BPF_LINK_GET_FD_BY_ID
             );
 
-            if returns_fd && event.return_value >= 0 {
-                finish!(sf, event.return_value, b" (fd)");
+            if returns_fd && header.return_value >= 0 {
+                finish!(sf, header.return_value, b" (fd)");
             } else {
-                finish!(sf, event.return_value);
+                finish!(sf, header.return_value);
             }
         }
         syscalls::SYS_syslog => {
-            let data = unsafe { event.data.syslog };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SyslogData)
+            };
 
             argf!(sf, "type: {}", format_syslog_type(data.type_));
             argf!(sf, "bufp: 0x{:x}", data.bufp);
             argf!(sf, "size: {}", data.size);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_ptrace => {
-            let data = unsafe { event.data.ptrace };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::PtraceData)
+            };
 
             argf!(
                 sf,
@@ -5034,21 +5069,23 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                     "sig: {}",
                     crate::format_helpers::format_signal_number(data.data as i32)
                 );
-                finish!(sf, event.return_value);
+                finish!(sf, header.return_value);
             } else if request == libc::PTRACE_PEEKTEXT as i32
                 || request == libc::PTRACE_PEEKDATA as i32
             {
                 argf!(sf, "addr: 0x{:x}", data.addr);
                 argf!(sf, "data: 0x{:x}", data.data);
-                finish!(sf, event.return_value, b" (data ptr)");
+                finish!(sf, header.return_value, b" (data ptr)");
             } else {
                 argf!(sf, "addr: 0x{:x}", data.addr);
                 argf!(sf, "data: 0x{:x}", data.data);
-                finish!(sf, event.return_value);
+                finish!(sf, header.return_value);
             }
         }
         syscalls::SYS_seccomp => {
-            let data = unsafe { event.data.seccomp };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SeccompData)
+            };
 
             argf!(
                 sf,
@@ -5122,15 +5159,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 }
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_restart_syscall => {
-            let _data = unsafe { event.data.restart_syscall };
+            let _data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::RestartSyscallData
+                )
+            };
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_kexec_load => {
-            let data = unsafe { event.data.kexec_load };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::KexecLoadData)
+            };
 
             argf!(sf, "entry: 0x{:x}", data.entry);
             argf!(sf, "nr_segments: {}", data.nr_segments);
@@ -5168,10 +5211,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             argf!(sf, "flags: {}", format_kexec_load_flags(data.flags));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fanotify_init => {
-            let data = unsafe { event.data.fanotify_init };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FanotifyInitData)
+            };
 
             argf!(
                 sf,
@@ -5184,10 +5229,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_flags(data.event_f_flags as i32)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_fanotify_mark => {
-            let data = unsafe { event.data.fanotify_mark };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FanotifyMarkData)
+            };
 
             argf!(sf, "fanotify_fd: {}", data.fanotify_fd);
             argf!(
@@ -5213,10 +5260,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 argf!(sf, "pathname: (null)");
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_name_to_handle_at => {
-            let data = unsafe { event.data.name_to_handle_at };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::NameToHandleAtData
+                )
+            };
 
             argf!(
                 sf,
@@ -5240,10 +5291,14 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_at_flags(data.flags)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_open_by_handle_at => {
-            let data = unsafe { event.data.open_by_handle_at };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::OpenByHandleAtData
+                )
+            };
 
             argf!(
                 sf,
@@ -5257,10 +5312,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_flags(data.flags)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_copy_file_range => {
-            let data = unsafe { event.data.copy_file_range };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::CopyFileRangeData)
+            };
 
             argf!(sf, "fd_in: {}", data.fd_in);
 
@@ -5281,10 +5338,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "len: {}", data.len);
             argf!(sf, "flags: {}", data.flags);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_sync_file_range => {
-            let data = unsafe { event.data.sync_file_range };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SyncFileRangeData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(sf, "offset: {}", data.offset);
@@ -5295,17 +5354,21 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_sync_file_range_flags(data.flags)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_syncfs => {
-            let data = unsafe { event.data.syncfs };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SyncfsData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_utimensat => {
-            let data = unsafe { event.data.utimensat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UtimensatData)
+            };
 
             argf!(
                 sf,
@@ -5338,10 +5401,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 crate::format_helpers::format_at_flags(data.flags)
             );
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_quotactl => {
-            let data = unsafe { event.data.quotactl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::QuotactlData)
+            };
 
             argf!(
                 sf,
@@ -5352,10 +5417,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "id: {}", data.id);
             argf!(sf, "addr: 0x{:x}", data.addr);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_quotactl_fd => {
-            let data = unsafe { event.data.quotactl_fd };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::QuotactlFdData)
+            };
 
             argf!(sf, "fd: {}", data.fd);
             argf!(
@@ -5366,10 +5433,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "id: {}", data.id);
             argf!(sf, "addr: 0x{:x}", data.addr);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_lookup_dcookie => {
-            let data = unsafe { event.data.lookup_dcookie };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::LookupDcookieData)
+            };
 
             argf!(sf, "cookie: {}", data.cookie);
 
@@ -5378,20 +5447,24 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "buffer: {}", buffer);
             argf!(sf, "size: {}", data.size);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_nfsservctl => {
-            let data = unsafe { event.data.nfsservctl };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::NfsservctlData)
+            };
 
             argf!(sf, "cmd: {}", data.cmd);
             argf!(sf, "argp: 0x{:x}", data.argp);
             argf!(sf, "resp: 0x{:x}", data.resp);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_utime => {
-            let data = unsafe { event.data.utime };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UtimeData)
+            };
 
             let filename = format_path(&data.filename, false);
 
@@ -5408,55 +5481,65 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 );
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_access => {
-            let data = unsafe { event.data.access };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::AccessData)
+            };
 
             let pathname = format_path(&data.pathname, false);
 
             argf!(sf, "pathname: {}", pathname);
             argf!(sf, "mode: {}", format_access_mode(data.mode));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_chmod => {
-            let data = unsafe { event.data.chmod };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ChmodData)
+            };
 
             let pathname = format_path(&data.pathname, false);
 
             argf!(sf, "pathname: {}", pathname);
             argf!(sf, "mode: {}", format_mode(data.mode));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_creat => {
-            let data = unsafe { event.data.creat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::CreatData)
+            };
 
             let pathname = format_path(&data.pathname, false);
 
             argf!(sf, "pathname: {}", pathname);
             argf!(sf, "mode: {}", format_mode(data.mode));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_mkdir => {
-            let data = unsafe { event.data.mkdir };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MkdirData)
+            };
 
             let pathname = format_path(&data.pathname, false);
 
             argf!(sf, "pathname: {}", pathname);
             argf!(sf, "mode: {}", format_mode(data.mode));
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_readlink => {
-            let data = unsafe { event.data.readlink };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ReadlinkData)
+            };
 
             let pathname = format_path(&data.pathname, false);
             let buf = format_path(&data.buf, false);
@@ -5465,11 +5548,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "buf: {}", buf);
             argf!(sf, "bufsiz: {}", data.bufsiz);
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_stat => {
-            let data = unsafe { event.data.stat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::StatData)
+            };
 
             let pathname = format_path(&data.pathname, false);
 
@@ -5477,11 +5562,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             arg!(sf, "statbuf:");
             format_stat(&mut sf, &data.statbuf).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_lstat => {
-            let data = unsafe { event.data.lstat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::LstatData)
+            };
 
             let pathname = format_path(&data.pathname, false);
 
@@ -5489,11 +5576,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             arg!(sf, "statbuf:");
             format_stat(&mut sf, &data.statbuf).await?;
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_utimes => {
-            let data = unsafe { event.data.utimes };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::UtimesData)
+            };
 
             let filename = format_path(&data.filename, false);
 
@@ -5512,11 +5601,13 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 );
             }
 
-            finish!(sf, event.return_value);
+            finish!(sf, header.return_value);
         }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_futimesat => {
-            let data = unsafe { event.data.futimesat };
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FutimesatData)
+            };
 
             let pathname = format_path(&data.pathname, false);
 
@@ -5536,31 +5627,20 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
                 );
             }
 
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_close
-        | syscalls::SYS_openat
-        | syscalls::SYS_read
-        | syscalls::SYS_lseek
-        | syscalls::SYS_write
-        | syscalls::SYS_pread64
-        | syscalls::SYS_pwrite64
-        | syscalls::SYS_readv
-        | syscalls::SYS_writev
-        | syscalls::SYS_preadv
-        | syscalls::SYS_pwritev
-        | syscalls::SYS_preadv2
-        | syscalls::SYS_pwritev2 => {
-            unreachable!();
+            finish!(sf, header.return_value);
         }
         _ => {
-            let data = unsafe { event.data.generic };
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::GenericSyscallData
+                )
+            };
 
             for i in 0..data.args.len() {
                 argf!(sf, "{}", data.args[i]);
             }
 
-            finish!(sf, event.return_value, b" <STUB>");
+            finish!(sf, header.return_value, b" <STUB>");
         }
     };
 

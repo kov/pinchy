@@ -4,10 +4,7 @@
 use aya_ebpf::{helpers::bpf_probe_read_user, macros::tracepoint, programs::TracePointContext};
 use pinchy_common::syscalls;
 
-use crate::{
-    data_mut,
-    util::{get_args, get_return_value, get_syscall_nr, read_iovec_array, Entry, IovecOp},
-};
+use crate::util::{get_args, get_return_value, get_syscall_nr, read_iovec_array, IovecOp};
 
 #[tracepoint]
 pub fn syscall_exit_memory(ctx: TracePointContext) -> u32 {
@@ -16,402 +13,493 @@ pub fn syscall_exit_memory(ctx: TracePointContext) -> u32 {
         let args = get_args(&ctx, syscall_nr)?;
         let return_value = get_return_value(&ctx)?;
 
-        let mut entry = Entry::new(&ctx, syscall_nr)?;
-
         match syscall_nr {
             syscalls::SYS_mmap => {
-                let data = data_mut!(entry, mmap);
-                data.addr = args[0];
-                data.length = args[1];
-                data.prot = args[2] as i32;
-                data.flags = args[3] as i32;
-                data.fd = args[4] as i32;
-                data.offset = args[5];
+                crate::util::submit_compact_payload::<pinchy_common::MmapData, _>(
+                    &ctx,
+                    syscalls::SYS_mmap,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.length = args[1];
+                        payload.prot = args[2] as i32;
+                        payload.flags = args[3] as i32;
+                        payload.fd = args[4] as i32;
+                        payload.offset = args[5];
+                    },
+                )?;
             }
             syscalls::SYS_munmap => {
-                let data = data_mut!(entry, munmap);
-                data.addr = args[0];
-                data.length = args[1];
+                crate::util::submit_compact_payload::<pinchy_common::MunmapData, _>(
+                    &ctx,
+                    syscalls::SYS_munmap,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.length = args[1];
+                    },
+                )?;
             }
             syscalls::SYS_madvise => {
-                let data = data_mut!(entry, madvise);
-                data.addr = args[0];
-                data.length = args[1];
-                data.advice = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::MadviseData, _>(
+                    &ctx,
+                    syscalls::SYS_madvise,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.length = args[1];
+                        payload.advice = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_process_madvise => {
-                let data = data_mut!(entry, process_madvise);
-                data.pidfd = args[0] as i32;
-                data.iovcnt = args[2] as usize;
-                data.advice = args[3] as i32;
-                data.flags = args[4] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::ProcessMadviseData, _>(
+                    &ctx,
+                    syscalls::SYS_process_madvise,
+                    return_value,
+                    |payload| {
+                        payload.pidfd = args[0] as i32;
+                        payload.iovcnt = args[2] as usize;
+                        payload.advice = args[3] as i32;
+                        payload.flags = args[4] as u32;
 
-                let iov_addr = args[1] as u64;
-                read_iovec_array(
-                    iov_addr,
-                    data.iovcnt,
-                    IovecOp::AddressOnly, // Don't read buffer contents for madvise
-                    &mut data.iovecs,
-                    &mut data.iov_lens,
-                    None, // No buffer needed for AddressOnly
-                    &mut data.read_count,
-                    0, // return_value not relevant for AddressOnly
-                );
+                        let iov_addr = args[1] as u64;
+                        read_iovec_array(
+                            iov_addr,
+                            payload.iovcnt,
+                            IovecOp::AddressOnly, // Don't read buffer contents for madvise
+                            &mut payload.iovecs,
+                            &mut payload.iov_lens,
+                            None, // No buffer needed for AddressOnly
+                            &mut payload.read_count,
+                            0, // return_value not relevant for AddressOnly
+                        );
+                    },
+                )?;
             }
             syscalls::SYS_process_vm_readv => {
-                let data = data_mut!(entry, process_vm);
-                data.pid = args[0] as i32;
-                data.local_iovcnt = args[2] as usize;
-                data.remote_iovcnt = args[4] as usize;
-                data.flags = args[5] as u64;
-
-                let local_addr = args[1] as u64;
-                let remote_addr = args[3] as u64;
-
-                // Read local iovec array (with buffer contents since it's readable by us)
-                read_iovec_array(
-                    local_addr,
-                    data.local_iovcnt,
-                    IovecOp::Read,
-                    &mut data.local_iovecs,
-                    &mut data.local_iov_lens,
-                    Some(&mut data.local_iov_bufs),
-                    &mut data.local_read_count,
+                crate::util::submit_compact_payload::<pinchy_common::ProcessVmData, _>(
+                    &ctx,
+                    syscalls::SYS_process_vm_readv,
                     return_value,
-                );
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.local_iovcnt = args[2] as usize;
+                        payload.remote_iovcnt = args[4] as usize;
+                        payload.flags = args[5] as u64;
 
-                // Read remote iovec array (address-only since we can't read remote process memory)
-                read_iovec_array(
-                    remote_addr,
-                    data.remote_iovcnt,
-                    IovecOp::AddressOnly,
-                    &mut data.remote_iovecs,
-                    &mut data.remote_iov_lens,
-                    None, // No buffer needed for AddressOnly
-                    &mut data.remote_read_count,
-                    return_value,
-                );
+                        let local_addr = args[1] as u64;
+                        let remote_addr = args[3] as u64;
+
+                        // Read local iovec array (with buffer contents since it's readable by us)
+                        read_iovec_array(
+                            local_addr,
+                            payload.local_iovcnt,
+                            IovecOp::Read,
+                            &mut payload.local_iovecs,
+                            &mut payload.local_iov_lens,
+                            Some(&mut payload.local_iov_bufs),
+                            &mut payload.local_read_count,
+                            return_value,
+                        );
+
+                        // Read remote iovec array (address-only since we can't read remote process memory)
+                        read_iovec_array(
+                            remote_addr,
+                            payload.remote_iovcnt,
+                            IovecOp::AddressOnly,
+                            &mut payload.remote_iovecs,
+                            &mut payload.remote_iov_lens,
+                            None, // No buffer needed for AddressOnly
+                            &mut payload.remote_read_count,
+                            return_value,
+                        );
+                    },
+                )?;
             }
             syscalls::SYS_process_vm_writev => {
-                let data = data_mut!(entry, process_vm);
-                data.pid = args[0] as i32;
-                data.local_iovcnt = args[2] as usize;
-                data.remote_iovcnt = args[4] as usize;
-                data.flags = args[5] as u64;
-
-                let local_addr = args[1] as u64;
-                let remote_addr = args[3] as u64;
-
-                // Read local iovec array (with buffer contents since it's readable by us)
-                read_iovec_array(
-                    local_addr,
-                    data.local_iovcnt,
-                    IovecOp::Write,
-                    &mut data.local_iovecs,
-                    &mut data.local_iov_lens,
-                    Some(&mut data.local_iov_bufs),
-                    &mut data.local_read_count,
+                crate::util::submit_compact_payload::<pinchy_common::ProcessVmData, _>(
+                    &ctx,
+                    syscalls::SYS_process_vm_writev,
                     return_value,
-                );
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.local_iovcnt = args[2] as usize;
+                        payload.remote_iovcnt = args[4] as usize;
+                        payload.flags = args[5] as u64;
 
-                // Read remote iovec array (address-only since we can't read remote process memory)
-                read_iovec_array(
-                    remote_addr,
-                    data.remote_iovcnt,
-                    IovecOp::AddressOnly,
-                    &mut data.remote_iovecs,
-                    &mut data.remote_iov_lens,
-                    None, // No buffer needed for AddressOnly
-                    &mut data.remote_read_count,
-                    return_value,
-                );
+                        let local_addr = args[1] as u64;
+                        let remote_addr = args[3] as u64;
+
+                        // Read local iovec array (with buffer contents since it's readable by us)
+                        read_iovec_array(
+                            local_addr,
+                            payload.local_iovcnt,
+                            IovecOp::Write,
+                            &mut payload.local_iovecs,
+                            &mut payload.local_iov_lens,
+                            Some(&mut payload.local_iov_bufs),
+                            &mut payload.local_read_count,
+                            return_value,
+                        );
+
+                        // Read remote iovec array (address-only since we can't read remote process memory)
+                        read_iovec_array(
+                            remote_addr,
+                            payload.remote_iovcnt,
+                            IovecOp::AddressOnly,
+                            &mut payload.remote_iovecs,
+                            &mut payload.remote_iov_lens,
+                            None, // No buffer needed for AddressOnly
+                            &mut payload.remote_read_count,
+                            return_value,
+                        );
+                    },
+                )?;
             }
             syscalls::SYS_mbind => {
-                let data = data_mut!(entry, mbind);
-                data.addr = args[0] as u64;
-                data.len = args[1] as u64;
-                data.mode = args[2] as i32;
-                data.maxnode = args[4] as u64;
-                data.flags = args[5] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::MbindData, _>(
+                    &ctx,
+                    syscalls::SYS_mbind,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0] as u64;
+                        payload.len = args[1] as u64;
+                        payload.mode = args[2] as i32;
+                        payload.maxnode = args[4] as u64;
+                        payload.flags = args[5] as u32;
 
-                let nodemask_ptr = args[3] as *const u64;
+                        let nodemask_ptr = args[3] as *const u64;
 
-                if !nodemask_ptr.is_null() && data.maxnode > 0 {
-                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+                        if !nodemask_ptr.is_null() && payload.maxnode > 0 {
+                            let max_longs = core::cmp::min(2, (payload.maxnode + 63) / 64);
 
-                    for i in 0..max_longs as usize {
-                        if i >= 2 {
-                            break;
-                        }
+                            for i in 0..max_longs as usize {
+                                if i >= 2 {
+                                    break;
+                                }
 
-                        unsafe {
-                            let ptr = nodemask_ptr.add(i);
+                                unsafe {
+                                    let ptr = nodemask_ptr.add(i);
 
-                            if let Ok(val) = bpf_probe_read_user(ptr) {
-                                data.nodemask[i] = val;
-                                data.nodemask_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(val) = bpf_probe_read_user(ptr) {
+                                        payload.nodemask[i] = val;
+                                        payload.nodemask_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_get_mempolicy => {
-                let data = data_mut!(entry, get_mempolicy);
-                data.maxnode = args[2] as u64;
-                data.addr = args[3] as u64;
-                data.flags = args[4] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::GetMempolicyData, _>(
+                    &ctx,
+                    syscalls::SYS_get_mempolicy,
+                    return_value,
+                    |payload| {
+                        payload.maxnode = args[2] as u64;
+                        payload.addr = args[3] as u64;
+                        payload.flags = args[4] as u64;
 
-                if return_value >= 0 {
-                    let mode_ptr = args[0] as *const i32;
+                        if return_value >= 0 {
+                            let mode_ptr = args[0] as *const i32;
 
-                    if !mode_ptr.is_null() {
-                        if let Ok(mode) = unsafe { bpf_probe_read_user(mode_ptr) } {
-                            data.mode_out = mode;
-                            data.mode_valid = true;
-                        }
-                    }
-
-                    let nodemask_ptr = args[1] as *const u64;
-
-                    if !nodemask_ptr.is_null() && data.maxnode > 0 {
-                        let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
-
-                        for i in 0..max_longs as usize {
-                            if i >= 2 {
-                                break;
+                            if !mode_ptr.is_null() {
+                                if let Ok(mode) = unsafe { bpf_probe_read_user(mode_ptr) } {
+                                    payload.mode_out = mode;
+                                    payload.mode_valid = true;
+                                }
                             }
 
-                            unsafe {
-                                let ptr = nodemask_ptr.add(i);
+                            let nodemask_ptr = args[1] as *const u64;
 
-                                if let Ok(val) = bpf_probe_read_user(ptr) {
-                                    data.nodemask_out[i] = val;
-                                    data.nodemask_read_count += 1;
-                                } else {
-                                    break;
+                            if !nodemask_ptr.is_null() && payload.maxnode > 0 {
+                                let max_longs = core::cmp::min(2, (payload.maxnode + 63) / 64);
+
+                                for i in 0..max_longs as usize {
+                                    if i >= 2 {
+                                        break;
+                                    }
+
+                                    unsafe {
+                                        let ptr = nodemask_ptr.add(i);
+
+                                        if let Ok(val) = bpf_probe_read_user(ptr) {
+                                            payload.nodemask_out[i] = val;
+                                            payload.nodemask_read_count += 1;
+                                        } else {
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_set_mempolicy => {
-                let data = data_mut!(entry, set_mempolicy);
-                data.mode = args[0] as i32;
-                data.maxnode = args[2] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::SetMempolicyData, _>(
+                    &ctx,
+                    syscalls::SYS_set_mempolicy,
+                    return_value,
+                    |payload| {
+                        payload.mode = args[0] as i32;
+                        payload.maxnode = args[2] as u64;
 
-                let nodemask_ptr = args[1] as *const u64;
+                        let nodemask_ptr = args[1] as *const u64;
 
-                if !nodemask_ptr.is_null() && data.maxnode > 0 {
-                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+                        if !nodemask_ptr.is_null() && payload.maxnode > 0 {
+                            let max_longs = core::cmp::min(2, (payload.maxnode + 63) / 64);
 
-                    for i in 0..max_longs as usize {
-                        if i >= 2 {
-                            break;
-                        }
+                            for i in 0..max_longs as usize {
+                                if i >= 2 {
+                                    break;
+                                }
 
-                        unsafe {
-                            let ptr = nodemask_ptr.add(i);
+                                unsafe {
+                                    let ptr = nodemask_ptr.add(i);
 
-                            if let Ok(val) = bpf_probe_read_user(ptr) {
-                                data.nodemask[i] = val;
-                                data.nodemask_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(val) = bpf_probe_read_user(ptr) {
+                                        payload.nodemask[i] = val;
+                                        payload.nodemask_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_migrate_pages => {
-                let data = data_mut!(entry, migrate_pages);
-                data.pid = args[0] as i32;
-                data.maxnode = args[1] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::MigratePagesData, _>(
+                    &ctx,
+                    syscalls::SYS_migrate_pages,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.maxnode = args[1] as u64;
 
-                let old_nodes_ptr = args[2] as *const u64;
-                let new_nodes_ptr = args[3] as *const u64;
+                        let old_nodes_ptr = args[2] as *const u64;
+                        let new_nodes_ptr = args[3] as *const u64;
 
-                if !old_nodes_ptr.is_null() && data.maxnode > 0 {
-                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+                        if !old_nodes_ptr.is_null() && payload.maxnode > 0 {
+                            let max_longs = core::cmp::min(2, (payload.maxnode + 63) / 64);
 
-                    for i in 0..max_longs as usize {
-                        if i >= 2 {
-                            break;
-                        }
+                            for i in 0..max_longs as usize {
+                                if i >= 2 {
+                                    break;
+                                }
 
-                        unsafe {
-                            let ptr = old_nodes_ptr.add(i);
+                                unsafe {
+                                    let ptr = old_nodes_ptr.add(i);
 
-                            if let Ok(val) = bpf_probe_read_user(ptr) {
-                                data.old_nodes[i] = val;
-                                data.old_nodes_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(val) = bpf_probe_read_user(ptr) {
+                                        payload.old_nodes[i] = val;
+                                        payload.old_nodes_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
 
-                if !new_nodes_ptr.is_null() && data.maxnode > 0 {
-                    let max_longs = core::cmp::min(2, (data.maxnode + 63) / 64);
+                        if !new_nodes_ptr.is_null() && payload.maxnode > 0 {
+                            let max_longs = core::cmp::min(2, (payload.maxnode + 63) / 64);
 
-                    for i in 0..max_longs as usize {
-                        if i >= 2 {
-                            break;
-                        }
+                            for i in 0..max_longs as usize {
+                                if i >= 2 {
+                                    break;
+                                }
 
-                        unsafe {
-                            let ptr = new_nodes_ptr.add(i);
+                                unsafe {
+                                    let ptr = new_nodes_ptr.add(i);
 
-                            if let Ok(val) = bpf_probe_read_user(ptr) {
-                                data.new_nodes[i] = val;
-                                data.new_nodes_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(val) = bpf_probe_read_user(ptr) {
+                                        payload.new_nodes[i] = val;
+                                        payload.new_nodes_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_move_pages => {
-                let data = data_mut!(entry, move_pages);
-                data.pid = args[0] as i32;
-                data.count = args[1] as u64;
-                data.flags = args[5] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::MovePagesData, _>(
+                    &ctx,
+                    syscalls::SYS_move_pages,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.count = args[1] as u64;
+                        payload.flags = args[5] as i32;
 
-                let pages_ptr = args[2] as *const *const core::ffi::c_void;
-                let nodes_ptr = args[3] as *const i32;
-                let status_ptr = args[4] as *const i32;
+                        let pages_ptr = args[2] as *const *const core::ffi::c_void;
+                        let nodes_ptr = args[3] as *const i32;
+                        let status_ptr = args[4] as *const i32;
 
-                let max_to_read = core::cmp::min(8, data.count as usize);
+                        let max_to_read = core::cmp::min(8, payload.count as usize);
 
-                if !pages_ptr.is_null() {
-                    for i in 0..max_to_read {
-                        unsafe {
-                            let ptr = pages_ptr.add(i);
+                        if !pages_ptr.is_null() {
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    let ptr = pages_ptr.add(i);
 
-                            if let Ok(page_ptr) = bpf_probe_read_user(ptr) {
-                                data.pages[i] = page_ptr as u64;
-                                data.pages_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(page_ptr) = bpf_probe_read_user(ptr) {
+                                        payload.pages[i] = page_ptr as u64;
+                                        payload.pages_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
 
-                if !nodes_ptr.is_null() {
-                    for i in 0..max_to_read {
-                        unsafe {
-                            let ptr = nodes_ptr.add(i);
+                        if !nodes_ptr.is_null() {
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    let ptr = nodes_ptr.add(i);
 
-                            if let Ok(node) = bpf_probe_read_user(ptr) {
-                                data.nodes[i] = node;
-                                data.nodes_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(node) = bpf_probe_read_user(ptr) {
+                                        payload.nodes[i] = node;
+                                        payload.nodes_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
 
-                if !status_ptr.is_null() && return_value >= 0 {
-                    for i in 0..max_to_read {
-                        unsafe {
-                            let ptr = status_ptr.add(i);
+                        if !status_ptr.is_null() && return_value >= 0 {
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    let ptr = status_ptr.add(i);
 
-                            if let Ok(status) = bpf_probe_read_user(ptr) {
-                                data.status[i] = status;
-                                data.status_read_count += 1;
-                            } else {
-                                break;
+                                    if let Ok(status) = bpf_probe_read_user(ptr) {
+                                        payload.status[i] = status;
+                                        payload.status_read_count += 1;
+                                    } else {
+                                        break;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_mincore => {
-                let data = data_mut!(entry, mincore);
-                data.addr = args[0] as u64;
-                data.length = args[1] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::MincoreData, _>(
+                    &ctx,
+                    syscalls::SYS_mincore,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0] as u64;
+                        payload.length = args[1] as u64;
 
-                if return_value >= 0 {
-                    let vec_ptr = args[2] as *const u8;
+                        if return_value >= 0 {
+                            let vec_ptr = args[2] as *const u8;
 
-                    if !vec_ptr.is_null() && data.length > 0 {
-                        const PAGE_SIZE: u64 = 4096;
-                        let num_pages = ((data.length + PAGE_SIZE - 1) / PAGE_SIZE) as usize;
-                        let max_to_read = core::cmp::min(32, num_pages);
+                            if !vec_ptr.is_null() && payload.length > 0 {
+                                const PAGE_SIZE: u64 = 4096;
+                                let num_pages =
+                                    ((payload.length + PAGE_SIZE - 1) / PAGE_SIZE) as usize;
+                                let max_to_read = core::cmp::min(32, num_pages);
 
-                        for i in 0..max_to_read {
-                            unsafe {
-                                let ptr = vec_ptr.add(i);
+                                for i in 0..max_to_read {
+                                    unsafe {
+                                        let ptr = vec_ptr.add(i);
 
-                                if let Ok(byte) = bpf_probe_read_user(ptr) {
-                                    data.vec[i] = byte;
-                                    data.vec_read_count += 1;
-                                } else {
-                                    break;
+                                        if let Ok(byte) = bpf_probe_read_user(ptr) {
+                                            payload.vec[i] = byte;
+                                            payload.vec_read_count += 1;
+                                        } else {
+                                            break;
+                                        }
+                                    }
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_memfd_create => {
-                let data = data_mut!(entry, memfd_create);
-                data.flags = args[1] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::MemfdCreateData, _>(
+                    &ctx,
+                    syscalls::SYS_memfd_create,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[1] as u32;
 
-                let name_ptr = args[0] as *const u8;
+                        let name_ptr = args[0] as *const u8;
 
-                if !name_ptr.is_null() {
-                    for i in 0..data.name.len() {
-                        unsafe {
-                            let ptr = name_ptr.add(i);
+                        if !name_ptr.is_null() {
+                            for i in 0..payload.name.len() {
+                                unsafe {
+                                    let ptr = name_ptr.add(i);
 
-                            if let Ok(byte) = bpf_probe_read_user(ptr) {
-                                data.name[i] = byte;
+                                    if let Ok(byte) = bpf_probe_read_user(ptr) {
+                                        payload.name[i] = byte;
 
-                                if byte == 0 {
-                                    break;
+                                        if byte == 0 {
+                                            break;
+                                        }
+                                    } else {
+                                        break;
+                                    }
                                 }
-                            } else {
-                                break;
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_pkey_mprotect => {
-                let data = data_mut!(entry, pkey_mprotect);
-                data.addr = args[0] as u64;
-                data.len = args[1] as u64;
-                data.prot = args[2] as i32;
-                data.pkey = args[3] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::PkeyMprotectData, _>(
+                    &ctx,
+                    syscalls::SYS_pkey_mprotect,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0] as u64;
+                        payload.len = args[1] as u64;
+                        payload.prot = args[2] as i32;
+                        payload.pkey = args[3] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_mseal => {
-                let data = data_mut!(entry, mseal);
-                data.addr = args[0] as u64;
-                data.len = args[1] as u64;
-                data.flags = args[2] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::MsealData, _>(
+                    &ctx,
+                    syscalls::SYS_mseal,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0] as u64;
+                        payload.len = args[1] as u64;
+                        payload.flags = args[2] as u64;
+                    },
+                )?;
             }
             syscalls::SYS_remap_file_pages => {
-                let data = data_mut!(entry, remap_file_pages);
-                data.addr = args[0] as u64;
-                data.size = args[1] as u64;
-                data.prot = args[2] as i32;
-                data.pgoff = args[3] as u64;
-                data.flags = args[4] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::RemapFilePagesData, _>(
+                    &ctx,
+                    syscalls::SYS_remap_file_pages,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0] as u64;
+                        payload.size = args[1] as u64;
+                        payload.prot = args[2] as i32;
+                        payload.pgoff = args[3] as u64;
+                        payload.flags = args[4] as i32;
+                    },
+                )?;
             }
-            _ => {
-                entry.discard();
-                return Ok(());
-            }
+            _ => {}
         }
 
-        entry.submit();
         Ok(())
     }
 

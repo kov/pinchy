@@ -6,7 +6,6 @@ use aya_ebpf::{
     macros::tracepoint,
     programs::TracePointContext,
 };
-use aya_log_ebpf::error;
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::Timeval;
 use pinchy_common::{
@@ -22,12 +21,9 @@ use pinchy_common::{PollData, SelectData, SendfileData};
 
 #[cfg(x86_64)]
 use crate::util::read_timeval;
-use crate::{
-    data_mut,
-    util::{
-        get_args, get_return_value, get_syscall_nr, read_epoll_events, read_iovec_array,
-        read_timespec, submit_compact_payload, Entry, IovecOp,
-    },
+use crate::util::{
+    get_args, get_return_value, get_syscall_nr, read_epoll_events, read_iovec_array, read_timespec,
+    submit_compact_payload, IovecOp,
 };
 
 #[tracepoint]
@@ -47,8 +43,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         payload.fd = args[0] as i32;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_openat => {
                 submit_compact_payload::<OpenAtData, _>(
@@ -70,8 +64,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_read => {
                 submit_compact_payload::<ReadData, _>(
@@ -108,8 +100,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         payload.whence = args[2] as i32;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_write => {
                 submit_compact_payload::<WriteData, _>(
@@ -133,8 +123,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_pread64 => {
                 submit_compact_payload::<PreadData, _>(
@@ -159,8 +147,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_pwrite64 => {
                 submit_compact_payload::<PwriteData, _>(
@@ -185,8 +171,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_readv
             | syscalls::SYS_writev
@@ -238,8 +222,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         );
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_openat2 => {
                 submit_compact_payload::<OpenAt2Data, _>(
@@ -267,8 +249,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_epoll_pwait => {
                 submit_compact_payload::<EpollPWaitData, _>(
@@ -286,8 +266,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         );
                     },
                 )?;
-
-                return Ok(());
             }
             #[cfg(x86_64)]
             syscalls::SYS_epoll_wait => {
@@ -327,8 +305,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         );
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_epoll_ctl => {
                 submit_compact_payload::<EpollCtlData, _>(
@@ -346,8 +322,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         );
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_ppoll => {
                 submit_compact_payload::<PpollData, _>(
@@ -375,8 +349,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
             #[cfg(x86_64)]
             syscalls::SYS_poll => {
@@ -412,8 +384,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_pselect6 => {
                 submit_compact_payload::<Pselect6Data, _>(
@@ -442,8 +412,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         payload.has_sigmask = !sigmask_ptr.is_null();
                     },
                 )?;
-
-                return Ok(());
             }
             #[cfg(x86_64)]
             syscalls::SYS_select => {
@@ -475,8 +443,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         payload.has_timeout = !timeout_ptr.is_null();
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_pipe2 => {
                 submit_compact_payload::<Pipe2Data, _>(
@@ -500,8 +466,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         };
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_splice => {
                 submit_compact_payload::<SpliceData, _>(
@@ -517,8 +481,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         payload.flags = args[5] as u32;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_tee => {
                 submit_compact_payload::<TeeData, _>(
@@ -532,8 +494,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         payload.flags = args[3] as u32;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_vmsplice => {
                 submit_compact_payload::<VmspliceData, _>(
@@ -558,8 +518,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         );
                     },
                 )?;
-
-                return Ok(());
             }
             #[cfg(x86_64)]
             syscalls::SYS_sendfile => {
@@ -583,231 +541,245 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         }
                     },
                 )?;
-
-                return Ok(());
             }
-            _ => {}
-        }
-
-        let mut entry = Entry::new(&ctx, syscall_nr)?;
-
-        match syscall_nr {
             syscalls::SYS_io_setup => {
-                let data = data_mut!(entry, io_setup);
-                data.nr_events = args[0] as u32;
-                data.ctx_idp = args[1] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::IoSetupData, _>(
+                    &ctx,
+                    syscalls::SYS_io_setup,
+                    return_value,
+                    |payload| {
+                        payload.nr_events = args[0] as u32;
+                        payload.ctx_idp = args[1] as u64;
+                    },
+                )?;
             }
             syscalls::SYS_io_destroy => {
-                let data = data_mut!(entry, io_destroy);
-                data.ctx_id = args[0] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::IoDestroyData, _>(
+                    &ctx,
+                    syscalls::SYS_io_destroy,
+                    return_value,
+                    |payload| {
+                        payload.ctx_id = args[0] as u64;
+                    },
+                )?;
             }
             syscalls::SYS_io_submit => {
-                let data = data_mut!(entry, io_submit);
-                data.ctx_id = args[0] as u64;
-                data.nr = args[1] as i64;
-                data.iocbpp = args[2] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::IoSubmitData, _>(
+                    &ctx,
+                    syscalls::SYS_io_submit,
+                    return_value,
+                    |payload| {
+                        payload.ctx_id = args[0] as u64;
+                        payload.nr = args[1] as i64;
+                        payload.iocbpp = args[2] as u64;
 
-                // Read bounded array of IOCBs
-                let nr_to_read = if data.nr < 0 { 0 } else { data.nr as usize };
-                let max_to_read = core::cmp::min(nr_to_read, data.iocbs.len());
-                data.iocb_count = max_to_read as u32;
+                        // Read bounded array of IOCBs
+                        let nr_to_read = if payload.nr < 0 {
+                            0
+                        } else {
+                            payload.nr as usize
+                        };
+                        let max_to_read = core::cmp::min(nr_to_read, payload.iocbs.len());
+                        payload.iocb_count = max_to_read as u32;
 
-                if data.iocbpp != 0 && max_to_read > 0 {
-                    // Read array of IOCB pointers
-                    let iocb_ptrs_ptr = data.iocbpp as *const u64;
-                    for i in 0..max_to_read {
-                        unsafe {
-                            if let Ok(iocb_ptr) = bpf_probe_read_user::<u64>(iocb_ptrs_ptr.add(i)) {
-                                if iocb_ptr != 0 {
-                                    if let Ok(iocb) =
-                                        bpf_probe_read_user::<IoCb>(iocb_ptr as *const _)
+                        if payload.iocbpp != 0 && max_to_read > 0 {
+                            // Read array of IOCB pointers
+                            let iocb_ptrs_ptr = payload.iocbpp as *const u64;
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    if let Ok(iocb_ptr) =
+                                        bpf_probe_read_user::<u64>(iocb_ptrs_ptr.add(i))
                                     {
-                                        data.iocbs[i] = iocb;
+                                        if iocb_ptr != 0 {
+                                            if let Ok(iocb) =
+                                                bpf_probe_read_user::<IoCb>(iocb_ptr as *const _)
+                                            {
+                                                payload.iocbs[i] = iocb;
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_io_cancel => {
-                let data = data_mut!(entry, io_cancel);
-                data.ctx_id = args[0] as u64;
-                data.iocb = args[1] as u64;
-                data.result = args[2] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::IoCancelData, _>(
+                    &ctx,
+                    syscalls::SYS_io_cancel,
+                    return_value,
+                    |payload| {
+                        payload.ctx_id = args[0] as u64;
+                        payload.iocb = args[1] as u64;
+                        payload.result = args[2] as u64;
 
-                // Try to read result event if pointer is valid and syscall succeeded
-                data.has_result = data.result != 0 && return_value == 0;
-                if data.has_result {
-                    unsafe {
-                        if let Ok(event) = bpf_probe_read_user::<IoEvent>(data.result as *const _) {
-                            data.result_event = event;
-                        } else {
-                            data.has_result = false;
-                        }
-                    }
-                }
-            }
-            syscalls::SYS_io_getevents => {
-                let data = data_mut!(entry, io_getevents);
-                data.ctx_id = args[0] as u64;
-                data.min_nr = args[1] as i64;
-                data.nr = args[2] as i64;
-                data.events = args[3] as u64;
-                data.timeout = args[4] as u64;
-
-                // Read timeout if provided
-                data.has_timeout = data.timeout != 0;
-                if data.has_timeout {
-                    data.timeout_data = read_timespec(data.timeout as *const _);
-                }
-
-                // Read bounded array of events if syscall succeeded
-                if data.events != 0 && return_value > 0 {
-                    let nr_events = return_value as usize;
-                    let max_to_read = core::cmp::min(nr_events, data.event_array.len());
-                    data.event_count = max_to_read as u32;
-
-                    let events_ptr = data.events as *const IoEvent;
-                    for i in 0..max_to_read {
-                        unsafe {
-                            if let Ok(event) = bpf_probe_read_user::<IoEvent>(events_ptr.add(i)) {
-                                data.event_array[i] = event;
-                            }
-                        }
-                    }
-                }
-            }
-            syscalls::SYS_io_pgetevents => {
-                let data = data_mut!(entry, io_pgetevents);
-                data.ctx_id = args[0] as u64;
-                data.min_nr = args[1] as i64;
-                data.nr = args[2] as i64;
-                data.events = args[3] as u64;
-                data.timeout = args[4] as u64;
-                data.usig = args[5] as u64;
-
-                // Read timeout if provided
-                data.has_timeout = data.timeout != 0;
-                if data.has_timeout {
-                    data.timeout_data = read_timespec(data.timeout as *const _);
-                }
-
-                // Read signal set info if provided
-                data.has_usig = data.usig != 0;
-                if data.has_usig {
-                    unsafe {
-                        if let Ok(aio_sigset) =
-                            bpf_probe_read_user::<AioSigset>(data.usig as *const _)
-                        {
-                            data.usig_data = aio_sigset;
-
-                            // Try to read the actual sigset if pointer is valid
-                            if aio_sigset.sigmask != 0 && aio_sigset.sigsetsize <= 128 {
-                                if let Ok(sigset) =
-                                    bpf_probe_read_user::<Sigset>(aio_sigset.sigmask as *const _)
+                        // Try to read result event if pointer is valid and syscall succeeded
+                        payload.has_result = payload.result != 0 && return_value == 0;
+                        if payload.has_result {
+                            unsafe {
+                                if let Ok(event) =
+                                    bpf_probe_read_user::<IoEvent>(payload.result as *const _)
                                 {
-                                    data.sigset_data = sigset;
+                                    payload.result_event = event;
+                                } else {
+                                    payload.has_result = false;
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
+            }
+            syscalls::SYS_io_getevents => {
+                crate::util::submit_compact_payload::<pinchy_common::IoGeteventsData, _>(
+                    &ctx,
+                    syscalls::SYS_io_getevents,
+                    return_value,
+                    |payload| {
+                        payload.ctx_id = args[0] as u64;
+                        payload.min_nr = args[1] as i64;
+                        payload.nr = args[2] as i64;
+                        payload.events = args[3] as u64;
+                        payload.timeout = args[4] as u64;
 
-                // Read bounded array of events if syscall succeeded
-                if data.events != 0 && return_value > 0 {
-                    let nr_events = return_value as usize;
-                    let max_to_read = core::cmp::min(nr_events, data.event_array.len());
-                    data.event_count = max_to_read as u32;
+                        // Read timeout if provided
+                        payload.has_timeout = payload.timeout != 0;
+                        if payload.has_timeout {
+                            payload.timeout_data = read_timespec(payload.timeout as *const _);
+                        }
 
-                    let events_ptr = data.events as *const IoEvent;
-                    for i in 0..max_to_read {
-                        unsafe {
-                            if let Ok(event) = bpf_probe_read_user::<IoEvent>(events_ptr.add(i)) {
-                                data.event_array[i] = event;
+                        // Read bounded array of events if syscall succeeded
+                        if payload.events != 0 && return_value > 0 {
+                            let nr_events = return_value as usize;
+                            let max_to_read = core::cmp::min(nr_events, payload.event_array.len());
+                            payload.event_count = max_to_read as u32;
+
+                            let events_ptr = payload.events as *const IoEvent;
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    if let Ok(event) =
+                                        bpf_probe_read_user::<IoEvent>(events_ptr.add(i))
+                                    {
+                                        payload.event_array[i] = event;
+                                    }
+                                }
                             }
                         }
-                    }
-                }
+                    },
+                )?;
+            }
+            syscalls::SYS_io_pgetevents => {
+                crate::util::submit_compact_payload::<pinchy_common::IoPgeteventsData, _>(
+                    &ctx,
+                    syscalls::SYS_io_pgetevents,
+                    return_value,
+                    |payload| {
+                        payload.ctx_id = args[0] as u64;
+                        payload.min_nr = args[1] as i64;
+                        payload.nr = args[2] as i64;
+                        payload.events = args[3] as u64;
+                        payload.timeout = args[4] as u64;
+                        payload.usig = args[5] as u64;
+
+                        // Read timeout if provided
+                        payload.has_timeout = payload.timeout != 0;
+                        if payload.has_timeout {
+                            payload.timeout_data = read_timespec(payload.timeout as *const _);
+                        }
+
+                        // Read signal set info if provided
+                        payload.has_usig = payload.usig != 0;
+                        if payload.has_usig {
+                            unsafe {
+                                if let Ok(aio_sigset) =
+                                    bpf_probe_read_user::<AioSigset>(payload.usig as *const _)
+                                {
+                                    payload.usig_data = aio_sigset;
+
+                                    // Try to read the actual sigset if pointer is valid
+                                    if aio_sigset.sigmask != 0 && aio_sigset.sigsetsize <= 128 {
+                                        if let Ok(sigset) = bpf_probe_read_user::<Sigset>(
+                                            aio_sigset.sigmask as *const _,
+                                        ) {
+                                            payload.sigset_data = sigset;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Read bounded array of events if syscall succeeded
+                        if payload.events != 0 && return_value > 0 {
+                            let nr_events = return_value as usize;
+                            let max_to_read = core::cmp::min(nr_events, payload.event_array.len());
+                            payload.event_count = max_to_read as u32;
+
+                            let events_ptr = payload.events as *const IoEvent;
+                            for i in 0..max_to_read {
+                                unsafe {
+                                    if let Ok(event) =
+                                        bpf_probe_read_user::<IoEvent>(events_ptr.add(i))
+                                    {
+                                        payload.event_array[i] = event;
+                                    }
+                                }
+                            }
+                        }
+                    },
+                )?;
             }
             syscalls::SYS_io_uring_setup => {
-                let data = data_mut!(entry, io_uring_setup);
-                data.entries = args[0] as u32;
-                data.params_ptr = args[1] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::IoUringSetupData, _>(
+                    &ctx,
+                    syscalls::SYS_io_uring_setup,
+                    return_value,
+                    |payload| {
+                        payload.entries = args[0] as u32;
+                        payload.params_ptr = args[1] as u64;
 
-                let params_ptr = args[1] as *const IoUringParams;
-                if !params_ptr.is_null() {
-                    unsafe {
-                        if let Ok(params) = bpf_probe_read_user(params_ptr) {
-                            data.params = params;
-                            data.has_params = true;
+                        let params_ptr = args[1] as *const IoUringParams;
+                        if !params_ptr.is_null() {
+                            unsafe {
+                                if let Ok(params) = bpf_probe_read_user(params_ptr) {
+                                    payload.params = params;
+                                    payload.has_params = true;
+                                }
+                            }
                         }
-                    }
-                }
+                    },
+                )?;
             }
             syscalls::SYS_io_uring_enter => {
-                let data = data_mut!(entry, io_uring_enter);
-                data.fd = args[0] as i32;
-                data.to_submit = args[1] as u32;
-                data.min_complete = args[2] as u32;
-                data.flags = args[3] as u32;
-                data.sig = args[4] as u64;
-                data.sigsz = args[5] as usize;
+                crate::util::submit_compact_payload::<pinchy_common::IoUringEnterData, _>(
+                    &ctx,
+                    syscalls::SYS_io_uring_enter,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.to_submit = args[1] as u32;
+                        payload.min_complete = args[2] as u32;
+                        payload.flags = args[3] as u32;
+                        payload.sig = args[4] as u64;
+                        payload.sigsz = args[5] as usize;
+                    },
+                )?;
             }
             syscalls::SYS_io_uring_register => {
-                let data = data_mut!(entry, io_uring_register);
-                data.fd = args[0] as i32;
-                data.opcode = args[1] as u32;
-                data.arg = args[2] as u64;
-                data.nr_args = args[3] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::IoUringRegisterData, _>(
+                    &ctx,
+                    syscalls::SYS_io_uring_register,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.opcode = args[1] as u32;
+                        payload.arg = args[2] as u64;
+                        payload.nr_args = args[3] as u32;
+                    },
+                )?;
             }
-            syscalls::SYS_close
-            | syscalls::SYS_openat
-            | syscalls::SYS_read
-            | syscalls::SYS_lseek
-            | syscalls::SYS_write
-            | syscalls::SYS_pread64
-            | syscalls::SYS_pwrite64
-            | syscalls::SYS_readv
-            | syscalls::SYS_writev
-            | syscalls::SYS_preadv
-            | syscalls::SYS_pwritev
-            | syscalls::SYS_preadv2
-            | syscalls::SYS_pwritev2
-            | syscalls::SYS_openat2
-            | syscalls::SYS_epoll_pwait
-            | syscalls::SYS_epoll_pwait2
-            | syscalls::SYS_epoll_ctl
-            | syscalls::SYS_ppoll
-            | syscalls::SYS_pselect6
-            | syscalls::SYS_pipe2
-            | syscalls::SYS_splice
-            | syscalls::SYS_tee
-            | syscalls::SYS_vmsplice => {
-                error!(&ctx, "hit migrated syscall {}", syscall_nr);
-
-                entry.discard();
-
-                return Ok(());
-            }
-            #[cfg(x86_64)]
-            syscalls::SYS_epoll_wait
-            | syscalls::SYS_poll
-            | syscalls::SYS_select
-            | syscalls::SYS_sendfile => {
-                error!(&ctx, "hit migrated syscall {}", syscall_nr);
-
-                entry.discard();
-
-                return Ok(());
-            }
-            _ => {
-                entry.discard();
-                return Ok(());
-            }
+            _ => {}
         }
 
-        entry.submit();
         Ok(())
     }
 

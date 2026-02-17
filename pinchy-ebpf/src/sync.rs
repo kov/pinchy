@@ -7,68 +7,83 @@ use pinchy_common::{
     syscalls,
 };
 
-use crate::{data_mut, util};
+use crate::util;
 
 #[tracepoint]
 pub fn syscall_exit_sync(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let syscall_nr = util::get_syscall_nr(&ctx)?;
         let args = util::get_args(&ctx, syscall_nr)?;
-
-        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
+        let return_value = util::get_return_value(&ctx)?;
 
         match syscall_nr {
             syscalls::SYS_futex => {
-                let data = data_mut!(entry, futex);
-                data.uaddr = args[0];
-                data.op = args[1] as u32;
-                data.val = args[2] as u32;
-                data.uaddr2 = args[4];
-                data.val3 = args[5] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::FutexData, _>(
+                    &ctx,
+                    syscalls::SYS_futex,
+                    return_value,
+                    |payload| {
+                        payload.uaddr = args[0];
+                        payload.op = args[1] as u32;
+                        payload.val = args[2] as u32;
+                        payload.uaddr2 = args[4];
+                        payload.val3 = args[5] as u32;
 
-                let timeout_ptr = args[3] as *const Timespec;
-                data.timeout = crate::util::read_timespec(timeout_ptr);
+                        let timeout_ptr = args[3] as *const Timespec;
+                        payload.timeout = crate::util::read_timespec(timeout_ptr);
+                    },
+                )?;
             }
             syscalls::SYS_futex_waitv => {
-                let data = data_mut!(entry, futex_waitv);
-                let waiters_ptr = args[0] as *const FutexWaitv;
-                data.nr_waiters = args[1] as u32;
-                data.flags = args[2] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::FutexWaitvData, _>(
+                    &ctx,
+                    syscalls::SYS_futex_waitv,
+                    return_value,
+                    |payload| {
+                        let waiters_ptr = args[0] as *const FutexWaitv;
+                        payload.nr_waiters = args[1] as u32;
+                        payload.flags = args[2] as u32;
 
-                let timeout_ptr = args[3] as *const Timespec;
-                data.has_timeout = !timeout_ptr.is_null();
-                if data.has_timeout {
-                    data.timeout = crate::util::read_timespec(timeout_ptr);
-                }
+                        let timeout_ptr = args[3] as *const Timespec;
+                        payload.has_timeout = !timeout_ptr.is_null();
+                        if payload.has_timeout {
+                            payload.timeout = crate::util::read_timespec(timeout_ptr);
+                        }
 
-                data.clockid = args[4] as i32;
+                        payload.clockid = args[4] as i32;
 
-                let count = core::cmp::min(data.nr_waiters as usize, data.waiters.len());
-                for i in 0..count {
-                    let ptr = unsafe { waiters_ptr.add(i) };
-                    if let Ok(val) = unsafe { bpf_probe_read_user::<FutexWaitv>(ptr) } {
-                        data.waiters[i] = val;
-                    }
-                }
+                        let count =
+                            core::cmp::min(payload.nr_waiters as usize, payload.waiters.len());
+                        for i in 0..count {
+                            let ptr = unsafe { waiters_ptr.add(i) };
+                            if let Ok(val) = unsafe { bpf_probe_read_user::<FutexWaitv>(ptr) } {
+                                payload.waiters[i] = val;
+                            }
+                        }
+                    },
+                )?;
             }
             syscalls::SYS_get_robust_list => {
-                let data = data_mut!(entry, get_robust_list);
-                data.pid = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::GetRobustListData, _>(
+                    &ctx,
+                    syscalls::SYS_get_robust_list,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
 
-                let head_ptr = args[1] as *const usize;
-                let len_ptr = args[2] as *const usize;
+                        let head_ptr = args[1] as *const usize;
+                        let len_ptr = args[2] as *const usize;
 
-                data.head = unsafe { bpf_probe_read_user::<usize>(head_ptr) }.unwrap_or_default();
-                data.len = unsafe { bpf_probe_read_user::<usize>(len_ptr) }.unwrap_or_default();
+                        payload.head =
+                            unsafe { bpf_probe_read_user::<usize>(head_ptr) }.unwrap_or_default();
+                        payload.len =
+                            unsafe { bpf_probe_read_user::<usize>(len_ptr) }.unwrap_or_default();
+                    },
+                )?;
             }
-
-            _ => {
-                entry.discard();
-                return Ok(());
-            }
+            _ => {}
         }
 
-        entry.submit();
         Ok(())
     }
 

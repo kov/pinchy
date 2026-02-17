@@ -207,8 +207,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         payload.mode = args[1] as u32;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_fsync => {
                 submit_compact_payload::<FsyncData, _>(
@@ -219,8 +217,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         payload.fd = args[0] as i32;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_fdatasync => {
                 submit_compact_payload::<FdatasyncData, _>(
@@ -231,8 +227,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         payload.fd = args[0] as i32;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_ftruncate => {
                 submit_compact_payload::<FtruncateData, _>(
@@ -244,8 +238,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         payload.length = args[1] as i64;
                     },
                 )?;
-
-                return Ok(());
             }
             syscalls::SYS_fchown => {
                 submit_compact_payload::<FchownData, _>(
@@ -258,405 +250,942 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         payload.gid = args[2] as u32;
                     },
                 )?;
-
-                return Ok(());
             }
-            _ => {}
-        }
-
-        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
-
-        match syscall_nr {
             syscalls::SYS_flock => {
-                let data = unsafe { &mut entry.data.flock };
-                data.fd = args[0] as i32;
-                data.operation = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::FlockData, _>(
+                    &ctx,
+                    syscalls::SYS_flock,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.operation = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_process_mrelease => {
-                let data = unsafe { &mut entry.data.process_mrelease };
-                data.pidfd = args[0] as i32;
-                data.flags = args[1] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::ProcessMreleaseData, _>(
+                    &ctx,
+                    syscalls::SYS_process_mrelease,
+                    return_value,
+                    |payload| {
+                        payload.pidfd = args[0] as i32;
+                        payload.flags = args[1] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_brk => {
-                let data = unsafe { &mut entry.data.brk };
-                data.addr = args[0];
+                crate::util::submit_compact_payload::<pinchy_common::BrkData, _>(
+                    &ctx,
+                    syscalls::SYS_brk,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                    },
+                )?;
             }
             syscalls::SYS_mprotect => {
-                let data = unsafe { &mut entry.data.mprotect };
-                data.addr = args[0];
-                data.length = args[1];
-                data.prot = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::MprotectData, _>(
+                    &ctx,
+                    syscalls::SYS_mprotect,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.length = args[1];
+                        payload.prot = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_getrandom => {
-                let data = unsafe { &mut entry.data.getrandom };
-                data.buf = args[0];
-                data.buflen = args[1];
-                data.flags = args[2] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::GetrandomData, _>(
+                    &ctx,
+                    syscalls::SYS_getrandom,
+                    return_value,
+                    |payload| {
+                        payload.buf = args[0];
+                        payload.buflen = args[1];
+                        payload.flags = args[2] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_set_robust_list => {
-                let data = unsafe { &mut entry.data.set_robust_list };
-                data.head = args[0];
-                data.len = args[1];
+                crate::util::submit_compact_payload::<pinchy_common::SetRobustListData, _>(
+                    &ctx,
+                    syscalls::SYS_set_robust_list,
+                    return_value,
+                    |payload| {
+                        payload.head = args[0];
+                        payload.len = args[1];
+                    },
+                )?;
             }
             syscalls::SYS_set_tid_address => {
-                let data = unsafe { &mut entry.data.set_tid_address };
-                data.tidptr = args[0];
+                crate::util::submit_compact_payload::<pinchy_common::SetTidAddressData, _>(
+                    &ctx,
+                    syscalls::SYS_set_tid_address,
+                    return_value,
+                    |payload| {
+                        payload.tidptr = args[0];
+                    },
+                )?;
             }
             syscalls::SYS_rt_sigaction => {
-                let data = unsafe { &mut entry.data.rt_sigaction };
-                data.signum = args[0] as i32;
-                data.act = args[1];
-                data.oldact = args[2];
-                data.sigsetsize = args[3];
+                crate::util::submit_compact_payload::<pinchy_common::RtSigactionData, _>(
+                    &ctx,
+                    syscalls::SYS_rt_sigaction,
+                    return_value,
+                    |payload| {
+                        payload.signum = args[0] as i32;
+                        payload.act = args[1];
+                        payload.oldact = args[2];
+                        payload.sigsetsize = args[3];
+                    },
+                )?;
             }
             syscalls::SYS_rt_sigqueueinfo => {
-                let data = unsafe { &mut entry.data.rt_sigqueueinfo };
-                data.tgid = args[0] as i32;
-                data.sig = args[1] as i32;
-                data.uinfo = args[2];
+                crate::util::submit_compact_payload::<pinchy_common::RtSigqueueinfoData, _>(
+                    &ctx,
+                    syscalls::SYS_rt_sigqueueinfo,
+                    return_value,
+                    |payload| {
+                        payload.tgid = args[0] as i32;
+                        payload.sig = args[1] as i32;
+                        payload.uinfo = args[2];
+                    },
+                )?;
             }
             syscalls::SYS_rt_tgsigqueueinfo => {
-                let data = unsafe { &mut entry.data.rt_tgsigqueueinfo };
-                data.tgid = args[0] as i32;
-                data.tid = args[1] as i32;
-                data.sig = args[2] as i32;
-                data.uinfo = args[3];
+                crate::util::submit_compact_payload::<pinchy_common::RtTgsigqueueinfoData, _>(
+                    &ctx,
+                    syscalls::SYS_rt_tgsigqueueinfo,
+                    return_value,
+                    |payload| {
+                        payload.tgid = args[0] as i32;
+                        payload.tid = args[1] as i32;
+                        payload.sig = args[2] as i32;
+                        payload.uinfo = args[3];
+                    },
+                )?;
             }
             syscalls::SYS_fchdir => {
-                let data = unsafe { &mut entry.data.fchdir };
-                data.fd = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::FchdirData, _>(
+                    &ctx,
+                    syscalls::SYS_fchdir,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_dup3 => {
-                let data = unsafe { &mut entry.data.dup3 };
-                data.oldfd = args[0] as i32;
-                data.newfd = args[1] as i32;
-                data.flags = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::Dup3Data, _>(
+                    &ctx,
+                    syscalls::SYS_dup3,
+                    return_value,
+                    |payload| {
+                        payload.oldfd = args[0] as i32;
+                        payload.newfd = args[1] as i32;
+                        payload.flags = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_exit_group => {
-                let data = unsafe { &mut entry.data.exit_group };
-                data.status = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::ExitGroupData, _>(
+                    &ctx,
+                    syscalls::SYS_exit_group,
+                    return_value,
+                    |payload| {
+                        payload.status = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_dup => {
-                let data = unsafe { &mut entry.data.dup };
-                data.oldfd = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::DupData, _>(
+                    &ctx,
+                    syscalls::SYS_dup,
+                    return_value,
+                    |payload| {
+                        payload.oldfd = args[0] as i32;
+                    },
+                )?;
             }
             #[cfg(x86_64)]
             syscalls::SYS_dup2 => {
-                let data = unsafe { &mut entry.data.dup2 };
-                data.oldfd = args[0] as i32;
-                data.newfd = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::Dup2Data, _>(
+                    &ctx,
+                    syscalls::SYS_dup2,
+                    return_value,
+                    |payload| {
+                        payload.oldfd = args[0] as i32;
+                        payload.newfd = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_setuid => {
-                let data = unsafe { &mut entry.data.setuid };
-                data.uid = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetuidData, _>(
+                    &ctx,
+                    syscalls::SYS_setuid,
+                    return_value,
+                    |payload| {
+                        payload.uid = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_setgid => {
-                let data = unsafe { &mut entry.data.setgid };
-                data.gid = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetgidData, _>(
+                    &ctx,
+                    syscalls::SYS_setgid,
+                    return_value,
+                    |payload| {
+                        payload.gid = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_close_range => {
-                let data = unsafe { &mut entry.data.close_range };
-                data.fd = args[0] as u32;
-                data.max_fd = args[1] as u32;
-                data.flags = args[2] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::CloseRangeData, _>(
+                    &ctx,
+                    syscalls::SYS_close_range,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as u32;
+                        payload.max_fd = args[1] as u32;
+                        payload.flags = args[2] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_getpgid => {
-                let data = unsafe { &mut entry.data.getpgid };
-                data.pid = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::GetpgidData, _>(
+                    &ctx,
+                    syscalls::SYS_getpgid,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_getsid => {
-                let data = unsafe { &mut entry.data.getsid };
-                data.pid = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::GetsidData, _>(
+                    &ctx,
+                    syscalls::SYS_getsid,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_setpgid => {
-                let data = unsafe { &mut entry.data.setpgid };
-                data.pid = args[0] as i32;
-                data.pgid = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::SetpgidData, _>(
+                    &ctx,
+                    syscalls::SYS_setpgid,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.pgid = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_umask => {
-                let data = unsafe { &mut entry.data.umask };
-                data.mask = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::UmaskData, _>(
+                    &ctx,
+                    syscalls::SYS_umask,
+                    return_value,
+                    |payload| {
+                        payload.mask = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_ioprio_get => {
-                let data = unsafe { &mut entry.data.ioprio_get };
-                data.which = args[0] as i32;
-                data.who = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::IoprioGetData, _>(
+                    &ctx,
+                    syscalls::SYS_ioprio_get,
+                    return_value,
+                    |payload| {
+                        payload.which = args[0] as i32;
+                        payload.who = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_ioprio_set => {
-                let data = unsafe { &mut entry.data.ioprio_set };
-                data.which = args[0] as i32;
-                data.who = args[1] as i32;
-                data.ioprio = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::IoprioSetData, _>(
+                    &ctx,
+                    syscalls::SYS_ioprio_set,
+                    return_value,
+                    |payload| {
+                        payload.which = args[0] as i32;
+                        payload.who = args[1] as i32;
+                        payload.ioprio = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_setregid => {
-                let data = unsafe { &mut entry.data.setregid };
-                data.rgid = args[0] as u32;
-                data.egid = args[1] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetregidData, _>(
+                    &ctx,
+                    syscalls::SYS_setregid,
+                    return_value,
+                    |payload| {
+                        payload.rgid = args[0] as u32;
+                        payload.egid = args[1] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_setresgid => {
-                let data = unsafe { &mut entry.data.setresgid };
-                data.rgid = args[0] as u32;
-                data.egid = args[1] as u32;
-                data.sgid = args[2] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetresgidData, _>(
+                    &ctx,
+                    syscalls::SYS_setresgid,
+                    return_value,
+                    |payload| {
+                        payload.rgid = args[0] as u32;
+                        payload.egid = args[1] as u32;
+                        payload.sgid = args[2] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_setresuid => {
-                let data = unsafe { &mut entry.data.setresuid };
-                data.ruid = args[0] as u32;
-                data.euid = args[1] as u32;
-                data.suid = args[2] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetresuidData, _>(
+                    &ctx,
+                    syscalls::SYS_setresuid,
+                    return_value,
+                    |payload| {
+                        payload.ruid = args[0] as u32;
+                        payload.euid = args[1] as u32;
+                        payload.suid = args[2] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_setreuid => {
-                let data = unsafe { &mut entry.data.setreuid };
-                data.ruid = args[0] as u32;
-                data.euid = args[1] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetreuidData, _>(
+                    &ctx,
+                    syscalls::SYS_setreuid,
+                    return_value,
+                    |payload| {
+                        payload.ruid = args[0] as u32;
+                        payload.euid = args[1] as u32;
+                    },
+                )?;
             }
             #[cfg(x86_64)]
             syscalls::SYS_alarm => {
-                let data = unsafe { &mut entry.data.alarm };
-                data.seconds = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::AlarmData, _>(
+                    &ctx,
+                    syscalls::SYS_alarm,
+                    return_value,
+                    |payload| {
+                        payload.seconds = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_personality => {
-                let data = unsafe { &mut entry.data.personality };
-                data.persona = args[0] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::PersonalityData, _>(
+                    &ctx,
+                    syscalls::SYS_personality,
+                    return_value,
+                    |payload| {
+                        payload.persona = args[0] as u64;
+                    },
+                )?;
             }
             syscalls::SYS_getpriority => {
-                let data = unsafe { &mut entry.data.getpriority };
-                data.which = args[0] as i32;
-                data.who = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::GetpriorityData, _>(
+                    &ctx,
+                    syscalls::SYS_getpriority,
+                    return_value,
+                    |payload| {
+                        payload.which = args[0] as i32;
+                        payload.who = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_setpriority => {
-                let data = unsafe { &mut entry.data.setpriority };
-                data.which = args[0] as i32;
-                data.who = args[1] as i32;
-                data.prio = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::SetpriorityData, _>(
+                    &ctx,
+                    syscalls::SYS_setpriority,
+                    return_value,
+                    |payload| {
+                        payload.which = args[0] as i32;
+                        payload.who = args[1] as i32;
+                        payload.prio = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_tkill => {
-                let data = unsafe { &mut entry.data.tkill };
-                data.pid = args[0] as i32;
-                data.signal = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::TkillData, _>(
+                    &ctx,
+                    syscalls::SYS_tkill,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.signal = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_tgkill => {
-                let data = unsafe { &mut entry.data.tgkill };
-                data.tgid = args[0] as i32;
-                data.pid = args[1] as i32;
-                data.signal = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::TgkillData, _>(
+                    &ctx,
+                    syscalls::SYS_tgkill,
+                    return_value,
+                    |payload| {
+                        payload.tgid = args[0] as i32;
+                        payload.pid = args[1] as i32;
+                        payload.signal = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_kill => {
-                let data = unsafe { &mut entry.data.kill };
-                data.pid = args[0] as i32;
-                data.signal = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::KillData, _>(
+                    &ctx,
+                    syscalls::SYS_kill,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.signal = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_exit => {
-                let data = unsafe { &mut entry.data.exit };
-                data.status = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::ExitData, _>(
+                    &ctx,
+                    syscalls::SYS_exit,
+                    return_value,
+                    |payload| {
+                        payload.status = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_sched_getscheduler => {
-                let data = unsafe { &mut entry.data.sched_getscheduler };
-                data.pid = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::SchedGetschedulerData, _>(
+                    &ctx,
+                    syscalls::SYS_sched_getscheduler,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_setfsuid => {
-                let data = unsafe { &mut entry.data.setfsuid };
-                data.uid = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetfsuidData, _>(
+                    &ctx,
+                    syscalls::SYS_setfsuid,
+                    return_value,
+                    |payload| {
+                        payload.uid = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_setfsgid => {
-                let data = unsafe { &mut entry.data.setfsgid };
-                data.gid = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::SetfsgidData, _>(
+                    &ctx,
+                    syscalls::SYS_setfsgid,
+                    return_value,
+                    |payload| {
+                        payload.gid = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_sched_get_priority_max => {
-                let data = unsafe { &mut entry.data.sched_get_priority_max };
-                data.policy = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::SchedGetPriorityMaxData, _>(
+                    &ctx,
+                    syscalls::SYS_sched_get_priority_max,
+                    return_value,
+                    |payload| {
+                        payload.policy = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_sched_get_priority_min => {
-                let data = unsafe { &mut entry.data.sched_get_priority_min };
-                data.policy = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::SchedGetPriorityMinData, _>(
+                    &ctx,
+                    syscalls::SYS_sched_get_priority_min,
+                    return_value,
+                    |payload| {
+                        payload.policy = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_inotify_rm_watch => {
-                let data = unsafe { &mut entry.data.inotify_rm_watch };
-                data.fd = args[0] as i32;
-                data.wd = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::InotifyRmWatchData, _>(
+                    &ctx,
+                    syscalls::SYS_inotify_rm_watch,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.wd = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_inotify_init1 => {
-                let data = unsafe { &mut entry.data.inotify_init1 };
-                data.flags = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::InotifyInit1Data, _>(
+                    &ctx,
+                    syscalls::SYS_inotify_init1,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_socket => {
-                let data = unsafe { &mut entry.data.socket };
-                data.domain = args[0] as i32;
-                data.type_ = args[1] as i32;
-                data.protocol = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::SocketData, _>(
+                    &ctx,
+                    syscalls::SYS_socket,
+                    return_value,
+                    |payload| {
+                        payload.domain = args[0] as i32;
+                        payload.type_ = args[1] as i32;
+                        payload.protocol = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_listen => {
-                let data = unsafe { &mut entry.data.listen };
-                data.sockfd = args[0] as i32;
-                data.backlog = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::ListenData, _>(
+                    &ctx,
+                    syscalls::SYS_listen,
+                    return_value,
+                    |payload| {
+                        payload.sockfd = args[0] as i32;
+                        payload.backlog = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_shutdown => {
-                let data = unsafe { &mut entry.data.shutdown };
-                data.sockfd = args[0] as i32;
-                data.how = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::ShutdownData, _>(
+                    &ctx,
+                    syscalls::SYS_shutdown,
+                    return_value,
+                    |payload| {
+                        payload.sockfd = args[0] as i32;
+                        payload.how = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_fcntl => {
-                let data = unsafe { &mut entry.data.fcntl };
-                data.fd = args[0] as i32;
-                data.cmd = args[1] as i32;
-                data.arg = args[2];
+                crate::util::submit_compact_payload::<pinchy_common::FcntlData, _>(
+                    &ctx,
+                    syscalls::SYS_fcntl,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.cmd = args[1] as i32;
+                        payload.arg = args[2];
+                    },
+                )?;
             }
             syscalls::SYS_fsmount => {
-                let data = unsafe { &mut entry.data.fsmount };
-                data.fd = args[0] as i32;
-                data.flags = args[1] as u32;
-                data.attr_flags = args[2] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::FsmountData, _>(
+                    &ctx,
+                    syscalls::SYS_fsmount,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.flags = args[1] as u32;
+                        payload.attr_flags = args[2] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_pidfd_open => {
-                let data = unsafe { &mut entry.data.pidfd_open };
-                data.pid = args[0] as i32;
-                data.flags = args[1] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::PidfdOpenData, _>(
+                    &ctx,
+                    syscalls::SYS_pidfd_open,
+                    return_value,
+                    |payload| {
+                        payload.pid = args[0] as i32;
+                        payload.flags = args[1] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_pidfd_getfd => {
-                let data = unsafe { &mut entry.data.pidfd_getfd };
-                data.pidfd = args[0] as i32;
-                data.targetfd = args[1] as i32;
-                data.flags = args[2] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::PidfdGetfdData, _>(
+                    &ctx,
+                    syscalls::SYS_pidfd_getfd,
+                    return_value,
+                    |payload| {
+                        payload.pidfd = args[0] as i32;
+                        payload.targetfd = args[1] as i32;
+                        payload.flags = args[2] as u32;
+                    },
+                )?;
             }
             #[cfg(x86_64)]
             syscalls::SYS_epoll_create => {
-                let data = unsafe { &mut entry.data.epoll_create };
-                data.size = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::EpollCreateData, _>(
+                    &ctx,
+                    syscalls::SYS_epoll_create,
+                    return_value,
+                    |payload| {
+                        payload.size = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_epoll_create1 => {
-                let data = unsafe { &mut entry.data.epoll_create1 };
-                data.flags = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::EpollCreate1Data, _>(
+                    &ctx,
+                    syscalls::SYS_epoll_create1,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_memfd_secret => {
-                let data = unsafe { &mut entry.data.memfd_secret };
-                data.flags = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::MemfdSecretData, _>(
+                    &ctx,
+                    syscalls::SYS_memfd_secret,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_userfaultfd => {
-                let data = unsafe { &mut entry.data.userfaultfd };
-                data.flags = args[0] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::UserfaultfdData, _>(
+                    &ctx,
+                    syscalls::SYS_userfaultfd,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_pkey_alloc => {
-                let data = unsafe { &mut entry.data.pkey_alloc };
-                data.flags = args[0] as u32;
-                data.access_rights = args[1] as u32;
+                crate::util::submit_compact_payload::<pinchy_common::PkeyAllocData, _>(
+                    &ctx,
+                    syscalls::SYS_pkey_alloc,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as u32;
+                        payload.access_rights = args[1] as u32;
+                    },
+                )?;
             }
             syscalls::SYS_pkey_free => {
-                let data = unsafe { &mut entry.data.pkey_free };
-                data.pkey = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::PkeyFreeData, _>(
+                    &ctx,
+                    syscalls::SYS_pkey_free,
+                    return_value,
+                    |payload| {
+                        payload.pkey = args[0] as i32;
+                    },
+                )?;
             }
             #[cfg(x86_64)]
             syscalls::SYS_eventfd => {
-                let data = unsafe { &mut entry.data.eventfd };
-                data.initval = args[0] as u32;
-                data.flags = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::EventfdData, _>(
+                    &ctx,
+                    syscalls::SYS_eventfd,
+                    return_value,
+                    |payload| {
+                        payload.initval = args[0] as u32;
+                        payload.flags = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_eventfd2 => {
-                let data = unsafe { &mut entry.data.eventfd2 };
-                data.initval = args[0] as u32;
-                data.flags = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::Eventfd2Data, _>(
+                    &ctx,
+                    syscalls::SYS_eventfd2,
+                    return_value,
+                    |payload| {
+                        payload.initval = args[0] as u32;
+                        payload.flags = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_mlock => {
-                let data = unsafe { &mut entry.data.mlock };
-                data.addr = args[0];
-                data.len = args[1];
+                crate::util::submit_compact_payload::<pinchy_common::MlockData, _>(
+                    &ctx,
+                    syscalls::SYS_mlock,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.len = args[1];
+                    },
+                )?;
             }
             syscalls::SYS_mlock2 => {
-                let data = unsafe { &mut entry.data.mlock2 };
-                data.addr = args[0];
-                data.len = args[1];
-                data.flags = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::Mlock2Data, _>(
+                    &ctx,
+                    syscalls::SYS_mlock2,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.len = args[1];
+                        payload.flags = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_mlockall => {
-                let data = unsafe { &mut entry.data.mlockall };
-                data.flags = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::MlockallData, _>(
+                    &ctx,
+                    syscalls::SYS_mlockall,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_membarrier => {
-                let data = unsafe { &mut entry.data.membarrier };
-                data.cmd = args[0] as i32;
-                data.flags = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::MembarrierData, _>(
+                    &ctx,
+                    syscalls::SYS_membarrier,
+                    return_value,
+                    |payload| {
+                        payload.cmd = args[0] as i32;
+                        payload.flags = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_mremap => {
-                let data = unsafe { &mut entry.data.mremap };
-                data.old_address = args[0];
-                data.old_size = args[1];
-                data.new_size = args[2];
-                data.flags = args[3] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::MremapData, _>(
+                    &ctx,
+                    syscalls::SYS_mremap,
+                    return_value,
+                    |payload| {
+                        payload.old_address = args[0];
+                        payload.old_size = args[1];
+                        payload.new_size = args[2];
+                        payload.flags = args[3] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_msync => {
-                let data = unsafe { &mut entry.data.msync };
-                data.addr = args[0];
-                data.length = args[1];
-                data.flags = args[2] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::MsyncData, _>(
+                    &ctx,
+                    syscalls::SYS_msync,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.length = args[1];
+                        payload.flags = args[2] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_munlock => {
-                let data = unsafe { &mut entry.data.munlock };
-                data.addr = args[0];
-                data.len = args[1];
+                crate::util::submit_compact_payload::<pinchy_common::MunlockData, _>(
+                    &ctx,
+                    syscalls::SYS_munlock,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0];
+                        payload.len = args[1];
+                    },
+                )?;
             }
             syscalls::SYS_readahead => {
-                let data = unsafe { &mut entry.data.readahead };
-                data.fd = args[0] as i32;
-                data.offset = args[1];
-                data.count = args[2];
+                crate::util::submit_compact_payload::<pinchy_common::ReadaheadData, _>(
+                    &ctx,
+                    syscalls::SYS_readahead,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.offset = args[1];
+                        payload.count = args[2];
+                    },
+                )?;
             }
             syscalls::SYS_setns => {
-                let data = unsafe { &mut entry.data.setns };
-                data.fd = args[0] as i32;
-                data.nstype = args[1] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::SetnsData, _>(
+                    &ctx,
+                    syscalls::SYS_setns,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.nstype = args[1] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_unshare => {
-                let data = unsafe { &mut entry.data.unshare };
-                data.flags = args[0] as i32;
+                crate::util::submit_compact_payload::<pinchy_common::UnshareData, _>(
+                    &ctx,
+                    syscalls::SYS_unshare,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[0] as i32;
+                    },
+                )?;
             }
             syscalls::SYS_timer_delete => {
-                let data = unsafe { &mut entry.data.timer_delete };
-                data.timerid = args[0];
+                crate::util::submit_compact_payload::<pinchy_common::TimerDeleteData, _>(
+                    &ctx,
+                    syscalls::SYS_timer_delete,
+                    return_value,
+                    |payload| {
+                        payload.timerid = args[0];
+                    },
+                )?;
             }
             syscalls::SYS_timer_getoverrun => {
-                let data = unsafe { &mut entry.data.timer_getoverrun };
-                data.timerid = args[0];
+                crate::util::submit_compact_payload::<pinchy_common::TimerGetoverrunData, _>(
+                    &ctx,
+                    syscalls::SYS_timer_getoverrun,
+                    return_value,
+                    |payload| {
+                        payload.timerid = args[0];
+                    },
+                )?;
             }
             #[cfg(x86_64)]
-            syscalls::SYS_pause | syscalls::SYS_getpgrp | syscalls::SYS_inotify_init => {}
-            syscalls::SYS_sched_yield
-            | syscalls::SYS_getpid
-            | syscalls::SYS_gettid
-            | syscalls::SYS_getuid
-            | syscalls::SYS_geteuid
-            | syscalls::SYS_getgid
-            | syscalls::SYS_getegid
-            | syscalls::SYS_getppid
-            | syscalls::SYS_rt_sigreturn
-            | syscalls::SYS_sync
-            | syscalls::SYS_setsid
-            | syscalls::SYS_munlockall
-            | syscalls::SYS_vhangup => {}
+            syscalls::SYS_pause => {
+                crate::util::submit_compact_payload::<pinchy_common::PauseData, _>(
+                    &ctx,
+                    syscalls::SYS_pause,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
             #[cfg(x86_64)]
-            syscalls::SYS_fork | syscalls::SYS_vfork => {}
+            syscalls::SYS_getpgrp => {
+                crate::util::submit_compact_payload::<pinchy_common::GetpgrpData, _>(
+                    &ctx,
+                    syscalls::SYS_getpgrp,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_inotify_init => {
+                crate::util::submit_compact_payload::<pinchy_common::InotifyInitData, _>(
+                    &ctx,
+                    syscalls::SYS_inotify_init,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_sched_yield => {
+                crate::util::submit_compact_payload::<pinchy_common::SchedYieldData, _>(
+                    &ctx,
+                    syscalls::SYS_sched_yield,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_getpid => {
+                crate::util::submit_compact_payload::<pinchy_common::GetpidData, _>(
+                    &ctx,
+                    syscalls::SYS_getpid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_gettid => {
+                crate::util::submit_compact_payload::<pinchy_common::GettidData, _>(
+                    &ctx,
+                    syscalls::SYS_gettid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_getuid => {
+                crate::util::submit_compact_payload::<pinchy_common::GetuidData, _>(
+                    &ctx,
+                    syscalls::SYS_getuid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_geteuid => {
+                crate::util::submit_compact_payload::<pinchy_common::GeteuidData, _>(
+                    &ctx,
+                    syscalls::SYS_geteuid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_getgid => {
+                crate::util::submit_compact_payload::<pinchy_common::GetgidData, _>(
+                    &ctx,
+                    syscalls::SYS_getgid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_getegid => {
+                crate::util::submit_compact_payload::<pinchy_common::GetegidData, _>(
+                    &ctx,
+                    syscalls::SYS_getegid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_getppid => {
+                crate::util::submit_compact_payload::<pinchy_common::GetppidData, _>(
+                    &ctx,
+                    syscalls::SYS_getppid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_rt_sigreturn => {
+                crate::util::submit_compact_payload::<pinchy_common::RtSigreturnData, _>(
+                    &ctx,
+                    syscalls::SYS_rt_sigreturn,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_sync => {
+                crate::util::submit_compact_payload::<pinchy_common::SyncData, _>(
+                    &ctx,
+                    syscalls::SYS_sync,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_setsid => {
+                crate::util::submit_compact_payload::<pinchy_common::SetsidData, _>(
+                    &ctx,
+                    syscalls::SYS_setsid,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_munlockall => {
+                crate::util::submit_compact_payload::<pinchy_common::MunlockallData, _>(
+                    &ctx,
+                    syscalls::SYS_munlockall,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            syscalls::SYS_vhangup => {
+                crate::util::submit_compact_payload::<pinchy_common::VhangupData, _>(
+                    &ctx,
+                    syscalls::SYS_vhangup,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_fork => {
+                crate::util::submit_compact_payload::<pinchy_common::ForkData, _>(
+                    &ctx,
+                    syscalls::SYS_fork,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_vfork => {
+                crate::util::submit_compact_payload::<pinchy_common::VforkData, _>(
+                    &ctx,
+                    syscalls::SYS_vfork,
+                    return_value,
+                    |_payload| {},
+                )?;
+            }
             syscalls::SYS_set_mempolicy_home_node => {
-                let data = unsafe { &mut entry.data.set_mempolicy_home_node };
-                data.start = args[0] as u64;
-                data.len = args[1] as u64;
-                data.home_node = args[2] as u64;
-                data.flags = args[3] as u64;
-            }
-            syscalls::SYS_close
-            | syscalls::SYS_lseek
-            | syscalls::SYS_fchmod
-            | syscalls::SYS_fsync
-            | syscalls::SYS_fdatasync
-            | syscalls::SYS_ftruncate
-            | syscalls::SYS_fchown => {
-                error!(&ctx, "hit migrated syscall {}", syscall_nr);
+                crate::util::submit_compact_payload::<pinchy_common::SetMempolicyHomeNodeData, _>(
+                    &ctx,
+                    syscalls::SYS_set_mempolicy_home_node,
+                    return_value,
+                    |payload| {
+                        payload.start = args[0] as u64;
+                        payload.len = args[1] as u64;
+                        payload.home_node = args[2] as u64;
+                        payload.flags = args[3] as u64;
+                    },
+                )?;
             }
             _ => {
                 trace!(&ctx, "unknown syscall {}", syscall_nr);
-                entry.discard();
-                return Ok(());
             }
         }
-
-        entry.submit();
 
         Ok(())
     }
@@ -670,17 +1199,16 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
 pub fn syscall_exit_generic(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let syscall_nr = get_syscall_nr(&ctx)?;
+        let return_value = crate::util::get_return_value(&ctx)?;
         let args = get_args(&ctx, syscall_nr)?;
-
-        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
-
-        let data = unsafe { &mut entry.data.generic };
-
-        data.args = args;
-
-        entry.submit();
-
-        Ok(())
+        crate::util::submit_compact_payload::<pinchy_common::GenericSyscallData, _>(
+            &ctx,
+            syscall_nr,
+            return_value,
+            |payload| {
+                payload.args = args;
+            },
+        )
     }
     match inner(ctx) {
         Ok(_) => 0,

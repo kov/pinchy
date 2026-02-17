@@ -1,6 +1,6 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     os::fd::{AsRawFd as _, OwnedFd},
     sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
@@ -14,8 +14,7 @@ use aya::{
     Ebpf,
 };
 use pinchy_common::{
-    compact_payload_size, syscalls, wire_validation_enabled, SyscallEvent, WireEventHeader,
-    WIRE_KIND_COMPACT_SYSCALL_EVENT, WIRE_KIND_LEGACY_SYSCALL_EVENT, WIRE_VERSION,
+    compact_payload_size, syscalls, wire_validation_enabled, WireEventHeader, WIRE_VERSION,
 };
 use tokio::{
     io::{unix::AsyncFd, AsyncWriteExt},
@@ -37,7 +36,7 @@ mod efficiency {
 
         use aya::{maps::Array, Ebpf};
         use pinchy_common::{
-            EFF_STAT_BYTES_SUBMITTED, EFF_STAT_COUNT, EFF_STAT_EVENTS_LEGACY,
+            EFF_STAT_BYTES_SUBMITTED, EFF_STAT_COUNT, EFF_STAT_EVENTS_COMPACT,
             EFF_STAT_EVENTS_SUBMITTED, EFF_STAT_RESERVE_FAIL,
         };
 
@@ -55,7 +54,7 @@ mod efficiency {
             dispatch_send_fail: AtomicU64,
             dispatch_send_queue_full: AtomicU64,
             dispatch_send_closed: AtomicU64,
-            drop_legacy_events: AtomicU64,
+            drop_events: AtomicU64,
             queue_depth_current: AtomicU64,
             queue_depth_peak: AtomicU64,
             writer_events_written: AtomicU64,
@@ -76,7 +75,7 @@ mod efficiency {
             dispatch_send_fail: u64,
             dispatch_send_queue_full: u64,
             dispatch_send_closed: u64,
-            drop_legacy_events: u64,
+            drop_events: u64,
             queue_depth_current: u64,
             queue_depth_peak: u64,
             writer_events_written: u64,
@@ -139,7 +138,7 @@ mod efficiency {
                     self.dispatch_send_closed.fetch_add(1, Ordering::Relaxed);
                 }
 
-                self.drop_legacy_events.fetch_add(1, Ordering::Relaxed);
+                self.drop_events.fetch_add(1, Ordering::Relaxed);
             }
 
             pub(crate) fn queue_depth_increment(&self) {
@@ -172,7 +171,7 @@ mod efficiency {
                     dispatch_send_fail: self.dispatch_send_fail.load(Ordering::Relaxed),
                     dispatch_send_queue_full: self.dispatch_send_queue_full.load(Ordering::Relaxed),
                     dispatch_send_closed: self.dispatch_send_closed.load(Ordering::Relaxed),
-                    drop_legacy_events: self.drop_legacy_events.load(Ordering::Relaxed),
+                    drop_events: self.drop_events.load(Ordering::Relaxed),
                     queue_depth_current: self.queue_depth_current.load(Ordering::Relaxed),
                     queue_depth_peak: self.queue_depth_peak.load(Ordering::Relaxed),
                     writer_events_written: self.writer_events_written.load(Ordering::Relaxed),
@@ -209,7 +208,7 @@ mod efficiency {
             queue_snapshot: &str,
         ) {
             let mut line = format!(
-                "EFF userspace ring_items={} ring_bytes={} unexpected={} framed_events={} framed_bytes={} matched={} send_ok={} send_fail={} send_queue_full={} send_closed={} drop_legacy={} qdepth={} qpeak={} writer_events={} writer_bytes={} writer_write_err={} writer_flush_err={}",
+                "EFF userspace ring_items={} ring_bytes={} unexpected={} framed_events={} framed_bytes={} matched={} send_ok={} send_fail={} send_queue_full={} send_closed={} drop_events={} qdepth={} qpeak={} writer_events={} writer_bytes={} writer_write_err={} writer_flush_err={}",
                 userspace.ring_items_read,
                 userspace.ring_bytes_read,
                 userspace.ring_items_unexpected,
@@ -220,7 +219,7 @@ mod efficiency {
                 userspace.dispatch_send_fail,
                 userspace.dispatch_send_queue_full,
                 userspace.dispatch_send_closed,
-                userspace.drop_legacy_events,
+                userspace.drop_events,
                 userspace.queue_depth_current,
                 userspace.queue_depth_peak,
                 userspace.writer_events_written,
@@ -231,11 +230,11 @@ mod efficiency {
 
             if let Some(ebpf) = ebpf {
                 line.push_str(&format!(
-                    " ebpf_submitted={} ebpf_bytes={} ebpf_reserve_fail={} ebpf_legacy_events={}",
+                    " ebpf_submitted={} ebpf_bytes={} ebpf_reserve_fail={} ebpf_compact_events={}",
                     ebpf[EFF_STAT_EVENTS_SUBMITTED as usize],
                     ebpf[EFF_STAT_BYTES_SUBMITTED as usize],
                     ebpf[EFF_STAT_RESERVE_FAIL as usize],
-                    ebpf[EFF_STAT_EVENTS_LEGACY as usize],
+                    ebpf[EFF_STAT_EVENTS_COMPACT as usize],
                 ));
             }
 
@@ -442,7 +441,7 @@ struct Client {
     #[allow(unused)]
     pid: u32,
     sender: tokio::sync::mpsc::Sender<Arc<[u8]>>,
-    syscalls: Vec<i64>,
+    syscalls: HashSet<i64>,
     queue_stats: Arc<ClientQueueStats>,
 }
 
@@ -467,50 +466,7 @@ pub struct EventDispatch {
     stats: Arc<DispatchStats>,
 }
 
-fn parse_event_metadata(event: &[u8]) -> Option<WireEventHeader> {
-    let header_size = std::mem::size_of::<WireEventHeader>();
-
-    if event.len() >= header_size {
-        let header = unsafe { std::ptr::read_unaligned(event.as_ptr() as *const WireEventHeader) };
-
-        if header.version == WIRE_VERSION {
-            let payload_len = header.payload_len as usize;
-            let total_size = header_size.checked_add(payload_len)?;
-
-            if total_size == event.len() {
-                let payload = &event[header_size..];
-
-                match header.kind {
-                    WIRE_KIND_LEGACY_SYSCALL_EVENT => {
-                        if payload.len() != std::mem::size_of::<SyscallEvent>() {
-                            return None;
-                        }
-
-                        return Some(header);
-                    }
-
-                    WIRE_KIND_COMPACT_SYSCALL_EVENT => {
-                        let expected_payload_size = compact_payload_size(header.syscall_nr)?;
-
-                        if payload.len() != expected_payload_size {
-                            return None;
-                        }
-
-                        return Some(header);
-                    }
-
-                    _ => {
-                        return None;
-                    }
-                }
-            }
-        }
-    }
-
-    None
-}
-
-fn parse_trusted_wire_metadata(event: &[u8]) -> Option<WireEventHeader> {
+fn parse_wire_metadata(event: &[u8], validate_wire: bool) -> Option<WireEventHeader> {
     let header_size = std::mem::size_of::<WireEventHeader>();
 
     if event.len() < header_size {
@@ -519,7 +475,26 @@ fn parse_trusted_wire_metadata(event: &[u8]) -> Option<WireEventHeader> {
 
     let header = unsafe { std::ptr::read_unaligned(event.as_ptr() as *const WireEventHeader) };
 
-    assert_eq!(header.version, WIRE_VERSION);
+    if header.version != WIRE_VERSION {
+        return None;
+    }
+
+    if !validate_wire {
+        return Some(header);
+    }
+
+    let payload_len = header.payload_len as usize;
+    let total_size = header_size.checked_add(payload_len)?;
+
+    if total_size != event.len() {
+        return None;
+    }
+
+    let expected_payload_size = compact_payload_size(header.syscall_nr)?;
+
+    if payload_len != expected_payload_size {
+        return None;
+    }
 
     Some(header)
 }
@@ -645,11 +620,7 @@ impl EventDispatch {
 
                                     event_stats.ring_item_read(event.len());
 
-                                    let parsed = if validate_wire {
-                                        parse_event_metadata(event)
-                                    } else {
-                                        parse_trusted_wire_metadata(event)
-                                    };
+                                    let parsed = parse_wire_metadata(event, validate_wire);
 
                                     let Some(header) = parsed else {
                                         event_stats.ring_item_unexpected();
@@ -783,7 +754,7 @@ impl EventDispatch {
             client_id,
             pid,
             sender: event_tx,
-            syscalls,
+            syscalls: syscalls.into_iter().collect(),
             queue_stats: queue_stats.clone(),
         };
 

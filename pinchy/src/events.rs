@@ -768,7 +768,7 @@ pub async fn handle_compact_event(
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "mode: {}", format_mode(data.mode));
-            argf!(sf, "flags: {}", data.flags);
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
             finish!(sf, header.return_value);
         }
         syscalls::SYS_fchown => {
@@ -786,7 +786,7 @@ pub async fn handle_compact_event(
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
             argf!(sf, "uid: {}", data.uid);
             argf!(sf, "gid: {}", data.gid);
-            argf!(sf, "flags: {}", data.flags);
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
             finish!(sf, header.return_value);
         }
         syscalls::SYS_renameat => {

@@ -95,6 +95,7 @@ fn main() -> anyhow::Result<()> {
             "benchmark_filesystem_wave1" => benchmark_filesystem_wave1(),
             "benchmark_filesystem_wave2" => benchmark_filesystem_wave2(),
             "benchmark_filesystem_wave3" => benchmark_filesystem_wave3(),
+            "benchmark_filesystem_wave4" => benchmark_filesystem_wave4(),
             "rt_sig" => rt_sig(),
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
@@ -1341,6 +1342,128 @@ fn benchmark_filesystem_wave3() -> anyhow::Result<()> {
 
         let _ = libc::unlink(file_path.as_ptr());
         let _ = libc::rmdir(nested_dir.as_ptr());
+        let _ = libc::rmdir(base_dir.as_ptr());
+    }
+
+    Ok(())
+}
+
+fn benchmark_filesystem_wave4() -> anyhow::Result<()> {
+    let loops = std::env::var("PINCHY_BENCH_LOOPS")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .unwrap_or(250);
+
+    if loops == 0 {
+        return Ok(());
+    }
+
+    let base_dir = c"/tmp/benchmark_filesystem_wave4";
+    let old_path = c"/tmp/benchmark_filesystem_wave4/source";
+    let renamed_path = c"/tmp/benchmark_filesystem_wave4/renamed";
+    let link_path = c"/tmp/benchmark_filesystem_wave4/hardlink";
+    let symlink_path = c"/tmp/benchmark_filesystem_wave4/symlink";
+
+    unsafe {
+        let _ = libc::unlink(old_path.as_ptr());
+        let _ = libc::unlink(renamed_path.as_ptr());
+        let _ = libc::unlink(link_path.as_ptr());
+        let _ = libc::unlink(symlink_path.as_ptr());
+        let _ = libc::rmdir(base_dir.as_ptr());
+
+        if libc::mkdir(base_dir.as_ptr(), 0o755) != 0 {
+            bail!("mkdir base_dir failed: {}", std::io::Error::last_os_error());
+        }
+
+        for _ in 0..loops {
+            let _ = libc::unlink(old_path.as_ptr());
+            let _ = libc::unlink(renamed_path.as_ptr());
+            let _ = libc::unlink(link_path.as_ptr());
+            let _ = libc::unlink(symlink_path.as_ptr());
+
+            let fd = libc::openat(
+                libc::AT_FDCWD,
+                old_path.as_ptr(),
+                libc::O_RDWR | libc::O_CREAT | libc::O_TRUNC,
+                0o644,
+            );
+
+            if fd < 0 {
+                bail!("openat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::close(fd) != 0 {
+                bail!("close failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_linkat,
+                libc::AT_FDCWD,
+                old_path.as_ptr(),
+                libc::AT_FDCWD,
+                link_path.as_ptr(),
+                0,
+            ) != 0
+            {
+                bail!("linkat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_symlinkat,
+                old_path.as_ptr(),
+                libc::AT_FDCWD,
+                symlink_path.as_ptr(),
+            ) != 0
+            {
+                bail!("symlinkat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_renameat,
+                libc::AT_FDCWD,
+                old_path.as_ptr(),
+                libc::AT_FDCWD,
+                renamed_path.as_ptr(),
+            ) != 0
+            {
+                bail!("renameat failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(
+                libc::SYS_renameat2,
+                libc::AT_FDCWD,
+                renamed_path.as_ptr(),
+                libc::AT_FDCWD,
+                old_path.as_ptr(),
+                0,
+            ) != 0
+            {
+                bail!("renameat2 failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_unlinkat, libc::AT_FDCWD, link_path.as_ptr(), 0) != 0 {
+                bail!("unlinkat(link) failed: {}", std::io::Error::last_os_error());
+            }
+
+            if libc::syscall(libc::SYS_unlinkat, libc::AT_FDCWD, symlink_path.as_ptr(), 0) != 0 {
+                bail!(
+                    "unlinkat(symlink) failed: {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+
+            if libc::syscall(libc::SYS_unlinkat, libc::AT_FDCWD, old_path.as_ptr(), 0) != 0 {
+                bail!(
+                    "unlinkat(source) failed: {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+        }
+
+        let _ = libc::unlink(old_path.as_ptr());
+        let _ = libc::unlink(renamed_path.as_ptr());
+        let _ = libc::unlink(link_path.as_ptr());
+        let _ = libc::unlink(symlink_path.as_ptr());
         let _ = libc::rmdir(base_dir.as_ptr());
     }
 

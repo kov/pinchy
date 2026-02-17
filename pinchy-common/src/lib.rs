@@ -183,6 +183,11 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_fchmodat => Some(core::mem::size_of::<FchmodatData>()),
         syscalls::SYS_fchown => Some(core::mem::size_of::<FchownData>()),
         syscalls::SYS_fchownat => Some(core::mem::size_of::<FchownatData>()),
+        syscalls::SYS_renameat => Some(core::mem::size_of::<RenameatData>()),
+        syscalls::SYS_renameat2 => Some(core::mem::size_of::<Renameat2Data>()),
+        syscalls::SYS_unlinkat => Some(core::mem::size_of::<UnlinkatData>()),
+        syscalls::SYS_symlinkat => Some(core::mem::size_of::<SymlinkatData>()),
+        syscalls::SYS_linkat => Some(core::mem::size_of::<LinkatData>()),
         _ => None,
     }
 }

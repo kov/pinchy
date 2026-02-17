@@ -658,35 +658,38 @@ impl EventDispatch {
 
     fn dispatch_event(&self, header: WireEventHeader, event_bytes: Arc<[u8]>) {
         if let Some(clients) = self.clients_map.get(&header.pid) {
-            let interested_clients: Vec<_> = clients
-                .iter()
-                .filter(|client| client.syscalls.contains(&header.syscall_nr))
-                .collect();
+            let mut matched = false;
 
-            if !interested_clients.is_empty() {
-                self.stats.dispatch_event_matched();
-
-                for client in interested_clients {
-                    match client.sender.try_send(event_bytes.clone()) {
-                        Ok(()) => {
-                            client.queue_stats.increment_depth();
-                            self.stats.queue_depth_increment();
-                            self.stats.dispatch_send(true);
-                        }
-                        Err(TrySendError::Full(_)) => {
-                            client.queue_stats.record_full_drop();
-                            self.stats.dispatch_send(false);
-                            self.stats.dispatch_send_drop(true);
-                        }
-                        Err(TrySendError::Closed(_)) => {
-                            client.queue_stats.record_closed_drop();
-                            self.stats.dispatch_send(false);
-                            self.stats.dispatch_send_drop(false);
-                        }
-                    }
+            for client in clients {
+                if !client.syscalls.contains(&header.syscall_nr) {
+                    continue;
                 }
 
-                // Reset timeout for this PID if it has one
+                if !matched {
+                    matched = true;
+                    self.stats.dispatch_event_matched();
+                }
+
+                match client.sender.try_send(event_bytes.clone()) {
+                    Ok(()) => {
+                        client.queue_stats.increment_depth();
+                        self.stats.queue_depth_increment();
+                        self.stats.dispatch_send(true);
+                    }
+                    Err(TrySendError::Full(_)) => {
+                        client.queue_stats.record_full_drop();
+                        self.stats.dispatch_send(false);
+                        self.stats.dispatch_send_drop(true);
+                    }
+                    Err(TrySendError::Closed(_)) => {
+                        client.queue_stats.record_closed_drop();
+                        self.stats.dispatch_send(false);
+                        self.stats.dispatch_send_drop(false);
+                    }
+                }
+            }
+
+            if matched {
                 self.reset_pid_timeout(header.pid);
             }
         }

@@ -615,6 +615,8 @@ impl EventDispatch {
                                 log::trace!("RingBuf had something to read...");
 
                                 let ring = guard.get_inner_mut();
+                                let dispatch = event_dispatch.read().await;
+
                                 while let Some(item) = ring.next() {
                                     let event = &*item;
 
@@ -633,7 +635,7 @@ impl EventDispatch {
                                     event_stats.framed_event(framed_event.len());
 
                                     log::trace!("Read {} bytes from ringbuf...", event.len());
-                                    event_dispatch.read().await.dispatch_event(header, framed_event);
+                                    dispatch.dispatch_event(header, framed_event);
                                 }
                                 guard.clear_ready();
                             }

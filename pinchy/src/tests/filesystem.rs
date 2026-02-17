@@ -964,10 +964,7 @@ syscall_compact_test!(
 
         make_compact_test_data(SYS_fchmodat, 1001, 0, &data)
     },
-    &format!(
-        "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: {}) = 0 (success)\n",
-        libc::AT_SYMLINK_NOFOLLOW
-    )
+    "1001 fchmodat(dirfd: 3, pathname: \"/tmp/testfile\", mode: 0o755 (rwxr-xr-x), flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
 );
 
 syscall_compact_test!(
@@ -1021,10 +1018,7 @@ syscall_compact_test!(
 
         make_compact_test_data(SYS_fchownat, 1001, 0, &data)
     },
-    &format!(
-        "1001 fchownat(dirfd: AT_FDCWD, pathname: \"/etc/passwd\", uid: 1000, gid: 1000, flags: {}) = 0 (success)\n",
-        libc::AT_SYMLINK_NOFOLLOW
-    )
+    "1001 fchownat(dirfd: AT_FDCWD, pathname: \"/etc/passwd\", uid: 1000, gid: 1000, flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
 );
 
 #[cfg(target_arch = "x86_64")]

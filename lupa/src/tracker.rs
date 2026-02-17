@@ -10,7 +10,8 @@ use std::{
 };
 
 use pinchy_common::{
-    CloseData, OpenAtData, ReadData, WIRE_VERSION, WireEventHeader, WriteData, syscalls,
+    CloseData, OpenAtData, ReadData, WIRE_VERSION, WireEventHeader, WriteData,
+    max_compact_payload_size, syscalls,
 };
 
 #[derive(Debug)]
@@ -129,6 +130,8 @@ pub fn run(
     notify_tx: Sender<TrackerNotification>,
 ) {
     let mut header_buf = [0u8; std::mem::size_of::<WireEventHeader>()];
+    let mut payload = Vec::new();
+    let max_payload_size = max_compact_payload_size();
 
     loop {
         match reader.read_exact(&mut header_buf) {
@@ -141,13 +144,31 @@ pub fn run(
                     notify_tx
                         .send(TrackerNotification::Error(io::Error::new(
                             ErrorKind::InvalidData,
-                            "invalid wire header",
+                            format!(
+                                "invalid wire header: version={} expected={} payload_len={}",
+                                header.version, WIRE_VERSION, header.payload_len
+                            ),
                         )))
                         .expect("Trying to send error notification");
                     break;
                 }
 
-                let mut payload = vec![0u8; header.payload_len as usize];
+                let payload_len = header.payload_len as usize;
+
+                if payload_len > max_payload_size {
+                    notify_tx
+                        .send(TrackerNotification::Error(io::Error::new(
+                            ErrorKind::InvalidData,
+                            format!(
+                                "invalid payload_len {} (max {}) for syscall {}",
+                                payload_len, max_payload_size, header.syscall_nr
+                            ),
+                        )))
+                        .expect("Trying to send error notification");
+                    break;
+                }
+
+                payload.resize(payload_len, 0);
 
                 if let Err(e) = reader.read_exact(&mut payload) {
                     if e.kind() == ErrorKind::UnexpectedEof {

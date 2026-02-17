@@ -17,3 +17,6 @@ perf.data.old
 
 # UML kernel cache (source tree + built kernels)
 uml-kernel/cache/
+
+# Local markdown files used by agents during tasks
+/designs

@@ -3,15 +3,13 @@ use core::{mem::size_of, ops::DerefMut as _};
 use aya_ebpf::{
     bindings::BPF_RB_FORCE_WAKEUP,
     helpers::{bpf_probe_read_user, bpf_probe_read_user_buf},
-    maps::ring_buf::RingBufEntry,
     programs::TracePointContext,
     EbpfContext as _,
 };
 use aya_log_ebpf::error;
 use pinchy_common::{
     kernel_types::{EpollEvent, Timespec},
-    SyscallEvent, WireEventHeader, WireLegacySyscallEvent, WIRE_KIND_COMPACT_SYSCALL_EVENT,
-    WIRE_KIND_LEGACY_SYSCALL_EVENT, WIRE_VERSION,
+    WireEventHeader, WIRE_VERSION,
 };
 
 use crate::{ENTER_MAP, EVENTS, SYSCALL_RETURN_OFFSET};
@@ -20,8 +18,8 @@ mod efficiency {
     #[cfg(feature = "efficiency-metrics")]
     mod enabled {
         use pinchy_common::{
-            WireLegacySyscallEvent, EFF_STAT_BYTES_SUBMITTED, EFF_STAT_EVENTS_LEGACY,
-            EFF_STAT_EVENTS_SUBMITTED, EFF_STAT_RESERVE_FAIL,
+            EFF_STAT_BYTES_SUBMITTED, EFF_STAT_EVENTS_COMPACT, EFF_STAT_EVENTS_SUBMITTED,
+            EFF_STAT_RESERVE_FAIL,
         };
 
         use crate::EFFICIENCY_STATS;
@@ -44,14 +42,9 @@ mod efficiency {
         }
 
         #[inline(always)]
-        pub(crate) fn record_legacy_submit() {
-            record_legacy_submit_size(core::mem::size_of::<WireLegacySyscallEvent>() as u64);
-        }
-
-        #[inline(always)]
-        pub(crate) fn record_legacy_submit_size(bytes: u64) {
+        pub(crate) fn record_compact_submit_size(bytes: u64) {
             counter_add(EFF_STAT_EVENTS_SUBMITTED, 1);
-            counter_add(EFF_STAT_EVENTS_LEGACY, 1);
+            counter_add(EFF_STAT_EVENTS_COMPACT, 1);
             counter_add(EFF_STAT_BYTES_SUBMITTED, bytes);
         }
     }
@@ -62,10 +55,7 @@ mod efficiency {
         pub(crate) fn record_reserve_fail() {}
 
         #[inline(always)]
-        pub(crate) fn record_legacy_submit() {}
-
-        #[inline(always)]
-        pub(crate) fn record_legacy_submit_size(_bytes: u64) {}
+        pub(crate) fn record_compact_submit_size(_bytes: u64) {}
     }
 
     #[cfg(not(feature = "efficiency-metrics"))]
@@ -74,7 +64,7 @@ mod efficiency {
     pub(crate) use enabled::*;
 }
 
-pub(crate) use efficiency::{record_legacy_submit, record_legacy_submit_size, record_reserve_fail};
+pub(crate) use efficiency::{record_compact_submit_size, record_reserve_fail};
 
 #[inline(always)]
 pub fn read_timespec(ptr: *const Timespec) -> Timespec {
@@ -172,74 +162,6 @@ pub fn get_return_value(ctx: &TracePointContext) -> Result<i64, u32> {
     })
 }
 
-#[macro_export]
-macro_rules! data_mut {
-    ($entry:expr, $field:ident) => {
-        unsafe { &mut $entry.data.$field }
-    };
-}
-
-pub struct Entry {
-    inner: RingBufEntry<WireLegacySyscallEvent>,
-}
-
-impl Entry {
-    pub fn new(ctx: &TracePointContext, syscall_nr: i64) -> Result<Self, u32> {
-        let Some(mut entry) = (unsafe { EVENTS.reserve::<WireLegacySyscallEvent>(0) }) else {
-            record_reserve_fail();
-
-            error!(
-                ctx,
-                "Failed to reserve ringbuf entry for syscall {}", syscall_nr
-            );
-            return Err(1);
-        };
-
-        let event = entry.deref_mut();
-        event.write(unsafe { core::mem::zeroed::<WireLegacySyscallEvent>() });
-
-        let event = unsafe { event.assume_init_mut() };
-
-        event.payload.pid = ctx.pid();
-        event.payload.tid = ctx.tgid();
-        event.payload.syscall_nr = syscall_nr;
-        let return_value = match get_return_value(&ctx) {
-            Ok(return_value) => return_value,
-            Err(e) => {
-                entry.discard(0);
-                return Err(e);
-            }
-        };
-        event.payload.return_value = return_value;
-
-        event.header = WireEventHeader {
-            version: WIRE_VERSION,
-            kind: WIRE_KIND_LEGACY_SYSCALL_EVENT,
-            payload_len: core::mem::size_of::<SyscallEvent>() as u32,
-            syscall_nr,
-            pid: event.payload.pid,
-            tid: event.payload.tid,
-            return_value,
-        };
-
-        Ok(Entry { inner: entry })
-    }
-
-    fn event_mut(&mut self) -> &mut SyscallEvent {
-        unsafe { &mut self.inner.deref_mut().assume_init_mut().payload }
-    }
-
-    pub fn submit(self) -> u32 {
-        record_legacy_submit();
-        self.inner.submit(BPF_RB_FORCE_WAKEUP.into());
-        0
-    }
-
-    pub fn discard(self) {
-        self.inner.discard(0);
-    }
-}
-
 #[repr(C, packed)]
 struct WireCompactPayload<T> {
     header: WireEventHeader,
@@ -276,11 +198,10 @@ where
     unsafe {
         header_ptr.write(WireEventHeader {
             version: WIRE_VERSION,
-            kind: WIRE_KIND_COMPACT_SYSCALL_EVENT,
             payload_len: core::mem::size_of::<T>() as u32,
             syscall_nr,
-            pid: ctx.pid(),
-            tid: ctx.tgid(),
+            pid: ctx.tgid(),
+            tid: ctx.pid(),
             return_value,
         });
     }
@@ -289,25 +210,11 @@ where
 
     initialize_payload(unsafe { &mut *payload_ptr });
 
-    record_legacy_submit_size(core::mem::size_of::<WireCompactPayload<T>>() as u64);
+    record_compact_submit_size(core::mem::size_of::<WireCompactPayload<T>>() as u64);
 
     entry.submit(BPF_RB_FORCE_WAKEUP.into());
 
     Ok(())
-}
-
-impl core::ops::Deref for Entry {
-    type Target = SyscallEvent;
-
-    fn deref(&self) -> &Self::Target {
-        unsafe { &self.inner.assume_init_ref().payload }
-    }
-}
-
-impl core::ops::DerefMut for Entry {
-    fn deref_mut(&mut self) -> &mut SyscallEvent {
-        self.event_mut()
-    }
 }
 
 use pinchy_common::{kernel_types::Iovec, IOV_COUNT, LARGER_READ_SIZE};

@@ -60,7 +60,7 @@ macro_rules! with_array {
     };
 }
 
-#[derive(Clone, Debug, Default, ValueEnum)]
+#[derive(Clone, Copy, Debug, Default, ValueEnum)]
 pub enum FormattingStyle {
     #[default]
     OneLine,

@@ -24,7 +24,6 @@ pub(crate) fn make_compact_test_data<T: Copy>(
 ) -> (pinchy_common::WireEventHeader, Vec<u8>) {
     let header = pinchy_common::WireEventHeader {
         version: pinchy_common::WIRE_VERSION,
-        kind: pinchy_common::WIRE_KIND_COMPACT_SYSCALL_EVENT,
         payload_len: core::mem::size_of::<T>() as u32,
         syscall_nr,
         pid,
@@ -45,32 +44,6 @@ macro_rules! syscall_test {
     ($name:ident, $init:block, $expected:expr) => {
         #[::tokio::test]
         async fn $name() {
-            let event = $init;
-
-            let mut output: Vec<u8> = vec![];
-            let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
-            let formatter = $crate::formatting::Formatter::new(
-                pin_output,
-                $crate::formatting::FormattingStyle::OneLine,
-            );
-
-            $crate::events::handle_event(&event, formatter)
-                .await
-                .unwrap();
-
-            assert_eq!(
-                String::from_utf8_lossy(&output).to_string().as_str(),
-                $expected
-            );
-        }
-    };
-}
-
-#[macro_export]
-macro_rules! syscall_compact_test {
-    ($name:ident, $init:block, $expected:expr) => {
-        #[::tokio::test]
-        async fn $name() {
             let (header, payload) = $init;
 
             let mut output: Vec<u8> = vec![];
@@ -80,11 +53,9 @@ macro_rules! syscall_compact_test {
                 $crate::formatting::FormattingStyle::OneLine,
             );
 
-            let handled = $crate::events::handle_compact_event(&header, &payload, formatter)
+            $crate::events::handle_event(&header, &payload, formatter)
                 .await
                 .unwrap();
-
-            assert!(handled);
             assert_eq!(
                 String::from_utf8_lossy(&output).to_string().as_str(),
                 $expected
@@ -96,21 +67,13 @@ macro_rules! syscall_compact_test {
 syscall_test!(
     parse_generic_syscall,
     {
-        use pinchy_common::{
-            syscalls::SYS_generic_parse_test, GenericSyscallData, SyscallEvent, SyscallEventData,
+        use pinchy_common::{syscalls::SYS_generic_parse_test, GenericSyscallData};
+
+        let data = GenericSyscallData {
+            args: [0, 1, 2, 3, 4, 5],
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_generic_parse_test,
-            pid: 1234,
-            tid: 1234,
-            return_value: 42,
-            data: SyscallEventData {
-                generic: GenericSyscallData {
-                    args: [0, 1, 2, 3, 4, 5],
-                },
-            },
-        }
+        crate::tests::make_compact_test_data(SYS_generic_parse_test, 1234, 42, &data)
     },
     "1234 generic_parse_test(0, 1, 2, 3, 4, 5) = 42 <STUB>\n"
 );

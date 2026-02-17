@@ -90,7 +90,7 @@ loaded.
 Each category has a single `syscall_exit_<category>` tracepoint function that:
 
 1. **Uses a match statement** on `syscall_nr` to dispatch to syscall-specific logic
-2. **Uses the `data_mut!()` macro** for safe access to syscall data structures
+2. **Uses `submit_compact_payload()`** to reserve and fill compact payloads
 3. **Follows a consistent pattern** for argument parsing and data population
 4. **Handles architecture-specific syscalls** with `#[cfg(x86_64)]` attributes
 
@@ -102,22 +102,23 @@ pub fn syscall_exit_category(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let syscall_nr = util::get_syscall_nr(&ctx)?;
         let args = util::get_args(&ctx, syscall_nr)?;
-        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
 
         match syscall_nr {
             syscalls::SYS_example => {
-                let data = data_mut!(entry, example);
-                data.arg1 = args[0] as u32;
-                // ... handle syscall-specific logic
+                submit_compact_payload::<ExampleData, _>(
+                    &ctx,
+                    syscall_nr,
+                    util::get_return_value(&ctx)?,
+                    |payload| {
+                        payload.arg1 = args[0] as u32;
+                    },
+                )?;
             }
-            // ... other syscalls in this category
             _ => {
-                entry.discard();
-                return Ok(());
+                trace!(&ctx, "unknown syscall {}", syscall_nr);
             }
         }
 
-        entry.submit();
         Ok(())
     }
 
@@ -221,8 +222,8 @@ addresses):
 
 - **Important**: Before adding a new syscall, study the existing consolidated
   handlers to understand the pattern. Each handler uses a unified tracepoint
-  with a match statement on `syscall_nr` and the `data_mut!()` macro for safe
-  data structure access.
+  with a match statement on `syscall_nr` and `submit_compact_payload()` to
+  populate compact payload structures.
 
 - Register it in the appropriate `SYSCALL_CATEGORY_SYSCALLS` array in
   `load_tailcalls()` in `pinchy/src/server.rs`. The available arrays are:
@@ -245,14 +246,16 @@ addresses):
 - When parsing structs on the eBPF side, use `bpf_probe_read_user()` only when
   reading small structs; use `bpf_probe_read_buf()` when reading byte arrays
   and bigger structs so that the read can be done directly into the reserved
-  ringbuf memory (see the consolidated handlers and the `Entry` type in
+  compact payload ringbuf memory (see `submit_compact_payload()` in
   `pinchy-ebpf/src/util.rs` for context), thus saving on stack usage.
 
 ### 3. Define Syscall Arguments
 
 - Syscall arguments go into a struct called `<Syscall>Data` that should be
-  added to the `pinchy-common/src/lib.rs` file and be added to the
-  `SyscallEventData` union.
+  added to `pinchy-common/src/lib.rs`.
+
+- Register the payload size in `compact_payload_size()` in
+  `pinchy-common/src/lib.rs` so userspace can validate wire payload lengths.
 
 - Identify any arguments with further parsing, especially those that could be
   reused by multiple syscalls (e.g., mode, flags, poll events, structs like

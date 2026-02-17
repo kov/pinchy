@@ -4,7 +4,7 @@
 use aya_ebpf::{helpers::bpf_probe_read_user, macros::tracepoint, programs::TracePointContext};
 use pinchy_common::{kernel_types, syscalls};
 
-use crate::{data_mut, util};
+use crate::util;
 
 // Seccomp operation constants
 const SECCOMP_GET_ACTION_AVAIL: u32 = 2;
@@ -16,66 +16,75 @@ pub fn syscall_exit_security(ctx: TracePointContext) -> u32 {
     fn inner(ctx: TracePointContext) -> Result<(), u32> {
         let syscall_nr = util::get_syscall_nr(&ctx)?;
         let args = util::get_args(&ctx, syscall_nr)?;
-
-        let mut entry = util::Entry::new(&ctx, syscall_nr)?;
+        let return_value = util::get_return_value(&ctx)?;
 
         match syscall_nr {
             syscalls::SYS_ptrace => {
-                let data = data_mut!(entry, ptrace);
-                data.request = args[0] as i32;
-                data.pid = args[1] as i32;
-                data.addr = args[2] as u64;
-                data.data = args[3] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::PtraceData, _>(
+                    &ctx,
+                    syscalls::SYS_ptrace,
+                    return_value,
+                    |payload| {
+                        payload.request = args[0] as i32;
+                        payload.pid = args[1] as i32;
+                        payload.addr = args[2] as u64;
+                        payload.data = args[3] as u64;
+                    },
+                )?;
             }
             syscalls::SYS_seccomp => {
-                let data = data_mut!(entry, seccomp);
-                data.operation = args[0] as u32;
-                data.flags = args[1] as u32;
-                data.args = args[2] as u64;
+                crate::util::submit_compact_payload::<pinchy_common::SeccompData, _>(
+                    &ctx,
+                    syscalls::SYS_seccomp,
+                    return_value,
+                    |payload| {
+                        payload.operation = args[0] as u32;
+                        payload.flags = args[1] as u32;
+                        payload.args = args[2] as u64;
 
-                // Parse args based on operation if not NULL
-                if data.args != 0 {
-                    match data.operation {
-                        SECCOMP_GET_ACTION_AVAIL => {
-                            // Read u32 action value
-                            if let Ok(action) =
-                                unsafe { bpf_probe_read_user(data.args as *const u32) }
-                            {
-                                data.action_avail = action;
-                                data.action_read_ok = 1;
+                        // Parse args based on operation if not NULL
+                        if payload.args != 0 {
+                            match payload.operation {
+                                SECCOMP_GET_ACTION_AVAIL => {
+                                    // Read u32 action value
+                                    if let Ok(action) =
+                                        unsafe { bpf_probe_read_user(payload.args as *const u32) }
+                                    {
+                                        payload.action_avail = action;
+                                        payload.action_read_ok = 1;
+                                    }
+                                }
+                                SECCOMP_SET_MODE_FILTER => {
+                                    // Read struct sock_fprog
+                                    if let Ok(fprog) = unsafe {
+                                        bpf_probe_read_user(
+                                            payload.args as *const kernel_types::SockFprog,
+                                        )
+                                    } {
+                                        payload.filter_len = fprog.len;
+                                    }
+                                }
+                                SECCOMP_GET_NOTIF_SIZES => {
+                                    // Read struct seccomp_notif_sizes
+                                    if let Ok(sizes) = unsafe {
+                                        bpf_probe_read_user(
+                                            payload.args as *const kernel_types::SeccompNotifSizes,
+                                        )
+                                    } {
+                                        payload.notif_sizes[0] = sizes.seccomp_notif;
+                                        payload.notif_sizes[1] = sizes.seccomp_notif_resp;
+                                        payload.notif_sizes[2] = sizes.seccomp_data;
+                                    }
+                                }
+                                _ => {}
                             }
                         }
-                        SECCOMP_SET_MODE_FILTER => {
-                            // Read struct sock_fprog
-                            if let Ok(fprog) = unsafe {
-                                bpf_probe_read_user(data.args as *const kernel_types::SockFprog)
-                            } {
-                                data.filter_len = fprog.len;
-                            }
-                        }
-                        SECCOMP_GET_NOTIF_SIZES => {
-                            // Read struct seccomp_notif_sizes
-                            if let Ok(sizes) = unsafe {
-                                bpf_probe_read_user(
-                                    data.args as *const kernel_types::SeccompNotifSizes,
-                                )
-                            } {
-                                data.notif_sizes[0] = sizes.seccomp_notif;
-                                data.notif_sizes[1] = sizes.seccomp_notif_resp;
-                                data.notif_sizes[2] = sizes.seccomp_data;
-                            }
-                        }
-                        _ => {}
-                    }
-                }
+                    },
+                )?;
             }
-            _ => {
-                entry.discard();
-                return Ok(());
-            }
+            _ => {}
         }
 
-        entry.submit();
         Ok(())
     }
 

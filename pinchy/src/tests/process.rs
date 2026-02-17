@@ -16,7 +16,7 @@ use pinchy_common::{
     GetgroupsData, GetpgidData, GetpidData, GetppidData, GetresgidData, GetresuidData, GetsidData,
     GettidData, GetuidData, KcmpData, PidfdOpenData, SetTidAddressData, SetgidData, SetgroupsData,
     SetnsData, SetpgidData, SetregidData, SetresgidData, SetresuidData, SetreuidData, SetsidData,
-    SetuidData, SyscallEvent, SyscallEventData, UnshareData, SMALL_READ_SIZE,
+    SetuidData, UnshareData, SMALL_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{ForkData, GetpgrpData, VforkData};
@@ -27,15 +27,9 @@ use crate::{format_helpers::kcmp_constants, syscall_test};
 syscall_test!(
     test_getpgrp,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getpgrp,
-            pid: 1001,
-            tid: 1001,
-            return_value: 1001,
-            data: pinchy_common::SyscallEventData {
-                getpgrp: GetpgrpData,
-            },
-        }
+        let data = GetpgrpData;
+
+        crate::tests::make_compact_test_data(SYS_getpgrp, 1001, 1001, &data)
     },
     "1001 getpgrp() = 1001 (pid)\n"
 );
@@ -43,55 +37,46 @@ syscall_test!(
 syscall_test!(
     parse_execve,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_execve,
-            pid: 22,
-            tid: 22,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                execve: ExecveData {
-                    filename: [0u8; SMALL_READ_SIZE * 4],
-                    filename_truncated: false,
-                    argv: [[0u8; SMALL_READ_SIZE]; 4],
-                    argv_len: [0u16; 4],
-                    argc: 0,
-                    envp: [[0u8; SMALL_READ_SIZE]; 2],
-                    envp_len: [0u16; 2],
-                    envc: 0,
-                },
-            },
+        let mut data = ExecveData {
+            filename: [0u8; SMALL_READ_SIZE * 4],
+            filename_truncated: false,
+            argv: [[0u8; SMALL_READ_SIZE]; 4],
+            argv_len: [0u16; 4],
+            argc: 0,
+            envp: [[0u8; SMALL_READ_SIZE]; 2],
+            envp_len: [0u16; 2],
+            envc: 0,
         };
 
-        let execve_data = unsafe { &mut event.data.execve };
         let filename = c"/bin/find".to_bytes_with_nul();
-        execve_data.filename[..filename.len()].copy_from_slice(filename);
+        data.filename[..filename.len()].copy_from_slice(filename);
 
         let argv = [
             c"/etc".to_bytes_with_nul(),
             c"-name".to_bytes_with_nul(),
             c"org.pinc".to_bytes(),
         ];
-        execve_data.argv[0][..argv[0].len()].copy_from_slice(argv[0]);
-        execve_data.argv_len[0] = argv[0].len() as u16;
+        data.argv[0][..argv[0].len()].copy_from_slice(argv[0]);
+        data.argv_len[0] = argv[0].len() as u16;
 
-        execve_data.argv[1][..argv[1].len()].copy_from_slice(argv[1]);
-        execve_data.argv_len[1] = argv[1].len() as u16;
+        data.argv[1][..argv[1].len()].copy_from_slice(argv[1]);
+        data.argv_len[1] = argv[1].len() as u16;
 
-        execve_data.argv[2][..argv[2].len()].copy_from_slice(argv[2]);
-        execve_data.argv_len[2] = argv[2].len() as u16;
+        data.argv[2][..argv[2].len()].copy_from_slice(argv[2]);
+        data.argv_len[2] = argv[2].len() as u16;
 
-        execve_data.argc = 3;
+        data.argc = 3;
 
         let envp = [c"HOME=/ro".to_bytes(), c"WAYLAND=".to_bytes()];
-        execve_data.envp[0][..SMALL_READ_SIZE].copy_from_slice(&envp[0][..SMALL_READ_SIZE]);
-        execve_data.envp_len[0] = envp[0].len() as u16;
+        data.envp[0][..SMALL_READ_SIZE].copy_from_slice(&envp[0][..SMALL_READ_SIZE]);
+        data.envp_len[0] = envp[0].len() as u16;
 
-        execve_data.envp[1][..SMALL_READ_SIZE].copy_from_slice(&envp[1][..SMALL_READ_SIZE]);
-        execve_data.envp_len[1] = envp[1].len() as u16;
+        data.envp[1][..SMALL_READ_SIZE].copy_from_slice(&envp[1][..SMALL_READ_SIZE]);
+        data.envp_len[1] = envp[1].len() as u16;
 
-        execve_data.envc = 30;
+        data.envc = 30;
 
-        event
+        crate::tests::make_compact_test_data(SYS_execve, 22, 0, &data)
     },
     "22 execve(filename: \"/bin/find\", argv: [/etc\0, -name\0, org.pinc], envp: [HOME=/ro, WAYLAND=, ... (28 more)]) = 0 (success)\n"
 );
@@ -99,53 +84,44 @@ syscall_test!(
 syscall_test!(
     parse_execveat,
     {
-        let mut event = SyscallEvent {
-            syscall_nr: SYS_execveat,
-            pid: 23,
-            tid: 23,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                execveat: ExecveatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname: [0u8; SMALL_READ_SIZE * 4],
-                    pathname_truncated: false,
-                    argv: [[0u8; SMALL_READ_SIZE]; 4],
-                    argv_len: [0u16; 4],
-                    argc: 0,
-                    envp: [[0u8; SMALL_READ_SIZE]; 2],
-                    envp_len: [0u16; 2],
-                    envc: 0,
-                    flags: libc::AT_EMPTY_PATH,
-                },
-            },
+        let mut data = ExecveatData {
+            dirfd: libc::AT_FDCWD,
+            pathname: [0u8; SMALL_READ_SIZE * 4],
+            pathname_truncated: false,
+            argv: [[0u8; SMALL_READ_SIZE]; 4],
+            argv_len: [0u16; 4],
+            argc: 0,
+            envp: [[0u8; SMALL_READ_SIZE]; 2],
+            envp_len: [0u16; 2],
+            envc: 0,
+            flags: libc::AT_EMPTY_PATH,
         };
 
-        let execveat_data = unsafe { &mut event.data.execveat };
         let pathname = c"/bin/ls".to_bytes_with_nul();
-        execveat_data.pathname[..pathname.len()].copy_from_slice(pathname);
+        data.pathname[..pathname.len()].copy_from_slice(pathname);
 
         let argv = [
             c"/bin/ls".to_bytes_with_nul(),
             c"-la".to_bytes_with_nul(),
         ];
-        execveat_data.argv[0][..argv[0].len()].copy_from_slice(argv[0]);
-        execveat_data.argv_len[0] = argv[0].len() as u16;
+        data.argv[0][..argv[0].len()].copy_from_slice(argv[0]);
+        data.argv_len[0] = argv[0].len() as u16;
 
-        execveat_data.argv[1][..argv[1].len()].copy_from_slice(argv[1]);
-        execveat_data.argv_len[1] = argv[1].len() as u16;
+        data.argv[1][..argv[1].len()].copy_from_slice(argv[1]);
+        data.argv_len[1] = argv[1].len() as u16;
 
-        execveat_data.argc = 2;
+        data.argc = 2;
 
         let envp = [c"PATH=/u".to_bytes(), c"USER=te".to_bytes()];
-        execveat_data.envp[0][..envp[0].len()].copy_from_slice(envp[0]);
-        execveat_data.envp_len[0] = envp[0].len() as u16;
+        data.envp[0][..envp[0].len()].copy_from_slice(envp[0]);
+        data.envp_len[0] = envp[0].len() as u16;
 
-        execveat_data.envp[1][..envp[1].len()].copy_from_slice(envp[1]);
-        execveat_data.envp_len[1] = envp[1].len() as u16;
+        data.envp[1][..envp[1].len()].copy_from_slice(envp[1]);
+        data.envp_len[1] = envp[1].len() as u16;
 
-        execveat_data.envc = 5;
+        data.envc = 5;
 
-        event
+        crate::tests::make_compact_test_data(SYS_execveat, 23, 0, &data)
     },
     "23 execveat(dirfd: AT_FDCWD, pathname: \"/bin/ls\", argv: [/bin/ls\0, -la\0], envp: [PATH=/u, USER=te, ... (3 more)], flags: 0x1000 (AT_EMPTY_PATH)) = 0 (success)\n"
 );
@@ -153,17 +129,11 @@ syscall_test!(
 syscall_test!(
     parse_prctl,
     {
-        SyscallEvent {
-            syscall_nr: SYS_prctl,
-            pid: 999,
-            tid: 999,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                generic: GenericSyscallData {
-                    args: [libc::PR_SET_NAME as usize, 0x7fffffff0000, 0, 0, 0, 0],
-                },
-            },
-        }
+        let data = GenericSyscallData {
+            args: [libc::PR_SET_NAME as usize, 0x7fffffff0000, 0, 0, 0, 0],
+        };
+
+        crate::tests::make_compact_test_data(SYS_prctl, 999, 0, &data)
     },
     "999 prctl(PR_SET_NAME, 0x7fffffff0000) = 0 (success)\n"
 );
@@ -171,17 +141,11 @@ syscall_test!(
 syscall_test!(
     parse_set_tid_address,
     {
-        SyscallEvent {
-            syscall_nr: SYS_set_tid_address,
-            pid: 5678,
-            tid: 5678,
-            return_value: 5678,
-            data: pinchy_common::SyscallEventData {
-                set_tid_address: SetTidAddressData {
-                    tidptr: 0x7f1234560000,
-                },
-            },
-        }
+        let data = SetTidAddressData {
+            tidptr: 0x7f1234560000,
+        };
+
+        crate::tests::make_compact_test_data(SYS_set_tid_address, 5678, 5678, &data)
     },
     "5678 set_tid_address(tidptr: 0x7f1234560000) = 5678\n"
 );
@@ -189,13 +153,9 @@ syscall_test!(
 syscall_test!(
     test_getpid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getpid,
-            pid: 1234,
-            tid: 1234,
-            return_value: 1234,
-            data: pinchy_common::SyscallEventData { getpid: GetpidData },
-        }
+        let data = GetpidData;
+
+        crate::tests::make_compact_test_data(SYS_getpid, 1234, 1234, &data)
     },
     "1234 getpid() = 1234 (pid)\n"
 );
@@ -203,13 +163,9 @@ syscall_test!(
 syscall_test!(
     test_gettid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_gettid,
-            pid: 1234,
-            tid: 5678,
-            return_value: 5678,
-            data: pinchy_common::SyscallEventData { gettid: GettidData },
-        }
+        let data = GettidData;
+
+        crate::tests::make_compact_test_data(SYS_gettid, 5678, 5678, &data)
     },
     "5678 gettid() = 5678 (pid)\n"
 );
@@ -217,13 +173,9 @@ syscall_test!(
 syscall_test!(
     test_getuid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getuid,
-            pid: 1234,
-            tid: 1234,
-            return_value: 1000,
-            data: pinchy_common::SyscallEventData { getuid: GetuidData },
-        }
+        let data = GetuidData;
+
+        crate::tests::make_compact_test_data(SYS_getuid, 1234, 1000, &data)
     },
     "1234 getuid() = 1000 (id)\n"
 );
@@ -231,15 +183,9 @@ syscall_test!(
 syscall_test!(
     test_geteuid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_geteuid,
-            pid: 1234,
-            tid: 1234,
-            return_value: 1000,
-            data: pinchy_common::SyscallEventData {
-                geteuid: GeteuidData,
-            },
-        }
+        let data = GeteuidData;
+
+        crate::tests::make_compact_test_data(SYS_geteuid, 1234, 1000, &data)
     },
     "1234 geteuid() = 1000 (id)\n"
 );
@@ -247,13 +193,9 @@ syscall_test!(
 syscall_test!(
     test_getgid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getgid,
-            pid: 1234,
-            tid: 1234,
-            return_value: 1000,
-            data: pinchy_common::SyscallEventData { getgid: GetgidData },
-        }
+        let data = GetgidData;
+
+        crate::tests::make_compact_test_data(SYS_getgid, 1234, 1000, &data)
     },
     "1234 getgid() = 1000 (id)\n"
 );
@@ -261,15 +203,9 @@ syscall_test!(
 syscall_test!(
     test_getegid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getegid,
-            pid: 1234,
-            tid: 1234,
-            return_value: 1000,
-            data: pinchy_common::SyscallEventData {
-                getegid: GetegidData,
-            },
-        }
+        let data = GetegidData;
+
+        crate::tests::make_compact_test_data(SYS_getegid, 1234, 1000, &data)
     },
     "1234 getegid() = 1000 (id)\n"
 );
@@ -277,15 +213,9 @@ syscall_test!(
 syscall_test!(
     test_getppid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getppid,
-            pid: 1234,
-            tid: 1234,
-            return_value: 987,
-            data: pinchy_common::SyscallEventData {
-                getppid: GetppidData,
-            },
-        }
+        let data = GetppidData;
+
+        crate::tests::make_compact_test_data(SYS_getppid, 1234, 987, &data)
     },
     "1234 getppid() = 987 (pid)\n"
 );
@@ -293,19 +223,13 @@ syscall_test!(
 syscall_test!(
     parse_prlimit64_new_and_old,
     {
-        use pinchy_common::{
-            kernel_types::Rlimit, syscalls::SYS_prlimit64, PrlimitData, SyscallEvent, SyscallEventData,
-        };
 
-        SyscallEvent {
-            syscall_nr: SYS_prlimit64,
-            pid: 9876,
-            tid: 9876,
-            return_value: 0, // Success
-            data: SyscallEventData {
-                prlimit: PrlimitData {
+        use pinchy_common::{
+            kernel_types::Rlimit, syscalls::SYS_prlimit64, PrlimitData, };
+
+        let data = PrlimitData {
                     pid: 1234,
-                    resource: 7, // RLIMIT_NOFILE
+                    resource: 7,
                     has_old: true,
                     has_new: true,
                     old_limit: Rlimit {
@@ -316,9 +240,9 @@ syscall_test!(
                         rlim_cur: 2048,
                         rlim_max: 4096,
                     },
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_prlimit64, 9876, 0, &data)
     },
     "9876 prlimit64(pid: 1234, resource: RLIMIT_NOFILE, new_limit: { rlim_cur: 2048, rlim_max: 4096 }, old_limit: { rlim_cur: 1024, rlim_max: 4096 }) = 0 (success)\n"
 );
@@ -326,29 +250,23 @@ syscall_test!(
 syscall_test!(
     parse_prlimit64_old_only,
     {
-        use pinchy_common::{
-            kernel_types::Rlimit, syscalls::SYS_prlimit64, PrlimitData, SyscallEvent, SyscallEventData,
-        };
 
-        SyscallEvent {
-            syscall_nr: SYS_prlimit64,
-            pid: 9876,
-            tid: 9876,
-            return_value: 0, // Success
-            data: SyscallEventData {
-                prlimit: PrlimitData {
-                    pid: 0,      // Current process
-                    resource: 3, // RLIMIT_STACK
+        use pinchy_common::{
+            kernel_types::Rlimit, syscalls::SYS_prlimit64, PrlimitData, };
+
+        let data = PrlimitData {
+                    pid: 0,
+                    resource: 3,
                     has_old: true,
                     has_new: false,
                     old_limit: Rlimit {
-                        rlim_cur: 8 * 1024 * 1024, // 8MB
-                        rlim_max: u64::MAX,        // RLIM_INFINITY
+                        rlim_cur: 8 * 1024 * 1024,
+                        rlim_max: u64::MAX,
                     },
                     new_limit: Rlimit::default(),
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_prlimit64, 9876, 0, &data)
     },
     "9876 prlimit64(pid: 0, resource: RLIMIT_STACK, new_limit: NULL, old_limit: { rlim_cur: 8388608, rlim_max: RLIM_INFINITY }) = 0 (success)\n"
 );
@@ -356,29 +274,23 @@ syscall_test!(
 syscall_test!(
     parse_prlimit64_new_only_error,
     {
-        use pinchy_common::{
-            kernel_types::Rlimit, syscalls::SYS_prlimit64, PrlimitData, SyscallEvent, SyscallEventData,
-        };
 
-        SyscallEvent {
-            syscall_nr: SYS_prlimit64,
-            pid: 9876,
-            tid: 9876,
-            return_value: -1, // Error
-            data: SyscallEventData {
-                prlimit: PrlimitData {
+        use pinchy_common::{
+            kernel_types::Rlimit, syscalls::SYS_prlimit64, PrlimitData, };
+
+        let data = PrlimitData {
                     pid: 5678,
-                    resource: 9, // RLIMIT_AS
+                    resource: 9,
                     has_old: false,
                     has_new: true,
                     old_limit: Rlimit::default(),
                     new_limit: Rlimit {
-                        rlim_cur: 4 * 1024 * 1024 * 1024, // 4GB
-                        rlim_max: 8 * 1024 * 1024 * 1024, // 8GB
+                        rlim_cur: 4 * 1024 * 1024 * 1024,
+                        rlim_max: 8 * 1024 * 1024 * 1024,
                     },
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_prlimit64, 9876, -1, &data)
     },
     "9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: { rlim_cur: 4294967296, rlim_max: 8589934592 }, old_limit: NULL) = -1 (error)\n"
 );
@@ -386,17 +298,11 @@ syscall_test!(
 syscall_test!(
     parse_fchdir,
     {
-        use pinchy_common::{syscalls::SYS_fchdir, FchdirData, SyscallEvent, SyscallEventData};
+        use pinchy_common::{syscalls::SYS_fchdir, FchdirData};
 
-        SyscallEvent {
-            syscall_nr: SYS_fchdir,
-            pid: 42,
-            tid: 42,
-            return_value: 0,
-            data: SyscallEventData {
-                fchdir: FchdirData { fd: 5 },
-            },
-        }
+        let data = FchdirData { fd: 5 };
+
+        crate::tests::make_compact_test_data(SYS_fchdir, 42, 0, &data)
     },
     "42 fchdir(fd: 5) = 0 (success)\n"
 );
@@ -404,19 +310,14 @@ syscall_test!(
 syscall_test!(
     test_wait4_successful,
     {
+
         use pinchy_common::{
-            kernel_types::Rusage, syscalls::SYS_wait4, SyscallEvent, SyscallEventData, Wait4Data,
+            kernel_types::Rusage, syscalls::SYS_wait4, Wait4Data,
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_wait4,
-            pid: 1000,
-            tid: 1001,
-            return_value: 1234, // child PID that was waited on
-            data: SyscallEventData {
-                wait4: Wait4Data {
-                    pid: -1,    // wait for any child
-                    wstatus: 0, // child exited with status 0 (WIFEXITED)
+        let data = Wait4Data {
+                    pid: -1,
+                    wstatus: 0,
                     options: libc::WNOHANG | libc::WUNTRACED,
                     has_rusage: true,
                     rusage: Rusage {
@@ -433,9 +334,9 @@ syscall_test!(
                         ru_majflt: 5,
                         ..Default::default()
                     },
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_wait4, 1001, 1234, &data)
     },
     "1001 wait4(pid: -1, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 0}, options: WNOHANG|WUNTRACED|WSTOPPED, rusage: { ru_utime: { tv_sec: 0, tv_usec: 123456 }, ru_stime: { tv_sec: 0, tv_usec: 78910 }, ru_maxrss: 1024, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 100, ru_majflt: 5, ru_nswap: 0, ru_inblock: 0, ru_oublock: 0, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 0, ru_nivcsw: 0 }) = 1234\n"
 );
@@ -443,25 +344,20 @@ syscall_test!(
 syscall_test!(
     test_wait4_no_rusage,
     {
+
         use pinchy_common::{
-            syscalls::SYS_wait4, SyscallEvent, SyscallEventData, Wait4Data,
+            syscalls::SYS_wait4, Wait4Data,
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_wait4,
-            pid: 2000,
-            tid: 2001,
-            return_value: 5678,
-            data: SyscallEventData {
-                wait4: Wait4Data {
-                    pid: 1234,       // wait for specific child
-                    wstatus: 9 << 8, // child exited with status 9
+        let data = Wait4Data {
+                    pid: 1234,
+                    wstatus: 9 << 8,
                     options: 0,
-                    has_rusage: false,          // no rusage requested
-                    rusage: Default::default(), // should be ignored
-                },
-            },
-        }
+                    has_rusage: false,
+                    rusage: Default::default(),
+                };
+
+        crate::tests::make_compact_test_data(SYS_wait4, 2001, 5678, &data)
     },
     "2001 wait4(pid: 1234, wstatus: {WIFEXITED(s) && WEXITSTATUS(s) == 9}, options: 0, rusage: NULL) = 5678\n"
 );
@@ -469,33 +365,28 @@ syscall_test!(
 syscall_test!(
     test_waitid_successful,
     {
+
         use pinchy_common::{
-            kernel_types::Siginfo, syscalls::SYS_waitid, SyscallEvent, SyscallEventData, WaitidData,
+            kernel_types::Siginfo, syscalls::SYS_waitid, WaitidData,
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_waitid,
-            pid: 4000,
-            tid: 4001,
-            return_value: 0, // success
-            data: SyscallEventData {
-                waitid: WaitidData {
+        let data = WaitidData {
                     idtype: libc::P_PID,
-                    id: 1234,  // wait for child with PID 1234
+                    id: 1234,
                     infop: Siginfo {
                         si_signo: libc::SIGCHLD,
                         si_errno: 0,
-                        si_code: 1, // CLD_EXITED
+                        si_code: 1,
                         si_pid: 1234,
                         si_uid: 1000,
-                        si_status: 0, // exit status 0
+                        si_status: 0,
                         ..Default::default()
                     },
                     options: libc::WEXITED,
                     has_infop: true,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_waitid, 4001, 0, &data)
     },
     "4001 waitid(idtype: P_PID, id: 1234, infop: { signo: 17, errno: 0, code: 1, trapno: 0, pid: 1234, uid: 1000, status: 0, utime: 0, stime: 0, value: 0x0, int: 0, ptr: 0x0, overrun: 0, timerid: 0, addr: 0x0, band: 0, fd: 0, addr_lsb: 0, lower: 0x0, upper: 0x0, pkey: 0, call_addr: 0x0, syscall: 0, arch: 0 }, options: WEXITED) = 0 (success)\n"
 );
@@ -503,33 +394,28 @@ syscall_test!(
 syscall_test!(
     test_waitid_p_all,
     {
+
         use pinchy_common::{
-            kernel_types::Siginfo, syscalls::SYS_waitid, SyscallEvent, SyscallEventData, WaitidData,
+            kernel_types::Siginfo, syscalls::SYS_waitid, WaitidData,
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_waitid,
-            pid: 5000,
-            tid: 5001,
-            return_value: 0, // success
-            data: SyscallEventData {
-                waitid: WaitidData {
+        let data = WaitidData {
                     idtype: libc::P_ALL,
-                    id: 0,     // ignored for P_ALL
+                    id: 0,
                     infop: Siginfo {
                         si_signo: libc::SIGCHLD,
                         si_errno: 0,
-                        si_code: 2, // CLD_KILLED
+                        si_code: 2,
                         si_pid: 5678,
                         si_uid: 0,
-                        si_status: 9, // killed by signal 9 (SIGKILL)
+                        si_status: 9,
                         ..Default::default()
                     },
                     options: libc::WNOHANG | libc::WEXITED,
                     has_infop: true,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_waitid, 5001, 0, &data)
     },
     "5001 waitid(idtype: P_ALL, id: 0, infop: { signo: 17, errno: 0, code: 2, trapno: 0, pid: 5678, uid: 0, status: 9, utime: 0, stime: 0, value: 0x0, int: 0, ptr: 0x0, overrun: 0, timerid: 0, addr: 0x0, band: 0, fd: 0, addr_lsb: 0, lower: 0x0, upper: 0x0, pkey: 0, call_addr: 0x0, syscall: 0, arch: 0 }, options: WNOHANG|WEXITED) = 0 (success)\n"
 );
@@ -537,23 +423,17 @@ syscall_test!(
 syscall_test!(
     test_waitid_failed,
     {
-        use pinchy_common::{syscalls::SYS_waitid, SyscallEvent, SyscallEventData, WaitidData};
+        use pinchy_common::{syscalls::SYS_waitid, WaitidData};
 
-        SyscallEvent {
-            syscall_nr: SYS_waitid,
-            pid: 6000,
-            tid: 6001,
-            return_value: -1, // error (e.g., ECHILD)
-            data: SyscallEventData {
-                waitid: WaitidData {
-                    idtype: libc::P_PID,
-                    id: 9999,                  // non-existent child
-                    infop: Default::default(), // not filled on error
-                    options: libc::WEXITED,
-                    has_infop: false, // no siginfo on error
-                },
-            },
-        }
+        let data = WaitidData {
+            idtype: libc::P_PID,
+            id: 9999,
+            infop: Default::default(),
+            options: libc::WEXITED,
+            has_infop: false,
+        };
+
+        crate::tests::make_compact_test_data(SYS_waitid, 6001, -1, &data)
     },
     "6001 waitid(idtype: P_PID, id: 9999, infop: NULL, options: WEXITED) = -1 (error)\n"
 );
@@ -561,17 +441,12 @@ syscall_test!(
 syscall_test!(
     test_getrusage_self,
     {
+
         use pinchy_common::{
-            kernel_types::Rusage, syscalls::SYS_getrusage, SyscallEvent, SyscallEventData, GetrusageData,
+            kernel_types::Rusage, syscalls::SYS_getrusage, GetrusageData,
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_getrusage,
-            pid: 3000,
-            tid: 3001,
-            return_value: 0, // success
-            data: SyscallEventData {
-                getrusage: GetrusageData {
+        let data = GetrusageData {
                     who: libc::RUSAGE_SELF,
                     rusage: Rusage {
                         ru_utime: pinchy_common::kernel_types::Timeval {
@@ -589,9 +464,9 @@ syscall_test!(
                         ru_nivcsw: 5,
                         ..Default::default()
                     },
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_getrusage, 3001, 0, &data)
     },
     "3001 getrusage(who: RUSAGE_SELF, rusage: { ru_utime: { tv_sec: 1, tv_usec: 250000 }, ru_stime: { tv_sec: 0, tv_usec: 150000 }, ru_maxrss: 2048, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 200, ru_majflt: 10, ru_nswap: 0, ru_inblock: 0, ru_oublock: 0, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 50, ru_nivcsw: 5 }) = 0 (success)\n"
 );
@@ -599,17 +474,12 @@ syscall_test!(
 syscall_test!(
     test_getrusage_children,
     {
+
         use pinchy_common::{
-            kernel_types::Rusage, syscalls::SYS_getrusage, SyscallEvent, SyscallEventData, GetrusageData,
+            kernel_types::Rusage, syscalls::SYS_getrusage, GetrusageData,
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_getrusage,
-            pid: 4000,
-            tid: 4001,
-            return_value: 0, // success
-            data: SyscallEventData {
-                getrusage: GetrusageData {
+        let data = GetrusageData {
                     who: libc::RUSAGE_CHILDREN,
                     rusage: Rusage {
                         ru_utime: pinchy_common::kernel_types::Timeval {
@@ -625,9 +495,9 @@ syscall_test!(
                         ru_oublock: 50,
                         ..Default::default()
                     },
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_getrusage, 4001, 0, &data)
     },
     "4001 getrusage(who: RUSAGE_CHILDREN, rusage: { ru_utime: { tv_sec: 5, tv_usec: 750000 }, ru_stime: { tv_sec: 2, tv_usec: 500000 }, ru_maxrss: 4096, ru_ixrss: 0, ru_idrss: 0, ru_isrss: 0, ru_minflt: 0, ru_majflt: 0, ru_nswap: 0, ru_inblock: 100, ru_oublock: 50, ru_msgsnd: 0, ru_msgrcv: 0, ru_nsignals: 0, ru_nvcsw: 0, ru_nivcsw: 0 }) = 0 (success)\n"
 );
@@ -635,22 +505,14 @@ syscall_test!(
 syscall_test!(
     test_getrusage_error,
     {
-        use pinchy_common::{
-            syscalls::SYS_getrusage, GetrusageData, SyscallEvent, SyscallEventData,
+        use pinchy_common::{syscalls::SYS_getrusage, GetrusageData};
+
+        let data = GetrusageData {
+            who: 999,
+            rusage: Default::default(),
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_getrusage,
-            pid: 5000,
-            tid: 5001,
-            return_value: -22, // -EINVAL
-            data: SyscallEventData {
-                getrusage: GetrusageData {
-                    who: 999,                   // invalid who parameter
-                    rusage: Default::default(), // should be ignored for failed calls
-                },
-            },
-        }
+        crate::tests::make_compact_test_data(SYS_getrusage, 5001, -22, &data)
     },
     "5001 getrusage(who: UNKNOWN, rusage: NULL) = -22 (error)\n"
 );
@@ -658,19 +520,13 @@ syscall_test!(
 syscall_test!(
     test_clone3,
     {
-        SyscallEvent {
-            syscall_nr: SYS_clone3,
-            pid: 1000,
-            tid: 1001,
-            return_value: 1234, // child PID
-            data: pinchy_common::SyscallEventData {
-                clone3: Clone3Data {
+        let data = Clone3Data {
                     cl_args: CloneArgs {
                         flags: 0x11200,
                         pidfd: 0,
                         child_tid: 0x7fff12345678,
                         parent_tid: 0x7fff87654321,
-                        exit_signal: 17, // SIGCHLD
+                        exit_signal: 17,
                         stack: 0x7fff00001000,
                         stack_size: 8192,
                         tls: 0x7fff00002000,
@@ -681,9 +537,9 @@ syscall_test!(
                     size: 88,
                     set_tid_count: 0,
                     set_tid_array: [0; pinchy_common::CLONE_SET_TID_MAX],
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_clone3, 1001, 1234, &data)
     },
     "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000 }, size: 88) = 1234 (pid)\n"
 );
@@ -691,36 +547,31 @@ syscall_test!(
 syscall_test!(
     test_clone3_with_set_tid,
     {
+
         use pinchy_common::{
-            kernel_types::CloneArgs, syscalls::SYS_clone3, SyscallEvent, SyscallEventData, Clone3Data,
+            kernel_types::CloneArgs, syscalls::SYS_clone3, Clone3Data,
         };
 
-        SyscallEvent {
-            syscall_nr: SYS_clone3,
-            pid: 1000,
-            tid: 1001,
-            return_value: 1234, // child PID
-            data: SyscallEventData {
-                clone3: Clone3Data {
+        let data = Clone3Data {
                     cl_args: CloneArgs {
                         flags: 0x11200,
                         pidfd: 0,
                         child_tid: 0x7fff12345678,
                         parent_tid: 0x7fff87654321,
-                        exit_signal: 17, // SIGCHLD
+                        exit_signal: 17,
                         stack: 0x7fff00001000,
                         stack_size: 8192,
                         tls: 0x7fff00002000,
-                        set_tid: 0x7fff00003000, // Pointer to set_tid array
+                        set_tid: 0x7fff00003000,
                         set_tid_size: 3,
                         cgroup: 0,
                     },
                     size: 88,
-                    set_tid_count: 3,                             // We captured 3 PIDs
-                    set_tid_array: [7, 42, 31496, 0, 0, 0, 0, 0], // Example from manpage
-                },
-            },
-        }
+                    set_tid_count: 3,
+                    set_tid_array: [7, 42, 31496, 0, 0, 0, 0, 0],
+                };
+
+        crate::tests::make_compact_test_data(SYS_clone3, 1001, 1234, &data)
     },
     "1001 clone3(cl_args: { flags: 0x11200 (CLONE_FS|CLONE_PIDFD|CLONE_THREAD), pidfd: 0x0, child_tid: 0x7fff12345678, parent_tid: 0x7fff87654321, exit_signal: 17, stack: 0x7fff00001000, stack_size: 8192, tls: 0x7fff00002000, set_tid: [ 7, 42, 31496 ], set_tid_size: 3 }, size: 88) = 1234 (pid)\n"
 );
@@ -728,25 +579,19 @@ syscall_test!(
 syscall_test!(
     test_clone,
     {
-        use pinchy_common::{
-            CloneData, syscalls::SYS_clone, SyscallEvent, SyscallEventData,
-        };
 
-        SyscallEvent {
-            syscall_nr: SYS_clone,
-            pid: 1000,
-            tid: 1001,
-            return_value: 4321, // child PID
-            data: SyscallEventData {
-                clone: CloneData {
+        use pinchy_common::{
+            CloneData, syscalls::SYS_clone, };
+
+        let data = CloneData {
                     flags: libc::CLONE_FS as u64 | libc::CLONE_THREAD as u64 | libc::CLONE_VM as u64,
                     stack: 0x7fff00001000,
                     parent_tid: 41,
                     child_tid: 42,
                     tls: 0x7fff00002000,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(SYS_clone, 1001, 4321, &data)
     },
     "1001 clone(flags: 0x10300 (CLONE_VM|CLONE_FS|CLONE_THREAD), stack: 0x7fff00001000, parent_tid: 41, child_tid: 42, tls: 0x7fff00002000) = 4321 (pid)\n"
 );
@@ -754,15 +599,9 @@ syscall_test!(
 syscall_test!(
     test_setuid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setuid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setuid: SetuidData { uid: 1001 },
-            },
-        }
+        let data = SetuidData { uid: 1001 };
+
+        crate::tests::make_compact_test_data(SYS_setuid, 1001, 0, &data)
     },
     "1001 setuid(uid: 1001) = 0 (success)\n"
 );
@@ -770,15 +609,9 @@ syscall_test!(
 syscall_test!(
     test_setgid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setgid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setgid: SetgidData { gid: 1001 },
-            },
-        }
+        let data = SetgidData { gid: 1001 };
+
+        crate::tests::make_compact_test_data(SYS_setgid, 1001, 0, &data)
     },
     "1001 setgid(gid: 1001) = 0 (success)\n"
 );
@@ -786,13 +619,9 @@ syscall_test!(
 syscall_test!(
     test_setsid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setsid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 1001,
-            data: pinchy_common::SyscallEventData { setsid: SetsidData },
-        }
+        let data = SetsidData;
+
+        crate::tests::make_compact_test_data(SYS_setsid, 1001, 1001, &data)
     },
     "1001 setsid() = 1001 (pid)\n"
 );
@@ -800,15 +629,9 @@ syscall_test!(
 syscall_test!(
     test_getpgid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getpgid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 1234,
-            data: pinchy_common::SyscallEventData {
-                getpgid: GetpgidData { pid: 0 },
-            },
-        }
+        let data = GetpgidData { pid: 0 };
+
+        crate::tests::make_compact_test_data(SYS_getpgid, 1001, 1234, &data)
     },
     "1001 getpgid(pid: 0) = 1234 (pid)\n"
 );
@@ -816,15 +639,9 @@ syscall_test!(
 syscall_test!(
     test_getsid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getsid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 5678,
-            data: pinchy_common::SyscallEventData {
-                getsid: GetsidData { pid: 1234 },
-            },
-        }
+        let data = GetsidData { pid: 1234 };
+
+        crate::tests::make_compact_test_data(SYS_getsid, 1001, 5678, &data)
     },
     "1001 getsid(pid: 1234) = 5678 (pid)\n"
 );
@@ -832,18 +649,12 @@ syscall_test!(
 syscall_test!(
     test_setpgid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setpgid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setpgid: SetpgidData {
-                    pid: 1234,
-                    pgid: 5678,
-                },
-            },
-        }
+        let data = SetpgidData {
+            pid: 1234,
+            pgid: 5678,
+        };
+
+        crate::tests::make_compact_test_data(SYS_setpgid, 1001, 0, &data)
     },
     "1001 setpgid(pid: 1234, pgid: 5678) = 0 (success)\n"
 );
@@ -851,18 +662,12 @@ syscall_test!(
 syscall_test!(
     test_setreuid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setreuid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setreuid: SetreuidData {
-                    ruid: 1001,
-                    euid: 1002,
-                },
-            },
-        }
+        let data = SetreuidData {
+            ruid: 1001,
+            euid: 1002,
+        };
+
+        crate::tests::make_compact_test_data(SYS_setreuid, 1001, 0, &data)
     },
     "1001 setreuid(ruid: 1001, euid: 1002) = 0 (success)\n"
 );
@@ -870,18 +675,12 @@ syscall_test!(
 syscall_test!(
     test_setregid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setregid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setregid: SetregidData {
-                    rgid: 1001,
-                    egid: 1002,
-                },
-            },
-        }
+        let data = SetregidData {
+            rgid: 1001,
+            egid: 1002,
+        };
+
+        crate::tests::make_compact_test_data(SYS_setregid, 1001, 0, &data)
     },
     "1001 setregid(rgid: 1001, egid: 1002) = 0 (success)\n"
 );
@@ -889,19 +688,13 @@ syscall_test!(
 syscall_test!(
     test_setresuid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setresuid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setresuid: SetresuidData {
-                    ruid: 1001,
-                    euid: 1002,
-                    suid: 1003,
-                },
-            },
-        }
+        let data = SetresuidData {
+            ruid: 1001,
+            euid: 1002,
+            suid: 1003,
+        };
+
+        crate::tests::make_compact_test_data(SYS_setresuid, 1001, 0, &data)
     },
     "1001 setresuid(ruid: 1001, euid: 1002, suid: 1003) = 0 (success)\n"
 );
@@ -909,19 +702,13 @@ syscall_test!(
 syscall_test!(
     test_setresgid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setresgid,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setresgid: SetresgidData {
-                    rgid: 1001,
-                    egid: 1002,
-                    sgid: 1003,
-                },
-            },
-        }
+        let data = SetresgidData {
+            rgid: 1001,
+            egid: 1002,
+            sgid: 1003,
+        };
+
+        crate::tests::make_compact_test_data(SYS_setresgid, 1001, 0, &data)
     },
     "1001 setresgid(rgid: 1001, egid: 1002, sgid: 1003) = 0 (success)\n"
 );
@@ -929,18 +716,12 @@ syscall_test!(
 syscall_test!(
     parse_pidfd_open,
     {
-        SyscallEvent {
-            syscall_nr: SYS_pidfd_open,
-            pid: 123,
-            tid: 123,
-            return_value: 5,
-            data: pinchy_common::SyscallEventData {
-                pidfd_open: PidfdOpenData {
-                    pid: 12345,
-                    flags: 0,
-                },
-            },
-        }
+        let data = PidfdOpenData {
+            pid: 12345,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(SYS_pidfd_open, 123, 5, &data)
     },
     "123 pidfd_open(pid: 12345, flags: 0x0) = 5 (fd)\n"
 );
@@ -948,13 +729,7 @@ syscall_test!(
 syscall_test!(
     test_pidfd_send_signal,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_pidfd_send_signal,
-            pid: 42,
-            tid: 42,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                pidfd_send_signal: pinchy_common::PidfdSendSignalData {
+        let data = pinchy_common::PidfdSendSignalData {
                     pidfd: 5,
                     sig: libc::SIGKILL,
                     info: pinchy_common::kernel_types::Siginfo {
@@ -985,9 +760,9 @@ syscall_test!(
                     },
                     info_ptr: 0x7fffdeadbeef,
                     flags: 0,
-                },
-            },
-        }
+                };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_pidfd_send_signal, 42, 0, &data)
     },
     "42 pidfd_send_signal(pidfd: 5, sig: SIGKILL, siginfo: { signo: 0, errno: 0, code: 0, trapno: 0, pid: 0, uid: 0, status: 0, utime: 0, stime: 0, value: 0x0, int: 0, ptr: 0x0, overrun: 0, timerid: 0, addr: 0x0, band: 0, fd: 0, addr_lsb: 0, lower: 0x0, upper: 0x0, pkey: 0, call_addr: 0x0, syscall: 0, arch: 0 }, flags: 0x0) = 0 (success)\n"
 );
@@ -996,17 +771,11 @@ syscall_test!(
 syscall_test!(
     test_alarm,
     {
-        use pinchy_common::{syscalls::SYS_alarm, AlarmData, SyscallEvent, SyscallEventData};
+        use pinchy_common::{syscalls::SYS_alarm, AlarmData};
 
-        SyscallEvent {
-            syscall_nr: SYS_alarm,
-            pid: 1001,
-            tid: 1001,
-            return_value: 0,
-            data: SyscallEventData {
-                alarm: AlarmData { seconds: 60 },
-            },
-        }
+        let data = AlarmData { seconds: 60 };
+
+        crate::tests::make_compact_test_data(SYS_alarm, 1001, 0, &data)
     },
     "1001 alarm(seconds: 60) = 0\n"
 );
@@ -1015,15 +784,11 @@ syscall_test!(
 syscall_test!(
     test_pause,
     {
-        use pinchy_common::{syscalls::SYS_pause, PauseData, SyscallEvent, SyscallEventData};
+        use pinchy_common::{syscalls::SYS_pause, PauseData};
 
-        SyscallEvent {
-            syscall_nr: SYS_pause,
-            pid: 1001,
-            tid: 1001,
-            return_value: -4, // EINTR
-            data: SyscallEventData { pause: PauseData },
-        }
+        let data = PauseData;
+
+        crate::tests::make_compact_test_data(SYS_pause, 1001, -4, &data)
     },
     "1001 pause() = -4 (error)\n"
 );
@@ -1031,15 +796,9 @@ syscall_test!(
 syscall_test!(
     parse_exit,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_exit,
-            pid: 1234,
-            tid: 1234,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                exit: pinchy_common::ExitData { status: 42 },
-            },
-        }
+        let data = pinchy_common::ExitData { status: 42 };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_exit, 1234, 0, &data)
     },
     "1234 exit(status: 42) = 0 (success)\n"
 );
@@ -1047,15 +806,9 @@ syscall_test!(
 syscall_test!(
     parse_exit_with_zero,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_exit,
-            pid: 9999,
-            tid: 9999,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                exit: pinchy_common::ExitData { status: 0 },
-            },
-        }
+        let data = pinchy_common::ExitData { status: 0 };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_exit, 9999, 0, &data)
     },
     "9999 exit(status: 0) = 0 (success)\n"
 );
@@ -1063,19 +816,13 @@ syscall_test!(
 syscall_test!(
     test_pidfd_getfd,
     {
-        SyscallEvent {
-            syscall_nr: SYS_pidfd_getfd,
-            pid: 42,
-            tid: 42,
-            return_value: 7,
-            data: pinchy_common::SyscallEventData {
-                pidfd_getfd: pinchy_common::PidfdGetfdData {
-                    pidfd: 5,
-                    targetfd: 3,
-                    flags: 0,
-                },
-            },
-        }
+        let data = pinchy_common::PidfdGetfdData {
+            pidfd: 5,
+            targetfd: 3,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(SYS_pidfd_getfd, 42, 7, &data)
     },
     "42 pidfd_getfd(pidfd: 5, targetfd: 3, flags: 0x0) = 7 (fd)\n"
 );
@@ -1083,15 +830,14 @@ syscall_test!(
 syscall_test!(
     test_process_mrelease,
     {
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_process_mrelease,
-            pid: 4321,
-            tid: 4321,
-            return_value: 0, // Success
-            data: pinchy_common::SyscallEventData {
-                process_mrelease: pinchy_common::ProcessMreleaseData { pidfd: 5, flags: 0 },
-            },
-        }
+        let data = pinchy_common::ProcessMreleaseData { pidfd: 5, flags: 0 };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_process_mrelease,
+            4321,
+            0,
+            &data,
+        )
     },
     "4321 process_mrelease(pidfd: 5, flags: 0x0) = 0 (success)\n"
 );
@@ -1099,18 +845,12 @@ syscall_test!(
 syscall_test!(
     parse_setns_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setns,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setns: SetnsData {
-                    fd: 5,
-                    nstype: libc::CLONE_NEWNET | libc::CLONE_NEWPID,
-                },
-            },
-        }
+        let data = SetnsData {
+            fd: 5,
+            nstype: libc::CLONE_NEWNET | libc::CLONE_NEWPID,
+        };
+
+        crate::tests::make_compact_test_data(SYS_setns, 123, 0, &data)
     },
     "123 setns(fd: 5, nstype: 0x60000000 (CLONE_NEWPID|CLONE_NEWNET)) = 0 (success)\n"
 );
@@ -1118,18 +858,9 @@ syscall_test!(
 syscall_test!(
     parse_setns_all_namespaces,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setns,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                setns: SetnsData {
-                    fd: 6,
-                    nstype: 0, // Join all namespaces
-                },
-            },
-        }
+        let data = SetnsData { fd: 6, nstype: 0 };
+
+        crate::tests::make_compact_test_data(SYS_setns, 123, 0, &data)
     },
     "123 setns(fd: 6, nstype: 0) = 0 (success)\n"
 );
@@ -1137,17 +868,11 @@ syscall_test!(
 syscall_test!(
     parse_unshare_success,
     {
-        SyscallEvent {
-            syscall_nr: SYS_unshare,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                unshare: UnshareData {
-                    flags: libc::CLONE_NEWNS | libc::CLONE_NEWPID | libc::CLONE_NEWNET,
-                },
-            },
-        }
+        let data = UnshareData {
+            flags: libc::CLONE_NEWNS | libc::CLONE_NEWPID | libc::CLONE_NEWNET,
+        };
+
+        crate::tests::make_compact_test_data(SYS_unshare, 123, 0, &data)
     },
     "123 unshare(flags: 0x60020000 (CLONE_NEWNS|CLONE_NEWPID|CLONE_NEWNET)) = 0 (success)\n"
 );
@@ -1155,17 +880,11 @@ syscall_test!(
 syscall_test!(
     parse_unshare_fs_and_files,
     {
-        SyscallEvent {
-            syscall_nr: SYS_unshare,
-            pid: 123,
-            tid: 123,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                unshare: UnshareData {
-                    flags: libc::CLONE_FS | libc::CLONE_FILES,
-                },
-            },
-        }
+        let data = UnshareData {
+            flags: libc::CLONE_FS | libc::CLONE_FILES,
+        };
+
+        crate::tests::make_compact_test_data(SYS_unshare, 123, 0, &data)
     },
     "123 unshare(flags: 0x600 (CLONE_FS|CLONE_FILES)) = 0 (success)\n"
 );
@@ -1173,21 +892,15 @@ syscall_test!(
 syscall_test!(
     test_kcmp_equal,
     {
-        SyscallEvent {
-            syscall_nr: SYS_kcmp,
-            pid: 1000,
-            tid: 1000,
-            return_value: 0,
-            data: SyscallEventData {
-                kcmp: KcmpData {
-                    pid1: 1000,
-                    pid2: 1001,
-                    type_: kcmp_constants::KCMP_FILE,
-                    idx1: 3,
-                    idx2: 3,
-                },
-            },
-        }
+        let data = KcmpData {
+            pid1: 1000,
+            pid2: 1001,
+            type_: kcmp_constants::KCMP_FILE,
+            idx1: 3,
+            idx2: 3,
+        };
+
+        crate::tests::make_compact_test_data(SYS_kcmp, 1000, 0, &data)
     },
     "1000 kcmp(pid1: 1000, pid2: 1001, type: KCMP_FILE, idx1: 3, idx2: 3) = 0 (equal)\n"
 );
@@ -1195,21 +908,15 @@ syscall_test!(
 syscall_test!(
     test_getgroups,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getgroups,
-            pid: 2000,
-            tid: 2000,
-            return_value: 5,
-            data: SyscallEventData {
-                getgroups: GetgroupsData {
-                    size: 10,
-                    groups: [
-                        1000, 1001, 1002, 1003, 1004, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-                    ],
-                    groups_read_count: 5,
-                },
-            },
-        }
+        let data = GetgroupsData {
+            size: 10,
+            groups: [
+                1000, 1001, 1002, 1003, 1004, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            ],
+            groups_read_count: 5,
+        };
+
+        crate::tests::make_compact_test_data(SYS_getgroups, 2000, 5, &data)
     },
     "2000 getgroups(size: 10, list: [1000, 1001, 1002, 1003, 1004]) = 5 (groups)\n"
 );
@@ -1217,19 +924,13 @@ syscall_test!(
 syscall_test!(
     test_setgroups,
     {
-        SyscallEvent {
-            syscall_nr: SYS_setgroups,
-            pid: 3000,
-            tid: 3000,
-            return_value: 0,
-            data: SyscallEventData {
-                setgroups: SetgroupsData {
-                    size: 3,
-                    groups: [1000, 1001, 1002, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
-                    groups_read_count: 3,
-                },
-            },
-        }
+        let data = SetgroupsData {
+            size: 3,
+            groups: [1000, 1001, 1002, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+            groups_read_count: 3,
+        };
+
+        crate::tests::make_compact_test_data(SYS_setgroups, 3000, 0, &data)
     },
     "3000 setgroups(size: 3, list: [1000, 1001, 1002]) = 0 (success)\n"
 );
@@ -1237,19 +938,13 @@ syscall_test!(
 syscall_test!(
     test_getresuid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getresuid,
-            pid: 4000,
-            tid: 4000,
-            return_value: 0,
-            data: SyscallEventData {
-                getresuid: GetresuidData {
-                    ruid: 1000,
-                    euid: 1000,
-                    suid: 1000,
-                },
-            },
-        }
+        let data = GetresuidData {
+            ruid: 1000,
+            euid: 1000,
+            suid: 1000,
+        };
+
+        crate::tests::make_compact_test_data(SYS_getresuid, 4000, 0, &data)
     },
     "4000 getresuid(ruid: 1000, euid: 1000, suid: 1000) = 0 (success)\n"
 );
@@ -1257,19 +952,13 @@ syscall_test!(
 syscall_test!(
     test_getresgid,
     {
-        SyscallEvent {
-            syscall_nr: SYS_getresgid,
-            pid: 5000,
-            tid: 5000,
-            return_value: 0,
-            data: SyscallEventData {
-                getresgid: GetresgidData {
-                    rgid: 1000,
-                    egid: 1000,
-                    sgid: 1000,
-                },
-            },
-        }
+        let data = GetresgidData {
+            rgid: 1000,
+            egid: 1000,
+            sgid: 1000,
+        };
+
+        crate::tests::make_compact_test_data(SYS_getresgid, 5000, 0, &data)
     },
     "5000 getresgid(rgid: 1000, egid: 1000, sgid: 1000) = 0 (success)\n"
 );
@@ -1278,13 +967,9 @@ syscall_test!(
 syscall_test!(
     test_fork_parent,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fork,
-            pid: 1000,
-            tid: 1000,
-            return_value: 1001,
-            data: SyscallEventData { fork: ForkData },
-        }
+        let data = ForkData;
+
+        crate::tests::make_compact_test_data(SYS_fork, 1000, 1001, &data)
     },
     "1000 fork() = 1001 (child pid)\n"
 );
@@ -1293,13 +978,9 @@ syscall_test!(
 syscall_test!(
     test_fork_child,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fork,
-            pid: 1001,
-            tid: 1001,
-            return_value: 0,
-            data: SyscallEventData { fork: ForkData },
-        }
+        let data = ForkData;
+
+        crate::tests::make_compact_test_data(SYS_fork, 1001, 0, &data)
     },
     "1001 fork() = 0 (child)\n"
 );
@@ -1308,13 +989,9 @@ syscall_test!(
 syscall_test!(
     test_fork_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_fork,
-            pid: 1000,
-            tid: 1000,
-            return_value: -1,
-            data: SyscallEventData { fork: ForkData },
-        }
+        let data = ForkData;
+
+        crate::tests::make_compact_test_data(SYS_fork, 1000, -1, &data)
     },
     "1000 fork() = -1 (error)\n"
 );
@@ -1323,13 +1000,9 @@ syscall_test!(
 syscall_test!(
     test_vfork_parent,
     {
-        SyscallEvent {
-            syscall_nr: SYS_vfork,
-            pid: 2000,
-            tid: 2000,
-            return_value: 2001,
-            data: SyscallEventData { vfork: VforkData },
-        }
+        let data = VforkData;
+
+        crate::tests::make_compact_test_data(SYS_vfork, 2000, 2001, &data)
     },
     "2000 vfork() = 2001 (child pid)\n"
 );
@@ -1338,13 +1011,9 @@ syscall_test!(
 syscall_test!(
     test_vfork_child,
     {
-        SyscallEvent {
-            syscall_nr: SYS_vfork,
-            pid: 2001,
-            tid: 2001,
-            return_value: 0,
-            data: SyscallEventData { vfork: VforkData },
-        }
+        let data = VforkData;
+
+        crate::tests::make_compact_test_data(SYS_vfork, 2001, 0, &data)
     },
     "2001 vfork() = 0 (child)\n"
 );
@@ -1353,13 +1022,9 @@ syscall_test!(
 syscall_test!(
     test_vfork_error,
     {
-        SyscallEvent {
-            syscall_nr: SYS_vfork,
-            pid: 2000,
-            tid: 2000,
-            return_value: -1,
-            data: SyscallEventData { vfork: VforkData },
-        }
+        let data = VforkData;
+
+        crate::tests::make_compact_test_data(SYS_vfork, 2000, -1, &data)
     },
     "2000 vfork() = -1 (error)\n"
 );

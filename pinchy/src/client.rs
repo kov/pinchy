@@ -7,9 +7,9 @@ use std::{ffi::OsString, os::fd::OwnedFd, pin::Pin};
 use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
 use pinchy_common::{
+    max_compact_payload_size,
     syscalls::{syscall_nr_from_name, ALL_SYSCALLS},
-    SyscallEvent, WireEventHeader, WIRE_KIND_COMPACT_SYSCALL_EVENT, WIRE_KIND_LEGACY_SYSCALL_EVENT,
-    WIRE_VERSION,
+    WireEventHeader, WIRE_VERSION,
 };
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
 use zbus::proxy;
@@ -105,7 +105,9 @@ async fn main() -> Result<()> {
 async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<()> {
     let mut reader = tokio::io::BufReader::new(tokio::fs::File::from(std::fs::File::from(fd)));
     let mut stdout = tokio::io::BufWriter::new(tokio::io::stdout());
-    let mut header_buf = vec![0u8; std::mem::size_of::<WireEventHeader>()];
+    let mut header_buf = [0u8; std::mem::size_of::<WireEventHeader>()];
+    let mut payload = Vec::new();
+    let max_payload_size = max_compact_payload_size();
 
     let mut output: Vec<u8> = vec![];
     loop {
@@ -119,27 +121,29 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
                     continue;
                 }
 
-                let mut payload = vec![0u8; header.payload_len as usize];
+                let payload_len = header.payload_len as usize;
+
+                if payload_len > max_payload_size {
+                    return Err(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "invalid payload_len {} (max {}) for syscall {}",
+                            payload_len, max_payload_size, header.syscall_nr
+                        ),
+                    )
+                    .into());
+                }
+
+                payload.resize(payload_len, 0);
                 reader.read_exact(&mut payload).await?;
 
                 output.clear();
 
                 // Safety: we own the output vector and won't progress before handle_event() returns.
                 let pin_output = unsafe { Pin::new_unchecked(&mut output) };
-                let formatter = Formatter::new(pin_output, formatting_style.clone());
+                let formatter = Formatter::new(pin_output, formatting_style);
 
-                if is_compact_event_kind(header.kind) {
-                    if !events::handle_compact_event(&header, &payload, formatter).await? {
-                        continue;
-                    }
-                } else {
-                    let event = match decode_event(&header, &payload) {
-                        Some(event) => event,
-                        None => continue,
-                    };
-
-                    events::handle_event(&event, formatter).await?;
-                }
+                events::handle_event(&header, &payload, formatter).await?;
 
                 stdout.write_all(&output).await?;
             }
@@ -148,22 +152,4 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
         }
     }
     Ok(stdout.flush().await?)
-}
-
-fn is_compact_event_kind(kind: u16) -> bool {
-    kind == WIRE_KIND_COMPACT_SYSCALL_EVENT
-}
-
-fn decode_event(header: &WireEventHeader, payload: &[u8]) -> Option<SyscallEvent> {
-    match header.kind {
-        WIRE_KIND_LEGACY_SYSCALL_EVENT => {
-            if payload.len() != std::mem::size_of::<SyscallEvent>() {
-                return None;
-            }
-
-            Some(unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const SyscallEvent) })
-        }
-
-        _ => None,
-    }
 }

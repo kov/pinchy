@@ -13,8 +13,9 @@ use pinchy_common::{
     kernel_types::{LinuxDirent64, Stat},
     syscalls, ChdirData, FaccessatData, FchmodatData, FchownatData, FgetxattrData, FlistxattrData,
     FremovexattrData, FsetxattrData, FstatData, FstatfsData, GetcwdData, GetxattrData,
-    LgetxattrData, ListxattrData, LlistxattrData, LremovexattrData, LsetxattrData, MkdiratData,
-    NewfstatatData, ReadlinkatData, RemovexattrData, SetxattrData, StatfsData, DATA_READ_SIZE,
+    LgetxattrData, LinkatData, ListxattrData, LlistxattrData, LremovexattrData, LsetxattrData,
+    MkdiratData, NewfstatatData, ReadlinkatData, RemovexattrData, Renameat2Data, RenameatData,
+    SetxattrData, StatfsData, SymlinkatData, UnlinkatData, DATA_READ_SIZE,
 };
 
 use crate::{data_mut, util, util::submit_compact_payload};
@@ -89,10 +90,31 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                         let pathname_ptr = args[1] as *const u8;
                         let buf_ptr = args[2] as *const u8;
+                        let to_copy = if return_value > 0 {
+                            let returned = return_value as usize;
+                            let max_requested = core::cmp::min(payload.bufsiz, returned);
+
+                            core::cmp::min(max_requested, payload.buf.len())
+                        } else {
+                            0
+                        };
 
                         unsafe {
                             let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
-                            let _ = bpf_probe_read_user_buf(buf_ptr, &mut payload.buf);
+
+                            if to_copy > 0 {
+                                let _ =
+                                    bpf_probe_read_user_buf(buf_ptr, &mut payload.buf[..to_copy]);
+
+                                if to_copy < payload.buf.len() {
+                                    payload.buf[to_copy] = 0;
+                                } else {
+                                    let last = payload.buf.len() - 1;
+                                    payload.buf[last] = 0;
+                                }
+                            } else if !payload.buf.is_empty() {
+                                payload.buf[0] = 0;
+                            }
                         }
                     },
                 )?;
@@ -512,8 +534,25 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                         let buf_ptr = args[0] as *const u8;
 
                         if return_value > 0 {
+                            let max_len = core::cmp::min(payload.size, payload.path.len());
+                            let copy_len = core::cmp::min(max_len, return_value as usize);
+
                             unsafe {
-                                let _ = bpf_probe_read_user_buf(buf_ptr, &mut payload.path);
+                                if copy_len > 0 {
+                                    let _ = bpf_probe_read_user_buf(
+                                        buf_ptr,
+                                        &mut payload.path[..copy_len],
+                                    );
+
+                                    if copy_len < payload.path.len() {
+                                        payload.path[copy_len] = 0;
+                                    } else {
+                                        let last = payload.path.len() - 1;
+                                        payload.path[last] = 0;
+                                    }
+                                } else if !payload.path.is_empty() {
+                                    payload.path[0] = 0;
+                                }
                             }
                         }
                     },
@@ -597,6 +636,110 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                 return Ok(());
             }
+            syscalls::SYS_renameat => {
+                submit_compact_payload::<RenameatData, _>(
+                    &ctx,
+                    syscalls::SYS_renameat,
+                    return_value,
+                    |payload| {
+                        payload.olddirfd = args[0] as i32;
+                        payload.newdirfd = args[2] as i32;
+
+                        let oldpath_ptr = args[1] as *const u8;
+                        let newpath_ptr = args[3] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut payload.oldpath);
+                            let _ = bpf_probe_read_user_buf(newpath_ptr, &mut payload.newpath);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_renameat2 => {
+                submit_compact_payload::<Renameat2Data, _>(
+                    &ctx,
+                    syscalls::SYS_renameat2,
+                    return_value,
+                    |payload| {
+                        payload.olddirfd = args[0] as i32;
+                        payload.newdirfd = args[2] as i32;
+                        payload.flags = args[4] as u32;
+
+                        let oldpath_ptr = args[1] as *const u8;
+                        let newpath_ptr = args[3] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut payload.oldpath);
+                            let _ = bpf_probe_read_user_buf(newpath_ptr, &mut payload.newpath);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_unlinkat => {
+                submit_compact_payload::<UnlinkatData, _>(
+                    &ctx,
+                    syscalls::SYS_unlinkat,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.flags = args[2] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_symlinkat => {
+                submit_compact_payload::<SymlinkatData, _>(
+                    &ctx,
+                    syscalls::SYS_symlinkat,
+                    return_value,
+                    |payload| {
+                        payload.newdirfd = args[1] as i32;
+
+                        let target_ptr = args[0] as *const u8;
+                        let linkpath_ptr = args[2] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(target_ptr, &mut payload.target);
+                            let _ = bpf_probe_read_user_buf(linkpath_ptr, &mut payload.linkpath);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
+            syscalls::SYS_linkat => {
+                submit_compact_payload::<LinkatData, _>(
+                    &ctx,
+                    syscalls::SYS_linkat,
+                    return_value,
+                    |payload| {
+                        payload.olddirfd = args[0] as i32;
+                        payload.newdirfd = args[2] as i32;
+                        payload.flags = args[4] as i32;
+
+                        let oldpath_ptr = args[1] as *const u8;
+                        let newpath_ptr = args[3] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut payload.oldpath);
+                            let _ = bpf_probe_read_user_buf(newpath_ptr, &mut payload.newpath);
+                        }
+                    },
+                )?;
+
+                return Ok(());
+            }
             _ => {}
         }
 
@@ -626,7 +769,12 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
             | syscalls::SYS_chdir
             | syscalls::SYS_mkdirat
             | syscalls::SYS_fchmodat
-            | syscalls::SYS_fchownat => {
+            | syscalls::SYS_fchownat
+            | syscalls::SYS_renameat
+            | syscalls::SYS_renameat2
+            | syscalls::SYS_unlinkat
+            | syscalls::SYS_symlinkat
+            | syscalls::SYS_linkat => {
                 error!(
                     &ctx,
                     "migrated filesystem syscall {} hit legacy path", syscall_nr
@@ -752,29 +900,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
                 }
             }
-            syscalls::SYS_renameat => {
-                let data = data_mut!(entry, renameat);
-                data.olddirfd = args[0] as i32;
-                let oldpath_ptr = args[1] as *const u8;
-                data.newdirfd = args[2] as i32;
-                let newpath_ptr = args[3] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
-                }
-            }
-            syscalls::SYS_renameat2 => {
-                let data = data_mut!(entry, renameat2);
-                data.olddirfd = args[0] as i32;
-                let oldpath_ptr = args[1] as *const u8;
-                data.newdirfd = args[2] as i32;
-                let newpath_ptr = args[3] as *const u8;
-                data.flags = args[4] as u32;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
-                }
-            }
             #[cfg(x86_64)]
             syscalls::SYS_rmdir => {
                 let data = data_mut!(entry, rmdir);
@@ -791,15 +916,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
                 }
             }
-            syscalls::SYS_unlinkat => {
-                let data = data_mut!(entry, unlinkat);
-                data.dirfd = args[0] as i32;
-                data.flags = args[2] as i32;
-                let pathname_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(pathname_ptr, &mut data.pathname);
-                }
-            }
             syscalls::SYS_acct => {
                 let data = data_mut!(entry, acct);
                 let filename_ptr = args[0] as *const u8;
@@ -812,16 +928,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let data = data_mut!(entry, symlink);
                 let target_ptr = args[0] as *const u8;
                 let linkpath_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(target_ptr, &mut data.target);
-                    let _ = bpf_probe_read_user_buf(linkpath_ptr, &mut data.linkpath);
-                }
-            }
-            syscalls::SYS_symlinkat => {
-                let data = data_mut!(entry, symlinkat);
-                data.newdirfd = args[1] as i32;
-                let target_ptr = args[0] as *const u8;
-                let linkpath_ptr = args[2] as *const u8;
                 unsafe {
                     let _ = bpf_probe_read_user_buf(target_ptr, &mut data.target);
                     let _ = bpf_probe_read_user_buf(linkpath_ptr, &mut data.linkpath);
@@ -1013,18 +1119,6 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                 let data = data_mut!(entry, link);
                 let oldpath_ptr = args[0] as *const u8;
                 let newpath_ptr = args[1] as *const u8;
-                unsafe {
-                    let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
-                    let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);
-                }
-            }
-            syscalls::SYS_linkat => {
-                let data = data_mut!(entry, linkat);
-                data.olddirfd = args[0] as i32;
-                let oldpath_ptr = args[1] as *const u8;
-                data.newdirfd = args[2] as i32;
-                let newpath_ptr = args[3] as *const u8;
-                data.flags = args[4] as i32;
                 unsafe {
                     let _ = bpf_probe_read_user_buf(oldpath_ptr, &mut data.oldpath);
                     let _ = bpf_probe_read_user_buf(newpath_ptr, &mut data.newpath);

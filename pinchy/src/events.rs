@@ -9,10 +9,11 @@ use pinchy_common::{
     EpollCtlData, EpollPWait2Data, EpollPWaitData, FaccessatData, FchmodData, FchmodatData,
     FchownData, FchownatData, FdatasyncData, FgetxattrData, FlistxattrData, FremovexattrData,
     FsetxattrData, FstatData, FstatfsData, FsyncData, FtruncateData, GetcwdData, GetxattrData,
-    LgetxattrData, ListxattrData, LlistxattrData, LremovexattrData, LseekData, LsetxattrData,
-    MkdiratData, NewfstatatData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData,
-    Pselect6Data, PwriteData, ReadData, ReadlinkatData, RemovexattrData, SetxattrData, SpliceData,
-    StatfsData, SyscallEvent, TeeData, VectorIOData, VmspliceData, WireEventHeader, WriteData,
+    LgetxattrData, LinkatData, ListxattrData, LlistxattrData, LremovexattrData, LseekData,
+    LsetxattrData, MkdiratData, NewfstatatData, OpenAt2Data, OpenAtData, Pipe2Data, PpollData,
+    PreadData, Pselect6Data, PwriteData, ReadData, ReadlinkatData, RemovexattrData, Renameat2Data,
+    RenameatData, SetxattrData, SpliceData, StatfsData, SymlinkatData, SyscallEvent, TeeData,
+    UnlinkatData, VectorIOData, VmspliceData, WireEventHeader, WriteData,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{PollData, SelectData, SendfileData};
@@ -82,7 +83,12 @@ pub async fn handle_compact_event(
         | syscalls::SYS_fchmod
         | syscalls::SYS_fchmodat
         | syscalls::SYS_fchown
-        | syscalls::SYS_fchownat => header.syscall_nr,
+        | syscalls::SYS_fchownat
+        | syscalls::SYS_renameat
+        | syscalls::SYS_renameat2
+        | syscalls::SYS_unlinkat
+        | syscalls::SYS_symlinkat
+        | syscalls::SYS_linkat => header.syscall_nr,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_wait
         | syscalls::SYS_poll
@@ -652,7 +658,22 @@ pub async fn handle_compact_event(
 
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
             argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "buf: {}", format_path(&data.buf, false));
+
+            if header.return_value < 0 {
+                arg!(sf, "buf: <unavailable>");
+            } else {
+                let buf_cap = std::cmp::min(data.bufsiz, data.buf.len());
+                let read_len = std::cmp::min(header.return_value as usize, buf_cap);
+                let mut tmp = Vec::with_capacity(read_len + 1);
+
+                tmp.extend_from_slice(&data.buf[..read_len]);
+                tmp.push(0);
+
+                let truncated = header.return_value > 0 && header.return_value as usize >= buf_cap;
+
+                argf!(sf, "buf: {}", format_path(&tmp, truncated));
+            }
+
             argf!(sf, "bufsiz: {}", data.bufsiz);
 
             finish!(sf, header.return_value);
@@ -766,6 +787,53 @@ pub async fn handle_compact_event(
             argf!(sf, "uid: {}", data.uid);
             argf!(sf, "gid: {}", data.gid);
             argf!(sf, "flags: {}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_renameat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const RenameatData) };
+
+            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_renameat2 => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const Renameat2Data) };
+
+            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            argf!(sf, "flags: {}", format_renameat2_flags(data.flags));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_unlinkat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const UnlinkatData) };
+
+            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_symlinkat => {
+            let data =
+                unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const SymlinkatData) };
+
+            argf!(sf, "target: {}", format_path(&data.target, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_linkat => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const LinkatData) };
+
+            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
+            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
+            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
+            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
+            argf!(sf, "flags: {}", format_at_flags(data.flags));
             finish!(sf, header.return_value);
         }
         syscalls::SYS_flistxattr => {
@@ -995,7 +1063,12 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
         | syscalls::SYS_fchmod
         | syscalls::SYS_fchmodat
         | syscalls::SYS_fchown
-        | syscalls::SYS_fchownat => {
+        | syscalls::SYS_fchownat
+        | syscalls::SYS_renameat
+        | syscalls::SYS_renameat2
+        | syscalls::SYS_unlinkat
+        | syscalls::SYS_symlinkat
+        | syscalls::SYS_linkat => {
             unreachable!("migrated syscall should be handled by compact path");
         }
         #[cfg(target_arch = "x86_64")]
@@ -3864,23 +3937,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             argf!(sf, "newpath: {}", format_path(&data.newpath, false));
             finish!(sf, event.return_value);
         }
-        syscalls::SYS_renameat => {
-            let data = unsafe { event.data.renameat };
-            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
-            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
-            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
-            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_renameat2 => {
-            let data = unsafe { event.data.renameat2 };
-            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
-            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
-            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
-            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
-            argf!(sf, "flags: {}", format_renameat2_flags(data.flags));
-            finish!(sf, event.return_value);
-        }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_poll => {
             let data = unsafe { event.data.poll };
@@ -3973,25 +4029,10 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
 
             finish!(sf, event.return_value);
         }
-        syscalls::SYS_unlinkat => {
-            let data = unsafe { event.data.unlinkat };
-
-            argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
-            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
-            argf!(sf, "flags: {}", format_at_flags(data.flags));
-            finish!(sf, event.return_value);
-        }
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_symlink => {
             let data = unsafe { event.data.symlink };
             argf!(sf, "target: {}", format_path(&data.target, false));
-            argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_symlinkat => {
-            let data = unsafe { event.data.symlinkat };
-            argf!(sf, "target: {}", format_path(&data.target, false));
-            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
             argf!(sf, "linkpath: {}", format_path(&data.linkpath, false));
             finish!(sf, event.return_value);
         }
@@ -4000,15 +4041,6 @@ pub async fn handle_event(event: &SyscallEvent, formatter: Formatter<'_>) -> any
             let data = unsafe { event.data.link };
             argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
             argf!(sf, "newpath: {}", format_path(&data.newpath, false));
-            finish!(sf, event.return_value);
-        }
-        syscalls::SYS_linkat => {
-            let data = unsafe { event.data.linkat };
-            argf!(sf, "olddirfd: {}", format_dirfd(data.olddirfd));
-            argf!(sf, "oldpath: {}", format_path(&data.oldpath, false));
-            argf!(sf, "newdirfd: {}", format_dirfd(data.newdirfd));
-            argf!(sf, "newpath: {}", format_path(&data.newpath, false));
-            argf!(sf, "flags: {}", format_at_flags(data.flags));
             finish!(sf, event.return_value);
         }
         syscalls::SYS_shmat => {

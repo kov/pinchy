@@ -1600,7 +1600,7 @@ fn filesystem_links_syscalls() {
         @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
         @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
         @PID@ link(oldpath: "/tmp/filesystem_links_target", newpath: "/tmp/filesystem_links_link2") = 0 (success)
-        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: <unavailable>, bufsiz: 256) = -2 (error)
         @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (error)
     "#});
 
@@ -1609,7 +1609,7 @@ fn filesystem_links_syscalls() {
         @PID@ symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
         @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
         @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
-        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: "", bufsiz: 256) = -2 (error)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: <unavailable>, bufsiz: 256) = -2 (error)
         @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (error)
     "#});
 

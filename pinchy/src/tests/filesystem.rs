@@ -440,9 +440,9 @@ syscall_compact_test!(
         data.pathname[..exe_link.len()].copy_from_slice(exe_link);
         data.buf[..bin_path.len()].copy_from_slice(bin_path);
 
-        make_compact_test_data(SYS_readlinkat, 5678, 0, &data)
+        make_compact_test_data(SYS_readlinkat, 5678, 15, &data)
     },
-    "5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 0 (success)\n"
+    "5678 readlinkat(dirfd: 3, pathname: \"/proc/self/exe\", buf: \"/usr/bin/pinchy\", bufsiz: 16) = 15\n"
 );
 
 syscall_compact_test!(
@@ -1118,53 +1118,43 @@ syscall_test!(
     "1001 rename(oldpath: \"/old/path\", newpath: \"/new/path\") = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_renameat,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
         let mut newpath = [0u8; SMALLISH_READ_SIZE];
         oldpath[..10].copy_from_slice(b"/old/path\0");
         newpath[..10].copy_from_slice(b"/new/path\0");
-        SyscallEvent {
-            syscall_nr: SYS_renameat,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                renameat: RenameatData {
-                    olddirfd: libc::AT_FDCWD,
-                    oldpath,
-                    newdirfd: libc::AT_FDCWD,
-                    newpath,
-                },
-            },
-        }
+
+        let data = RenameatData {
+            olddirfd: libc::AT_FDCWD,
+            oldpath,
+            newdirfd: libc::AT_FDCWD,
+            newpath,
+        };
+
+        make_compact_test_data(SYS_renameat, 1001, 0, &data)
     },
     "1001 renameat(olddirfd: AT_FDCWD, oldpath: \"/old/path\", newdirfd: AT_FDCWD, newpath: \"/new/path\") = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_renameat2,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
         let mut newpath = [0u8; SMALLISH_READ_SIZE];
         oldpath[..10].copy_from_slice(b"/old/path\0");
         newpath[..10].copy_from_slice(b"/new/path\0");
-        SyscallEvent {
-            syscall_nr: SYS_renameat2,
-            pid: 1000,
-            tid: 1001,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                renameat2: Renameat2Data {
-                    olddirfd: libc::AT_FDCWD,
-                    oldpath,
-                    newdirfd: libc::AT_FDCWD,
-                    newpath,
-                    flags: libc::RENAME_NOREPLACE,
-                },
-            },
-        }
+
+        let data = Renameat2Data {
+            olddirfd: libc::AT_FDCWD,
+            oldpath,
+            newdirfd: libc::AT_FDCWD,
+            newpath,
+            flags: libc::RENAME_NOREPLACE,
+        };
+
+        make_compact_test_data(SYS_renameat2, 1001, 0, &data)
     },
     "1001 renameat2(olddirfd: AT_FDCWD, oldpath: \"/old/path\", newdirfd: AT_FDCWD, newpath: \"/new/path\", flags: 0x1 (RENAME_NOREPLACE)) = 0 (success)\n"
 );
@@ -1229,48 +1219,38 @@ syscall_test!(
     "301 unlink(pathname: \"/tmp/nonexistent\") = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_unlinkat,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/testdir\0";
         pathname[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_unlinkat,
-            pid: 400,
-            tid: 401,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                unlinkat: pinchy_common::UnlinkatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname,
-                    flags: libc::AT_REMOVEDIR,
-                },
-            },
-        }
+
+        let data = pinchy_common::UnlinkatData {
+            dirfd: libc::AT_FDCWD,
+            pathname,
+            flags: libc::AT_REMOVEDIR,
+        };
+
+        make_compact_test_data(pinchy_common::syscalls::SYS_unlinkat, 401, 0, &data)
     },
     "401 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/testdir\", flags: AT_EACCESS|AT_REMOVEDIR (0x200)) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_unlinkat_error,
     {
         let mut pathname = [0u8; DATA_READ_SIZE];
         let path = b"/tmp/nonexistent\0";
         pathname[..path.len()].copy_from_slice(path);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_unlinkat,
-            pid: 500,
-            tid: 501,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                unlinkat: pinchy_common::UnlinkatData {
-                    dirfd: libc::AT_FDCWD,
-                    pathname,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = pinchy_common::UnlinkatData {
+            dirfd: libc::AT_FDCWD,
+            pathname,
+            flags: 0,
+        };
+
+        make_compact_test_data(pinchy_common::syscalls::SYS_unlinkat, 501, -1, &data)
     },
     "501 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/nonexistent\", flags: 0) = -1 (error)\n"
 );
@@ -1321,7 +1301,7 @@ syscall_test!(
     "601 symlink(target: \"/target\", linkpath: \"/link\") = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_symlinkat,
     {
         let mut target = [0u8; DATA_READ_SIZE];
@@ -1330,24 +1310,19 @@ syscall_test!(
         let linkpath_bytes = b"/link\0";
         target[..target_bytes.len()].copy_from_slice(target_bytes);
         linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_symlinkat,
-            pid: 700,
-            tid: 701,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                symlinkat: pinchy_common::SymlinkatData {
-                    target,
-                    newdirfd: libc::AT_FDCWD,
-                    linkpath,
-                },
-            },
-        }
+
+        let data = pinchy_common::SymlinkatData {
+            target,
+            newdirfd: libc::AT_FDCWD,
+            linkpath,
+        };
+
+        make_compact_test_data(pinchy_common::syscalls::SYS_symlinkat, 701, 0, &data)
     },
     "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_symlinkat_error,
     {
         let mut target = [0u8; DATA_READ_SIZE];
@@ -1356,19 +1331,14 @@ syscall_test!(
         let linkpath_bytes = b"/link\0";
         target[..target_bytes.len()].copy_from_slice(target_bytes);
         linkpath[..linkpath_bytes.len()].copy_from_slice(linkpath_bytes);
-        SyscallEvent {
-            syscall_nr: pinchy_common::syscalls::SYS_symlinkat,
-            pid: 700,
-            tid: 701,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                symlinkat: pinchy_common::SymlinkatData {
-                    target,
-                    newdirfd: libc::AT_FDCWD,
-                    linkpath,
-                },
-            },
-        }
+
+        let data = pinchy_common::SymlinkatData {
+            target,
+            newdirfd: libc::AT_FDCWD,
+            linkpath,
+        };
+
+        make_compact_test_data(pinchy_common::syscalls::SYS_symlinkat, 701, -1, &data)
     },
     "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = -1 (error)\n"
 );
@@ -2399,7 +2369,7 @@ syscall_test!(
     "801 link(oldpath: \"/nonexistent\", newpath: \"/link\") = -1 (error)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_linkat,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -2408,26 +2378,21 @@ syscall_test!(
         let newpath_bytes = b"link.txt\0";
         oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
         newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
-        SyscallEvent {
-            syscall_nr: SYS_linkat,
-            pid: 900,
-            tid: 901,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                linkat: LinkatData {
-                    olddirfd: libc::AT_FDCWD,
-                    oldpath,
-                    newdirfd: libc::AT_FDCWD,
-                    newpath,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = LinkatData {
+            olddirfd: libc::AT_FDCWD,
+            oldpath,
+            newdirfd: libc::AT_FDCWD,
+            newpath,
+            flags: 0,
+        };
+
+        make_compact_test_data(SYS_linkat, 901, 0, &data)
     },
     "901 linkat(olddirfd: AT_FDCWD, oldpath: \"file.txt\", newdirfd: AT_FDCWD, newpath: \"link.txt\", flags: 0) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_linkat_with_flags,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -2436,26 +2401,21 @@ syscall_test!(
         let newpath_bytes = b"hardlink\0";
         oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
         newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
-        SyscallEvent {
-            syscall_nr: SYS_linkat,
-            pid: 950,
-            tid: 951,
-            return_value: 0,
-            data: pinchy_common::SyscallEventData {
-                linkat: LinkatData {
-                    olddirfd: 5,
-                    oldpath,
-                    newdirfd: 6,
-                    newpath,
-                    flags: libc::AT_SYMLINK_FOLLOW,
-                },
-            },
-        }
+
+        let data = LinkatData {
+            olddirfd: 5,
+            oldpath,
+            newdirfd: 6,
+            newpath,
+            flags: libc::AT_SYMLINK_FOLLOW,
+        };
+
+        make_compact_test_data(SYS_linkat, 951, 0, &data)
     },
     "951 linkat(olddirfd: 5, oldpath: \"symlink\", newdirfd: 6, newpath: \"hardlink\", flags: AT_SYMLINK_FOLLOW (0x400)) = 0 (success)\n"
 );
 
-syscall_test!(
+syscall_compact_test!(
     parse_linkat_error,
     {
         let mut oldpath = [0u8; SMALLISH_READ_SIZE];
@@ -2464,21 +2424,16 @@ syscall_test!(
         let newpath_bytes = b"link\0";
         oldpath[..oldpath_bytes.len()].copy_from_slice(oldpath_bytes);
         newpath[..newpath_bytes.len()].copy_from_slice(newpath_bytes);
-        SyscallEvent {
-            syscall_nr: SYS_linkat,
-            pid: 900,
-            tid: 901,
-            return_value: -1,
-            data: pinchy_common::SyscallEventData {
-                linkat: LinkatData {
-                    olddirfd: libc::AT_FDCWD,
-                    oldpath,
-                    newdirfd: libc::AT_FDCWD,
-                    newpath,
-                    flags: 0,
-                },
-            },
-        }
+
+        let data = LinkatData {
+            olddirfd: libc::AT_FDCWD,
+            oldpath,
+            newdirfd: libc::AT_FDCWD,
+            newpath,
+            flags: 0,
+        };
+
+        make_compact_test_data(SYS_linkat, 901, -1, &data)
     },
     "901 linkat(olddirfd: AT_FDCWD, oldpath: \"nonexistent\", newdirfd: AT_FDCWD, newpath: \"link\", flags: 0) = -1 (error)\n"
 );

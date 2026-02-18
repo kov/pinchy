@@ -659,7 +659,7 @@ impl EventDispatch {
                                         continue;
                                     };
 
-                                    let framed_event = Arc::<[u8]>::from(event.to_vec());
+                                    let framed_event = Arc::<[u8]>::from(event);
 
                                     event_stats.framed_event(framed_event.len());
 

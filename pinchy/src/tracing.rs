@@ -407,12 +407,14 @@ impl WriterTask {
 
                     log::trace!("Writer task wrote: {} bytes", event_bytes.len());
                 },
-                _ = sleep(Duration::from_millis(10)) => {
-                    if self.writer.flush().await.is_err() {
-                        self.stats.writer_flush_error();
+                _ = sleep(Duration::from_millis(50)) => {
+                    if self.event_rx.is_empty() {
+                        if self.writer.flush().await.is_err() {
+                            self.stats.writer_flush_error();
 
-                        log::trace!("Writer task ended: flush error");
-                        break;
+                            log::trace!("Writer task ended: flush error");
+                            break;
+                        }
                     }
 
                     // FIXME: there must be a better, more high level way of identifying the other end
@@ -504,7 +506,7 @@ fn parse_client_queue_capacity() -> usize {
         .ok()
         .and_then(|value| value.parse::<usize>().ok())
         .filter(|value| *value > 0)
-        .unwrap_or(128)
+        .unwrap_or(512)
 }
 
 // Core event processing and client management

@@ -107,6 +107,8 @@ struct PinchyDBus {
     dispatch: SharedEventDispatch,
 }
 
+const CLIENT_PIPE_WRITE_BUFFER_SIZE: usize = 256 * 1024;
+
 #[zbus::interface(name = "org.pinchy.Service")]
 impl PinchyDBus {
     async fn trace_pid(
@@ -128,9 +130,10 @@ impl PinchyDBus {
             Err(e) => return Err(zbus::fdo::Error::Failed(e.to_string())),
         };
 
-        let writer = tokio::io::BufWriter::new(tokio::fs::File::from(std::fs::File::from(
-            OwnedFd::from(write),
-        )));
+        let writer = tokio::io::BufWriter::with_capacity(
+            CLIENT_PIPE_WRITE_BUFFER_SIZE,
+            tokio::fs::File::from(std::fs::File::from(OwnedFd::from(write))),
+        );
 
         let _client_id = self
             .dispatch

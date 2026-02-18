@@ -24,6 +24,28 @@ cargo run --release --config 'target."cfg(all())".runner="sudo -E"'
 Cargo build scripts are used to automatically build the eBPF correctly and include it in the
 program.
 
+## UML Efficiency Benchmark
+
+You can run the UML efficiency benchmark with any traced command:
+
+```shell
+BENCH_COMMAND='find "$HOME/.local"' EVENTS='' ./scripts/measure-command-efficiency.sh
+```
+
+Useful parameters:
+
+- `BENCH_COMMAND`: command to run under tracing inside UML
+- `EVENTS`: comma-separated syscall filter (empty string means all supported events)
+- `RUNS`: latency samples (default `15`)
+- `THROUGHPUT_RUNS`: throughput loop count (default `3`)
+
+Example:
+
+```shell
+RUNS=1 THROUGHPUT_RUNS=1 EVENTS='' BENCH_COMMAND='cat /etc/passwd' \
+  ./scripts/measure-command-efficiency.sh
+```
+
 ## Usage
 
 Pinchy can trace syscalls for a running process or launch a new process and trace it. You can specify which syscalls to trace using the `-e` or `--event` option.

@@ -432,6 +432,19 @@ friendly with the `--workspace` argument.
 Keep in mind there is no real lib crate. The unit tests are in the pinchy
 binary.
 
+## Benchmarking
+
+Use the UML command benchmark script for efficiency measurements:
+
+```bash
+BENCH_COMMAND='find "$HOME/.local"' EVENTS='' ./scripts/measure-command-efficiency.sh
+```
+
+Key knobs:
+- `BENCH_COMMAND` selects the traced command.
+- `EVENTS` selects syscall filters (empty means all supported events).
+- `RUNS` and `THROUGHPUT_RUNS` control sample counts.
+
 ## Architecture-Specific Code
 
 When adding code that should only be on one of the supported architectures,

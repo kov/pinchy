@@ -18,7 +18,10 @@ use pinchy_common::{
 };
 use tokio::{
     io::{unix::AsyncFd, AsyncWriteExt},
-    sync::{mpsc::error::TrySendError, RwLock},
+    sync::{
+        mpsc::error::{TryRecvError, TrySendError},
+        RwLock,
+    },
     time::{sleep, Duration},
 };
 
@@ -28,6 +31,7 @@ pub type SharedEventDispatch = Arc<RwLock<EventDispatch>>;
 const PID_TIMEOUT_MS: u64 = 50; // Initial timeout after process exit
 const MAX_TIMEOUT_RESETS: u32 = 10; // Maximum number of times we'll reset the timeout
 const TIMEOUT_EXTENSION_MS: u64 = 10; // How much to extend on each event
+const WRITER_BATCH_SIZE: usize = 64;
 
 mod efficiency {
     #[cfg(feature = "efficiency-metrics")]
@@ -377,6 +381,7 @@ impl WriterTask {
     async fn run(mut self) {
         // Get the underlying file descriptor
         let fd = self.writer.get_ref().as_raw_fd();
+        let mut event_batch = Vec::with_capacity(WRITER_BATCH_SIZE);
 
         // Check if the pipe is still writable using poll
         let poll_fd = libc::pollfd {
@@ -393,19 +398,38 @@ impl WriterTask {
                         break;
                     };
 
-                    self.queue_stats.decrement_depth();
-                    self.stats.queue_depth_decrement();
+                    event_batch.clear();
+                    event_batch.push(event_bytes);
 
-                    if self.writer.write_all(&event_bytes).await.is_err() {
-                        self.stats.writer_write_error();
-
-                        log::trace!("Writer task ended: write error");
-                        break;
+                    while event_batch.len() < WRITER_BATCH_SIZE {
+                        match self.event_rx.try_recv() {
+                            Ok(next_event) => {
+                                event_batch.push(next_event);
+                            }
+                            Err(TryRecvError::Empty) => {
+                                break;
+                            }
+                            Err(TryRecvError::Disconnected) => {
+                                break;
+                            }
+                        }
                     }
 
-                    self.stats.writer_event_written(event_bytes.len());
+                    for event_bytes in event_batch.drain(..) {
+                        self.queue_stats.decrement_depth();
+                        self.stats.queue_depth_decrement();
 
-                    log::trace!("Writer task wrote: {} bytes", event_bytes.len());
+                        if self.writer.write_all(&event_bytes).await.is_err() {
+                            self.stats.writer_write_error();
+
+                            log::trace!("Writer task ended: write error");
+                            return;
+                        }
+
+                        self.stats.writer_event_written(event_bytes.len());
+
+                        log::trace!("Writer task wrote: {} bytes", event_bytes.len());
+                    }
                 },
                 _ = sleep(Duration::from_millis(50)) => {
                     if self.event_rx.is_empty() {

@@ -47,6 +47,12 @@ for param in $(cat /proc/cmdline); do
         PINCHY_CLIENT_QUEUE_CAPACITY=*)
             PINCHY_CLIENT_QUEUE_CAPACITY="${param#PINCHY_CLIENT_QUEUE_CAPACITY=}"
             ;;
+        PINCHY_FIND_PATH=*)
+            PINCHY_FIND_PATH="${param#PINCHY_FIND_PATH=}"
+            ;;
+        PINCHY_BENCH_COMMAND_B64=*)
+            PINCHY_BENCH_COMMAND_B64="${param#PINCHY_BENCH_COMMAND_B64=}"
+            ;;
     esac
 done
 
@@ -90,6 +96,21 @@ PINCHYD="$PINCHY_TEST_BINDIR/pinchyd"
 PINCHY="$PINCHY_TEST_BINDIR/pinchy"
 TEST_HELPER="$PINCHY_TEST_BINDIR/test-helper"
 PINCHY_CLIENT_QUEUE_CAPACITY="${PINCHY_CLIENT_QUEUE_CAPACITY:-128}"
+PINCHY_FIND_PATH="${PINCHY_FIND_PATH:-$HOME/.local}"
+
+if [ -n "${PINCHY_BENCH_COMMAND_B64:-}" ]; then
+    if command -v base64 >/dev/null 2>&1; then
+        PINCHY_BENCH_COMMAND="$(printf '%s' "$PINCHY_BENCH_COMMAND_B64" | base64 -d)"
+    else
+        echo "FATAL: base64 not available inside UML" >"$OUTDIR/pinchy.stderr"
+        echo "1" >"$OUTDIR/pinchyd.exit"
+        echo "1" >"$OUTDIR/pinchy.exit"
+        touch "$OUTDIR/done"
+        poweroff -f
+    fi
+fi
+
+PINCHY_BENCH_COMMAND="${PINCHY_BENCH_COMMAND:-find \"$PINCHY_FIND_PATH\"}"
 
 # Start system D-Bus daemon with pinchy policy installed.
 # We copy the policy to a tmpfs-backed directory so tests work without
@@ -260,6 +281,58 @@ run_benchmark() {
     echo "0" >"$OUTDIR/pinchy.exit"
 }
 
+run_benchmark_command() {
+    BENCH_LOOPS="${PINCHY_BENCH_LOOPS:-3}"
+    BENCH_RUNS="${PINCHY_BENCH_RUNS:-15}"
+
+    build_event_args
+
+    : >"$OUTDIR/pinchy.stderr"
+    rm -f "$OUTDIR/latency-ms.txt"
+
+    # Throughput phase
+    PINCHYD_OUT="$OUTDIR/pinchyd-throughput.out"
+    PINCHY_CLIENT_QUEUE_CAPACITY="$PINCHY_CLIENT_QUEUE_CAPACITY" PINCHY_EFF_STATS=1 $PINCHYD >"$PINCHYD_OUT" 2>&1 &
+    PINCHYD_PID=$!
+    wait_for_pinchyd
+
+    start_ns=$(date +%s%N)
+    for _ in $(seq 1 "$BENCH_LOOPS"); do
+        setsid sh -c "$PINCHY $EVENT_ARGS -- $PINCHY_BENCH_COMMAND \
+            >/dev/null 2>>\"$OUTDIR/pinchy.stderr\" || true"
+    done
+    end_ns=$(date +%s%N)
+
+    echo $(( (end_ns - start_ns) / 1000000 )) >"$OUTDIR/throughput-ms.txt"
+
+    sleep 1
+
+    for _ in $(seq 1 "$BENCH_RUNS"); do
+        start_ns=$(date +%s%N)
+        setsid sh -c "$PINCHY $EVENT_ARGS -- $PINCHY_BENCH_COMMAND \
+            >/dev/null 2>>\"$OUTDIR/pinchy.stderr\" || true"
+        end_ns=$(date +%s%N)
+        echo $(( (end_ns - start_ns) / 1000000 )) >>"$OUTDIR/latency-ms.txt"
+    done
+
+    sleep 1
+
+    kill -INT $PINCHYD_PID 2>/dev/null || true
+    wait $PINCHYD_PID 2>/dev/null
+    PINCHYD_EXIT=$?
+
+    cp "$OUTDIR/pinchyd-throughput.out" "$OUTDIR/pinchyd.out"
+    : >"$OUTDIR/pinchyd-latency.out"
+
+    if [ "$PINCHYD_EXIT" -eq 0 ]; then
+        echo "0" >"$OUTDIR/pinchyd.exit"
+    else
+        echo "1" >"$OUTDIR/pinchyd.exit"
+    fi
+
+    echo "0" >"$OUTDIR/pinchy.exit"
+}
+
 run_server_only() {
     PINCHYD_OUT="$OUTDIR/pinchyd.out"
     $PINCHYD >"$PINCHYD_OUT" 2>&1 &
@@ -339,6 +412,9 @@ case "$PINCHY_TEST_MODE" in
         ;;
     benchmark)
         run_benchmark
+        ;;
+    benchmark_command)
+        run_benchmark_command
         ;;
     *)
         echo "FATAL: Unknown test mode: $PINCHY_TEST_MODE" >"$OUTDIR/pinchy.stderr"

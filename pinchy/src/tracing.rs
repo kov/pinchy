@@ -31,7 +31,8 @@ pub type SharedEventDispatch = Arc<RwLock<EventDispatch>>;
 const PID_TIMEOUT_MS: u64 = 50; // Initial timeout after process exit
 const MAX_TIMEOUT_RESETS: u32 = 10; // Maximum number of times we'll reset the timeout
 const TIMEOUT_EXTENSION_MS: u64 = 10; // How much to extend on each event
-const WRITER_BATCH_SIZE: usize = 64;
+const WRITER_BATCH_SIZE: usize = 256;
+const WRITER_FLUSH_POLL_MS: u64 = 50;
 
 mod efficiency {
     #[cfg(feature = "efficiency-metrics")]
@@ -430,8 +431,9 @@ impl WriterTask {
 
                         log::trace!("Writer task wrote: {} bytes", event_bytes.len());
                     }
+
                 },
-                _ = sleep(Duration::from_millis(50)) => {
+                _ = sleep(Duration::from_millis(WRITER_FLUSH_POLL_MS)) => {
                     if self.event_rx.is_empty() {
                         if self.writer.flush().await.is_err() {
                             self.stats.writer_flush_error();

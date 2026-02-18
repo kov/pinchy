@@ -394,6 +394,111 @@ run_auto_quit_after_client() {
     date +%s >"$OUTDIR/pinchyd.end_time"
 }
 
+run_latency_probe() {
+    PINCHYD_OUT="$OUTDIR/pinchyd.out"
+    $PINCHYD >"$PINCHYD_OUT" 2>&1 &
+    PINCHYD_PID=$!
+    wait_for_pinchyd
+
+    rm -f \
+        "$OUTDIR/latency_workload_ready" \
+        "$OUTDIR/latency_workload_start" \
+        "$OUTDIR/latency_open_trigger_ns" \
+        "$OUTDIR/latency_workload_done_ns" \
+        "$OUTDIR/latency_workload_exit_ns" \
+        "$OUTDIR/latency_first_print_ns" \
+        "$OUTDIR/latency_first_print_ms" \
+        "$OUTDIR/pinchy.stdout" \
+        "$OUTDIR/pinchy.stderr"
+
+    PINCHY_LATENCY_OUTDIR="$OUTDIR" "$TEST_HELPER" latency_open_hold \
+        >"$OUTDIR/workload.stdout" 2>"$OUTDIR/workload.stderr" &
+    WORKLOAD_PID=$!
+
+    for _ in $(seq 1 2000); do
+        if [ -f "$OUTDIR/latency_workload_ready" ]; then
+            break
+        fi
+
+        if ! kill -0 "$WORKLOAD_PID" 2>/dev/null; then
+            break
+        fi
+
+        sleep 0.001
+    done
+
+    setsid sh -c "PINCHY_LOW_LATENCY_FLUSH=1 \
+        $PINCHY -p $WORKLOAD_PID -e open -e openat -e openat2 -e read -e close \
+        >\"$OUTDIR/pinchy.stdout\" 2>\"$OUTDIR/pinchy.stderr\"; \
+        echo \$? >\"$OUTDIR/pinchy.exit\"" &
+    CLIENT_PID=$!
+
+    sleep 0.2
+
+    touch "$OUTDIR/latency_workload_start"
+
+    for _ in $(seq 1 2000); do
+        if [ -f "$OUTDIR/latency_open_trigger_ns" ]; then
+            break
+        fi
+
+        if ! kill -0 "$WORKLOAD_PID" 2>/dev/null; then
+            break
+        fi
+
+        if ! kill -0 "$CLIENT_PID" 2>/dev/null; then
+            break
+        fi
+
+        sleep 0.001
+    done
+
+    first_print_seen=0
+
+    while kill -0 "$WORKLOAD_PID" 2>/dev/null; do
+        if [ "$first_print_seen" -eq 0 ] && [ -f "$OUTDIR/pinchy.stdout" ]; then
+            if grep -q 'pathname: "/etc/passwd"' "$OUTDIR/pinchy.stdout"; then
+                date +%s%N >"$OUTDIR/latency_first_print_ns"
+                first_print_seen=1
+            fi
+        fi
+
+        sleep 0.001
+    done
+
+    wait "$WORKLOAD_PID" 2>/dev/null || true
+
+    date +%s%N >"$OUTDIR/latency_workload_exit_ns"
+
+    if [ "$first_print_seen" -eq 0 ] && [ -f "$OUTDIR/pinchy.stdout" ]; then
+        if grep -q 'pathname: "/etc/passwd"' "$OUTDIR/pinchy.stdout"; then
+            date +%s%N >"$OUTDIR/latency_first_print_ns"
+            first_print_seen=1
+        fi
+    fi
+
+    wait "$CLIENT_PID" 2>/dev/null || true
+
+    if [ ! -f "$OUTDIR/pinchy.exit" ]; then
+        echo "1" >"$OUTDIR/pinchy.exit"
+    fi
+
+    if [ -f "$OUTDIR/latency_first_print_ns" ] \
+        && [ -f "$OUTDIR/latency_open_trigger_ns" ]; then
+        first_ns="$(cat "$OUTDIR/latency_first_print_ns")"
+        trigger_ns="$(cat "$OUTDIR/latency_open_trigger_ns")"
+
+        if [ "$first_ns" -ge "$trigger_ns" ]; then
+            echo $(( (first_ns - trigger_ns) / 1000000 )) \
+                >"$OUTDIR/latency_first_print_ms"
+        fi
+    fi
+
+    kill -INT "$PINCHYD_PID" 2>/dev/null || true
+    wait "$PINCHYD_PID" 2>/dev/null
+    echo $? >"$OUTDIR/pinchyd.exit"
+}
+
 case "$PINCHY_TEST_MODE" in
     standard)
         run_standard
@@ -409,6 +514,9 @@ case "$PINCHY_TEST_MODE" in
         ;;
     auto_quit_after_client)
         run_auto_quit_after_client
+        ;;
+    latency_probe)
+        run_latency_probe
         ;;
     benchmark)
         run_benchmark

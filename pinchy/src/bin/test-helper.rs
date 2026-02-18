@@ -13,6 +13,7 @@ use std::{
     ffi::{c_void, CString},
     fs,
     path::PathBuf,
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use anyhow::bail;
@@ -89,6 +90,7 @@ fn main() -> anyhow::Result<()> {
     if let Some(name) = args.next() {
         match name.as_str() {
             "pinchy_reads" => pinchy_reads(),
+            "latency_open_hold" => latency_open_hold(),
             "benchmark_trace_loop" => benchmark_trace_loop(),
             "benchmark_basic_io_wave1" => benchmark_basic_io_wave1(),
             "benchmark_basic_io_wave2" => benchmark_basic_io_wave2(),
@@ -489,6 +491,79 @@ fn pinchy_reads() -> anyhow::Result<()> {
             libc::close(fd_error);
         }
     }
+    Ok(())
+}
+
+fn now_ns() -> anyhow::Result<u64> {
+    let duration = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|e| anyhow::anyhow!("system clock before UNIX_EPOCH: {e}"))?;
+
+    Ok(duration.as_nanos() as u64)
+}
+
+fn latency_open_hold() -> anyhow::Result<()> {
+    let outdir = std::env::var("PINCHY_LATENCY_OUTDIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|_| PathBuf::from("/tmp"));
+
+    let trigger_path = outdir.join("latency_open_trigger_ns");
+    let ready_path = outdir.join("latency_workload_ready");
+    let start_path = outdir.join("latency_workload_start");
+    let done_path = outdir.join("latency_workload_done_ns");
+
+    let ready_ns = now_ns()?;
+    fs::write(&ready_path, format!("{ready_ns}\n"))?;
+
+    let mut saw_start = false;
+
+    for _ in 0..500 {
+        if start_path.exists() {
+            saw_start = true;
+            break;
+        }
+
+        std::thread::sleep(Duration::from_millis(10));
+    }
+
+    if !saw_start {
+        bail!(
+            "latency workload did not receive start signal: {}",
+            start_path.display()
+        );
+    }
+
+    let trigger_ns = now_ns()?;
+    fs::write(&trigger_path, format!("{trigger_ns}\n"))?;
+
+    unsafe {
+        let fd = libc::open(c"/etc/passwd".as_ptr(), libc::O_RDONLY);
+
+        if fd < 0 {
+            bail!("open(/etc/passwd) failed");
+        }
+
+        let mut buf = [0u8; 64];
+        let read_result = libc::read(fd, buf.as_mut_ptr() as *mut c_void, buf.len());
+
+        if read_result < 0 {
+            let _ = libc::close(fd);
+            bail!("read(/etc/passwd) failed");
+        }
+
+        let close_result = libc::close(fd);
+
+        if close_result != 0 {
+            bail!("close(/etc/passwd) failed");
+        }
+    }
+
+    std::thread::sleep(Duration::from_secs(2));
+
+    let done_ns = now_ns()?;
+    fs::write(&done_path, format!("{done_ns}\n"))?;
+    std::thread::sleep(Duration::from_millis(200));
+
     Ok(())
 }
 

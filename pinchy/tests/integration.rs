@@ -2161,6 +2161,50 @@ fn auto_quit_after_client_timing() {
     Assert::new(output).success();
 }
 
+#[test]
+fn latency_open_printed_before_exit() {
+    let pinchy = PinchyTest::with_mode(TestMode::LatencyProbe);
+
+    let trigger_ns = pinchy
+        .read_timestamp("latency_open_trigger_ns")
+        .expect("missing latency_open_trigger_ns");
+
+    let first_print_ns = pinchy
+        .read_timestamp("latency_first_print_ns")
+        .expect("missing latency_first_print_ns");
+
+    let workload_exit_ns = pinchy
+        .read_timestamp("latency_workload_exit_ns")
+        .expect("missing latency_workload_exit_ns");
+
+    let first_print_ms = pinchy
+        .read_timestamp("latency_first_print_ms")
+        .expect("missing latency_first_print_ms");
+
+    assert!(
+        first_print_ns >= trigger_ns,
+        "first print timestamp ({first_print_ns}) is before trigger \
+         ({trigger_ns})"
+    );
+
+    assert!(
+        first_print_ns < workload_exit_ns,
+        "first print timestamp ({first_print_ns}) should be before \
+         workload exit ({workload_exit_ns})"
+    );
+
+    assert!(
+        first_print_ms <= 200,
+        "first print latency {first_print_ms}ms exceeds expected \
+         200ms threshold"
+    );
+
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 // Tests for syscall aliases - these verify that users can use aliased names
 // and get the same behavior as using canonical names
 

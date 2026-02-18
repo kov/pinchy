@@ -38,6 +38,7 @@ pub enum TestMode {
     CheckCaps,
     AutoQuit,
     AutoQuitAfterClient,
+    LatencyProbe,
 }
 
 impl TestMode {
@@ -48,6 +49,7 @@ impl TestMode {
             TestMode::CheckCaps => "check_caps",
             TestMode::AutoQuit => "auto_quit",
             TestMode::AutoQuitAfterClient => "auto_quit_after_client",
+            TestMode::LatencyProbe => "latency_probe",
         }
     }
 }

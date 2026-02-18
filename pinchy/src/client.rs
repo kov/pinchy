@@ -2,7 +2,7 @@
 // Copyright (c) 2025 Gustavo Noronha Silva <gustavo@noronha.dev.br>
 
 #![allow(non_snake_case, non_upper_case_globals)]
-use std::{ffi::OsString, os::fd::OwnedFd, pin::Pin};
+use std::{ffi::OsString, io::IsTerminal, os::fd::OwnedFd, pin::Pin};
 
 use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
@@ -29,6 +29,9 @@ trait Pinchy {
     fn trace_pid(&self, pid: u32, syscalls: Vec<i64>) -> zbus::Result<zbus::zvariant::OwnedFd>;
 }
 
+const DEFAULT_STDOUT_FLUSH_BYTES: usize = 1;
+const DEFAULT_NON_TTY_FLUSH_BYTES: usize = 65536;
+
 fn parse_syscall_names(names: &[String]) -> Result<Vec<i64>, String> {
     let mut out = Vec::new();
     for name in names {
@@ -39,6 +42,22 @@ fn parse_syscall_names(names: &[String]) -> Result<Vec<i64>, String> {
         }
     }
     Ok(out)
+}
+
+fn parse_stdout_flush_bytes() -> usize {
+    std::env::var("PINCHY_STDOUT_FLUSH_BYTES")
+        .ok()
+        .and_then(|value| value.parse::<usize>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(DEFAULT_STDOUT_FLUSH_BYTES)
+}
+
+fn low_latency_flush_enabled() -> bool {
+    if let Ok(value) = std::env::var("PINCHY_LOW_LATENCY_FLUSH") {
+        return value == "1" || value.eq_ignore_ascii_case("true");
+    }
+
+    std::io::stdout().is_terminal()
 }
 
 #[derive(Parser, Debug)]
@@ -108,9 +127,17 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
     let mut header_buf = [0u8; std::mem::size_of::<WireEventHeader>()];
     let mut payload = Vec::new();
     let max_payload_size = max_compact_payload_size();
+    let low_latency_flush = low_latency_flush_enabled();
+    let flush_bytes = if low_latency_flush {
+        parse_stdout_flush_bytes()
+    } else {
+        DEFAULT_NON_TTY_FLUSH_BYTES
+    };
+    let mut pending_flush_bytes = 0usize;
 
     let mut output: Vec<u8> = vec![];
-    loop {
+
+    let read_result = loop {
         match reader.read_exact(&mut header_buf).await {
             Ok(_) => {
                 let header: WireEventHeader = unsafe {
@@ -146,10 +173,18 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
                 events::handle_event(&header, &payload, formatter).await?;
 
                 stdout.write_all(&output).await?;
+                pending_flush_bytes += output.len();
+
+                if pending_flush_bytes >= flush_bytes {
+                    stdout.flush().await?;
+                    pending_flush_bytes = 0;
+                }
             }
-            Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-            Err(e) => return Err(e.into()),
+            Err(ref e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break Ok(()),
+            Err(e) => break Err(e.into()),
         }
-    }
-    Ok(stdout.flush().await?)
+    };
+    stdout.flush().await?;
+
+    read_result
 }

@@ -630,6 +630,8 @@ impl EventDispatch {
         let event_dispatch = shared_dispatch.clone();
         let event_stats = stats.clone();
         tokio::spawn(async move {
+            let mut dispatch_batch: Vec<(WireEventHeader, Arc<[u8]>)> = Vec::with_capacity(256);
+
             loop {
                 tokio::select! {
                     // Read events from eBPF ring buffer
@@ -642,6 +644,7 @@ impl EventDispatch {
 
                                 let ring = guard.get_inner_mut();
                                 let dispatch = event_dispatch.read().await;
+                                dispatch_batch.clear();
 
                                 while let Some(item) = ring.next() {
                                     let event = &*item;
@@ -661,8 +664,13 @@ impl EventDispatch {
                                     event_stats.framed_event(framed_event.len());
 
                                     log::trace!("Read {} bytes from ringbuf...", event.len());
+                                    dispatch_batch.push((header, framed_event));
+                                }
+
+                                for (header, framed_event) in dispatch_batch.drain(..) {
                                     dispatch.dispatch_event(header, framed_event);
                                 }
+
                                 guard.clear_ready();
                             }
                             Err(e) => {

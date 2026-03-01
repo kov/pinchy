@@ -448,6 +448,8 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_keyctl => Some(core::mem::size_of::<KeyctlData>()),
         syscalls::SYS_perf_event_open => Some(core::mem::size_of::<PerfEventOpenData>()),
         syscalls::SYS_bpf => Some(core::mem::size_of::<BpfData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_arch_prctl => Some(core::mem::size_of::<ArchPrctlData>()),
         syscalls::SYS_syslog => Some(core::mem::size_of::<SyslogData>()),
         syscalls::SYS_restart_syscall => Some(core::mem::size_of::<RestartSyscallData>()),
         syscalls::SYS_kexec_load => Some(core::mem::size_of::<KexecLoadData>()),
@@ -3259,6 +3261,15 @@ pub struct PerfEventOpenData {
     pub cpu: i32,
     pub group_fd: i32,
     pub flags: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ArchPrctlData {
+    pub code: i32,
+    pub addr: usize,
+    pub has_val: bool, // Whether we successfully read the value (for GET operations)
+    pub val: usize,    // The returned/used value
 }
 
 #[repr(C)]

@@ -77,3 +77,39 @@ syscall_test!(
     },
     "1234 generic_parse_test(0, 1, 2, 3, 4, 5) = 42 <STUB>\n"
 );
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_arch_prctl_set_fs,
+    {
+        use pinchy_common::{syscalls::SYS_arch_prctl, ArchPrctlData};
+
+        let data = ArchPrctlData {
+            code: pinchy_common::kernel_types::ARCH_SET_FS as i32,
+            addr: 0x7f8a1b2c3d4e,
+            has_val: false,
+            val: 0,
+        };
+
+        crate::tests::make_compact_test_data(SYS_arch_prctl, 5678, 0, &data)
+    },
+    "5678 arch_prctl(ARCH_SET_FS, 0x7f8a1b2c3d4e, val: (unavailable)) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_arch_prctl_get_fs,
+    {
+        use pinchy_common::{syscalls::SYS_arch_prctl, ArchPrctlData};
+
+        let data = ArchPrctlData {
+            code: pinchy_common::kernel_types::ARCH_GET_FS as i32,
+            addr: 0x7f8a1b2c3d4e,
+            has_val: true,
+            val: 0xffffffffff600000,
+        };
+
+        crate::tests::make_compact_test_data(SYS_arch_prctl, 9012, 0, &data)
+    },
+    "9012 arch_prctl(ARCH_GET_FS, 0x7f8a1b2c3d4e, val: 0xffffffffff600000) = 0 (success)\n"
+);

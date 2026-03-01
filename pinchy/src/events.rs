@@ -2816,6 +2816,31 @@ pub async fn handle_event(
 
             finish!(sf, header.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_arch_prctl => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ArchPrctlData)
+            };
+
+            // Format the operation code
+            match data.code {
+                pinchy_common::kernel_types::ARCH_SET_FS => arg!(sf, "ARCH_SET_FS"),
+                pinchy_common::kernel_types::ARCH_SET_GS => arg!(sf, "ARCH_SET_GS"),
+                pinchy_common::kernel_types::ARCH_GET_FS => arg!(sf, "ARCH_GET_FS"),
+                pinchy_common::kernel_types::ARCH_GET_GS => arg!(sf, "ARCH_GET_GS"),
+                _ => argf!(sf, "UNKNOWN_CODE(0x{:x})", data.code),
+            }
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+
+            if data.has_val {
+                argf!(sf, "val: 0x{:x}", data.val);
+            } else {
+                arg!(sf, "val: (unavailable)");
+            }
+
+            finish!(sf, header.return_value);
+        }
         syscalls::SYS_fallocate => {
             let data = unsafe {
                 std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FallocateData)

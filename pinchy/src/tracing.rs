@@ -434,14 +434,13 @@ impl WriterTask {
 
                 },
                 _ = sleep(Duration::from_millis(WRITER_FLUSH_POLL_MS)) => {
-                    if self.event_rx.is_empty() {
-                        if self.writer.flush().await.is_err() {
+                    if self.event_rx.is_empty()
+                        && self.writer.flush().await.is_err() {
                             self.stats.writer_flush_error();
 
                             log::trace!("Writer task ended: flush error");
                             break;
                         }
-                    }
 
                     // FIXME: there must be a better, more high level way of identifying the other end
                     // of the pipe got closed? I tried a 0-sized write followed by a flush, I suppose the

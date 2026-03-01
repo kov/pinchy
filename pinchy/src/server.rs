@@ -748,6 +748,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_sethostname,
         syscalls::SYS_setdomainname,
         syscalls::SYS_prctl,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_arch_prctl,
         syscalls::SYS_landlock_create_ruleset,
         syscalls::SYS_landlock_add_rule,
         syscalls::SYS_landlock_restrict_self,

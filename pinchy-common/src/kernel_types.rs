@@ -927,3 +927,10 @@ pub struct KexecSegment {
     pub mem: u64,   // Physical address of kernel (void* as u64)
     pub memsz: u64, // Physical address length (size_t as u64)
 }
+
+// Constants for arch_prctl syscall (x86_64 specific)
+/// Control the fs and gs segments on x86_64
+pub const ARCH_SET_FS: i32 = 0x1002;
+pub const ARCH_SET_GS: i32 = 0x1003;
+pub const ARCH_GET_FS: i32 = 0x1004;
+pub const ARCH_GET_GS: i32 = 0x1005;

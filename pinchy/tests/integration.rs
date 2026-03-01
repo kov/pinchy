@@ -1036,6 +1036,48 @@ fn prctl_syscalls() {
         .stdout(predicate::str::ends_with("Exiting...\n"));
 }
 
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn arch_prctl_syscalls() {
+    let pinchy = PinchyTest::new();
+
+    // Run a workload that exercises arch_prctl syscalls (x86_64 only)
+    let handle = run_workload(&pinchy, &["prctl"], "prctl_test");
+
+    // Expected output - includes x86_64 specific arch_prctl operations
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ prctl(PR_SET_NAME, @ADDR@) = 0 (success)
+        @PID@ prctl(PR_GET_NAME, @ADDR@) = 0 (success)
+        @PID@ prctl(PR_GET_DUMPABLE) = @NUMBER@
+        @PID@ prctl(PR_SET_DUMPABLE, 0x0) = 0 (success)
+        @PID@ prctl(PR_GET_DUMPABLE) = 0 (success)
+        @PID@ prctl(PR_SET_DUMPABLE, 0x1) = 0 (success)
+        @PID@ prctl(PR_CAPBSET_READ, 0x15) = @NUMBER@
+        @PID@ prctl(PR_CAPBSET_DROP, 0x15) = 0 (success)
+        @PID@ prctl(PR_GET_KEEPCAPS) = 0 (success)
+        @PID@ prctl(PR_SET_KEEPCAPS, 0x1) = 0 (success)
+        @PID@ arch_prctl(ARCH_GET_FS, 0x@HEXNUMBER@, val: 0x@ADDR@) = 0 (success)
+        @PID@ arch_prctl(ARCH_SET_FS, 0x@HEXNUMBER@, val: (unavailable)) = 0 (success)
+        @PID@ arch_prctl(ARCH_GET_GS, 0x@HEXNUMBER@, val: 0x@ADDR@) = 0 (success)
+        @PID@ arch_prctl(ARCH_SET_GS, 0x@HEXNUMBER@, val: (unavailable)) = 0 (success)
+    "#});
+
+    let output = handle.join().unwrap();
+    // Uncomment for debugging:
+    // use std::io::Write;
+    // std::io::stderr().write_all(&output.stderr).unwrap();
+    // std::io::stderr().write_all(&output.stdout).unwrap();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
 #[test]
 fn ioprio_syscalls() {
     let pinchy = PinchyTest::new();

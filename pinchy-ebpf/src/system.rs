@@ -6,6 +6,8 @@ use aya_ebpf::{
     macros::tracepoint,
     programs::TracePointContext,
 };
+#[cfg(x86_64)]
+use pinchy_common::ArchPrctlData;
 use pinchy_common::{
     kernel_types::{
         self, CapUserData, CapUserHeader, LandlockNetPortAttr, LandlockPathBeneathAttr, Rlimit,
@@ -411,6 +413,35 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
                     return_value,
                     |payload| {
                         payload.args = args;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_arch_prctl => {
+                submit_compact_payload::<ArchPrctlData, _>(
+                    &ctx,
+                    syscalls::SYS_arch_prctl,
+                    return_value,
+                    |payload| {
+                        payload.code = args[0] as i32;
+                        payload.addr = args[1];
+
+                        // For GET operations (ARCH_GET_FS, ARCH_GET_GS), read the value from addr
+                        match payload.code {
+                            pinchy_common::kernel_types::ARCH_GET_FS
+                            | pinchy_common::kernel_types::ARCH_GET_GS => {
+                                let val_ptr = args[1] as *const usize;
+                                if !val_ptr.is_null() {
+                                    if let Ok(val) =
+                                        unsafe { bpf_probe_read_user::<usize>(val_ptr) }
+                                    {
+                                        payload.val = val;
+                                        payload.has_val = true;
+                                    }
+                                }
+                            }
+                            _ => {}
+                        }
                     },
                 )?;
             }

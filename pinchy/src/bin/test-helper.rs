@@ -4373,6 +4373,50 @@ fn prctl_test() -> anyhow::Result<()> {
         // This may fail for non-root users, which is fine for testing
     }
 
+    #[cfg(target_arch = "x86_64")]
+    {
+        // Test x86_64 specific arch_prctl syscalls
+        use std::mem;
+
+        // For ARCH_SET_FS and ARCH_GET_FS
+        let mut fs_base: usize = 0;
+        // First get the current FS base value
+        unsafe {
+            if libc::arch_prctl(libc::ARCH_GET_FS, &mut fs_base as *mut _ as *mut _) == 0 {
+                eprintln!("Got FS_BASE: 0x{:x}", fs_base);
+            }
+
+            // Try to set a new value (this may fail in some environments)
+            let result = libc::arch_prctl(libc::ARCH_SET_FS, fs_base as *mut _);
+            if result == 0 {
+                eprintln!("Successfully set FS_BASE back");
+            } else {
+                eprintln!(
+                    "Setting FS_BASE failed (expected in containers): {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+        }
+
+        // For ARCH_SET_GS and ARCH_GET_GS
+        let mut gs_base: usize = 0;
+        unsafe {
+            if libc::arch_prctl(libc::ARCH_GET_GS, &mut gs_base as *mut _ as *mut _) == 0 {
+                eprintln!("Got GS_BASE: 0x{:x}", gs_base);
+            }
+
+            let result = libc::arch_prctl(libc::ARCH_SET_GS, gs_base as *mut _);
+            if result == 0 {
+                eprintln!("Successfully set GS_BASE back");
+            } else {
+                eprintln!(
+                    "Setting GS_BASE failed (expected in containers): {}",
+                    std::io::Error::last_os_error()
+                );
+            }
+        }
+    }
+
     Ok(())
 }
 

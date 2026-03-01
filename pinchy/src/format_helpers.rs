@@ -2672,6 +2672,12 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
 
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_arch_prctl => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
         // Time adjustment syscalls - return clock state
         syscalls::SYS_adjtimex | syscalls::SYS_clock_adjtime => {
             if return_value < 0 {

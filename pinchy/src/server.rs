@@ -454,6 +454,54 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fork,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_vfork,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_fadvise64,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_arch_prctl,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_ioperm,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_iopl,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_time,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_kexec_file_load,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_get_thread_area,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_set_thread_area,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_modify_ldt,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_uselib,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_ustat,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_sysfs,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS__sysctl,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_create_module,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_get_kernel_syms,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_query_module,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_getpmsg,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_putpmsg,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_afs_syscall,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_tuxcall,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_security,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_epoll_ctl_old,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_epoll_wait_old,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_vserver,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
@@ -671,6 +719,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_tee,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_sendfile,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_open,
         syscalls::SYS_vmsplice,
         // Async I/O syscalls
         syscalls::SYS_io_setup,

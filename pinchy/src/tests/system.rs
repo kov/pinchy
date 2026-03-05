@@ -1558,3 +1558,100 @@ syscall_test!(
     },
     "123 kexec_load(entry: 0x80000000, nr_segments: 2, segments: [{buf: 0x1000, bufsz: 4096, mem: 0x100000, memsz: 4096}, {buf: 0x2000, bufsz: 8192, mem: 0x200000, memsz: 8192}], flags: 0) = 0 (success)\n"
 );
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_fadvise64,
+    {
+        use pinchy_common::Fadvise64Data;
+
+        let data = Fadvise64Data {
+            fd: 3,
+            offset: 0,
+            len: 4096,
+            advice: libc::POSIX_FADV_SEQUENTIAL,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fadvise64, 100, 0, &data)
+    },
+    "100 fadvise64(fd: 3, offset: 0, len: 4096, advice: POSIX_FADV_SEQUENTIAL) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_arch_prctl,
+    {
+        use pinchy_common::ArchPrctlData;
+
+        let data = ArchPrctlData {
+            code: crate::format_helpers::ARCH_SET_FS,
+            addr: 0x7f1234567890,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_arch_prctl, 100, 0, &data)
+    },
+    "100 arch_prctl(code: ARCH_SET_FS, addr: 0x7f1234567890) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_ioperm,
+    {
+        use pinchy_common::IopermData;
+
+        let data = IopermData {
+            from: 0x378,
+            num: 3,
+            turn_on: 1,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_ioperm, 100, 0, &data)
+    },
+    "100 ioperm(from: 888, num: 3, turn_on: 1) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_iopl,
+    {
+        use pinchy_common::IoplData;
+
+        let data = IoplData { level: 3 };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_iopl, 100, 0, &data)
+    },
+    "100 iopl(level: 3) = 0 (success)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_deprecated_syscall,
+    {
+        use pinchy_common::DeprecatedSyscallData;
+
+        let data = DeprecatedSyscallData {
+            args: [0x1234, 0x5678, 0, 0, 0, 0],
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_tuxcall, 100, -1, &data)
+    },
+    "100 tuxcall(0x1234, 0x5678) = -1 (error)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_time,
+    {
+        use pinchy_common::TimeData;
+
+        let data = TimeData { tloc: 0 };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_time,
+            100,
+            1709571600,
+            &data,
+        )
+    },
+    "100 time(tloc: NULL) = 1709571600\n"
+);

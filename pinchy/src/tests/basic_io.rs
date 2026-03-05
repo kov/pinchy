@@ -25,7 +25,7 @@ use pinchy_common::{
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
-    syscalls::{SYS_dup2, SYS_epoll_create, SYS_poll, SYS_sendfile},
+    syscalls::{SYS_dup2, SYS_epoll_create, SYS_open, SYS_poll, SYS_sendfile},
     Dup2Data, EpollCreateData, PollData, SendfileData,
 };
 
@@ -941,4 +941,22 @@ syscall_test!(
         make_compact_test_data(SYS_sendfile, 401, 4096, &data)
     },
     "401 sendfile(out_fd: 5, in_fd: 3, offset: NULL, count: 8192) = 4096 (bytes)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
+    parse_open,
+    {
+        let mut data = OpenAtData {
+            dfd: libc::AT_FDCWD,
+            pathname: [0u8; DATA_READ_SIZE],
+            flags: libc::O_RDONLY,
+            mode: 0o644,
+        };
+        let path = b"/tmp/test.txt";
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        make_compact_test_data(SYS_open, 100, 3, &data)
+    },
+    "100 open(pathname: \"/tmp/test.txt\", flags: 0x0 (O_RDONLY), mode: 0o644 (rw-r--r--)) = 3 (fd)\n"
 );

@@ -2529,6 +2529,26 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             }
         }
 
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_uselib
+        | syscalls::SYS_ustat
+        | syscalls::SYS_sysfs
+        | syscalls::SYS__sysctl
+        | syscalls::SYS_create_module
+        | syscalls::SYS_get_kernel_syms
+        | syscalls::SYS_query_module
+        | syscalls::SYS_getpmsg
+        | syscalls::SYS_putpmsg
+        | syscalls::SYS_afs_syscall
+        | syscalls::SYS_tuxcall
+        | syscalls::SYS_security
+        | syscalls::SYS_epoll_ctl_old
+        | syscalls::SYS_epoll_wait_old
+        | syscalls::SYS_vserver => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
         syscalls::SYS_kcmp => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (equal)"),
             1 => std::borrow::Cow::Borrowed("1 (less than)"),

@@ -5709,7 +5709,7 @@ pub async fn handle_event(
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_get_thread_area | syscalls::SYS_set_thread_area => {
             let data = unsafe {
-                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetThreadAreaData)
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ThreadAreaData)
             };
 
             argf!(sf, "u_info: 0x{:x}", data.u_info);
@@ -5748,10 +5748,10 @@ pub async fn handle_event(
                 )
             };
 
-            for arg in &data.args {
-                if *arg != 0 {
-                    argf!(sf, "0x{:x}", arg);
-                }
+            let last_nonzero = data.args.iter().rposition(|a| *a != 0).map_or(0, |i| i + 1);
+
+            for arg in &data.args[..last_nonzero] {
+                argf!(sf, "0x{:x}", arg);
             }
             finish!(sf, header.return_value);
         }

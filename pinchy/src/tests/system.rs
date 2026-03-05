@@ -1640,6 +1640,21 @@ syscall_test!(
 
 #[cfg(target_arch = "x86_64")]
 syscall_test!(
+    parse_deprecated_syscall_with_zero_arg,
+    {
+        use pinchy_common::DeprecatedSyscallData;
+
+        let data = DeprecatedSyscallData {
+            args: [0x1234, 0, 0x5678, 0, 0, 0],
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_ustat, 100, -38, &data)
+    },
+    "100 ustat(0x1234, 0x0, 0x5678) = -38 (error)\n"
+);
+
+#[cfg(target_arch = "x86_64")]
+syscall_test!(
     parse_time,
     {
         use pinchy_common::TimeData;

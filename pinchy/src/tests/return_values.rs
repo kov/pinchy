@@ -216,3 +216,20 @@ fn test_clock_adjtime_return_values() {
         "-95 (error)"
     );
 }
+
+#[cfg(target_arch = "x86_64")]
+#[test]
+fn test_deprecated_syscall_return_values() {
+    assert_eq!(
+        format_return_value(syscalls::SYS_tuxcall, 0).as_ref(),
+        "0 (success)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_tuxcall, -38).as_ref(),
+        "-38 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_sysfs, 2).as_ref(),
+        "2 (success)"
+    );
+}

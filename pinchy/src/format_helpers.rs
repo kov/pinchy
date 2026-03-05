@@ -2544,10 +2544,13 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_security
         | syscalls::SYS_epoll_ctl_old
         | syscalls::SYS_epoll_wait_old
-        | syscalls::SYS_vserver => match return_value {
-            0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
-        },
+        | syscalls::SYS_vserver => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (success)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
 
         syscalls::SYS_kcmp => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (equal)"),

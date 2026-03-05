@@ -271,9 +271,9 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         #[cfg(x86_64)]
         syscalls::SYS_kexec_file_load => Some(core::mem::size_of::<KexecFileLoadData>()),
         #[cfg(x86_64)]
-        syscalls::SYS_get_thread_area => Some(core::mem::size_of::<GetThreadAreaData>()),
-        #[cfg(x86_64)]
-        syscalls::SYS_set_thread_area => Some(core::mem::size_of::<SetThreadAreaData>()),
+        syscalls::SYS_get_thread_area | syscalls::SYS_set_thread_area => {
+            Some(core::mem::size_of::<ThreadAreaData>())
+        }
         #[cfg(x86_64)]
         syscalls::SYS_modify_ldt => Some(core::mem::size_of::<ModifyLdtData>()),
         #[cfg(x86_64)]
@@ -3715,9 +3715,9 @@ pub struct FutimesatData {
 #[derive(Clone, Copy)]
 pub struct Fadvise64Data {
     pub fd: i32,
+    pub advice: i32,
     pub offset: i64,
     pub len: i64,
-    pub advice: i32,
 }
 
 #[repr(C)]
@@ -3759,13 +3759,7 @@ pub struct KexecFileLoadData {
 
 #[repr(C)]
 #[derive(Clone, Copy)]
-pub struct GetThreadAreaData {
-    pub u_info: u64,
-}
-
-#[repr(C)]
-#[derive(Clone, Copy)]
-pub struct SetThreadAreaData {
+pub struct ThreadAreaData {
     pub u_info: u64,
 }
 

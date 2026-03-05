@@ -18,8 +18,8 @@ use pinchy_common::EFF_STAT_COUNT;
 use pinchy_common::{syscalls, FchmodData, FchownData, FdatasyncData, FsyncData, FtruncateData};
 #[cfg(x86_64)]
 use pinchy_common::{
-    ArchPrctlData, DeprecatedSyscallData, Fadvise64Data, GetThreadAreaData, IopermData, IoplData,
-    KexecFileLoadData, ModifyLdtData, SetThreadAreaData, TimeData,
+    ArchPrctlData, DeprecatedSyscallData, Fadvise64Data, IopermData, IoplData, KexecFileLoadData,
+    ModifyLdtData, ThreadAreaData, TimeData,
 };
 
 use crate::util::{get_args, get_syscall_nr, submit_compact_payload};
@@ -1195,9 +1195,9 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     return_value,
                     |payload| {
                         payload.fd = args[0] as i32;
+                        payload.advice = args[3] as i32;
                         payload.offset = args[1] as i64;
                         payload.len = args[2] as i64;
-                        payload.advice = args[3] as i32;
                     },
                 )?;
             }
@@ -1264,21 +1264,10 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                 )?;
             }
             #[cfg(x86_64)]
-            syscalls::SYS_get_thread_area => {
-                crate::util::submit_compact_payload::<GetThreadAreaData, _>(
+            syscalls::SYS_get_thread_area | syscalls::SYS_set_thread_area => {
+                crate::util::submit_compact_payload::<ThreadAreaData, _>(
                     &ctx,
-                    syscalls::SYS_get_thread_area,
-                    return_value,
-                    |payload| {
-                        payload.u_info = args[0] as u64;
-                    },
-                )?;
-            }
-            #[cfg(x86_64)]
-            syscalls::SYS_set_thread_area => {
-                crate::util::submit_compact_payload::<SetThreadAreaData, _>(
-                    &ctx,
-                    syscalls::SYS_set_thread_area,
+                    syscall_nr,
                     return_value,
                     |payload| {
                         payload.u_info = args[0] as u64;

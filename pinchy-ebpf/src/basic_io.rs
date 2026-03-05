@@ -65,6 +65,28 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                     },
                 )?;
             }
+            #[cfg(x86_64)]
+            syscalls::SYS_open => {
+                submit_compact_payload::<OpenAtData, _>(
+                    &ctx,
+                    syscalls::SYS_open,
+                    return_value,
+                    |payload| {
+                        payload.dfd = pinchy_common::AT_FDCWD;
+                        payload.flags = args[1] as i32;
+                        payload.mode = args[2] as u32;
+
+                        let pathname_ptr = args[0] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(
+                                pathname_ptr as *const _,
+                                &mut payload.pathname,
+                            );
+                        }
+                    },
+                )?;
+            }
             syscalls::SYS_read => {
                 submit_compact_payload::<ReadData, _>(
                     &ctx,

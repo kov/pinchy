@@ -2508,6 +2508,27 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
         },
 
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_fadvise64
+        | syscalls::SYS_arch_prctl
+        | syscalls::SYS_ioperm
+        | syscalls::SYS_iopl
+        | syscalls::SYS_set_thread_area
+        | syscalls::SYS_get_thread_area
+        | syscalls::SYS_kexec_file_load => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+        },
+
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_modify_ldt => {
+            if return_value >= 0 {
+                std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
+            } else {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            }
+        }
+
         syscalls::SYS_kcmp => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (equal)"),
             1 => std::borrow::Cow::Borrowed("1 (less than)"),
@@ -2694,7 +2715,9 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_getpriority => std::borrow::Cow::Owned(return_value.to_string()),
 
         #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_alarm => std::borrow::Cow::Owned(return_value.to_string()),
+        syscalls::SYS_alarm | syscalls::SYS_time => {
+            std::borrow::Cow::Owned(return_value.to_string())
+        }
 
         // Process-related syscalls - show success or error
         syscalls::SYS_kill
@@ -6369,4 +6392,37 @@ pub fn format_kexec_load_flags(flags: u64) -> Cow<'static, str> {
     }
 
     format!("0x{:x} ({})", flags, parts.join("|")).into()
+}
+
+#[cfg(target_arch = "x86_64")]
+pub fn format_fadvise_advice(advice: i32) -> &'static str {
+    match advice {
+        libc::POSIX_FADV_NORMAL => "POSIX_FADV_NORMAL",
+        libc::POSIX_FADV_SEQUENTIAL => "POSIX_FADV_SEQUENTIAL",
+        libc::POSIX_FADV_RANDOM => "POSIX_FADV_RANDOM",
+        libc::POSIX_FADV_NOREUSE => "POSIX_FADV_NOREUSE",
+        libc::POSIX_FADV_WILLNEED => "POSIX_FADV_WILLNEED",
+        libc::POSIX_FADV_DONTNEED => "POSIX_FADV_DONTNEED",
+        _ => "UNKNOWN",
+    }
+}
+
+#[cfg(target_arch = "x86_64")]
+pub(crate) const ARCH_SET_GS: i32 = 0x1001;
+#[cfg(target_arch = "x86_64")]
+pub(crate) const ARCH_SET_FS: i32 = 0x1002;
+#[cfg(target_arch = "x86_64")]
+pub(crate) const ARCH_GET_FS: i32 = 0x1003;
+#[cfg(target_arch = "x86_64")]
+pub(crate) const ARCH_GET_GS: i32 = 0x1004;
+
+#[cfg(target_arch = "x86_64")]
+pub fn format_arch_prctl_code(code: i32) -> Cow<'static, str> {
+    match code {
+        ARCH_SET_GS => Cow::Borrowed("ARCH_SET_GS"),
+        ARCH_SET_FS => Cow::Borrowed("ARCH_SET_FS"),
+        ARCH_GET_FS => Cow::Borrowed("ARCH_GET_FS"),
+        ARCH_GET_GS => Cow::Borrowed("ARCH_GET_GS"),
+        _ => Cow::Owned(format!("0x{code:x}")),
+    }
 }

@@ -5629,6 +5629,132 @@ pub async fn handle_event(
 
             finish!(sf, header.return_value);
         }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_open => {
+            let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const OpenAtData) };
+
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "flags: {}", format_flags(data.flags));
+            argf!(sf, "mode: {}", format_mode(data.mode));
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_fadvise64 => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Fadvise64Data)
+            };
+
+            argf!(sf, "fd: {}", data.fd);
+            argf!(sf, "offset: {}", data.offset);
+            argf!(sf, "len: {}", data.len);
+            argf!(sf, "advice: {}", format_fadvise_advice(data.advice));
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_arch_prctl => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ArchPrctlData)
+            };
+
+            argf!(sf, "code: {}", format_arch_prctl_code(data.code));
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_ioperm => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IopermData)
+            };
+
+            argf!(sf, "from: {}", data.from);
+            argf!(sf, "num: {}", data.num);
+            argf!(sf, "turn_on: {}", data.turn_on);
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_iopl => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::IoplData)
+            };
+
+            argf!(sf, "level: {}", data.level);
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_time => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::TimeData)
+            };
+
+            if data.tloc == 0 {
+                argf!(sf, "tloc: NULL");
+            } else {
+                argf!(sf, "tloc: 0x{:x}", data.tloc);
+            }
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_kexec_file_load => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::KexecFileLoadData)
+            };
+
+            argf!(sf, "kernel_fd: {}", data.kernel_fd);
+            argf!(sf, "initrd_fd: {}", data.initrd_fd);
+            argf!(sf, "cmdline_len: {}", data.cmdline_len);
+            argf!(sf, "cmdline: 0x{:x}", data.cmdline);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_get_thread_area | syscalls::SYS_set_thread_area => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::GetThreadAreaData)
+            };
+
+            argf!(sf, "u_info: 0x{:x}", data.u_info);
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_modify_ldt => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ModifyLdtData)
+            };
+
+            argf!(sf, "func: {}", data.func);
+            argf!(sf, "ptr: 0x{:x}", data.ptr);
+            argf!(sf, "bytecount: {}", data.bytecount);
+            finish!(sf, header.return_value);
+        }
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_uselib
+        | syscalls::SYS_ustat
+        | syscalls::SYS_sysfs
+        | syscalls::SYS__sysctl
+        | syscalls::SYS_create_module
+        | syscalls::SYS_get_kernel_syms
+        | syscalls::SYS_query_module
+        | syscalls::SYS_getpmsg
+        | syscalls::SYS_putpmsg
+        | syscalls::SYS_afs_syscall
+        | syscalls::SYS_tuxcall
+        | syscalls::SYS_security
+        | syscalls::SYS_epoll_ctl_old
+        | syscalls::SYS_epoll_wait_old
+        | syscalls::SYS_vserver => {
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::DeprecatedSyscallData
+                )
+            };
+
+            for arg in &data.args {
+                if *arg != 0 {
+                    argf!(sf, "0x{:x}", arg);
+                }
+            }
+            finish!(sf, header.return_value);
+        }
         _ => {
             let data = unsafe {
                 std::ptr::read_unaligned(

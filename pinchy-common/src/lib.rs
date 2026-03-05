@@ -11,6 +11,8 @@ use crate::kernel_types::{EpollEvent, LandlockRuleAttrUnion, Timespec};
 pub mod kernel_types;
 pub mod syscalls;
 
+pub const AT_FDCWD: i32 = -100;
+
 pub const LARGER_READ_SIZE: usize = 256;
 pub const DATA_READ_SIZE: usize = 128;
 pub const MEDIUM_READ_SIZE: usize = 64;
@@ -254,6 +256,42 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_utimes => Some(core::mem::size_of::<UtimesData>()),
         #[cfg(x86_64)]
         syscalls::SYS_futimesat => Some(core::mem::size_of::<FutimesatData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_open => Some(core::mem::size_of::<OpenAtData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_fadvise64 => Some(core::mem::size_of::<Fadvise64Data>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_arch_prctl => Some(core::mem::size_of::<ArchPrctlData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_ioperm => Some(core::mem::size_of::<IopermData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_iopl => Some(core::mem::size_of::<IoplData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_time => Some(core::mem::size_of::<TimeData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_kexec_file_load => Some(core::mem::size_of::<KexecFileLoadData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_get_thread_area => Some(core::mem::size_of::<GetThreadAreaData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_set_thread_area => Some(core::mem::size_of::<SetThreadAreaData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_modify_ldt => Some(core::mem::size_of::<ModifyLdtData>()),
+        #[cfg(x86_64)]
+        syscalls::SYS_uselib
+        | syscalls::SYS_ustat
+        | syscalls::SYS_sysfs
+        | syscalls::SYS__sysctl
+        | syscalls::SYS_create_module
+        | syscalls::SYS_get_kernel_syms
+        | syscalls::SYS_query_module
+        | syscalls::SYS_getpmsg
+        | syscalls::SYS_putpmsg
+        | syscalls::SYS_afs_syscall
+        | syscalls::SYS_tuxcall
+        | syscalls::SYS_security
+        | syscalls::SYS_epoll_ctl_old
+        | syscalls::SYS_epoll_wait_old
+        | syscalls::SYS_vserver => Some(core::mem::size_of::<DeprecatedSyscallData>()),
         syscalls::SYS_shmget => Some(core::mem::size_of::<ShmgetData>()),
         syscalls::SYS_shmat => Some(core::mem::size_of::<ShmatData>()),
         syscalls::SYS_shmdt => Some(core::mem::size_of::<ShmdtData>()),
@@ -3671,4 +3709,76 @@ pub struct FutimesatData {
     pub pathname: [u8; SMALL_READ_SIZE],
     pub times: [kernel_types::Timeval; 2],
     pub times_is_null: u8,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct Fadvise64Data {
+    pub fd: i32,
+    pub offset: i64,
+    pub len: i64,
+    pub advice: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ArchPrctlData {
+    pub code: i32,
+    pub addr: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IopermData {
+    pub from: u64,
+    pub num: u64,
+    pub turn_on: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct IoplData {
+    pub level: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct TimeData {
+    pub tloc: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct KexecFileLoadData {
+    pub kernel_fd: i32,
+    pub initrd_fd: i32,
+    pub cmdline_len: u64,
+    pub cmdline: u64,
+    pub flags: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct GetThreadAreaData {
+    pub u_info: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct SetThreadAreaData {
+    pub u_info: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ModifyLdtData {
+    pub func: i32,
+    pub ptr: u64,
+    pub bytecount: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct DeprecatedSyscallData {
+    pub args: [u64; 6],
 }

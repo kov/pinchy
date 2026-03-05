@@ -16,6 +16,11 @@ use aya_log_ebpf::{error, trace};
 #[cfg(feature = "efficiency-metrics")]
 use pinchy_common::EFF_STAT_COUNT;
 use pinchy_common::{syscalls, FchmodData, FchownData, FdatasyncData, FsyncData, FtruncateData};
+#[cfg(x86_64)]
+use pinchy_common::{
+    ArchPrctlData, DeprecatedSyscallData, Fadvise64Data, GetThreadAreaData, IopermData, IoplData,
+    KexecFileLoadData, ModifyLdtData, SetThreadAreaData, TimeData,
+};
 
 use crate::util::{get_args, get_syscall_nr, submit_compact_payload};
 
@@ -1179,6 +1184,149 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                         payload.len = args[1] as u64;
                         payload.home_node = args[2] as u64;
                         payload.flags = args[3] as u64;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_fadvise64 => {
+                crate::util::submit_compact_payload::<Fadvise64Data, _>(
+                    &ctx,
+                    syscalls::SYS_fadvise64,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.offset = args[1] as i64;
+                        payload.len = args[2] as i64;
+                        payload.advice = args[3] as i32;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_arch_prctl => {
+                crate::util::submit_compact_payload::<ArchPrctlData, _>(
+                    &ctx,
+                    syscalls::SYS_arch_prctl,
+                    return_value,
+                    |payload| {
+                        payload.code = args[0] as i32;
+                        payload.addr = args[1] as u64;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_ioperm => {
+                crate::util::submit_compact_payload::<IopermData, _>(
+                    &ctx,
+                    syscalls::SYS_ioperm,
+                    return_value,
+                    |payload| {
+                        payload.from = args[0] as u64;
+                        payload.num = args[1] as u64;
+                        payload.turn_on = args[2] as i32;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_iopl => {
+                crate::util::submit_compact_payload::<IoplData, _>(
+                    &ctx,
+                    syscalls::SYS_iopl,
+                    return_value,
+                    |payload| {
+                        payload.level = args[0] as i32;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_time => {
+                crate::util::submit_compact_payload::<TimeData, _>(
+                    &ctx,
+                    syscalls::SYS_time,
+                    return_value,
+                    |payload| {
+                        payload.tloc = args[0] as u64;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_kexec_file_load => {
+                crate::util::submit_compact_payload::<KexecFileLoadData, _>(
+                    &ctx,
+                    syscalls::SYS_kexec_file_load,
+                    return_value,
+                    |payload| {
+                        payload.kernel_fd = args[0] as i32;
+                        payload.initrd_fd = args[1] as i32;
+                        payload.cmdline_len = args[2] as u64;
+                        payload.cmdline = args[3] as u64;
+                        payload.flags = args[4] as u64;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_get_thread_area => {
+                crate::util::submit_compact_payload::<GetThreadAreaData, _>(
+                    &ctx,
+                    syscalls::SYS_get_thread_area,
+                    return_value,
+                    |payload| {
+                        payload.u_info = args[0] as u64;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_set_thread_area => {
+                crate::util::submit_compact_payload::<SetThreadAreaData, _>(
+                    &ctx,
+                    syscalls::SYS_set_thread_area,
+                    return_value,
+                    |payload| {
+                        payload.u_info = args[0] as u64;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_modify_ldt => {
+                crate::util::submit_compact_payload::<ModifyLdtData, _>(
+                    &ctx,
+                    syscalls::SYS_modify_ldt,
+                    return_value,
+                    |payload| {
+                        payload.func = args[0] as i32;
+                        payload.ptr = args[1] as u64;
+                        payload.bytecount = args[2] as u64;
+                    },
+                )?;
+            }
+            #[cfg(x86_64)]
+            syscalls::SYS_uselib
+            | syscalls::SYS_ustat
+            | syscalls::SYS_sysfs
+            | syscalls::SYS__sysctl
+            | syscalls::SYS_create_module
+            | syscalls::SYS_get_kernel_syms
+            | syscalls::SYS_query_module
+            | syscalls::SYS_getpmsg
+            | syscalls::SYS_putpmsg
+            | syscalls::SYS_afs_syscall
+            | syscalls::SYS_tuxcall
+            | syscalls::SYS_security
+            | syscalls::SYS_epoll_ctl_old
+            | syscalls::SYS_epoll_wait_old
+            | syscalls::SYS_vserver => {
+                crate::util::submit_compact_payload::<DeprecatedSyscallData, _>(
+                    &ctx,
+                    syscall_nr,
+                    return_value,
+                    |payload| {
+                        payload.args = [
+                            args[0] as u64,
+                            args[1] as u64,
+                            args[2] as u64,
+                            args[3] as u64,
+                            args[4] as u64,
+                            args[5] as u64,
+                        ];
                     },
                 )?;
             }

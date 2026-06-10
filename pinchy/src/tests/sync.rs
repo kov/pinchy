@@ -129,3 +129,65 @@ syscall_test!(
     },
     "123 get_robust_list(pid: 1234, head: (content unavailable), len: (content unavailable)) = -22 (EINVAL: Invalid argument)\n"
 );
+
+syscall_test!(
+    parse_futex_wake,
+    {
+        let data = pinchy_common::FutexWakeData {
+            uaddr: 0xbeef,
+            mask: u32::MAX as u64,
+            nr: 1,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_futex_wake, 42, 1, &data)
+    },
+    "42 futex_wake(uaddr: 0xbeef, mask: 0xffffffff, nr: 1, flags: 0) = 1 (woken)\n"
+);
+
+syscall_test!(
+    parse_futex_wait,
+    {
+        let data = pinchy_common::FutexWaitData {
+            uaddr: 0xbeef,
+            val: 0,
+            mask: u32::MAX as u64,
+            flags: 0,
+            has_timeout: true,
+            timeout: Timespec {
+                seconds: 1,
+                nanos: 500,
+            },
+            clockid: libc::CLOCK_MONOTONIC,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_futex_wait, 42, 0, &data)
+    },
+    "42 futex_wait(uaddr: 0xbeef, val: 0, mask: 0xffffffff, flags: 0, timeout: { secs: 1, nanos: 500 }, clockid: CLOCK_MONOTONIC) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_futex_requeue,
+    {
+        let mut data = pinchy_common::FutexRequeueData {
+            waiters: [FutexWaitv::default(); pinchy_common::FUTEX_REQUEUE_WAITERS],
+            has_waiters: true,
+            flags: 0,
+            nr_wake: 1,
+            nr_requeue: 1,
+        };
+
+        data.waiters[0].uaddr = 0xbeef;
+        data.waiters[0].val = 1;
+        data.waiters[1].uaddr = 0xbeef2;
+        data.waiters[1].val = 2;
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_futex_requeue,
+            42,
+            1,
+            &data,
+        )
+    },
+    "42 futex_requeue(waiters: [ waiter { uaddr: 0xbeef, val: 1, flags: 0 }, waiter { uaddr: 0xbeef2, val: 2, flags: 0 } ], flags: 0, nr_wake: 1, nr_requeue: 1) = 1 (woken)\n"
+);

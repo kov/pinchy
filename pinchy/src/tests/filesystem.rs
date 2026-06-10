@@ -3105,3 +3105,91 @@ syscall_test!(
     },
     "200 getdents(fd: 3, count: 1024, entries: [ dirent { ino: 12345, off: 24, reclen: 24, name: \".\" }, dirent { ino: 12346, off: 48, reclen: 24, name: \"..\" } ]) = 48 (bytes)\n"
 );
+
+syscall_test!(
+    parse_fchmodat2,
+    {
+        let mut data = pinchy_common::FchmodatData {
+            dirfd: libc::AT_FDCWD,
+            pathname: [0u8; pinchy_common::DATA_READ_SIZE],
+            mode: 0o644,
+            flags: libc::AT_SYMLINK_NOFOLLOW,
+        };
+
+        let path = b"/tmp/test.txt";
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_fchmodat2, 100, 0, &data)
+    },
+    "100 fchmodat2(dirfd: AT_FDCWD, pathname: \"/tmp/test.txt\", mode: 0o644 (rw-r--r--), flags: AT_SYMLINK_NOFOLLOW (0x100)) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_cachestat,
+    {
+        let data = pinchy_common::CachestatData {
+            fd: 3,
+            flags: 0,
+            range: pinchy_common::kernel_types::CachestatRange { off: 0, len: 4096 },
+            has_range: true,
+            cstat: pinchy_common::kernel_types::Cachestat {
+                nr_cache: 1,
+                nr_dirty: 0,
+                nr_writeback: 0,
+                nr_evicted: 2,
+                nr_recently_evicted: 1,
+            },
+            has_cstat: true,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_cachestat, 100, 0, &data)
+    },
+    "100 cachestat(fd: 3, range: { off: 0, len: 4096 }, cstat: { nr_cache: 1, nr_dirty: 0, nr_writeback: 0, nr_evicted: 2, nr_recently_evicted: 1 }, flags: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_statmount,
+    {
+        let data = pinchy_common::StatmountData {
+            req: pinchy_common::kernel_types::MntIdReq {
+                size: core::mem::size_of::<pinchy_common::kernel_types::MntIdReq>() as u32,
+                spare: 0,
+                mnt_id: 4242,
+                param: 0x1,
+                mnt_ns_id: 1,
+            },
+            has_req: true,
+            buf: 0x7fff1000,
+            bufsize: 4096,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_statmount, 100, 0, &data)
+    },
+    "100 statmount(req: { mnt_id: 4242, param: 0x1, mnt_ns_id: 1 }, buf: 0x7fff1000, bufsize: 4096, flags: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_listmount,
+    {
+        let mut data = pinchy_common::ListmountData {
+            req: pinchy_common::kernel_types::MntIdReq {
+                size: core::mem::size_of::<pinchy_common::kernel_types::MntIdReq>() as u32,
+                spare: 0,
+                mnt_id: 4242,
+                param: 0,
+                mnt_ns_id: 0,
+            },
+            has_req: true,
+            mnt_ids: [0u64; pinchy_common::LISTMOUNT_COUNT],
+            nr_mnt_ids: 16,
+            flags: 0,
+        };
+
+        data.mnt_ids[0] = 100;
+        data.mnt_ids[1] = 101;
+
+        crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_listmount, 100, 2, &data)
+    },
+    "100 listmount(req: { mnt_id: 4242, param: 0x0, mnt_ns_id: 0 }, mnt_ids: [ 100, 101 ], nr_mnt_ids: 16, flags: 0x0) = 2 (entries)\n"
+);

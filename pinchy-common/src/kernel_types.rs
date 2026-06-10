@@ -927,3 +927,35 @@ pub struct KexecSegment {
     pub mem: u64,   // Physical address of kernel (void* as u64)
     pub memsz: u64, // Physical address length (size_t as u64)
 }
+
+/// Matches the kernel's struct cachestat_range from the cachestat syscall.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct CachestatRange {
+    pub off: u64,
+    pub len: u64,
+}
+
+/// Matches the kernel's struct cachestat from the cachestat syscall.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct Cachestat {
+    pub nr_cache: u64,
+    pub nr_dirty: u64,
+    pub nr_writeback: u64,
+    pub nr_evicted: u64,
+    pub nr_recently_evicted: u64,
+}
+
+/// Matches the kernel's struct mnt_id_req used by statmount/listmount.
+/// mnt_ns_id only exists from MNT_ID_REQ_SIZE_VER1 (32 bytes) on; check the
+/// size field before trusting it.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct MntIdReq {
+    pub size: u32,
+    pub spare: u32,
+    pub mnt_id: u64,
+    pub param: u64,
+    pub mnt_ns_id: u64,
+}

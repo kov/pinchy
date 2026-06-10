@@ -179,6 +179,13 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_ftruncate => Some(core::mem::size_of::<FtruncateData>()),
         syscalls::SYS_fchmod => Some(core::mem::size_of::<FchmodData>()),
         syscalls::SYS_fchmodat => Some(core::mem::size_of::<FchmodatData>()),
+        syscalls::SYS_fchmodat2 => Some(core::mem::size_of::<FchmodatData>()),
+        syscalls::SYS_cachestat => Some(core::mem::size_of::<CachestatData>()),
+        syscalls::SYS_futex_wake => Some(core::mem::size_of::<FutexWakeData>()),
+        syscalls::SYS_futex_wait => Some(core::mem::size_of::<FutexWaitData>()),
+        syscalls::SYS_futex_requeue => Some(core::mem::size_of::<FutexRequeueData>()),
+        syscalls::SYS_statmount => Some(core::mem::size_of::<StatmountData>()),
+        syscalls::SYS_listmount => Some(core::mem::size_of::<ListmountData>()),
         syscalls::SYS_fchown => Some(core::mem::size_of::<FchownData>()),
         syscalls::SYS_fchownat => Some(core::mem::size_of::<FchownatData>()),
         syscalls::SYS_renameat => Some(core::mem::size_of::<RenameatData>()),
@@ -3771,4 +3778,71 @@ pub struct ModifyLdtData {
 #[derive(Clone, Copy)]
 pub struct DeprecatedSyscallData {
     pub args: [u64; 6],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct CachestatData {
+    pub fd: i32,
+    pub flags: u32,
+    pub range: kernel_types::CachestatRange,
+    pub has_range: bool,
+    pub cstat: kernel_types::Cachestat,
+    pub has_cstat: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FutexWakeData {
+    pub uaddr: u64,
+    pub mask: u64,
+    pub nr: i32,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FutexWaitData {
+    pub uaddr: u64,
+    pub val: u64,
+    pub mask: u64,
+    pub flags: u32,
+    pub has_timeout: bool,
+    pub timeout: kernel_types::Timespec,
+    pub clockid: i32,
+}
+
+// futex_requeue always takes exactly two waiters.
+pub const FUTEX_REQUEUE_WAITERS: usize = 2;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct FutexRequeueData {
+    pub waiters: [kernel_types::FutexWaitv; FUTEX_REQUEUE_WAITERS],
+    pub has_waiters: bool,
+    pub flags: u32,
+    pub nr_wake: i32,
+    pub nr_requeue: i32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct StatmountData {
+    pub req: kernel_types::MntIdReq,
+    pub has_req: bool,
+    pub buf: u64,
+    pub bufsize: u64,
+    pub flags: u64,
+}
+
+pub const LISTMOUNT_COUNT: usize = 16;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ListmountData {
+    pub req: kernel_types::MntIdReq,
+    pub has_req: bool,
+    pub mnt_ids: [u64; LISTMOUNT_COUNT],
+    pub nr_mnt_ids: u64,
+    pub flags: u64,
 }

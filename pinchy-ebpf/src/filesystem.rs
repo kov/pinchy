@@ -10,15 +10,41 @@ use aya_log_ebpf::error;
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::LinuxDirent;
 use pinchy_common::{
-    kernel_types::{LinuxDirent64, Stat},
-    syscalls, ChdirData, FaccessatData, FchmodatData, FchownatData, FgetxattrData, FlistxattrData,
-    FremovexattrData, FsetxattrData, FstatData, FstatfsData, GetcwdData, GetxattrData,
-    LgetxattrData, LinkatData, ListxattrData, LlistxattrData, LremovexattrData, LsetxattrData,
-    MkdiratData, NewfstatatData, ReadlinkatData, RemovexattrData, Renameat2Data, RenameatData,
-    SetxattrData, StatfsData, SymlinkatData, UnlinkatData, DATA_READ_SIZE,
+    kernel_types::{Cachestat, CachestatRange, LinuxDirent64, MntIdReq, Stat},
+    syscalls, CachestatData, ChdirData, FaccessatData, FchmodatData, FchownatData, FgetxattrData,
+    FlistxattrData, FremovexattrData, FsetxattrData, FstatData, FstatfsData, GetcwdData,
+    GetxattrData, LgetxattrData, LinkatData, ListmountData, ListxattrData, LlistxattrData,
+    LremovexattrData, LsetxattrData, MkdiratData, NewfstatatData, ReadlinkatData, RemovexattrData,
+    Renameat2Data, RenameatData, SetxattrData, StatfsData, StatmountData, SymlinkatData,
+    UnlinkatData, DATA_READ_SIZE,
 };
 
 use crate::{util, util::submit_compact_payload};
+
+// struct mnt_id_req is size-versioned: copy only as many bytes as the
+// caller's struct declares, so the trace never captures unrelated user
+// memory past a smaller (older) struct.
+#[inline(always)]
+fn read_mnt_id_req(req_ptr: *const MntIdReq, dst: &mut MntIdReq) -> bool {
+    if req_ptr.is_null() {
+        return false;
+    }
+
+    let Ok(size) = (unsafe { bpf_probe_read_user(req_ptr as *const u32) }) else {
+        return false;
+    };
+
+    let to_copy = core::cmp::min(size as usize, core::mem::size_of::<MntIdReq>());
+
+    let bytes = unsafe {
+        core::slice::from_raw_parts_mut(
+            dst as *mut MntIdReq as *mut u8,
+            core::mem::size_of::<MntIdReq>(),
+        )
+    };
+
+    unsafe { bpf_probe_read_user_buf(req_ptr as *const u8, &mut bytes[..to_copy]) }.is_ok()
+}
 
 #[tracepoint]
 pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
@@ -567,6 +593,92 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                         unsafe {
                             let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_fchmodat2 => {
+                submit_compact_payload::<FchmodatData, _>(
+                    &ctx,
+                    syscalls::SYS_fchmodat2,
+                    return_value,
+                    |payload| {
+                        payload.dirfd = args[0] as i32;
+                        payload.mode = args[2] as u32;
+                        payload.flags = args[3] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_cachestat => {
+                submit_compact_payload::<CachestatData, _>(
+                    &ctx,
+                    syscalls::SYS_cachestat,
+                    return_value,
+                    |payload| {
+                        payload.fd = args[0] as i32;
+                        payload.flags = args[3] as u32;
+
+                        let range_ptr = args[1] as *const CachestatRange;
+                        if !range_ptr.is_null() {
+                            if let Ok(range) = unsafe { bpf_probe_read_user(range_ptr) } {
+                                payload.range = range;
+                                payload.has_range = true;
+                            }
+                        }
+
+                        let cstat_ptr = args[2] as *const Cachestat;
+                        if return_value == 0 && !cstat_ptr.is_null() {
+                            if let Ok(cstat) = unsafe { bpf_probe_read_user(cstat_ptr) } {
+                                payload.cstat = cstat;
+                                payload.has_cstat = true;
+                            }
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_statmount => {
+                submit_compact_payload::<StatmountData, _>(
+                    &ctx,
+                    syscalls::SYS_statmount,
+                    return_value,
+                    |payload| {
+                        payload.buf = args[1] as u64;
+                        payload.bufsize = args[2] as u64;
+                        payload.flags = args[3] as u64;
+
+                        payload.has_req =
+                            read_mnt_id_req(args[0] as *const MntIdReq, &mut payload.req);
+                    },
+                )?;
+            }
+            syscalls::SYS_listmount => {
+                submit_compact_payload::<ListmountData, _>(
+                    &ctx,
+                    syscalls::SYS_listmount,
+                    return_value,
+                    |payload| {
+                        payload.nr_mnt_ids = args[2] as u64;
+                        payload.flags = args[3] as u64;
+
+                        payload.has_req =
+                            read_mnt_id_req(args[0] as *const MntIdReq, &mut payload.req);
+
+                        let ids_ptr = args[1] as *const u64;
+                        if return_value > 0 && !ids_ptr.is_null() {
+                            let count =
+                                core::cmp::min(return_value as usize, payload.mnt_ids.len());
+                            for i in 0..count {
+                                let ptr = unsafe { ids_ptr.add(i) };
+                                if let Ok(id) = unsafe { bpf_probe_read_user::<u64>(ptr) } {
+                                    payload.mnt_ids[i] = id;
+                                }
+                            }
                         }
                     },
                 )?;

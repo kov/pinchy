@@ -34,6 +34,50 @@ pub fn syscall_exit_sync(ctx: TracePointContext) -> u32 {
                     },
                 )?;
             }
+            syscalls::SYS_futex_wait => {
+                crate::util::submit_compact_payload::<pinchy_common::FutexWaitData, _>(
+                    &ctx,
+                    syscalls::SYS_futex_wait,
+                    return_value,
+                    |payload| {
+                        payload.uaddr = args[0] as u64;
+                        payload.val = args[1] as u64;
+                        payload.mask = args[2] as u64;
+                        payload.flags = args[3] as u32;
+
+                        let timeout_ptr = args[4] as *const Timespec;
+                        payload.has_timeout = !timeout_ptr.is_null();
+                        if payload.has_timeout {
+                            payload.timeout = crate::util::read_timespec(timeout_ptr);
+                        }
+
+                        payload.clockid = args[5] as i32;
+                    },
+                )?;
+            }
+            syscalls::SYS_futex_requeue => {
+                crate::util::submit_compact_payload::<pinchy_common::FutexRequeueData, _>(
+                    &ctx,
+                    syscalls::SYS_futex_requeue,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[1] as u32;
+                        payload.nr_wake = args[2] as i32;
+                        payload.nr_requeue = args[3] as i32;
+
+                        let waiters_ptr = args[0] as *const FutexWaitv;
+                        if !waiters_ptr.is_null() {
+                            payload.has_waiters = true;
+                            for (i, waiter) in payload.waiters.iter_mut().enumerate() {
+                                let ptr = unsafe { waiters_ptr.add(i) };
+                                if let Ok(val) = unsafe { bpf_probe_read_user::<FutexWaitv>(ptr) } {
+                                    *waiter = val;
+                                }
+                            }
+                        }
+                    },
+                )?;
+            }
             syscalls::SYS_futex_waitv => {
                 crate::util::submit_compact_payload::<pinchy_common::FutexWaitvData, _>(
                     &ctx,

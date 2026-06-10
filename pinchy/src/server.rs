@@ -461,6 +461,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fchmod,
         syscalls::SYS_fchown,
         syscalls::SYS_flock,
+        syscalls::SYS_futex_wake,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_create,
         syscalls::SYS_epoll_create1,
@@ -647,6 +648,10 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_lremovexattr,
         syscalls::SYS_fremovexattr,
         syscalls::SYS_fchmodat,
+        syscalls::SYS_fchmodat2,
+        syscalls::SYS_cachestat,
+        syscalls::SYS_statmount,
+        syscalls::SYS_listmount,
         syscalls::SYS_fchownat,
         syscalls::SYS_renameat,
         syscalls::SYS_renameat2,
@@ -912,6 +917,8 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     const SYNC_SYSCALLS: &[i64] = &[
         syscalls::SYS_futex,
         syscalls::SYS_futex_waitv,
+        syscalls::SYS_futex_wait,
+        syscalls::SYS_futex_requeue,
         syscalls::SYS_get_robust_list,
     ];
     let sync_prog: &mut aya::programs::TracePoint = ebpf

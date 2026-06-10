@@ -1559,7 +1559,6 @@ syscall_test!(
     "123 kexec_load(entry: 0x80000000, nr_segments: 2, segments: [{buf: 0x1000, bufsz: 4096, mem: 0x100000, memsz: 4096}, {buf: 0x2000, bufsz: 8192, mem: 0x200000, memsz: 8192}], flags: 0) = 0 (success)\n"
 );
 
-#[cfg(target_arch = "x86_64")]
 syscall_test!(
     parse_fadvise64,
     {
@@ -1669,4 +1668,27 @@ syscall_test!(
         )
     },
     "100 time(tloc: NULL) = 1709571600\n"
+);
+
+syscall_test!(
+    parse_kexec_file_load,
+    {
+        use pinchy_common::KexecFileLoadData;
+
+        let data = KexecFileLoadData {
+            kernel_fd: 4,
+            initrd_fd: 5,
+            cmdline_len: 12,
+            cmdline: 0x7fff1234,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_kexec_file_load,
+            100,
+            0,
+            &data,
+        )
+    },
+    "100 kexec_file_load(kernel_fd: 4, initrd_fd: 5, cmdline_len: 12, cmdline: 0x7fff1234, flags: 0x0) = 0 (success)\n"
 );

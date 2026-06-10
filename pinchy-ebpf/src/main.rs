@@ -15,11 +15,14 @@ use aya_ebpf::{
 use aya_log_ebpf::{error, trace};
 #[cfg(feature = "efficiency-metrics")]
 use pinchy_common::EFF_STAT_COUNT;
-use pinchy_common::{syscalls, FchmodData, FchownData, FdatasyncData, FsyncData, FtruncateData};
+use pinchy_common::{
+    syscalls, Fadvise64Data, FchmodData, FchownData, FdatasyncData, FsyncData, FtruncateData,
+    KexecFileLoadData,
+};
 #[cfg(x86_64)]
 use pinchy_common::{
-    ArchPrctlData, DeprecatedSyscallData, Fadvise64Data, IopermData, IoplData, KexecFileLoadData,
-    ModifyLdtData, ThreadAreaData, TimeData,
+    ArchPrctlData, DeprecatedSyscallData, IopermData, IoplData, ModifyLdtData, ThreadAreaData,
+    TimeData,
 };
 
 use crate::util::{get_args, get_syscall_nr, submit_compact_payload};
@@ -1187,7 +1190,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     },
                 )?;
             }
-            #[cfg(x86_64)]
             syscalls::SYS_fadvise64 => {
                 crate::util::submit_compact_payload::<Fadvise64Data, _>(
                     &ctx,
@@ -1248,7 +1250,6 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     },
                 )?;
             }
-            #[cfg(x86_64)]
             syscalls::SYS_kexec_file_load => {
                 crate::util::submit_compact_payload::<KexecFileLoadData, _>(
                     &ctx,

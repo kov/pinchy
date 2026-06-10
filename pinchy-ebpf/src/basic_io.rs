@@ -13,11 +13,11 @@ use pinchy_common::{
         AioSigset, FdSet, IoCb, IoEvent, IoUringParams, OpenHow, Pollfd, Sigset, Timespec,
     },
     syscalls, CloseData, EpollCtlData, EpollPWait2Data, EpollPWaitData, LseekData, OpenAt2Data,
-    OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data, PwriteData, ReadData, SpliceData,
-    TeeData, VectorIOData, VmspliceData, WriteData,
+    OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data, PwriteData, ReadData, SendfileData,
+    SpliceData, TeeData, VectorIOData, VmspliceData, WriteData,
 };
 #[cfg(x86_64)]
-use pinchy_common::{PollData, SelectData, SendfileData};
+use pinchy_common::{PollData, SelectData};
 
 #[cfg(x86_64)]
 use crate::util::read_timeval;
@@ -537,7 +537,6 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                     },
                 )?;
             }
-            #[cfg(x86_64)]
             syscalls::SYS_sendfile => {
                 submit_compact_payload::<SendfileData, _>(
                     &ctx,

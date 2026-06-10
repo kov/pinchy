@@ -151,7 +151,6 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_splice => Some(core::mem::size_of::<SpliceData>()),
         syscalls::SYS_tee => Some(core::mem::size_of::<TeeData>()),
         syscalls::SYS_vmsplice => Some(core::mem::size_of::<VmspliceData>()),
-        #[cfg(x86_64)]
         syscalls::SYS_sendfile => Some(core::mem::size_of::<SendfileData>()),
         syscalls::SYS_fstat => Some(core::mem::size_of::<FstatData>()),
         syscalls::SYS_newfstatat => Some(core::mem::size_of::<NewfstatatData>()),
@@ -258,7 +257,6 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_futimesat => Some(core::mem::size_of::<FutimesatData>()),
         #[cfg(x86_64)]
         syscalls::SYS_open => Some(core::mem::size_of::<OpenAtData>()),
-        #[cfg(x86_64)]
         syscalls::SYS_fadvise64 => Some(core::mem::size_of::<Fadvise64Data>()),
         #[cfg(x86_64)]
         syscalls::SYS_arch_prctl => Some(core::mem::size_of::<ArchPrctlData>()),
@@ -268,7 +266,6 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_iopl => Some(core::mem::size_of::<IoplData>()),
         #[cfg(x86_64)]
         syscalls::SYS_time => Some(core::mem::size_of::<TimeData>()),
-        #[cfg(x86_64)]
         syscalls::SYS_kexec_file_load => Some(core::mem::size_of::<KexecFileLoadData>()),
         #[cfg(x86_64)]
         syscalls::SYS_get_thread_area | syscalls::SYS_set_thread_area => {

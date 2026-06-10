@@ -53,7 +53,7 @@ fn memory_policy_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -108,7 +108,7 @@ fn epoll_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -175,7 +175,7 @@ fn pinchy_reads() {
     // stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -214,7 +214,7 @@ fn filesystem_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -239,7 +239,7 @@ fn statfs_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -265,7 +265,7 @@ fn rt_sig() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -291,7 +291,7 @@ fn rt_sigaction_realtime() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -317,7 +317,7 @@ fn rt_sigaction_standard() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -345,7 +345,7 @@ fn fcntl_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -383,7 +383,7 @@ fn pipe_operations_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -411,7 +411,7 @@ fn io_uring_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(expected_output).unwrap());
+        .stderr(predicate::str::is_match(expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -459,7 +459,7 @@ fn io_multiplexing_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -500,7 +500,7 @@ fn fchdir_syscall() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -530,7 +530,7 @@ fn filesystem_sync_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -560,7 +560,7 @@ fn network_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -601,7 +601,7 @@ fn socket_introspection_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -629,7 +629,7 @@ fn recvfrom_syscall() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -669,7 +669,7 @@ fn identity_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -708,7 +708,7 @@ fn mmap_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -742,7 +742,7 @@ fn memfd_create_syscall() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -773,7 +773,7 @@ fn madvise_syscall() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -802,7 +802,7 @@ fn mlock_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -853,7 +853,7 @@ fn file_descriptor_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -888,7 +888,7 @@ fn session_process_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -932,7 +932,7 @@ fn uid_gid_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -962,7 +962,7 @@ fn system_operations() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -991,7 +991,7 @@ fn uname_sysinfo_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1028,7 +1028,7 @@ fn prctl_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1057,7 +1057,7 @@ fn ioprio_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1090,7 +1090,7 @@ fn scheduler_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1124,7 +1124,7 @@ fn pread_pwrite_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1153,7 +1153,7 @@ fn readv_writev_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1196,7 +1196,7 @@ fn socket_lifecycle_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1225,7 +1225,7 @@ fn accept_syscall() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1251,7 +1251,7 @@ fn pselect6_syscall() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1303,7 +1303,7 @@ fn eventfd_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1331,7 +1331,7 @@ fn execveat_syscall() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1377,7 +1377,7 @@ fn xattr_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1426,7 +1426,7 @@ fn sysv_ipc_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1462,7 +1462,7 @@ fn socketpair_sendmmsg_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1500,7 +1500,7 @@ fn timer_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -1537,7 +1537,7 @@ fn timerfd_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -1566,7 +1566,7 @@ fn ioctl_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1621,7 +1621,7 @@ fn filesystem_links_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1666,7 +1666,7 @@ fn aio_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1711,7 +1711,7 @@ fn landlock_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1765,7 +1765,7 @@ fn posix_mq_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1806,7 +1806,7 @@ fn key_management_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     // Server output - has to be at the end, since we kill the server for waiting.
     let output = pinchy.wait();
@@ -1832,7 +1832,7 @@ fn perf_event_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -1858,7 +1858,7 @@ fn bpf_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -1887,7 +1887,7 @@ fn fanotify_syscalls() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -1932,7 +1932,7 @@ fn file_handles_syscalls() {
     // std::io::stderr().write_all(&output.stdout).unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -1956,7 +1956,7 @@ fn itimer_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -1983,7 +1983,7 @@ fn syslog_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2006,7 +2006,7 @@ fn ptrace_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2029,7 +2029,7 @@ fn seccomp_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2052,7 +2052,7 @@ fn quotactl_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2080,7 +2080,7 @@ fn process_identity_test() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2130,7 +2130,6 @@ fn auto_quit_after_client() {
     let output = pinchy.wait();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::contains("Currently serving: 0"))
         .stdout(predicate::str::contains(
             "Pinchy has been idle for a while, shutting down",
         ))
@@ -2227,7 +2226,7 @@ fn signal_alias_sigprocmask() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2252,7 +2251,7 @@ fn signal_alias_sigaction() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2280,7 +2279,7 @@ fn aarch64_alias_open() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2305,7 +2304,7 @@ fn aarch64_alias_stat() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)
@@ -2331,7 +2330,7 @@ fn mixed_aliases_and_canonical() {
     let output = handle.join().unwrap();
     Assert::new(output)
         .success()
-        .stdout(predicate::str::is_match(&expected_output).unwrap());
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
 
     let output = pinchy.wait();
     Assert::new(output)

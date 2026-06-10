@@ -355,7 +355,9 @@ async fn main() -> anyhow::Result<()> {
     let ctrl_c = signal::ctrl_c();
     let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
 
-    debug!("Waiting for SIGINT/SIGTERM...");
+    // Deliberate readiness marker: the UML test runner (and anything else
+    // that needs to know the service is up) waits for this exact line.
+    println!("Pinchy daemon ready");
     tokio::select! {
         result = ctrl_c => {
             debug!("SIGINT received...");

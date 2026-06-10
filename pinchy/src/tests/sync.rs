@@ -54,7 +54,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_set_robust_list, 1234, -22, &data)
     },
-    "1234 set_robust_list(head: 0x7f1234560000, len: 0) = -22 (error)\n"
+    "1234 set_robust_list(head: 0x7f1234560000, len: 0) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -127,5 +127,5 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_get_robust_list, 123, -22, &data)
     },
-    "123 get_robust_list(pid: 1234, head: (content unavailable), len: (content unavailable)) = -22 (error)\n"
+    "123 get_robust_list(pid: 1234, head: (content unavailable), len: (content unavailable)) = -22 (EINVAL: Invalid argument)\n"
 );

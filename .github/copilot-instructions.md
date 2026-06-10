@@ -122,6 +122,7 @@ Integration tests and helpers live in:
 | `@MAYBEITEM_@` | `([^ "]+ )?` |
 | `@MAYBETRUNCATED@` | `( ... (truncated))?` |
 | `@GROUPLIST@` | `[0-9, ]*` |
+| `@ERRNO@` | `-[0-9]+ \([A-Z0-9]+: [^)]*\)` |
 | `@ANY@` | `.+` |
 
 ## Canonical References

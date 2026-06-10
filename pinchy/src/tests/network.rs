@@ -148,7 +148,7 @@ syscall_test!(
         crate::tests::make_compact_test_data(SYS_recvmsg, 555, -1, &data)
     },
     format!(
-        "555 recvmsg(sockfd: 3, msg: {{ name: NULL, iov: NULL, iovlen: 0, control: NULL, flags: 0 }}, flags: 0x2 (MSG_PEEK)) = -1 (error)\n"
+        "555 recvmsg(sockfd: 3, msg: {{ name: NULL, iov: NULL, iovlen: 0, control: NULL, flags: 0 }}, flags: 0x2 (MSG_PEEK)) = -1 (EPERM: Operation not permitted)\n"
     )
 );
 
@@ -255,7 +255,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_accept4, 555, -1, &data)
     },
-    "555 accept4(sockfd: 8, addr: NULL, addrlen: 0, flags: 0x800 (SOCK_NONBLOCK)) = -1 (error)\n"
+    "555 accept4(sockfd: 8, addr: NULL, addrlen: 0, flags: 0x800 (SOCK_NONBLOCK)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -647,7 +647,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_recvfrom, 9999, -1, &data)
     },
-    "9999 recvfrom(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), src_addr: NULL, addrlen: 0) = -1 (error)\n"
+    "9999 recvfrom(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), src_addr: NULL, addrlen: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -722,7 +722,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_sendto, 9999, -1, &data)
     },
-    "9999 sendto(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), dest_addr: NULL, addrlen: 0) = -1 (error)\n"
+    "9999 sendto(sockfd: 4, buf: NULL, size: 256, flags: 0x40 (MSG_DONTWAIT), dest_addr: NULL, addrlen: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -826,7 +826,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_connect, 5678, -1, &data)
     },
-    "5678 connect(sockfd: 5, addr: { family: AF_INET, addr: 192.168.1.100:443 }, addrlen: 16) = -1 (error)\n"
+    "5678 connect(sockfd: 5, addr: { family: AF_INET, addr: 192.168.1.100:443 }, addrlen: 16) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -868,7 +868,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_socket, 9999, -1, &data)
     },
-    "9999 socket(domain: AF_INET6, type: SOCK_RAW, protocol: 1) = -1 (error)\n"
+    "9999 socket(domain: AF_INET6, type: SOCK_RAW, protocol: 1) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -894,7 +894,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_listen, 5678, -1, &data)
     },
-    "5678 listen(sockfd: 7, backlog: 50) = -1 (error)\n"
+    "5678 listen(sockfd: 7, backlog: 50) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -933,7 +933,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_shutdown, 9999, -1, &data)
     },
-    "9999 shutdown(sockfd: 10, how: SHUT_WR) = -1 (error)\n"
+    "9999 shutdown(sockfd: 10, how: SHUT_WR) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -978,7 +978,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_socketpair, 9999, -1, &data)
     },
-    "9999 socketpair(domain: AF_INET, type: SOCK_STREAM, protocol: 0, sv: [?, ?]) = -1 (error)\n"
+    "9999 socketpair(domain: AF_INET, type: SOCK_STREAM, protocol: 0, sv: [?, ?]) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1058,7 +1058,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_getsockname, 9999, -1, &data)
     },
-    "9999 getsockname(sockfd: 8, addr: NULL, addrlen: 0) = -1 (error)\n"
+    "9999 getsockname(sockfd: 8, addr: NULL, addrlen: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1144,7 +1144,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_getpeername, 8888, -1, &data)
     },
-    "8888 getpeername(sockfd: 11, addr: NULL, addrlen: 0) = -1 (error)\n"
+    "8888 getpeername(sockfd: 11, addr: NULL, addrlen: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1245,7 +1245,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_getsockopt, 5678, -1, &data)
     },
-    "5678 getsockopt(sockfd: 9, level: SOL_SOCKET, optname: SO_TYPE, optval: NULL, optlen: 0) = -1 (error)\n"
+    "5678 getsockopt(sockfd: 9, level: SOL_SOCKET, optname: SO_TYPE, optval: NULL, optlen: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(

@@ -40,7 +40,7 @@ fn memory_policy_syscalls() {
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ set_mempolicy(mode: MPOL_DEFAULT, nodemask: NULL, maxnode: 0) = 0 (success)
         @PID@ mbind(addr: @ADDR@, len: 4096, mode: MPOL_PREFERRED, nodemask: [0], maxnode: 1, flags: 0) = @NUMBER@ (success)
-        @PID@ get_mempolicy(mode: NULL, nodemask: NULL, maxnode: 64, addr: @ADDR@, flags: 0x1 (MPOL_F_NODE)) = -@NUMBER@ (error)
+        @PID@ get_mempolicy(mode: NULL, nodemask: NULL, maxnode: 64, addr: @ADDR@, flags: 0x1 (MPOL_F_NODE)) = @ERRNO@
         @PID@ mincore(addr: @ADDR@, length: 8192, vec: [0,0]) = 0 (success)
         @PID@ migrate_pages(pid: @NUMBER@, maxnode: 64, old_nodes: [0], new_nodes: [0]) = 0 (pages not migrated)
         @PID@ move_pages(pid: @NUMBER@, count: 1, pages: [@ADDR@], nodes: [0], status: [-@NUMBER@], flags: 0) = 0 (success)
@@ -167,7 +167,7 @@ fn pinchy_reads() {
         @PID@ read(fd: 3, buf: "", count: 1024) = 0 (bytes)
         @PID@ openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0xc (RESOLVE_BENEATH|RESOLVE_NO_SYMLINKS) }, size: 24) = @NUMBER@ (fd)
         @PID@ openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0 }, size: 24) = @NUMBER@ (fd)
-        @PID@ openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0x4 (RESOLVE_NO_SYMLINKS) }, size: 24) = -2 (error)
+        @PID@ openat2(dfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", how: { flags: 0x0 (O_RDONLY), mode: 0, resolve: 0x4 (RESOLVE_NO_SYMLINKS) }, size: 24) = -2 (ENOENT: No such file or directory)
     "#});
 
     let output = handle.join().unwrap();
@@ -208,7 +208,7 @@ fn filesystem_syscalls() {
         @PID@ newfstatat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", struct stat: { mode: 0o@NUMBER@ (@MODE@), ino: @NUMBER@, dev: @NUMBER@, nlink: @NUMBER@, uid: @NUMBER@, gid: @NUMBER@, size: 18092, blksize: @NUMBER@, blocks: @NUMBER@, atime: @NUMBER@, mtime: @NUMBER@, ctime: @NUMBER@ }, flags: 0) = 0 (success)
         @PID@ faccessat(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK) = 0 (success)
         @PID@ faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/GPLv2", mode: R_OK, flags: 0) = 0 (success)
-        @PID@ faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", mode: R_OK, flags: 0) = -2 (error)
+        @PID@ faccessat2(dirfd: AT_FDCWD, pathname: "pinchy/tests/non-existent-file", mode: R_OK, flags: 0) = -2 (ENOENT: No such file or directory)
     "#});
 
     let output = handle.join().unwrap();
@@ -232,7 +232,7 @@ fn statfs_syscalls() {
     // Expected output - we test both success and error cases
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ statfs(pathname: "pinchy/tests/GPLv2", buf: { type: @ALPHANUM@ (0x@HEXNUMBER@), block_size: @NUMBER@, blocks: @NUMBER@, blocks_free: @NUMBER@, blocks_available: @NUMBER@, files: @NUMBER@, files_free: @NUMBER@, fsid: [@SIGNEDNUMBER@, @SIGNEDNUMBER@], name_max: @NUMBER@, fragment_size: @NUMBER@, mount_flags: 0x@HEXNUMBER@ (@ALPHANUM@) }) = 0 (success)
-        @PID@ statfs(pathname: "/non/existent/path", buf: <unavailable>) = -2 (error)
+        @PID@ statfs(pathname: "/non/existent/path", buf: <unavailable>) = -2 (ENOENT: No such file or directory)
         @PID@ fstatfs(fd: @NUMBER@, buf: { type: @ALPHANUM@ (0x@HEXNUMBER@), block_size: @NUMBER@, blocks: @NUMBER@, blocks_free: @NUMBER@, blocks_available: @NUMBER@, files: @NUMBER@, files_free: @NUMBER@, fsid: [@SIGNEDNUMBER@, @SIGNEDNUMBER@], name_max: @NUMBER@, fragment_size: @NUMBER@, mount_flags: 0x@HEXNUMBER@ (@ALPHANUM@) }) = 0 (success)
     "#});
 
@@ -405,7 +405,7 @@ fn io_uring_syscalls() {
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ io_uring_setup(entries: 8, params_ptr: @ADDR@, params: { sq_entries: 8, cq_entries: 16, flags: 0, sq_thread_cpu: 0, sq_thread_idle: 0, features: 0x@HEXNUMBER@ (IORING_FEAT_SINGLE_MMAP|IORING_FEAT_NODROP|IORING_FEAT_SUBMIT_STABLE|IORING_FEAT_RW_CUR_POS|IORING_FEAT_CUR_PERSONALITY|IORING_FEAT_FAST_POLL|IORING_FEAT_POLL_32BITS|IORING_FEAT_SQPOLL_NONFIXED|IORING_FEAT_EXT_ARG|IORING_FEAT_NATIVE_WORKERS|IORING_FEAT_RSRC_TAGS|IORING_FEAT_CQE_SKIP|IORING_FEAT_LINKED_FILE|IORING_FEAT_REG_REG_RING|IORING_FEAT_RECVSEND_BUNDLE|IORING_FEAT_MIN_TIMEOUT|IORING_FEAT_RW_ATTR|IORING_FEAT_NO_IOWAIT), wq_fd: 0 }) = @NUMBER@ (fd)
         @PID@ io_uring_enter(fd: @NUMBER@, to_submit: 0, min_complete: 0, flags: 0x5 (IORING_ENTER_GETEVENTS|IORING_ENTER_SQ_WAIT), sig: 0x0, sigsz: 0) = @NUMBER@ (submitted)
-        @PID@ io_uring_register(fd: @NUMBER@, opcode: IORING_REGISTER_PROBE, arg: @ADDR@, nr_args: 4) = -@NUMBER@ (error)
+        @PID@ io_uring_register(fd: @NUMBER@, opcode: IORING_REGISTER_PROBE, arg: @ADDR@, nr_args: 4) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -482,6 +482,7 @@ fn escaped_regex(expected_output: &str) -> String {
     escaped = escaped.replace("@MAYBEITEM_@", "([^ \"]+ )?");
     escaped = escaped.replace("@MAYBETRUNCATED@", r"( ... \(truncated\))?");
     escaped = escaped.replace("@GROUPLIST@", r"[0-9, ]*");
+    escaped = escaped.replace("@ERRNO@", r"-[0-9]+ \([A-Z0-9]+: [^)]*\)");
     escaped = escaped.replace("@ANY@", ".+");
     escaped
 }
@@ -697,7 +698,7 @@ fn mmap_syscalls() {
         @PID@ munmap(addr: @ADDR@, length: 4096) = 0 (success)
         @PID@ munmap(addr: 0x12345000, length: 4096) = 0 (success)
         @PID@ munmap(addr: 0x0, length: 4096) = 0 (success)
-        @PID@ munmap(addr: 0x1000, length: 0) = -22 (error)
+        @PID@ munmap(addr: 0x1000, length: 0) = -22 (EINVAL: Invalid argument)
     "#});
 
     let output = handle.join().unwrap();
@@ -762,7 +763,7 @@ fn madvise_syscall() {
         @PID@ madvise(addr: @ADDR@, length: 4096, advice: MADV_WILLNEED (3)) = 0 (success)
         @PID@ madvise(addr: @ADDR@, length: 4096, advice: MADV_DONTNEED (4)) = 0 (success)
         @PID@ madvise(addr: @ADDR@, length: 4096, advice: MADV_NORMAL (0)) = 0 (success)
-        @PID@ madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -12 (error)
+        @PID@ madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -12 (ENOMEM: Cannot allocate memory)
     "#});
 
     let output = handle.join().unwrap();
@@ -1320,7 +1321,7 @@ fn execveat_syscall() {
 
     // Expected output - we should see execveat calls with different arguments and flags
     let expected_output = escaped_regex(indoc! {r#"
-        @PID@ execveat(dirfd: @NUMBER@, pathname: "this-does-not-exist-for-sure", argv: [this-doe, arg1, arg2], envp: [@ALPHANUM@, @ALPHANUM@], flags: 0) = -2 (error)
+        @PID@ execveat(dirfd: @NUMBER@, pathname: "this-does-not-exist-for-sure", argv: [this-doe, arg1, arg2], envp: [@ALPHANUM@, @ALPHANUM@], flags: 0) = -2 (ENOENT: No such file or directory)
     "#});
 
     let output = handle.join().unwrap();
@@ -1366,7 +1367,7 @@ fn xattr_syscalls() {
         @PID@ listxattr(pathname: "/tmp/xattr_test_file", list: [ @MAYBEITEM_@@ALPHANUM@, @ALPHANUM@ ], size: 256) = @NUMBER@
         @PID@ flistxattr(fd: @NUMBER@, list: [ @MAYBEITEM_@@ALPHANUM@, @ALPHANUM@ ], size: 256) = @NUMBER@
         @PID@ getxattr(pathname: "/tmp/xattr_test_file", name: "user.test_attr1", value: "@ALPHANUM@", size: 0) = 12
-        @PID@ getxattr(pathname: "/tmp/xattr_test_file", name: "user.nonexistent", value: @ADDR@, size: 64) = -61 (error)
+        @PID@ getxattr(pathname: "/tmp/xattr_test_file", name: "user.nonexistent", value: @ADDR@, size: 64) = -61 (ENODATA: No data available)
     "#});
 
     let output = handle.join().unwrap();
@@ -1554,7 +1555,7 @@ fn ioctl_syscalls() {
     // Expected output - we should see ioctl calls with different requests
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ ioctl(fd: 3, request: (0x541b) tty::FIONREAD, arg: @ADDR@) = 0 (success)
-        @PID@ ioctl(fd: 3, request: (0xdeadbeef) other::unknown, arg: @ADDR@) = -25 (error)
+        @PID@ ioctl(fd: 3, request: (0xdeadbeef) other::unknown, arg: @ADDR@) = -25 (ENOTTY: Inappropriate ioctl for device)
         @PID@ ioctl(fd: 3, request: (0x5451) tty::FIOCLEX, arg: 0x0) = 0 (success)
     "#});
 
@@ -1600,8 +1601,8 @@ fn filesystem_links_syscalls() {
         @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
         @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
         @PID@ link(oldpath: "/tmp/filesystem_links_target", newpath: "/tmp/filesystem_links_link2") = 0 (success)
-        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: <unavailable>, bufsiz: 256) = -2 (error)
-        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (error)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: <unavailable>, bufsiz: 256) = -2 (ENOENT: No such file or directory)
+        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (ENOENT: No such file or directory)
     "#});
 
     #[cfg(target_arch = "aarch64")]
@@ -1609,8 +1610,8 @@ fn filesystem_links_syscalls() {
         @PID@ symlinkat(target: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, linkpath: "/tmp/filesystem_links_symlink") = 0 (success)
         @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_symlink", buf: "/tmp/filesystem_links_target", bufsiz: 256) = 28
         @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_target", newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_hardlink", flags: 0) = 0 (success)
-        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: <unavailable>, bufsiz: 256) = -2 (error)
-        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (error)
+        @PID@ readlinkat(dirfd: AT_FDCWD, pathname: "/tmp/filesystem_links_nonexistent", buf: <unavailable>, bufsiz: 256) = -2 (ENOENT: No such file or directory)
+        @PID@ linkat(olddirfd: AT_FDCWD, oldpath: "/tmp/filesystem_links_nonexisten"@MAYBETRUNCATED@, newdirfd: AT_FDCWD, newpath: "/tmp/filesystem_links_error_link"@MAYBETRUNCATED@, flags: 0) = -2 (ENOENT: No such file or directory)
     "#});
 
     let output = handle.join().unwrap();
@@ -1653,8 +1654,8 @@ fn aio_syscalls() {
         @PID@ io_setup(nr_events: 128, ctx_idp: @ADDR@) = 0 (success)
         @PID@ io_submit(ctx_id: @ADDR@, nr: 1, iocbpp: @ADDR@, iocbs: [ iocb { data: @ADDR@, key: @NUMBER@, rw_flags: @NUMBER@, lio_opcode: IOCB_CMD_PREAD, reqprio: @NUMBER@, fildes: @NUMBER@, buf: @ADDR@, nbytes: 64, offset: 0, flags: @NUMBER@ } ]) = 1 (requests)
         @PID@ io_getevents(ctx_id: @ADDR@, min_nr: 1, nr: 2, events: @ADDR@, timeout: { secs: 1, nanos: 0 }, events_returned: [ event { data: @ADDR@, obj: @ADDR@, res: @SIGNEDNUMBER@, res2: @SIGNEDNUMBER@ } ]) = 1 (events)
-        @PID@ io_pgetevents(ctx_id: @ADDR@, min_nr: 0, nr: 2, events: @ADDR@, timeout: { secs: 1, nanos: 0 }, usig: { sigmask: @ADDR@, sigsetsize: @NUMBER@, sigset: [] }) = -@NUMBER@ (error)
-        @PID@ io_cancel(ctx_id: @ADDR@, iocb: @ADDR@, result: @ADDR@) = -@NUMBER@ (error)
+        @PID@ io_pgetevents(ctx_id: @ADDR@, min_nr: 0, nr: 2, events: @ADDR@, timeout: { secs: 1, nanos: 0 }, usig: { sigmask: @ADDR@, sigsetsize: @NUMBER@, sigset: [] }) = @ERRNO@
+        @PID@ io_cancel(ctx_id: @ADDR@, iocb: @ADDR@, result: @ADDR@) = @ERRNO@
         @PID@ io_destroy(ctx_id: @ADDR@) = 0 (success)
     "#});
 
@@ -1697,10 +1698,10 @@ fn landlock_syscalls() {
     // 5. landlock_restrict_self
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ landlock_create_ruleset(attr: 0x0, size: 0, flags: 0x1 (LANDLOCK_CREATE_RULESET_VERSION)) = @NUMBER@ (fd)
-        @PID@ landlock_create_ruleset(attr: @ADDR@, size: @NUMBER@, flags: 0) = -@NUMBER@ (error)
-        @PID@ landlock_add_rule(ruleset_fd: -1, rule_type: LANDLOCK_RULE_PATH_BENEATH, parent_fd: 4, allowed_access: 0x3f (EXECUTE|WRITE_FILE|READ_FILE|READ_DIR|REMOVE_DIR|REMOVE_FILE), flags: 0) = -@NUMBER@ (error)
-        @PID@ landlock_add_rule(ruleset_fd: -1, rule_type: LANDLOCK_RULE_NET_PORT, port: 8080, access_rights: 0x3 (BIND_TCP|CONNECT_TCP), flags: 0) = -@NUMBER@ (error)
-        @PID@ landlock_restrict_self(ruleset_fd: -1, flags: 0) = -@NUMBER@ (error)
+        @PID@ landlock_create_ruleset(attr: @ADDR@, size: @NUMBER@, flags: 0) = @ERRNO@
+        @PID@ landlock_add_rule(ruleset_fd: -1, rule_type: LANDLOCK_RULE_PATH_BENEATH, parent_fd: 4, allowed_access: 0x3f (EXECUTE|WRITE_FILE|READ_FILE|READ_DIR|REMOVE_DIR|REMOVE_FILE), flags: 0) = @ERRNO@
+        @PID@ landlock_add_rule(ruleset_fd: -1, rule_type: LANDLOCK_RULE_NET_PORT, port: 8080, access_rights: 0x3 (BIND_TCP|CONNECT_TCP), flags: 0) = @ERRNO@
+        @PID@ landlock_restrict_self(ruleset_fd: -1, flags: 0) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -1754,7 +1755,7 @@ fn posix_mq_syscalls() {
         @PID@ mq_notify(mqdes: @NUMBER@, sevp: @ADDR@) = 0 (success)
         @PID@ mq_notify(mqdes: @NUMBER@, sevp: 0x0) = 0 (success)
         @PID@ mq_unlink(name: @ADDR@) = 0 (success)
-        @PID@ mq_open(name: @ADDR@, flags: 0x0 (O_RDONLY), mode: 0, attr: NULL) = -@NUMBER@ (error)
+        @PID@ mq_open(name: @ADDR@, flags: 0x0 (O_RDONLY), mode: 0, attr: NULL) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -1825,7 +1826,7 @@ fn perf_event_syscalls() {
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ perf_event_open(attr: { type: PERF_TYPE_SOFTWARE, size: @NUMBER@, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = @NUMBER@ (fd)
         @PID@ perf_event_open(attr: { type: PERF_TYPE_SOFTWARE, size: @NUMBER@, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0x8 (FD_CLOEXEC)) = @NUMBER@ (fd)
-        @PID@ perf_event_open(attr: { type: PERF_TYPE_HARDWARE, size: 0, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = -@NUMBER@ (error)
+        @PID@ perf_event_open(attr: { type: PERF_TYPE_HARDWARE, size: 0, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -1880,7 +1881,7 @@ fn fanotify_syscalls() {
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ fanotify_init(flags: @ANY@, event_f_flags: @ANY@) = @NUMBER@ (fd)
         @PID@ fanotify_mark(fanotify_fd: @NUMBER@, flags: @ANY@, mask: @ANY@, dirfd: AT_FDCWD, pathname: "/tmp") = 0 (success)
-        @PID@ fanotify_init(flags: @ANY@, event_f_flags: @ANY@) = -@NUMBER@ (error)
+        @PID@ fanotify_init(flags: @ANY@, event_f_flags: @ANY@) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -1921,7 +1922,7 @@ fn file_handles_syscalls() {
         @PID@ utimensat(dirfd: AT_FDCWD, pathname: "/tmp/pinchy_file_handles_test.txt", times: @ANY@, flags: 0) = 0 (success)
         @PID@ utimensat(dirfd: AT_FDCWD, pathname: "/tmp/pinchy_file_handles_test.txt", times: NULL, flags: 0) = 0 (success)
         @PID@ name_to_handle_at(dirfd: AT_FDCWD, pathname: "/tmp/pinchy_file_handles_test.txt", handle: @ADDR@, mount_id: @ADDR@, flags: 0) = 0 (success)
-        @PID@ open_by_handle_at(mount_fd: AT_FDCWD, handle: @ADDR@, flags: @ANY@) = @SIGNEDNUMBER@ (error)
+        @PID@ open_by_handle_at(mount_fd: AT_FDCWD, handle: @ADDR@, flags: @ANY@) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -1998,8 +1999,8 @@ fn ptrace_test() {
 
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ ptrace(request: PTRACE_TRACEME, pid: 0, addr: @ADDR@, data: @ADDR@) = 0 (success)
-        @PID@ ptrace(request: PTRACE_PEEKTEXT, pid: @NUMBER@, addr: @ADDR@, data: @ADDR@) = @SIGNEDNUMBER@ (error) (data ptr)
-        @PID@ ptrace(request: PTRACE_CONT, pid: 1, addr: @ADDR@, sig: @ALPHANUM@) = @SIGNEDNUMBER@ (error)
+        @PID@ ptrace(request: PTRACE_PEEKTEXT, pid: @NUMBER@, addr: @ADDR@, data: @ADDR@) = @ERRNO@ (data ptr)
+        @PID@ ptrace(request: PTRACE_CONT, pid: 1, addr: @ADDR@, sig: @ALPHANUM@) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -2022,7 +2023,7 @@ fn seccomp_test() {
     let expected_output = escaped_regex(indoc! {r#"
         @PID@ seccomp(operation: SECCOMP_GET_ACTION_AVAIL, flags: 0, action: SECCOMP_RET_KILL_THREAD) = 0 (success)
         @PID@ seccomp(operation: SECCOMP_GET_NOTIF_SIZES, flags: 0, sizes: {notif: @NUMBER@, resp: @NUMBER@, data: @NUMBER@}) = 0 (success)
-        @PID@ seccomp(operation: 255, flags: 0, args: NULL) = @SIGNEDNUMBER@ (error)
+        @PID@ seccomp(operation: 255, flags: 0, args: NULL) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();
@@ -2043,9 +2044,9 @@ fn quotactl_test() {
     let handle = run_workload(&pinchy, &["quotactl"], "quotactl_test");
 
     let expected_output = escaped_regex(indoc! {r#"
-        @PID@ quotactl(op: 0x800001 (QCMD(Q_SYNC, USRQUOTA)), special: "", id: 0, addr: @ADDR@) = @SIGNEDNUMBER@ (error)
-        @PID@ quotactl(op: 0x800004 (QCMD(Q_GETFMT, USRQUOTA)), special: "/", id: 0, addr: @ADDR@) = @SIGNEDNUMBER@ (error)
-        @PID@ quotactl(op: 0x800007 (QCMD(Q_GETQUOTA, USRQUOTA)), special: "/", id: 1000, addr: @ADDR@) = @SIGNEDNUMBER@ (error)
+        @PID@ quotactl(op: 0x800001 (QCMD(Q_SYNC, USRQUOTA)), special: "", id: 0, addr: @ADDR@) = @ERRNO@
+        @PID@ quotactl(op: 0x800004 (QCMD(Q_GETFMT, USRQUOTA)), special: "/", id: 0, addr: @ADDR@) = @ERRNO@
+        @PID@ quotactl(op: 0x800007 (QCMD(Q_GETQUOTA, USRQUOTA)), special: "/", id: 1000, addr: @ADDR@) = @ERRNO@
     "#});
 
     let output = handle.join().unwrap();

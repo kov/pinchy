@@ -50,7 +50,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_ptrace, 5003, -1, &data)
     },
-    "5003 ptrace(request: PTRACE_CONT, pid: 9999, addr: 0x0, sig: UNKNOWN(0)) = -1 (error)\n"
+    "5003 ptrace(request: PTRACE_CONT, pid: 9999, addr: 0x0, sig: UNKNOWN(0)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -105,7 +105,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_seccomp, 6003, -1, &data)
     },
-    "6003 seccomp(operation: SECCOMP_GET_ACTION_AVAIL, flags: 0, action: NULL) = -1 (error)\n"
+    "6003 seccomp(operation: SECCOMP_GET_ACTION_AVAIL, flags: 0, action: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -123,7 +123,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_seccomp, 6007, -14, &data)
     },
-    "6007 seccomp(operation: SECCOMP_GET_ACTION_AVAIL, flags: 0, action: 0xdeadbeef) = -14 (error)\n"
+    "6007 seccomp(operation: SECCOMP_GET_ACTION_AVAIL, flags: 0, action: 0xdeadbeef) = -14 (EFAULT: Bad address)\n"
 );
 
 syscall_test!(

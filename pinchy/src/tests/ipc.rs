@@ -30,7 +30,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmat, 2222, -1, &data)
     },
-    "2222 shmat(shmid: 456, shmaddr: 0x1000, shmflg: 0x0) = -1 (error)\n"
+    "2222 shmat(shmid: 456, shmaddr: 0x1000, shmflg: 0x0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -54,7 +54,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmdt, 4444, -1, &data)
     },
-    "4444 shmdt(shmaddr: 0xdeadbeef) = -1 (error)\n"
+    "4444 shmdt(shmaddr: 0xdeadbeef) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -82,7 +82,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmget, 6666, -1, &data)
     },
-    "6666 shmget(key: 0xbeef, size: 8192, shmflg: 0x0) = -1 (error)\n"
+    "6666 shmget(key: 0xbeef, size: 8192, shmflg: 0x0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -130,7 +130,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_shmctl, 8888, -1, &data)
     },
-    "8888 shmctl(shmid: 99, cmd: IPC_RMID, buf: NULL) = -1 (error)\n"
+    "8888 shmctl(shmid: 99, cmd: IPC_RMID, buf: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -223,7 +223,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_msgctl, 10505, -1, &data)
     },
-    "10505 msgctl(msqid: 666, cmd: IPC_RMID, buf: NULL) = -1 (error)\n"
+    "10505 msgctl(msqid: 666, cmd: IPC_RMID, buf: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -251,7 +251,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semget, 20002, -1, &data)
     },
-    "20002 semget(key: 0xbeef, nsems: 2, semflg: 0x0) = -1 (error)\n"
+    "20002 semget(key: 0xbeef, nsems: 2, semflg: 0x0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -279,7 +279,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semop, 20004, -1, &data)
     },
-    "20004 semop(semid: 654, sops: 0x7fff3000, nsops: 1) = -1 (error)\n"
+    "20004 semop(semid: 654, sops: 0x7fff3000, nsops: 1) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -363,7 +363,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_semctl, 20008, -1, &data)
     },
-    "20008 semctl(semid: 88, semnum: 2, op: SETVAL, val: 0) = -1 (error)\n"
+    "20008 semctl(semid: 88, semnum: 2, op: SETVAL, val: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 #[cfg(target_arch = "x86_64")]
@@ -405,7 +405,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_eventfd, 7777, -1, &data)
     },
-    "7777 eventfd(initval: 100, flags: 0xffffffff (EFD_CLOEXEC|EFD_NONBLOCK|UNKNOWN)) = -1 (error)\n"
+    "7777 eventfd(initval: 100, flags: 0xffffffff (EFD_CLOEXEC|EFD_NONBLOCK|UNKNOWN)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -431,7 +431,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_eventfd2, 9999, -1, &data)
     },
-    "9999 eventfd2(initval: 42, flags: 0xf423f (EFD_CLOEXEC|UNKNOWN)) = -1 (error)\n"
+    "9999 eventfd2(initval: 42, flags: 0xf423f (EFD_CLOEXEC|UNKNOWN)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -484,7 +484,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_open, 5678, -1, &data)
     },
-    "5678 mq_open(name: 0x7fff9abc, flags: 0x801 (O_WRONLY|O_NONBLOCK), mode: 0o600 (rw-------), attr: NULL) = -1 (error)\n"
+    "5678 mq_open(name: 0x7fff9abc, flags: 0x801 (O_WRONLY|O_NONBLOCK), mode: 0o600 (rw-------), attr: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -509,7 +509,7 @@ syscall_test!(
             &data,
         )
     },
-    "3456 mq_unlink(name: 0x7fff3456) = -1 (error)\n"
+    "3456 mq_unlink(name: 0x7fff3456) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -541,7 +541,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_timedsend, 5678, -1, &data)
     },
-    "5678 mq_timedsend(mqdes: 4, msg_ptr: 0x7fff6789, msg_len: 2048, msg_prio: 10, abs_timeout: 0x0) = -1 (error)\n"
+    "5678 mq_timedsend(mqdes: 4, msg_ptr: 0x7fff6789, msg_len: 2048, msg_prio: 10, abs_timeout: 0x0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -573,7 +573,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_mq_timedreceive, 7890, -1, &data)
     },
-    "7890 mq_timedreceive(mqdes: 5, msg_ptr: 0x7fff9abc, msg_len: 4096, msg_prio: 1, abs_timeout: 0x0) = -1 (error)\n"
+    "7890 mq_timedreceive(mqdes: 5, msg_ptr: 0x7fff9abc, msg_len: 4096, msg_prio: 1, abs_timeout: 0x0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -601,7 +601,7 @@ syscall_test!(
             &data,
         )
     },
-    "9012 mq_notify(mqdes: 4, sevp: 0x0) = -1 (error)\n"
+    "9012 mq_notify(mqdes: 4, sevp: 0x0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -648,7 +648,7 @@ syscall_test!(
             &data,
         )
     },
-    "2468 mq_getsetattr(mqdes: 99, newattr: NULL, oldattr: NULL) = -1 (error)\n"
+    "2468 mq_getsetattr(mqdes: 99, newattr: NULL, oldattr: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(

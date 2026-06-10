@@ -57,7 +57,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_mmap, 66, -1, &data)
     },
-    "66 mmap(addr: 0x7f0000000000, length: 8192, prot: 0x4 (PROT_EXEC), flags: 0x1 (MAP_SHARED), fd: 5, offset: 0x1000) = -1 (error)\n"
+    "66 mmap(addr: 0x7f0000000000, length: 8192, prot: 0x4 (PROT_EXEC), flags: 0x1 (MAP_SHARED), fd: 5, offset: 0x1000) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -87,7 +87,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_munmap, 123, -1, &data)
     },
-    "123 munmap(addr: 0xffff8a9c2000, length: 57344) = -1 (error)\n"
+    "123 munmap(addr: 0xffff8a9c2000, length: 57344) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -120,7 +120,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_mprotect, 77, -22, &data)
     },
-    "77 mprotect(addr: 0x1000, length: 4096, prot: 0x2 (PROT_WRITE)) = -22 (error)\n"
+    "77 mprotect(addr: 0x1000, length: 4096, prot: 0x2 (PROT_WRITE)) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -178,7 +178,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_madvise, 456, -1, &data)
     },
-    "456 madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -1 (error)\n"
+    "456 madvise(addr: 0x0, length: 4096, advice: MADV_WILLNEED (3)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -262,7 +262,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_process_madvise, 456, -1, &data)
     },
-    "456 process_madvise(pidfd: 9, iov: [ iovec { base: 0x7f9876543000, len: 8192 } ], iovcnt: 1, advice: MADV_WILLNEED (3), flags: 0) = -1 (error)\n"
+    "456 process_madvise(pidfd: 9, iov: [ iovec { base: 0x7f9876543000, len: 8192 } ], iovcnt: 1, advice: MADV_WILLNEED (3), flags: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -346,7 +346,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_munlockall, 456, -1, &data)
     },
-    "456 munlockall() = -1 (error)\n"
+    "456 munlockall() = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -723,7 +723,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_process_vm_readv, 999, -1, &data)
     },
-    "999 process_vm_readv(pid: 123, local_iov: [ iovec { base: 0x7f1234567000, len: 32, buf: \"\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\" } ], liovcnt: 1, remote_iov: [ iovec { base: 0x0, len: 32 } ], riovcnt: 1, flags: 0) = -1 (error)\n"
+    "999 process_vm_readv(pid: 123, local_iov: [ iovec { base: 0x7f1234567000, len: 32, buf: \"\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\\0\" } ], liovcnt: 1, remote_iov: [ iovec { base: 0x0, len: 32 } ], riovcnt: 1, flags: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(

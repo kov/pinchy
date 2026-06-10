@@ -2251,7 +2251,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
 
     // Handle the common error case first
     if return_value == -1 {
-        return std::borrow::Cow::Borrowed("-1 (error)");
+        return format_error_return(return_value);
     }
 
     match syscall_nr {
@@ -2285,7 +2285,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (fd)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2301,7 +2301,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{} (fd)", return_value))
             } else {
-                std::borrow::Cow::Owned(format!("{} (error)", return_value))
+                format_error_return(return_value)
             }
         }
 
@@ -2331,7 +2331,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2340,7 +2340,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{} (bytes)", return_value))
             } else {
-                std::borrow::Cow::Owned(format!("{} (error)", return_value))
+                format_error_return(return_value)
             }
         }
 
@@ -2349,7 +2349,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (messages)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2358,21 +2358,21 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (requests)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
         syscalls::SYS_io_getevents | syscalls::SYS_io_pgetevents => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (events)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
         syscalls::SYS_io_setup | syscalls::SYS_io_destroy | syscalls::SYS_io_cancel => {
             if return_value == 0 {
                 std::borrow::Cow::Borrowed("0 (success)")
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2380,7 +2380,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (submitted)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2389,7 +2389,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{} (bytes)", return_value))
             } else {
-                std::borrow::Cow::Owned(format!("{} (error)", return_value))
+                format_error_return(return_value)
             }
         }
 
@@ -2505,7 +2505,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_kexec_load
         | syscalls::SYS_nfsservctl => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         #[cfg(target_arch = "x86_64")]
@@ -2517,7 +2517,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_get_thread_area
         | syscalls::SYS_kexec_file_load => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         #[cfg(target_arch = "x86_64")]
@@ -2525,7 +2525,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (bytes)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2548,7 +2548,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (success)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2557,21 +2557,21 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             1 => std::borrow::Cow::Borrowed("1 (less than)"),
             2 => std::borrow::Cow::Borrowed("2 (greater than)"),
             3 => std::borrow::Cow::Borrowed("3 (not equal)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         syscalls::SYS_getgroups => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (groups)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_pause => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         #[cfg(target_arch = "x86_64")]
@@ -2592,21 +2592,21 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_utimes
         | syscalls::SYS_futimesat => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         // Count returning syscalls - special handling for poll/select family
         syscalls::SYS_pselect6 => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (timeout)"),
             n if n > 0 => std::borrow::Cow::Owned(format!("{n} (ready)")),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_poll | syscalls::SYS_select => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (timeout)"),
             n if n > 0 => std::borrow::Cow::Owned(format!("{} (ready)", n)),
-            _ => std::borrow::Cow::Owned(format!("{} (error)", return_value)),
+            _ => format_error_return(return_value),
         },
 
         // ppoll gets special handling with detailed ready state - handled in events.rs
@@ -2615,7 +2615,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             // The events.rs handler will override this with the extra parameter
             match return_value {
                 0 => std::borrow::Cow::Borrowed("0 (timeout)"),
-                n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+                n if n < 0 => format_error_return(return_value),
                 _ => std::borrow::Cow::Owned(format!("{return_value} (ready)")),
             }
         }
@@ -2625,7 +2625,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_fork | syscalls::SYS_vfork => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (child)"),
             v if v > 0 => std::borrow::Cow::Owned(format!("{v} (child pid)")),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         // PID returning syscalls
@@ -2640,7 +2640,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (pid)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2649,7 +2649,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (pid)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2661,7 +2661,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (id)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2669,7 +2669,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         // -4095..0 range, anything else is a valid address
         syscalls::SYS_mmap | syscalls::SYS_mremap => {
             if (-4095..0).contains(&return_value) {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             } else {
                 std::borrow::Cow::Owned(format!("0x{return_value:x} (addr)"))
             }
@@ -2677,7 +2677,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
 
         syscalls::SYS_shmat => {
             if (-4095..0).contains(&return_value) {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             } else {
                 std::borrow::Cow::Owned(format!("0x{return_value:x}"))
             }
@@ -2691,7 +2691,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (pages not migrated)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2701,7 +2701,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             } else if return_value > 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (pages not migrated)"))
             } else {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             }
         }
 
@@ -2720,13 +2720,13 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_nanosleep
         | syscalls::SYS_clock_nanosleep => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         // Time adjustment syscalls - return clock state
         syscalls::SYS_adjtimex | syscalls::SYS_clock_adjtime => {
             if return_value < 0 {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             } else {
                 std::borrow::Cow::Owned(format!(
                     "{} ({})",
@@ -2761,60 +2761,60 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_exit
         | syscalls::SYS_exit_group => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         syscalls::SYS_shmget => match return_value {
-            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => format_error_return(return_value),
             _ => std::borrow::Cow::Owned(format!("{return_value} (shmid)")),
         },
 
         syscalls::SYS_msgget => match return_value {
-            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => format_error_return(return_value),
             _ => std::borrow::Cow::Owned(format!("{return_value} (msqid)")),
         },
 
         syscalls::SYS_semget => match return_value {
-            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => format_error_return(return_value),
             _ => std::borrow::Cow::Owned(format!("{return_value} (semid)")),
         },
 
         syscalls::SYS_inotify_add_watch => match return_value {
-            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => format_error_return(return_value),
             _ => std::borrow::Cow::Owned(format!("{return_value} (wd)")),
         },
 
         syscalls::SYS_timer_create => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         syscalls::SYS_timer_getoverrun => match return_value {
-            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            -1 => format_error_return(return_value),
             n if n >= 0 => std::borrow::Cow::Owned(format!("{n} (overruns)")),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         syscalls::SYS_timer_gettime | syscalls::SYS_timer_settime => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         // Special syscalls with unique return value semantics
         syscalls::SYS_membarrier => match return_value {
-            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => format_error_return(return_value),
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (bitmask)")),
         },
 
         syscalls::SYS_pkey_alloc => match return_value {
-            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => format_error_return(return_value),
             _ => std::borrow::Cow::Owned(format!("{return_value} (pkey)")),
         },
 
         // Signal-related syscalls with special return semantics
         syscalls::SYS_rt_sigtimedwait => match return_value {
-            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => format_error_return(return_value),
             _ => std::borrow::Cow::Owned(format!("{return_value} (signal)")),
         },
 
@@ -2822,13 +2822,13 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         syscalls::SYS_syslog => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             n if n > 0 => std::borrow::Cow::Owned(format!("{n}")),
-            _ => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            _ => format_error_return(return_value),
         },
 
         // Default case - just show the raw value with error indication if negative
         _ => {
             if return_value < 0 {
-                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+                format_error_return(return_value)
             } else if return_value == 0 {
                 std::borrow::Cow::Owned(format!("{return_value} (success)"))
             } else {
@@ -6455,4 +6455,158 @@ pub fn format_arch_prctl_code(code: i32) -> Cow<'static, str> {
         ARCH_GET_GS => Cow::Borrowed("ARCH_GET_GS"),
         _ => Cow::Owned(format!("0x{code:x}")),
     }
+}
+
+pub fn errno_info(errno: i32) -> Option<(&'static str, &'static str)> {
+    let info = match errno {
+        libc::EPERM => ("EPERM", "Operation not permitted"),
+        libc::ENOENT => ("ENOENT", "No such file or directory"),
+        libc::ESRCH => ("ESRCH", "No such process"),
+        libc::EINTR => ("EINTR", "Interrupted system call"),
+        libc::EIO => ("EIO", "Input/output error"),
+        libc::ENXIO => ("ENXIO", "No such device or address"),
+        libc::E2BIG => ("E2BIG", "Argument list too long"),
+        libc::ENOEXEC => ("ENOEXEC", "Exec format error"),
+        libc::EBADF => ("EBADF", "Bad file descriptor"),
+        libc::ECHILD => ("ECHILD", "No child processes"),
+        libc::EAGAIN => ("EAGAIN", "Resource temporarily unavailable"),
+        libc::ENOMEM => ("ENOMEM", "Cannot allocate memory"),
+        libc::EACCES => ("EACCES", "Permission denied"),
+        libc::EFAULT => ("EFAULT", "Bad address"),
+        libc::ENOTBLK => ("ENOTBLK", "Block device required"),
+        libc::EBUSY => ("EBUSY", "Device or resource busy"),
+        libc::EEXIST => ("EEXIST", "File exists"),
+        libc::EXDEV => ("EXDEV", "Invalid cross-device link"),
+        libc::ENODEV => ("ENODEV", "No such device"),
+        libc::ENOTDIR => ("ENOTDIR", "Not a directory"),
+        libc::EISDIR => ("EISDIR", "Is a directory"),
+        libc::EINVAL => ("EINVAL", "Invalid argument"),
+        libc::ENFILE => ("ENFILE", "Too many open files in system"),
+        libc::EMFILE => ("EMFILE", "Too many open files"),
+        libc::ENOTTY => ("ENOTTY", "Inappropriate ioctl for device"),
+        libc::ETXTBSY => ("ETXTBSY", "Text file busy"),
+        libc::EFBIG => ("EFBIG", "File too large"),
+        libc::ENOSPC => ("ENOSPC", "No space left on device"),
+        libc::ESPIPE => ("ESPIPE", "Illegal seek"),
+        libc::EROFS => ("EROFS", "Read-only file system"),
+        libc::EMLINK => ("EMLINK", "Too many links"),
+        libc::EPIPE => ("EPIPE", "Broken pipe"),
+        libc::EDOM => ("EDOM", "Numerical argument out of domain"),
+        libc::ERANGE => ("ERANGE", "Numerical result out of range"),
+        libc::EDEADLK => ("EDEADLK", "Resource deadlock avoided"),
+        libc::ENAMETOOLONG => ("ENAMETOOLONG", "File name too long"),
+        libc::ENOLCK => ("ENOLCK", "No locks available"),
+        libc::ENOSYS => ("ENOSYS", "Function not implemented"),
+        libc::ENOTEMPTY => ("ENOTEMPTY", "Directory not empty"),
+        libc::ELOOP => ("ELOOP", "Too many levels of symbolic links"),
+        libc::ENOMSG => ("ENOMSG", "No message of desired type"),
+        libc::EIDRM => ("EIDRM", "Identifier removed"),
+        libc::ECHRNG => ("ECHRNG", "Channel number out of range"),
+        libc::EL2NSYNC => ("EL2NSYNC", "Level 2 not synchronized"),
+        libc::EL3HLT => ("EL3HLT", "Level 3 halted"),
+        libc::EL3RST => ("EL3RST", "Level 3 reset"),
+        libc::ELNRNG => ("ELNRNG", "Link number out of range"),
+        libc::EUNATCH => ("EUNATCH", "Protocol driver not attached"),
+        libc::ENOCSI => ("ENOCSI", "No CSI structure available"),
+        libc::EL2HLT => ("EL2HLT", "Level 2 halted"),
+        libc::EBADE => ("EBADE", "Invalid exchange"),
+        libc::EBADR => ("EBADR", "Invalid request descriptor"),
+        libc::EXFULL => ("EXFULL", "Exchange full"),
+        libc::ENOANO => ("ENOANO", "No anode"),
+        libc::EBADRQC => ("EBADRQC", "Invalid request code"),
+        libc::EBADSLT => ("EBADSLT", "Invalid slot"),
+        libc::EBFONT => ("EBFONT", "Bad font file format"),
+        libc::ENOSTR => ("ENOSTR", "Device not a stream"),
+        libc::ENODATA => ("ENODATA", "No data available"),
+        libc::ETIME => ("ETIME", "Timer expired"),
+        libc::ENOSR => ("ENOSR", "Out of streams resources"),
+        libc::ENONET => ("ENONET", "Machine is not on the network"),
+        libc::ENOPKG => ("ENOPKG", "Package not installed"),
+        libc::EREMOTE => ("EREMOTE", "Object is remote"),
+        libc::ENOLINK => ("ENOLINK", "Link has been severed"),
+        libc::EADV => ("EADV", "Advertise error"),
+        libc::ESRMNT => ("ESRMNT", "Srmount error"),
+        libc::ECOMM => ("ECOMM", "Communication error on send"),
+        libc::EPROTO => ("EPROTO", "Protocol error"),
+        libc::EMULTIHOP => ("EMULTIHOP", "Multihop attempted"),
+        libc::EDOTDOT => ("EDOTDOT", "RFS specific error"),
+        libc::EBADMSG => ("EBADMSG", "Bad message"),
+        libc::EOVERFLOW => ("EOVERFLOW", "Value too large for defined data type"),
+        libc::ENOTUNIQ => ("ENOTUNIQ", "Name not unique on network"),
+        libc::EBADFD => ("EBADFD", "File descriptor in bad state"),
+        libc::EREMCHG => ("EREMCHG", "Remote address changed"),
+        libc::ELIBACC => ("ELIBACC", "Can not access a needed shared library"),
+        libc::ELIBBAD => ("ELIBBAD", "Accessing a corrupted shared library"),
+        libc::ELIBSCN => ("ELIBSCN", ".lib section in a.out corrupted"),
+        libc::ELIBMAX => ("ELIBMAX", "Attempting to link in too many shared libraries"),
+        libc::ELIBEXEC => ("ELIBEXEC", "Cannot exec a shared library directly"),
+        libc::EILSEQ => (
+            "EILSEQ",
+            "Invalid or incomplete multibyte or wide character",
+        ),
+        libc::ERESTART => ("ERESTART", "Interrupted system call should be restarted"),
+        libc::ESTRPIPE => ("ESTRPIPE", "Streams pipe error"),
+        libc::EUSERS => ("EUSERS", "Too many users"),
+        libc::ENOTSOCK => ("ENOTSOCK", "Socket operation on non-socket"),
+        libc::EDESTADDRREQ => ("EDESTADDRREQ", "Destination address required"),
+        libc::EMSGSIZE => ("EMSGSIZE", "Message too long"),
+        libc::EPROTOTYPE => ("EPROTOTYPE", "Protocol wrong type for socket"),
+        libc::ENOPROTOOPT => ("ENOPROTOOPT", "Protocol not available"),
+        libc::EPROTONOSUPPORT => ("EPROTONOSUPPORT", "Protocol not supported"),
+        libc::ESOCKTNOSUPPORT => ("ESOCKTNOSUPPORT", "Socket type not supported"),
+        libc::EOPNOTSUPP => ("EOPNOTSUPP", "Operation not supported"),
+        libc::EPFNOSUPPORT => ("EPFNOSUPPORT", "Protocol family not supported"),
+        libc::EAFNOSUPPORT => ("EAFNOSUPPORT", "Address family not supported by protocol"),
+        libc::EADDRINUSE => ("EADDRINUSE", "Address already in use"),
+        libc::EADDRNOTAVAIL => ("EADDRNOTAVAIL", "Cannot assign requested address"),
+        libc::ENETDOWN => ("ENETDOWN", "Network is down"),
+        libc::ENETUNREACH => ("ENETUNREACH", "Network is unreachable"),
+        libc::ENETRESET => ("ENETRESET", "Network dropped connection on reset"),
+        libc::ECONNABORTED => ("ECONNABORTED", "Software caused connection abort"),
+        libc::ECONNRESET => ("ECONNRESET", "Connection reset by peer"),
+        libc::ENOBUFS => ("ENOBUFS", "No buffer space available"),
+        libc::EISCONN => ("EISCONN", "Transport endpoint is already connected"),
+        libc::ENOTCONN => ("ENOTCONN", "Transport endpoint is not connected"),
+        libc::ESHUTDOWN => ("ESHUTDOWN", "Cannot send after transport endpoint shutdown"),
+        libc::ETOOMANYREFS => ("ETOOMANYREFS", "Too many references: cannot splice"),
+        libc::ETIMEDOUT => ("ETIMEDOUT", "Connection timed out"),
+        libc::ECONNREFUSED => ("ECONNREFUSED", "Connection refused"),
+        libc::EHOSTDOWN => ("EHOSTDOWN", "Host is down"),
+        libc::EHOSTUNREACH => ("EHOSTUNREACH", "No route to host"),
+        libc::EALREADY => ("EALREADY", "Operation already in progress"),
+        libc::EINPROGRESS => ("EINPROGRESS", "Operation now in progress"),
+        libc::ESTALE => ("ESTALE", "Stale file handle"),
+        libc::EUCLEAN => ("EUCLEAN", "Structure needs cleaning"),
+        libc::ENOTNAM => ("ENOTNAM", "Not a XENIX named type file"),
+        libc::ENAVAIL => ("ENAVAIL", "No XENIX semaphores available"),
+        libc::EISNAM => ("EISNAM", "Is a named type file"),
+        libc::EREMOTEIO => ("EREMOTEIO", "Remote I/O error"),
+        libc::EDQUOT => ("EDQUOT", "Disk quota exceeded"),
+        libc::ENOMEDIUM => ("ENOMEDIUM", "No medium found"),
+        libc::EMEDIUMTYPE => ("EMEDIUMTYPE", "Wrong medium type"),
+        libc::ECANCELED => ("ECANCELED", "Operation canceled"),
+        libc::ENOKEY => ("ENOKEY", "Required key not available"),
+        libc::EKEYEXPIRED => ("EKEYEXPIRED", "Key has expired"),
+        libc::EKEYREVOKED => ("EKEYREVOKED", "Key has been revoked"),
+        libc::EKEYREJECTED => ("EKEYREJECTED", "Key was rejected by service"),
+        libc::EOWNERDEAD => ("EOWNERDEAD", "Owner died"),
+        libc::ENOTRECOVERABLE => ("ENOTRECOVERABLE", "State not recoverable"),
+        libc::ERFKILL => ("ERFKILL", "Operation not possible due to RF-kill"),
+        libc::EHWPOISON => ("EHWPOISON", "Memory page has hardware error"),
+        _ => return None,
+    };
+
+    Some(info)
+}
+
+// Raw sys_exit return values use the -errno convention; decode them so the
+// user does not have to.
+pub fn format_error_return(return_value: i64) -> Cow<'static, str> {
+    if (-4095..0).contains(&return_value) {
+        if let Some((name, description)) = errno_info(-return_value as i32) {
+            return Cow::Owned(format!("{return_value} ({name}: {description})"));
+        }
+    }
+
+    Cow::Owned(format!("{return_value} (error)"))
 }

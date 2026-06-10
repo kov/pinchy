@@ -91,7 +91,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_reboot, 42, -22, &data)
     },
-    "42 reboot(magic1: 0xfee1dead (LINUX_REBOOT_MAGIC1), magic2: 0x28121969 (LINUX_REBOOT_MAGIC2), cmd: LINUX_REBOOT_CMD_HALT (-839974621), arg: 0x0) = -22 (error)\n"
+    "42 reboot(magic1: 0xfee1dead (LINUX_REBOOT_MAGIC1), magic2: 0x28121969 (LINUX_REBOOT_MAGIC2), cmd: LINUX_REBOOT_CMD_HALT (-839974621), arg: 0x0) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -175,7 +175,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_getrandom, 555, -11, &data)
     },
-    "555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = -11 (error)\n"
+    "555 getrandom(buf: 0x7f5678901000, buflen: 32, flags: 0x3 (GRND_NONBLOCK|GRND_RANDOM)) = -11 (EAGAIN: Resource temporarily unavailable)\n"
 );
 
 syscall_test!(
@@ -499,7 +499,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_nanosleep, 5678, -4, &data)
     },
-    "5678 nanosleep(req: { secs: 10, nanos: 0 }, rem: { secs: 7, nanos: 250000000 }) = -4 (error)\n"
+    "5678 nanosleep(req: { secs: 10, nanos: 0 }, rem: { secs: 7, nanos: 250000000 }) = -4 (EINTR: Interrupted system call)\n"
 );
 
 syscall_test!(
@@ -565,7 +565,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_clock_nanosleep, 5678, -4, &data)
     },
-    "5678 clock_nanosleep(clockid: CLOCK_MONOTONIC, flags: 0, req: { secs: 10, nanos: 0 }, rem: { secs: 7, nanos: 250000000 }) = -4 (error)\n"
+    "5678 clock_nanosleep(clockid: CLOCK_MONOTONIC, flags: 0, req: { secs: 10, nanos: 0 }, rem: { secs: 7, nanos: 250000000 }) = -4 (EINTR: Interrupted system call)\n"
 );
 
 syscall_test!(
@@ -729,7 +729,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_setrlimit, 101, -1, &data)
     },
-    "101 setrlimit(resource: RLIMIT_NOFILE, limit: NULL) = -1 (error)\n"
+    "101 setrlimit(resource: RLIMIT_NOFILE, limit: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -763,7 +763,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_getrlimit, 201, -1, &data)
     },
-    "201 getrlimit(resource: RLIMIT_STACK, limit: (content unavailable)) = -1 (error)\n"
+    "201 getrlimit(resource: RLIMIT_STACK, limit: (content unavailable)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -777,7 +777,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_getrlimit, 202, -1, &data)
     },
-    "202 getrlimit(resource: RLIMIT_STACK, limit: NULL) = -1 (error)\n"
+    "202 getrlimit(resource: RLIMIT_STACK, limit: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -813,7 +813,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_init_module, 1001, -17, &data)
     },
-    "1001 init_module(module_image: 0x7f8000002000, len: 32768, param_values: \"\") = -17 (error)\n"
+    "1001 init_module(module_image: 0x7f8000002000, len: 32768, param_values: \"\") = -17 (EEXIST: File exists)\n"
 );
 
 syscall_test!(
@@ -867,7 +867,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_finit_module, 2002, -2, &data)
     },
-    "2002 finit_module(fd: -1, param_values: \"\", flags: 0) = -2 (error)\n"
+    "2002 finit_module(fd: -1, param_values: \"\", flags: 0) = -2 (ENOENT: No such file or directory)\n"
 );
 
 syscall_test!(
@@ -913,7 +913,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_delete_module, 3002, -2, &data)
     },
-    "3002 delete_module(name: \"nonexistent_module\", flags: 0) = -2 (error)\n"
+    "3002 delete_module(name: \"nonexistent_module\", flags: 0) = -2 (ENOENT: No such file or directory)\n"
 );
 
 syscall_test!(
@@ -941,7 +941,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_sethostname, 4001, -22, &data)
     },
-    "4001 sethostname(name: \"verylonghostname\", len: 16) = -22 (error)\n"
+    "4001 sethostname(name: \"verylonghostname\", len: 16) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -969,7 +969,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_setdomainname, 5001, -1, &data)
     },
-    "5001 setdomainname(name: \"veryverylongdomainname.example.org\", len: 34) = -1 (error)\n"
+    "5001 setdomainname(name: \"veryverylongdomainname.example.org\", len: 34) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1063,7 +1063,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_landlock_add_rule, 6004, -9, &data)
     },
-    "6004 landlock_add_rule(ruleset_fd: 999, rule_type: LANDLOCK_RULE_PATH_BENEATH, parent_fd: 0, allowed_access: 0, flags: 0) = -9 (error)\n"
+    "6004 landlock_add_rule(ruleset_fd: 999, rule_type: LANDLOCK_RULE_PATH_BENEATH, parent_fd: 0, allowed_access: 0, flags: 0) = -9 (EBADF: Bad file descriptor)\n"
 );
 
 syscall_test!(
@@ -1089,7 +1089,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_landlock_restrict_self, 6006, -22, &data)
     },
-    "6006 landlock_restrict_self(ruleset_fd: -1, flags: 0) = -22 (error)\n"
+    "6006 landlock_restrict_self(ruleset_fd: -1, flags: 0) = -22 (EINVAL: Invalid argument)\n"
 );
 syscall_test!(
     parse_add_key_user_type,
@@ -1169,7 +1169,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_add_key, 7002, -22, &data)
     },
-    "7002 add_key(type: \"unknown\", description: \"\", payload: (empty), keyring: KEY_SPEC_THREAD_KEYRING) = -22 (error)\n"
+    "7002 add_key(type: \"unknown\", description: \"\", payload: (empty), keyring: KEY_SPEC_THREAD_KEYRING) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -1351,7 +1351,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_perf_event_open, 8002, -22, &data)
     },
-    "8002 perf_event_open(attr: { type: PERF_TYPE_HARDWARE, size: 0, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = -22 (error)\n"
+    "8002 perf_event_open(attr: { type: PERF_TYPE_HARDWARE, size: 0, config: 0x0, sample_period: 0 }, pid: 0, cpu: -1, group_fd: -1, flags: 0) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -1418,7 +1418,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_bpf, 8102, -1, &data)
     },
-    "8102 bpf(cmd: BPF_PROG_LOAD, size: 0) = -1 (error)\n"
+    "8102 bpf(cmd: BPF_PROG_LOAD, size: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1460,7 +1460,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_syslog, 9102, -1, &data)
     },
-    "9102 syslog(type: SYSLOG_ACTION_READ, bufp: 0x0, size: 0) = -1 (error)\n"
+    "9102 syslog(type: SYSLOG_ACTION_READ, bufp: 0x0, size: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1635,7 +1635,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_tuxcall, 100, -1, &data)
     },
-    "100 tuxcall(0x1234, 0x5678) = -1 (error)\n"
+    "100 tuxcall(0x1234, 0x5678) = -1 (EPERM: Operation not permitted)\n"
 );
 
 #[cfg(target_arch = "x86_64")]
@@ -1650,7 +1650,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_ustat, 100, -38, &data)
     },
-    "100 ustat(0x1234, 0x0, 0x5678) = -38 (error)\n"
+    "100 ustat(0x1234, 0x0, 0x5678) = -38 (ENOSYS: Function not implemented)\n"
 );
 
 #[cfg(target_arch = "x86_64")]

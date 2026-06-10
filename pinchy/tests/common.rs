@@ -119,7 +119,7 @@ fn boot_uml(
     let test_name_str = test_name.unwrap_or("");
 
     let args = vec![
-        "mem=64M".to_string(),
+        "mem=128M".to_string(),
         "root=/dev/root".to_string(),
         "rootfstype=hostfs".to_string(),
         "hostfs=/".to_string(),

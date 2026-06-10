@@ -223,7 +223,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_tgkill, 1111, -3, &data)
     },
-    "1111 tgkill(tgid: 9999, pid: 8888, sig: SIGTERM) = -3 (error)\n"
+    "1111 tgkill(tgid: 9999, pid: 8888, sig: SIGTERM) = -3 (ESRCH: No such process)\n"
 );
 
 syscall_test!(
@@ -322,7 +322,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_rt_sigsuspend, 3691, -1, &data)
     },
-    "3691 rt_sigsuspend(mask: 0x7fff87654321, sigsetsize: 8) = -1 (error)\n"
+    "3691 rt_sigsuspend(mask: 0x7fff87654321, sigsetsize: 8) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -337,7 +337,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_rt_sigsuspend, 4815, -1, &data)
     },
-    "4815 rt_sigsuspend(mask: NULL, sigsetsize: 8) = -1 (error)\n"
+    "4815 rt_sigsuspend(mask: NULL, sigsetsize: 8) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(

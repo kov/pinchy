@@ -415,7 +415,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_getitimer, 1234, -1, &data)
     },
-    "1234 getitimer(which: 999, curr_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = -1 (error)\n"
+    "1234 getitimer(which: 999, curr_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -514,7 +514,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_setitimer, 1234, -1, &data)
     },
-    "1234 setitimer(which: -1, new_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }, old_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = -1 (error)\n"
+    "1234 setitimer(which: -1, new_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }, old_value: { it_interval: { tv_sec: 0, tv_usec: 0 }, it_value: { tv_sec: 0, tv_usec: 0 } }) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(

@@ -136,7 +136,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_fstat, 33, -1, &data)
     },
-    "33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = -1 (error)\n"
+    "33 fstat(fd: 5, struct stat: { mode: 0o644 (rw-r--r--), ino: 9876543, dev: 0, nlink: 0, uid: 1000, gid: 1000, size: 12345, blksize: 4096, blocks: 24, atime: 0, mtime: 0, ctime: 0 }) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -255,7 +255,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_faccessat, 1001, -1, &data)
     },
-    "1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK) = -1 (error)\n"
+    "1001 faccessat(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -291,7 +291,7 @@ syscall_test!(
 
         make_compact_test_data(syscalls::SYS_faccessat2, 1003, -1, &data)
     },
-    "1003 faccessat2(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
+    "1003 faccessat2(dirfd: 3, pathname: \"/etc/hosts\", mode: F_OK, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -338,7 +338,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_newfstatat, 42, -1, &data)
     },
-    "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (error)\n"
+    "42 newfstatat(dirfd: AT_FDCWD, pathname: \"test_file.txt\", struct stat: <unavailable>, flags: AT_SYMLINK_NOFOLLOW (0x100)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -733,7 +733,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_getcwd, 55, -1, &data)
     },
-    "55 getcwd(buf: 0x7ffe12345000, size: 4096) = -1 (error)\n"
+    "55 getcwd(buf: 0x7ffe12345000, size: 4096) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -765,7 +765,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_chdir, 66, -1, &data)
     },
-    "66 chdir(path: \"/home/user/newdir\") = -1 (error)\n"
+    "66 chdir(path: \"/home/user/newdir\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -819,7 +819,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_mkdirat, 77, -1, &data)
     },
-    "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = -1 (error)\n"
+    "77 mkdirat(dirfd: 5, pathname: \"/home/user/newdir\", mode: 0o700 (rwx------)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -865,7 +865,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_ftruncate, 125, -1, &data)
     },
-    "125 ftruncate(fd: 3, length: 4096) = -1 (error)\n"
+    "125 ftruncate(fd: 3, length: 4096) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -885,7 +885,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_fchmod, 126, -1, &data)
     },
-    "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = -1 (error)\n"
+    "126 fchmod(fd: 3, mode: 0o644 (rw-r--r--)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1144,7 +1144,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_unlink, 301, -1, &data)
     },
-    "301 unlink(pathname: \"/tmp/nonexistent\") = -1 (error)\n"
+    "301 unlink(pathname: \"/tmp/nonexistent\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1180,7 +1180,7 @@ syscall_test!(
 
         make_compact_test_data(pinchy_common::syscalls::SYS_unlinkat, 501, -1, &data)
     },
-    "501 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/nonexistent\", flags: 0) = -1 (error)\n"
+    "501 unlinkat(dirfd: AT_FDCWD, pathname: \"/tmp/nonexistent\", flags: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 #[cfg(target_arch = "x86_64")]
@@ -1216,7 +1216,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_symlink, 601, -1, &data)
     },
-    "601 symlink(target: \"/target\", linkpath: \"/link\") = -1 (error)\n"
+    "601 symlink(target: \"/target\", linkpath: \"/link\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1258,7 +1258,7 @@ syscall_test!(
 
         make_compact_test_data(pinchy_common::syscalls::SYS_symlinkat, 701, -1, &data)
     },
-    "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = -1 (error)\n"
+    "701 symlinkat(target: \"/target\", newdirfd: AT_FDCWD, linkpath: \"/link\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1286,7 +1286,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_acct, 901, -1, &data)
     },
-    "901 acct(filename: \"/var/log/account\") = -1 (error)\n"
+    "901 acct(filename: \"/var/log/account\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1420,7 +1420,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(syscalls::SYS_mknodat, 203, -1, &data)
     },
-    "203 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = -1 (error)\n"
+    "203 mknodat(dirfd: AT_FDCWD, pathname: \"/tmp/testfile\", mode: 0o644 (rw-r--r--) (S_IFREG), dev: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 // Mount management syscalls tests
@@ -1468,7 +1468,7 @@ syscall_test!(
             &data,
         )
     },
-    "1001 pivot_root(new_root: \"/mnt/root\", put_old: \"/mnt/old\") = -1 (error)\n"
+    "1001 pivot_root(new_root: \"/mnt/root\", put_old: \"/mnt/old\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1498,7 +1498,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_chroot, 1003, -1, &data)
     },
-    "1003 chroot(path: \"/bad/path\") = -1 (error)\n"
+    "1003 chroot(path: \"/bad/path\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1715,7 +1715,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_move_mount, 1012, -1, &data)
     },
-    "1012 move_mount(from_dfd: 5, from_pathname: \"/mnt/source\", to_dfd: 7, to_pathname: \"/mnt/target\", flags: 0x0) = -1 (error)\n"
+    "1012 move_mount(from_dfd: 5, from_pathname: \"/mnt/source\", to_dfd: 7, to_pathname: \"/mnt/target\", flags: 0x0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1766,7 +1766,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_swapon, 1015, -1, &data)
     },
-    "1015 swapon(pathname: \"/tmp/badfile\", flags: 0x10000 (SWAP_FLAG_DISCARD)) = -1 (error)\n"
+    "1015 swapon(pathname: \"/tmp/badfile\", flags: 0x10000 (SWAP_FLAG_DISCARD)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1796,7 +1796,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(pinchy_common::syscalls::SYS_swapoff, 1017, -1, &data)
     },
-    "1017 swapoff(pathname: \"/dev/sda2\") = -1 (error)\n"
+    "1017 swapoff(pathname: \"/dev/sda2\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -1844,7 +1844,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_statfs, 44, -1, &data)
     },
-    "44 statfs(pathname: \"/mnt/data\", buf: <unavailable>) = -1 (error)\n"
+    "44 statfs(pathname: \"/mnt/data\", buf: <unavailable>) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -2067,7 +2067,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_fallocate, 999, -1, &data)
     },
-    "999 fallocate(fd: 3, mode: 0x10 (FALLOC_FL_ZERO_RANGE), offset: 100, size: 500) = -1 (error)\n"
+    "999 fallocate(fd: 3, mode: 0x10 (FALLOC_FL_ZERO_RANGE), offset: 100, size: 500) = -1 (EPERM: Operation not permitted)\n"
 );
 
 #[cfg(target_arch = "x86_64")]
@@ -2103,7 +2103,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_link, 801, -1, &data)
     },
-    "801 link(oldpath: \"/nonexistent\", newpath: \"/link\") = -1 (error)\n"
+    "801 link(oldpath: \"/nonexistent\", newpath: \"/link\") = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -2172,7 +2172,7 @@ syscall_test!(
 
         make_compact_test_data(SYS_linkat, 901, -1, &data)
     },
-    "901 linkat(olddirfd: AT_FDCWD, oldpath: \"nonexistent\", newdirfd: AT_FDCWD, newpath: \"link\", flags: 0) = -1 (error)\n"
+    "901 linkat(olddirfd: AT_FDCWD, oldpath: \"nonexistent\", newdirfd: AT_FDCWD, newpath: \"link\", flags: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 // Use fanotify constants directly from libc
@@ -2213,7 +2213,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_fanotify_init, 9002, -1, &data)
     },
-    "9002 fanotify_init(flags: 0, event_f_flags: 0x0 (O_RDONLY)) = -1 (error)\n"
+    "9002 fanotify_init(flags: 0, event_f_flags: 0x0 (O_RDONLY)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -2274,7 +2274,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_fanotify_mark, 9102, -9, &data)
     },
-    "9102 fanotify_mark(fanotify_fd: 999, flags: 0x1 (INODE|ADD), mask: 0x1 (ACCESS), dirfd: AT_FDCWD, pathname: (null)) = -9 (error)\n"
+    "9102 fanotify_mark(fanotify_fd: 999, flags: 0x1 (INODE|ADD), mask: 0x1 (ACCESS), dirfd: AT_FDCWD, pathname: (null)) = -9 (EBADF: Bad file descriptor)\n"
 );
 
 syscall_test!(
@@ -2335,7 +2335,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_name_to_handle_at, 9202, -2, &data)
     },
-    "9202 name_to_handle_at(dirfd: AT_FDCWD, pathname: \"/nonexistent\", handle: 0x0, mount_id: 0x0, flags: 0) = -2 (error)\n"
+    "9202 name_to_handle_at(dirfd: AT_FDCWD, pathname: \"/nonexistent\", handle: 0x0, mount_id: 0x0, flags: 0) = -2 (ENOENT: No such file or directory)\n"
 );
 
 syscall_test!(
@@ -2377,7 +2377,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_open_by_handle_at, 9302, -1, &data)
     },
-    "9302 open_by_handle_at(mount_fd: 999, handle: 0xbadbadbad, flags: 0x0 (O_RDONLY)) = -1 (error)\n"
+    "9302 open_by_handle_at(mount_fd: 999, handle: 0xbadbadbad, flags: 0x0 (O_RDONLY)) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -2434,7 +2434,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_copy_file_range, 9402, -1, &data)
     },
-    "9402 copy_file_range(fd_in: 999, off_in: NULL, fd_out: 998, off_out: NULL, len: 0, flags: 0) = -1 (error)\n"
+    "9402 copy_file_range(fd_in: 999, off_in: NULL, fd_out: 998, off_out: NULL, len: 0, flags: 0) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -2481,7 +2481,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_sync_file_range, 9502, -9, &data)
     },
-    "9502 sync_file_range(fd: 999, offset: 0, nbytes: 0, flags: 0) = -9 (error)\n"
+    "9502 sync_file_range(fd: 999, offset: 0, nbytes: 0, flags: 0) = -9 (EBADF: Bad file descriptor)\n"
 );
 
 syscall_test!(
@@ -2501,7 +2501,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_syncfs, 9601, -9, &data)
     },
-    "9601 syncfs(fd: 999) = -9 (error)\n"
+    "9601 syncfs(fd: 999) = -9 (EBADF: Bad file descriptor)\n"
 );
 
 syscall_test!(
@@ -2584,7 +2584,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_utimensat, 9702, -2, &data)
     },
-    "9702 utimensat(dirfd: AT_FDCWD, pathname: \"/nonexistent\", times: [UTIME_NOW, UTIME_OMIT], flags: 0) = -2 (error)\n"
+    "9702 utimensat(dirfd: AT_FDCWD, pathname: \"/nonexistent\", times: [UTIME_NOW, UTIME_OMIT], flags: 0) = -2 (ENOENT: No such file or directory)\n"
 );
 
 syscall_test!(
@@ -2656,7 +2656,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_quotactl, 10004, -1, &data)
     },
-    "10004 quotactl(op: 0x800005 (QCMD(Q_GETINFO, USRQUOTA)), special: \"/dev/sdc1\", id: 500, addr: 0x7fff00003000) = -1 (error)\n"
+    "10004 quotactl(op: 0x800005 (QCMD(Q_GETINFO, USRQUOTA)), special: \"/dev/sdc1\", id: 500, addr: 0x7fff00003000) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -2750,7 +2750,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_lookup_dcookie, 123, -1, &data)
     },
-    "123 lookup_dcookie(cookie: 1311768467463790320, buffer: \"\", size: 64) = -1 (error)\n"
+    "123 lookup_dcookie(cookie: 1311768467463790320, buffer: \"\", size: 64) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -2842,7 +2842,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_access, 124, -1, &data)
     },
-    "124 access(pathname: \"/root/.s\" ... (truncated), mode: X_OK) = -1 (error)\n"
+    "124 access(pathname: \"/root/.s\" ... (truncated), mode: X_OK) = -1 (EPERM: Operation not permitted)\n"
 );
 
 #[cfg(target_arch = "x86_64")]
@@ -2928,7 +2928,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_readlink, 129, -1, &data)
     },
-    "129 readlink(pathname: \"/tmp/not\" ... (truncated), buf: \"\", bufsiz: 64) = -1 (error)\n"
+    "129 readlink(pathname: \"/tmp/not\" ... (truncated), buf: \"\", bufsiz: 64) = -1 (EPERM: Operation not permitted)\n"
 );
 
 #[cfg(target_arch = "x86_64")]

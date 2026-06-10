@@ -292,7 +292,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_prlimit64, 9876, -1, &data)
     },
-    "9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: { rlim_cur: 4294967296, rlim_max: 8589934592 }, old_limit: NULL) = -1 (error)\n"
+    "9876 prlimit64(pid: 5678, resource: RLIMIT_AS, new_limit: { rlim_cur: 4294967296, rlim_max: 8589934592 }, old_limit: NULL) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -435,7 +435,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_waitid, 6001, -1, &data)
     },
-    "6001 waitid(idtype: P_PID, id: 9999, infop: NULL, options: WEXITED) = -1 (error)\n"
+    "6001 waitid(idtype: P_PID, id: 9999, infop: NULL, options: WEXITED) = -1 (EPERM: Operation not permitted)\n"
 );
 
 syscall_test!(
@@ -514,7 +514,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_getrusage, 5001, -22, &data)
     },
-    "5001 getrusage(who: UNKNOWN, rusage: NULL) = -22 (error)\n"
+    "5001 getrusage(who: UNKNOWN, rusage: NULL) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -790,7 +790,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_pause, 1001, -4, &data)
     },
-    "1001 pause() = -4 (error)\n"
+    "1001 pause() = -4 (EINTR: Interrupted system call)\n"
 );
 
 syscall_test!(
@@ -993,7 +993,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_fork, 1000, -1, &data)
     },
-    "1000 fork() = -1 (error)\n"
+    "1000 fork() = -1 (EPERM: Operation not permitted)\n"
 );
 
 #[cfg(target_arch = "x86_64")]
@@ -1026,5 +1026,5 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_vfork, 2000, -1, &data)
     },
-    "2000 vfork() = -1 (error)\n"
+    "2000 vfork() = -1 (EPERM: Operation not permitted)\n"
 );

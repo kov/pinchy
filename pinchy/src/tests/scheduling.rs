@@ -73,7 +73,7 @@ syscall_test!(
 
         crate::tests::make_compact_test_data(SYS_rseq, 1234, -22, &data)
     },
-    "1234 rseq(rseq: NULL, rseq_len: 32, flags: 0, signature: 0xabcdef12) = -22 (error)\n"
+    "1234 rseq(rseq: NULL, rseq_len: 32, flags: 0, signature: 0xabcdef12) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(
@@ -260,7 +260,7 @@ syscall_test!(
             &data,
         )
     },
-    "9999 sched_setscheduler(pid: 1234, policy: SCHED_OTHER, param: NULL) = -22 (error)\n"
+    "9999 sched_setscheduler(pid: 1234, policy: SCHED_OTHER, param: NULL) = -22 (EINVAL: Invalid argument)\n"
 );
 
 syscall_test!(

@@ -12,15 +12,15 @@ fn test_error_return_values() {
     // All syscalls should show -1 as error
     assert_eq!(
         format_return_value(syscalls::SYS_openat, -1).as_ref(),
-        "-1 (error)"
+        "-1 (EPERM: Operation not permitted)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_read, -1).as_ref(),
-        "-1 (error)"
+        "-1 (EPERM: Operation not permitted)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_close, -1).as_ref(),
-        "-1 (error)"
+        "-1 (EPERM: Operation not permitted)"
     );
 }
 
@@ -90,11 +90,11 @@ fn test_boolean_like_syscalls() {
     // Non-zero is error
     assert_eq!(
         format_return_value(syscalls::SYS_close, -2).as_ref(),
-        "-2 (error)"
+        "-2 (ENOENT: No such file or directory)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_bind, -1).as_ref(),
-        "-1 (error)"
+        "-1 (EPERM: Operation not permitted)"
     );
 }
 
@@ -159,7 +159,7 @@ fn test_default_syscall_handling() {
     assert_eq!(format_return_value(unknown_syscall, 42).as_ref(), "42");
     assert_eq!(
         format_return_value(unknown_syscall, -5).as_ref(),
-        "-5 (error)"
+        "-5 (EIO: Input/output error)"
     );
 }
 
@@ -192,7 +192,7 @@ fn test_adjtimex_return_values() {
     );
     assert_eq!(
         format_return_value(syscalls::SYS_adjtimex, -22).as_ref(),
-        "-22 (error)"
+        "-22 (EINVAL: Invalid argument)"
     );
 }
 
@@ -213,7 +213,7 @@ fn test_clock_adjtime_return_values() {
     );
     assert_eq!(
         format_return_value(syscalls::SYS_clock_adjtime, -95).as_ref(),
-        "-95 (error)"
+        "-95 (EOPNOTSUPP: Operation not supported)"
     );
 }
 
@@ -226,7 +226,7 @@ fn test_deprecated_syscall_return_values() {
     );
     assert_eq!(
         format_return_value(syscalls::SYS_tuxcall, -38).as_ref(),
-        "-38 (error)"
+        "-38 (ENOSYS: Function not implemented)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_sysfs, 2).as_ref(),
@@ -240,47 +240,47 @@ fn test_raw_errno_return_values() {
     // error for these syscalls
     assert_eq!(
         format_return_value(syscalls::SYS_ppoll, -(libc::EINTR as i64)).as_ref(),
-        "-4 (error)"
+        "-4 (EINTR: Interrupted system call)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_mmap, -(libc::ENOMEM as i64)).as_ref(),
-        "-12 (error)"
+        "-12 (ENOMEM: Cannot allocate memory)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_mremap, -(libc::EFAULT as i64)).as_ref(),
-        "-14 (error)"
+        "-14 (EFAULT: Bad address)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_shmat, -(libc::EACCES as i64)).as_ref(),
-        "-13 (error)"
+        "-13 (EACCES: Permission denied)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_shmget, -(libc::ENOENT as i64)).as_ref(),
-        "-2 (error)"
+        "-2 (ENOENT: No such file or directory)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_msgget, -(libc::ENOENT as i64)).as_ref(),
-        "-2 (error)"
+        "-2 (ENOENT: No such file or directory)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_semget, -(libc::ENOENT as i64)).as_ref(),
-        "-2 (error)"
+        "-2 (ENOENT: No such file or directory)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_inotify_add_watch, -(libc::ENOSPC as i64)).as_ref(),
-        "-28 (error)"
+        "-28 (ENOSPC: No space left on device)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_membarrier, -(libc::EINVAL as i64)).as_ref(),
-        "-22 (error)"
+        "-22 (EINVAL: Invalid argument)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_pkey_alloc, -(libc::ENOSPC as i64)).as_ref(),
-        "-28 (error)"
+        "-28 (ENOSPC: No space left on device)"
     );
     assert_eq!(
         format_return_value(syscalls::SYS_rt_sigtimedwait, -(libc::EAGAIN as i64)).as_ref(),
-        "-11 (error)"
+        "-11 (EAGAIN: Resource temporarily unavailable)"
     );
 
     // brk returns the new break, never an errno

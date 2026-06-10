@@ -5756,14 +5756,16 @@ pub async fn handle_event(
             finish!(sf, header.return_value);
         }
         _ => {
-            let data = unsafe {
-                std::ptr::read_unaligned(
-                    payload.as_ptr() as *const pinchy_common::GenericSyscallData
-                )
-            };
+            if payload.len() >= size_of::<pinchy_common::GenericSyscallData>() {
+                let data = unsafe {
+                    std::ptr::read_unaligned(
+                        payload.as_ptr() as *const pinchy_common::GenericSyscallData
+                    )
+                };
 
-            for i in 0..data.args.len() {
-                argf!(sf, "{}", data.args[i]);
+                for i in 0..data.args.len() {
+                    argf!(sf, "{}", data.args[i]);
+                }
             }
 
             finish!(sf, header.return_value, b" <STUB>");

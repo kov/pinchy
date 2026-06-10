@@ -382,6 +382,29 @@ fn follow_forks() {
 }
 
 #[test]
+fn syscall_times() {
+    let pinchy = PinchyTest::new();
+
+    let handle = run_workload_with_args(&pinchy, &["fcntl"], "fcntl_test", &["-T"]);
+
+    // Every trace line should carry a duration suffix.
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ fcntl(fd: 3, cmd: F_GETFD, arg: 0x0) = 0 (success) <@NUMBER@.@NUMBER@>
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
 fn pipe_operations_syscalls() {
     let pinchy = PinchyTest::new();
 

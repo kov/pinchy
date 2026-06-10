@@ -70,11 +70,23 @@ pub enum FormattingStyle {
 pub struct Formatter<'f> {
     style: FormattingStyle,
     output: Pin<&'f mut dyn AsyncWrite>,
+    duration_ns: Option<u64>,
 }
 
 impl<'f> Formatter<'f> {
     pub fn new(output: Pin<&'f mut dyn AsyncWrite>, style: FormattingStyle) -> Self {
-        Formatter { style, output }
+        Formatter {
+            style,
+            output,
+            duration_ns: None,
+        }
+    }
+
+    // When set, finish() appends the time spent in the syscall, strace-style:
+    // ` <0.000123>`.
+    pub fn with_duration(mut self, duration_ns: u64) -> Self {
+        self.duration_ns = Some(duration_ns);
+        self
     }
 
     pub async fn push_syscall(mut self, pid: u32, syscall_nr: i64) -> Result<SyscallFormatter<'f>> {
@@ -222,6 +234,14 @@ impl<'f> SyscallFormatter<'f> {
 
         if let Some(suffix) = suffix {
             output.write_all(suffix).await?;
+        }
+
+        if let Some(duration_ns) = self.formatter.duration_ns {
+            let seconds = duration_ns as f64 / 1_000_000_000.0;
+
+            output
+                .write_all(format!(" <{seconds:.6}>").as_bytes())
+                .await?;
         }
 
         output.write_all(b"\n").await?;

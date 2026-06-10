@@ -29,6 +29,7 @@ pub(crate) fn make_compact_test_data<T: Copy>(
         pid,
         tid: pid,
         return_value,
+        duration_ns: 0,
     };
 
     let payload = unsafe {
@@ -62,6 +63,28 @@ macro_rules! syscall_test {
             );
         }
     };
+}
+
+#[::tokio::test]
+async fn syscall_duration_suffix() {
+    let data = pinchy_common::CloseData { fd: 3 };
+    let (header, payload) =
+        make_compact_test_data(pinchy_common::syscalls::SYS_close, 100, 0, &data);
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter =
+        crate::formatting::Formatter::new(pin_output, crate::formatting::FormattingStyle::OneLine)
+            .with_duration(123_456);
+
+    crate::events::handle_event(&header, &payload, formatter)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "100 close(fd: 3) = 0 (success) <0.000123>\n"
+    );
 }
 
 syscall_test!(

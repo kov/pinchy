@@ -15,14 +15,36 @@ IMPORTANT: note that we depend on a specific version of nightly to avoid breakag
 
 ## Build & Run
 
-Use `cargo build`, `cargo check`, etc. as normal. Run your program with:
+Use `cargo build`, `cargo check`, etc. as normal. Run the daemon with:
 
 ```shell
-cargo run --release --config 'target."cfg(all())".runner="sudo -E"'
+cargo run --release --bin pinchyd --config 'target."cfg(all())".runner="sudo -E"'
+```
+
+and the client (no root needed) with:
+
+```shell
+cargo run --release --bin pinchy -- ls /tmp
 ```
 
 Cargo build scripts are used to automatically build the eBPF correctly and include it in the
 program.
+
+## Installing the daemon
+
+`pinchyd` must run as root and registers the `org.pinchy.Service` name on the
+system D-Bus. The repository ships the pieces you need:
+
+- `org.pinchy.Service.conf` → `/etc/dbus-1/system.d/` (bus policy: lets
+  pinchyd own the name and any user talk to it)
+- `org.pinchy.Service.service` → `/usr/share/dbus-1/system-services/`
+  (bus activation: starts pinchyd on demand)
+- `pinchy.service` → `/usr/lib/systemd/system/` (systemd unit)
+
+With those installed (and `pinchyd` in the path used by the service files),
+running `pinchy ls /tmp` will start the daemon automatically via bus
+activation, and it exits on its own after being idle. Alternatively manage it
+explicitly with `sudo systemctl start pinchy`.
 
 ## UML Efficiency Benchmark
 
@@ -66,6 +88,19 @@ Attach to a running process:
 ```shell
 pinchy -p <PID> -e open,close
 ```
+
+List the syscall names supported by this build:
+```shell
+pinchy --list-syscalls
+```
+
+Other knobs:
+
+- `--format one-line|multi-line`: trace line formatting (default `one-line`)
+- `PINCHY_STDOUT_FLUSH_BYTES` / `PINCHY_LOW_LATENCY_FLUSH`: client output
+  flush tuning (defaults: flush per event on a TTY, on threshold or idle
+  otherwise)
+- `PINCHY_RINGBUF_SIZE`: daemon ring buffer size in bytes (default 80 MiB)
 
 ### Syscall Aliases
 

@@ -8,7 +8,7 @@ use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
 use pinchy_common::{
     compact_payload_size, max_compact_payload_size,
-    syscalls::{syscall_nr_from_name, ALL_SYSCALLS},
+    syscalls::{syscall_name_from_nr, syscall_nr_from_name, ALL_SYSCALLS, SYSCALL_ALIASES},
     WireEventHeader, WIRE_VERSION,
 };
 use tokio::io::{AsyncReadExt as _, AsyncWriteExt as _};
@@ -32,16 +32,82 @@ trait Pinchy {
 const DEFAULT_STDOUT_FLUSH_BYTES: usize = 1;
 const DEFAULT_NON_TTY_FLUSH_BYTES: usize = 65536;
 
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut row: Vec<usize> = (0..=b.len()).collect();
+
+    for (i, ca) in a.iter().enumerate() {
+        let mut prev = row[0];
+        row[0] = i + 1;
+
+        for (j, cb) in b.iter().enumerate() {
+            let cost = if ca == cb { prev } else { prev + 1 };
+            prev = row[j + 1];
+            row[j + 1] = cost.min(prev + 1).min(row[j] + 1);
+        }
+    }
+
+    row[b.len()]
+}
+
+fn closest_syscall_name(name: &str) -> Option<&'static str> {
+    ALL_SYSCALLS
+        .iter()
+        .filter_map(|&nr| syscall_name_from_nr(nr))
+        .chain(SYSCALL_ALIASES.iter().map(|&(alias, _)| alias))
+        .map(|candidate| (levenshtein(name, candidate), candidate))
+        .min()
+        .filter(|&(distance, _)| distance <= 2)
+        .map(|(_, candidate)| candidate)
+}
+
 fn parse_syscall_names(names: &[String]) -> Result<Vec<i64>, String> {
     let mut out = Vec::new();
     for name in names {
+        // Accept strace's -e trace=name,name qualifier syntax.
+        let name = name.strip_prefix("trace=").unwrap_or(name);
+
         match syscall_nr_from_name(name) {
             Some(nr) if ALL_SYSCALLS.contains(&nr) => out.push(nr),
             Some(_) => return Err(format!("Syscall '{name}' is not supported by this build")),
-            None => return Err(format!("Unknown syscall name: {name}")),
+            None => {
+                let mut msg = format!("Unknown syscall name: {name}.");
+
+                if let Some(suggestion) = closest_syscall_name(name) {
+                    msg.push_str(&format!(" Did you mean '{suggestion}'?"));
+                }
+
+                msg.push_str(" Run 'pinchy --list-syscalls' to see supported names.");
+                return Err(msg);
+            }
         }
     }
     Ok(out)
+}
+
+fn list_syscalls() {
+    use std::io::Write as _;
+
+    let mut names: Vec<&'static str> = ALL_SYSCALLS
+        .iter()
+        .filter_map(|&nr| syscall_name_from_nr(nr))
+        .collect();
+    names.sort_unstable();
+
+    let mut out = std::io::stdout().lock();
+    for name in names {
+        if let Err(e) = writeln!(out, "{name}") {
+            // Tolerate a closed pipe (e.g. `pinchy --list-syscalls | head`),
+            // but surface real write failures.
+            if e.kind() == std::io::ErrorKind::BrokenPipe {
+                return;
+            }
+
+            eprintln!("error writing syscall list: {e}");
+            std::process::exit(1);
+        }
+    }
 }
 
 fn parse_stdout_flush_bytes() -> usize {
@@ -67,9 +133,13 @@ struct Args {
     #[arg(short = 'e', long = "event", value_delimiter = ',', action = clap::ArgAction::Append)]
     syscalls: Vec<String>,
 
-    // Formatting style, `one-line` or `multi-line`
+    /// Formatting style for trace output
     #[arg(long = "format", value_enum, default_value_t = FormattingStyle::default())]
     style: FormattingStyle,
+
+    /// List the syscall names supported by this build and exit
+    #[arg(long = "list-syscalls")]
+    list_syscalls: bool,
 
     /// PID to trace
     #[arg(short = 'p', long = "pid", action = clap::ArgAction::Set, conflicts_with = "command")]
@@ -85,6 +155,12 @@ async fn main() -> Result<()> {
     env_logger::init();
 
     let args = Args::parse();
+
+    if args.list_syscalls {
+        list_syscalls();
+        return Ok(());
+    }
+
     let syscalls = if !args.syscalls.is_empty() {
         match parse_syscall_names(&args.syscalls) {
             Ok(v) => v,

@@ -48,5 +48,7 @@ macro_rules! declare_syscalls {
             }
         }
         pub const ALL_SYSCALLS: &[i64] = &[$($name),*];
+        pub const SYSCALL_ALIASES: &[(&str, i64)] =
+            &[$( $( ($alias, $target) ),* )?];
     };
 }

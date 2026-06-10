@@ -233,3 +233,59 @@ fn test_deprecated_syscall_return_values() {
         "2 (success)"
     );
 }
+
+#[test]
+fn test_raw_errno_return_values() {
+    // Raw sys_exit values are -errno, not just -1; any negative value is an
+    // error for these syscalls
+    assert_eq!(
+        format_return_value(syscalls::SYS_ppoll, -(libc::EINTR as i64)).as_ref(),
+        "-4 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_mmap, -(libc::ENOMEM as i64)).as_ref(),
+        "-12 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_mremap, -(libc::EFAULT as i64)).as_ref(),
+        "-14 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_shmat, -(libc::EACCES as i64)).as_ref(),
+        "-13 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_shmget, -(libc::ENOENT as i64)).as_ref(),
+        "-2 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_msgget, -(libc::ENOENT as i64)).as_ref(),
+        "-2 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_semget, -(libc::ENOENT as i64)).as_ref(),
+        "-2 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_inotify_add_watch, -(libc::ENOSPC as i64)).as_ref(),
+        "-28 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_membarrier, -(libc::EINVAL as i64)).as_ref(),
+        "-22 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_pkey_alloc, -(libc::ENOSPC as i64)).as_ref(),
+        "-28 (error)"
+    );
+    assert_eq!(
+        format_return_value(syscalls::SYS_rt_sigtimedwait, -(libc::EAGAIN as i64)).as_ref(),
+        "-11 (error)"
+    );
+
+    // brk returns the new break, never an errno
+    assert_eq!(
+        format_return_value(syscalls::SYS_brk, 0x5500000000).as_ref(),
+        "0x5500000000"
+    );
+}

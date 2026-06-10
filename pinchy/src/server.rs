@@ -418,7 +418,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fchmod,
         syscalls::SYS_fchown,
         syscalls::SYS_flock,
-        syscalls::SYS_truncate,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_create,
         syscalls::SYS_epoll_create1,

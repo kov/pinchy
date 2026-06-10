@@ -219,7 +219,7 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         if syscall_nr == syscalls::SYS_preadv2
                             || syscall_nr == syscalls::SYS_pwritev2
                         {
-                            payload.flags = args[4] as u32;
+                            payload.flags = args[5] as u32;
                         }
 
                         let iov_addr = args[1] as u64;
@@ -382,20 +382,16 @@ pub fn syscall_exit_basic_io(ctx: TracePointContext) -> u32 {
                         payload.nfds = args[1] as u32;
                         payload.timeout = args[2] as i32;
 
-                        let mut fds_ptr = args[0] as *const Pollfd;
+                        let fds_ptr = args[0] as *const Pollfd;
                         let fds = &mut payload.fds;
 
                         if !fds_ptr.is_null() && payload.nfds > 0 {
                             let max_fds = core::cmp::min(payload.nfds, 16) as usize;
                             for i in 0..max_fds {
-                                fds_ptr = unsafe { fds_ptr.add(i) };
-
-                                if fds_ptr.is_null() {
-                                    break;
-                                }
+                                let entry_ptr = unsafe { fds_ptr.add(i) };
 
                                 if let Ok(pollfd) =
-                                    unsafe { bpf_probe_read_user::<Pollfd>(fds_ptr) }
+                                    unsafe { bpf_probe_read_user::<Pollfd>(entry_ptr) }
                                 {
                                     fds[i] = pollfd;
                                     payload.actual_nfds += 1;

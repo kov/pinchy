@@ -141,7 +141,6 @@ pub fn syscall_exit_signal(ctx: TracePointContext) -> u32 {
                     return_value,
                     |payload| {
                         payload.fd = args[0] as i32;
-                        payload.flags = args[2] as i32;
 
                         let mask_ptr = args[1] as *const kernel_types::Sigset;
                         if !mask_ptr.is_null() {
@@ -162,7 +161,7 @@ pub fn syscall_exit_signal(ctx: TracePointContext) -> u32 {
                     return_value,
                     |payload| {
                         payload.fd = args[0] as i32;
-                        payload.flags = args[2] as i32;
+                        payload.flags = args[3] as i32;
 
                         let mask_ptr = args[1] as *const kernel_types::Sigset;
                         if !mask_ptr.is_null() {

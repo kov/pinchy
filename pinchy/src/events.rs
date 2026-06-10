@@ -1816,8 +1816,6 @@ pub async fn handle_event(
                 arg!(sf, "mask: NULL");
             }
 
-            argf!(sf, "flags: {}", format_signalfd_flags(data.flags));
-
             finish!(sf, header.return_value);
         }
         syscalls::SYS_signalfd4 => {

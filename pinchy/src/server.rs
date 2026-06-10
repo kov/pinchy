@@ -496,7 +496,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fork,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_vfork,
-        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_fadvise64,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_arch_prctl,
@@ -506,7 +505,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_iopl,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_time,
-        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_kexec_file_load,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_get_thread_area,
@@ -759,7 +757,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_pipe2,
         syscalls::SYS_splice,
         syscalls::SYS_tee,
-        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_sendfile,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_open,

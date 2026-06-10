@@ -11,12 +11,12 @@ use pinchy_common::{
     FsyncData, FtruncateData, GetcwdData, GetxattrData, LgetxattrData, LinkatData, ListxattrData,
     LlistxattrData, LremovexattrData, LseekData, LsetxattrData, MkdiratData, NewfstatatData,
     OpenAt2Data, OpenAtData, Pipe2Data, PpollData, PreadData, Pselect6Data, PwriteData, ReadData,
-    ReadlinkatData, RemovexattrData, Renameat2Data, RenameatData, SetxattrData, SpliceData,
-    StatfsData, SymlinkatData, TeeData, UnlinkatData, VectorIOData, VmspliceData, WireEventHeader,
-    WriteData,
+    ReadlinkatData, RemovexattrData, Renameat2Data, RenameatData, SendfileData, SetxattrData,
+    SpliceData, StatfsData, SymlinkatData, TeeData, UnlinkatData, VectorIOData, VmspliceData,
+    WireEventHeader, WriteData,
 };
 #[cfg(target_arch = "x86_64")]
-use pinchy_common::{PollData, SelectData, SendfileData};
+use pinchy_common::{PollData, SelectData};
 
 use crate::{
     arg, argf, finish,
@@ -520,7 +520,6 @@ pub async fn handle_event(
             argf!(sf, "flags: {}", format_splice_flags(data.flags));
             finish!(sf, header.return_value);
         }
-        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_sendfile => {
             let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const SendfileData) };
 
@@ -2351,25 +2350,6 @@ pub async fn handle_event(
                     data.timeout.nanos
                 );
             }
-
-            finish!(sf, header.return_value);
-        }
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_sendfile => {
-            let data = unsafe {
-                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::SendfileData)
-            };
-
-            argf!(sf, "out_fd: {}", data.out_fd);
-            argf!(sf, "in_fd: {}", data.in_fd);
-
-            if data.offset_is_null != 0 {
-                argf!(sf, "offset: NULL");
-            } else {
-                argf!(sf, "offset: {}", data.offset);
-            }
-
-            argf!(sf, "count: {}", data.count);
 
             finish!(sf, header.return_value);
         }
@@ -5638,7 +5618,6 @@ pub async fn handle_event(
             argf!(sf, "mode: {}", format_mode(data.mode));
             finish!(sf, header.return_value);
         }
-        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_fadvise64 => {
             let data = unsafe {
                 std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::Fadvise64Data)
@@ -5693,7 +5672,6 @@ pub async fn handle_event(
             }
             finish!(sf, header.return_value);
         }
-        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_kexec_file_load => {
             let data = unsafe {
                 std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::KexecFileLoadData)

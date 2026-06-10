@@ -949,18 +949,18 @@ fn benchmark_basic_io_wave2() -> anyhow::Result<()> {
                 if select_ret < 0 {
                     bail!("select failed: {}", std::io::Error::last_os_error());
                 }
+            }
 
-                let mut offset = 0i64;
-                let sendfile_ret = libc::syscall(
-                    libc::SYS_sendfile,
-                    pipe2[1],
-                    fd,
-                    &mut offset as *mut i64,
-                    16usize,
-                );
-                if sendfile_ret < 0 {
-                    bail!("sendfile failed: {}", std::io::Error::last_os_error());
-                }
+            let mut offset = 0i64;
+            let sendfile_ret = libc::syscall(
+                pinchy_common::syscalls::SYS_sendfile,
+                pipe2[1],
+                fd,
+                &mut offset as *mut i64,
+                16usize,
+            );
+            if sendfile_ret < 0 {
+                bail!("sendfile failed: {}", std::io::Error::last_os_error());
             }
 
             libc::close(epfd);

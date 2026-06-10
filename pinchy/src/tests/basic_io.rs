@@ -13,20 +13,20 @@ use pinchy_common::{
         SYS_epoll_pwait2, SYS_fcntl, SYS_flock, SYS_io_cancel, SYS_io_destroy, SYS_io_getevents,
         SYS_io_pgetevents, SYS_io_setup, SYS_io_submit, SYS_io_uring_enter, SYS_io_uring_register,
         SYS_io_uring_setup, SYS_lseek, SYS_openat, SYS_openat2, SYS_pipe2, SYS_ppoll, SYS_pread64,
-        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_splice, SYS_tee, SYS_vmsplice,
-        SYS_write, SYS_writev,
+        SYS_preadv2, SYS_pwrite64, SYS_read, SYS_readv, SYS_sendfile, SYS_splice, SYS_tee,
+        SYS_vmsplice, SYS_write, SYS_writev,
     },
     CloseData, CloseRangeData, Dup3Data, DupData, EpollCreate1Data, EpollPWait2Data,
     EpollPWaitData, FcntlData, FlockData, IoCancelData, IoDestroyData, IoGeteventsData,
     IoPgeteventsData, IoSetupData, IoSubmitData, IoUringEnterData, IoUringRegisterData,
     IoUringSetupData, LseekData, OpenAt2Data, OpenAtData, PpollData, PreadData, PwriteData,
-    ReadData, SpliceData, TeeData, VectorIOData, VmspliceData, WriteData, DATA_READ_SIZE,
-    IOV_COUNT, LARGER_READ_SIZE,
+    ReadData, SendfileData, SpliceData, TeeData, VectorIOData, VmspliceData, WriteData,
+    DATA_READ_SIZE, IOV_COUNT, LARGER_READ_SIZE,
 };
 #[cfg(target_arch = "x86_64")]
 use pinchy_common::{
-    syscalls::{SYS_dup2, SYS_epoll_create, SYS_open, SYS_poll, SYS_sendfile},
-    Dup2Data, EpollCreateData, PollData, SendfileData,
+    syscalls::{SYS_dup2, SYS_epoll_create, SYS_open, SYS_poll},
+    Dup2Data, EpollCreateData, PollData,
 };
 
 use crate::{
@@ -909,7 +909,6 @@ syscall_test!(
     "444 io_uring_register(fd: 4, opcode: IORING_REGISTER_PROBE, arg: 0x7ffeabcd3000, nr_args: 0x80000004 (4|IORING_REGISTER_USE_REGISTERED_RING)) = 0 (success)\n"
 );
 
-#[cfg(target_arch = "x86_64")]
 syscall_test!(
     parse_sendfile_with_offset,
     {
@@ -926,7 +925,6 @@ syscall_test!(
     "400 sendfile(out_fd: 4, in_fd: 3, offset: 512, count: 2048) = 1024 (bytes)\n"
 );
 
-#[cfg(target_arch = "x86_64")]
 syscall_test!(
     parse_sendfile_null_offset,
     {

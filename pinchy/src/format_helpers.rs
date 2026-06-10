@@ -2384,7 +2384,6 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             }
         }
 
-        #[cfg(target_arch = "x86_64")]
         syscalls::SYS_sendfile => {
             if return_value >= 0 {
                 std::borrow::Cow::Owned(format!("{} (bytes)", return_value))
@@ -2508,14 +2507,17 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             _ => format_error_return(return_value),
         },
 
+        syscalls::SYS_fadvise64 | syscalls::SYS_kexec_file_load => match return_value {
+            0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => format_error_return(return_value),
+        },
+
         #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_fadvise64
-        | syscalls::SYS_arch_prctl
+        syscalls::SYS_arch_prctl
         | syscalls::SYS_ioperm
         | syscalls::SYS_iopl
         | syscalls::SYS_set_thread_area
-        | syscalls::SYS_get_thread_area
-        | syscalls::SYS_kexec_file_load => match return_value {
+        | syscalls::SYS_get_thread_area => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => format_error_return(return_value),
         },
@@ -6424,7 +6426,6 @@ pub fn format_kexec_load_flags(flags: u64) -> Cow<'static, str> {
     format!("0x{:x} ({})", flags, parts.join("|")).into()
 }
 
-#[cfg(target_arch = "x86_64")]
 pub fn format_fadvise_advice(advice: i32) -> &'static str {
     match advice {
         libc::POSIX_FADV_NORMAL => "POSIX_FADV_NORMAL",

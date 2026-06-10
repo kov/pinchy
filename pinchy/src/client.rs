@@ -26,7 +26,12 @@ mod tests;
 
 #[proxy(interface = "org.pinchy.Service", default_path = "/org/pinchy/Service")]
 trait Pinchy {
-    fn trace_pid(&self, pid: u32, syscalls: Vec<i64>) -> zbus::Result<zbus::zvariant::OwnedFd>;
+    fn trace_pid(
+        &self,
+        pid: u32,
+        syscalls: Vec<i64>,
+        follow_forks: bool,
+    ) -> zbus::Result<zbus::zvariant::OwnedFd>;
 }
 
 const DEFAULT_STDOUT_FLUSH_BYTES: usize = 1;
@@ -141,6 +146,10 @@ struct Args {
     #[arg(long = "list-syscalls")]
     list_syscalls: bool,
 
+    /// Follow forks: also trace child processes created by the tracee
+    #[arg(short = 'f', long = "follow-forks")]
+    follow_forks: bool,
+
     /// Write trace output to FILE instead of stderr
     #[arg(short = 'o', long = "output")]
     output: Option<std::path::PathBuf>,
@@ -180,7 +189,7 @@ async fn main() -> Result<()> {
     let style = args.style;
 
     if let Some(command) = args.command {
-        let (pid, fd) = pinchy_client::trace_child(command, syscalls).await;
+        let (pid, fd) = pinchy_client::trace_child(command, syscalls, args.follow_forks).await;
 
         // Read everything there is to read, the server will close the write end
         // of the pipe
@@ -188,7 +197,7 @@ async fn main() -> Result<()> {
 
         pinchy_client::cleanup_and_quit(pid);
     } else if let Some(pid) = args.pid {
-        let fd = pinchy_client::attach(pid, syscalls).await;
+        let fd = pinchy_client::attach(pid, syscalls, args.follow_forks).await;
 
         relay_to_sink(fd, style, args.output).await?;
     } else {

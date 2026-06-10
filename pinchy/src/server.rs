@@ -121,6 +121,7 @@ impl PinchyDBus {
         #[zbus(connection)] conn: &zbus::Connection,
         pid: u32,
         syscalls: Vec<i64>,
+        follow_forks: bool,
     ) -> zbus::fdo::Result<Fd<'_>> {
         // The eBPF SYSCALL_FILTER is a 512-bit bitmap indexed by syscall
         // number; reject anything outside that range before it reaches the
@@ -164,7 +165,7 @@ impl PinchyDBus {
             .dispatch
             .write()
             .await
-            .register_client(pid, writer, syscalls, Some(pidfd), caller_uid)
+            .register_client(pid, writer, syscalls, Some(pidfd), caller_uid, follow_forks)
             .await
             .map_err(|e| zbus::fdo::Error::Failed(e.to_string()))?;
 

@@ -38,6 +38,10 @@ for param in $(cat /proc/cmdline); do
         PINCHY_TEST_NAME=*)
             PINCHY_TEST_NAME="${param#PINCHY_TEST_NAME=}"
             ;;
+        PINCHY_TEST_EXTRA_ARGS=*)
+            # Comma-separated so the value survives the kernel command line.
+            PINCHY_TEST_EXTRA_ARGS=$(printf '%s' "${param#PINCHY_TEST_EXTRA_ARGS=}" | tr ',' ' ')
+            ;;
         PINCHY_BENCH_LOOPS=*)
             PINCHY_BENCH_LOOPS="${param#PINCHY_BENCH_LOOPS=}"
             ;;
@@ -217,7 +221,7 @@ run_standard() {
     build_event_args
 
     # Run pinchy client with test-helper workload under setsid
-    setsid sh -c "$PINCHY $EVENT_ARGS -- $TEST_HELPER $PINCHY_TEST_WORKLOAD \
+    setsid sh -c "$PINCHY $EVENT_ARGS $PINCHY_TEST_EXTRA_ARGS -- $TEST_HELPER $PINCHY_TEST_WORKLOAD \
         >\"$OUTDIR/pinchy.stdout\" 2>\"$OUTDIR/pinchy.stderr\"; \
         echo \$? >\"$OUTDIR/pinchy.exit\""
 

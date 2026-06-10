@@ -7,22 +7,31 @@ use zbus::{Error as ZBusError, fdo, names::WellKnownName, proxy};
 
 #[proxy(interface = "org.pinchy.Service", default_path = "/org/pinchy/Service")]
 pub trait Pinchy {
-    fn trace_pid(&self, pid: u32, syscalls: Vec<i64>) -> zbus::Result<zbus::zvariant::OwnedFd>;
+    fn trace_pid(
+        &self,
+        pid: u32,
+        syscalls: Vec<i64>,
+        follow_forks: bool,
+    ) -> zbus::Result<zbus::zvariant::OwnedFd>;
 }
 
-pub async fn attach(pid: u32, syscalls: Vec<i64>) -> OwnedFd {
+pub async fn attach(pid: u32, syscalls: Vec<i64>, follow_forks: bool) -> OwnedFd {
     let proxy = match connect_to_server().await {
         Ok(proxy) => proxy,
         Err(e) => handle_dbus_error(e),
     };
 
-    match proxy.trace_pid(pid, syscalls).await {
+    match proxy.trace_pid(pid, syscalls, follow_forks).await {
         Ok(fd) => OwnedFd::from(fd),
         Err(e) => handle_dbus_error(e),
     }
 }
 
-pub async fn trace_child(command: Vec<OsString>, syscalls: Vec<i64>) -> (i32, OwnedFd) {
+pub async fn trace_child(
+    command: Vec<OsString>,
+    syscalls: Vec<i64>,
+    follow_forks: bool,
+) -> (i32, OwnedFd) {
     let proxy = match connect_to_server().await {
         Ok(proxy) => proxy,
         Err(e) => handle_dbus_error(e),
@@ -107,7 +116,7 @@ pub async fn trace_child(command: Vec<OsString>, syscalls: Vec<i64>) -> (i32, Ow
             std::process::exit(1);
         }
     }
-    let fd = match proxy.trace_pid(pid as u32, syscalls).await {
+    let fd = match proxy.trace_pid(pid as u32, syscalls, follow_forks).await {
         Ok(fd) => OwnedFd::from(fd),
         Err(e) => handle_dbus_error(e),
     };

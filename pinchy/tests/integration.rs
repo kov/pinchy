@@ -4,7 +4,7 @@
 mod common;
 
 use assert_cmd::assert::Assert;
-use common::{run_workload, PinchyTest, TestMode};
+use common::{run_workload, run_workload_with_args, PinchyTest, TestMode};
 use indoc::indoc;
 use predicates::prelude::*;
 
@@ -352,6 +352,33 @@ fn fcntl_syscalls() {
     Assert::new(output)
         .success()
         .stdout(predicate::str::ends_with("Exiting...\n"));
+}
+
+#[test]
+fn follow_forks() {
+    let pinchy = PinchyTest::new();
+
+    // The fork_test workload forks a child that opens /dev/null; only a
+    // follow-forks trace sees the child's openat.
+    let handle = run_workload_with_args(&pinchy, &["openat"], "fork_test", &["-f"]);
+
+    let expected_output = escaped_regex(indoc! {r#"
+        @PID@ openat(dfd: AT_FDCWD, pathname: "/dev/null", flags: 0x0 (O_RDONLY), mode: 0) = @NUMBER@ (fd)
+    "#});
+
+    let output = handle.join().unwrap();
+    Assert::new(output)
+        .success()
+        .stderr(predicate::str::is_match(&expected_output).unwrap());
+
+    // Server output - has to be at the end, since we kill the server for waiting.
+    let output = pinchy.wait();
+    Assert::new(output)
+        .success()
+        .stdout(predicate::str::ends_with(
+            "Exiting...
+",
+        ));
 }
 
 #[test]

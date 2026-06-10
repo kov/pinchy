@@ -100,6 +100,7 @@ fn boot_uml(
     events: Option<&str>,
     workload: Option<&str>,
     test_name: Option<&str>,
+    extra_args: Option<&str>,
 ) -> UmlResult {
     let kpath = kernel_path();
 
@@ -117,6 +118,7 @@ fn boot_uml(
     let events_str = events.unwrap_or("");
     let workload_str = workload.unwrap_or("");
     let test_name_str = test_name.unwrap_or("");
+    let extra_args_str = extra_args.unwrap_or("");
 
     let args = vec![
         "mem=128M".to_string(),
@@ -133,6 +135,7 @@ fn boot_uml(
         format!("PINCHY_TEST_PROJDIR={}", proj.display()),
         format!("PINCHY_TEST_MODE={}", mode.as_str()),
         format!("PINCHY_TEST_NAME={test_name_str}"),
+        format!("PINCHY_TEST_EXTRA_ARGS={extra_args_str}"),
     ];
 
     let output = Command::new(&kpath)
@@ -243,7 +246,7 @@ impl PinchyTest {
         let has_result = self.result.lock().unwrap().is_some();
 
         if !has_result {
-            let result = boot_uml(&self.mode, self.output_dir.path(), None, None, None);
+            let result = boot_uml(&self.mode, self.output_dir.path(), None, None, None, None);
 
             *self.result.lock().unwrap() = Some(result);
         }
@@ -266,7 +269,18 @@ impl PinchyTest {
 }
 
 pub fn run_workload(pinchy: &PinchyTest, events: &[&str], test_name: &str) -> JoinHandle<Output> {
+    run_workload_with_args(pinchy, events, test_name, &[])
+}
+
+// extra_args are additional pinchy client flags, e.g. &["-f"].
+pub fn run_workload_with_args(
+    pinchy: &PinchyTest,
+    events: &[&str],
+    test_name: &str,
+    extra_args: &[&str],
+) -> JoinHandle<Output> {
     let events_str = events.join(",");
+    let extra_args_str = extra_args.join(",");
     let test_name = test_name.to_owned();
     let output_dir = pinchy.output_dir.path().to_path_buf();
     let result_arc = Arc::clone(&pinchy.result);
@@ -279,6 +293,7 @@ pub fn run_workload(pinchy: &PinchyTest, events: &[&str], test_name: &str) -> Jo
             Some(&events_str),
             Some(&test_name),
             Some(&test_name),
+            Some(&extra_args_str),
         );
 
         // Take the pinchy output before storing the result

@@ -1,7 +1,7 @@
 #![allow(non_snake_case, non_upper_case_globals)]
 use std::{
     collections::{HashMap, HashSet},
-    os::fd::{AsRawFd as _, OwnedFd},
+    os::fd::{AsRawFd as _, FromRawFd as _, OwnedFd},
     sync::{
         atomic::{AtomicU64, AtomicUsize, Ordering},
         Arc,
@@ -14,7 +14,8 @@ use aya::{
     Ebpf,
 };
 use pinchy_common::{
-    compact_payload_size, syscalls, wire_validation_enabled, WireEventHeader, WIRE_VERSION,
+    compact_payload_size, syscalls, wire_validation_enabled, Clone3Data, CloneData,
+    WireEventHeader, WIRE_VERSION,
 };
 use tokio::{
     io::{unix::AsyncFd, AsyncWriteExt},
@@ -484,6 +485,7 @@ struct Client {
     sender: tokio::sync::mpsc::Sender<Arc<[u8]>>,
     syscalls: HashSet<i64>,
     queue_stats: Arc<ClientQueueStats>,
+    follow_forks: bool,
 }
 
 #[derive(Debug)]
@@ -538,6 +540,54 @@ fn parse_wire_metadata(event: &[u8], validate_wire: bool) -> Option<WireEventHea
     }
 
     Some(header)
+}
+
+fn is_fork_syscall(nr: i64) -> bool {
+    if nr == syscalls::SYS_clone || nr == syscalls::SYS_clone3 {
+        return true;
+    }
+
+    #[cfg(target_arch = "x86_64")]
+    if nr == syscalls::SYS_fork || nr == syscalls::SYS_vfork {
+        return true;
+    }
+
+    false
+}
+
+// A fork-family exit in a traced process announces a new child. clone and
+// clone3 with CLONE_THREAD stay within the traced thread group, so they are
+// not followed.
+fn fork_child_pid(header: &WireEventHeader, event: &[u8]) -> Option<u32> {
+    if header.return_value <= 0 {
+        return None;
+    }
+
+    let payload = &event[std::mem::size_of::<WireEventHeader>()..];
+
+    let flags = if header.syscall_nr == syscalls::SYS_clone {
+        if payload.len() < std::mem::size_of::<CloneData>() {
+            return None;
+        }
+
+        let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const CloneData) };
+        data.flags
+    } else if header.syscall_nr == syscalls::SYS_clone3 {
+        if payload.len() < std::mem::size_of::<Clone3Data>() {
+            return None;
+        }
+
+        let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const Clone3Data) };
+        data.cl_args.flags
+    } else {
+        0
+    };
+
+    if flags & libc::CLONE_THREAD as u64 != 0 {
+        return None;
+    }
+
+    Some(header.return_value as u32)
 }
 
 fn parse_client_queue_capacity() -> usize {
@@ -647,6 +697,7 @@ impl EventDispatch {
         tokio::spawn(async move {
             let mut dispatch_batch: Vec<(WireEventHeader, Arc<[u8]>)> = Vec::with_capacity(256);
             let mut revalidate_pids: Vec<u32> = Vec::new();
+            let mut fork_children: Vec<(u32, u32)> = Vec::new();
 
             loop {
                 tokio::select! {
@@ -662,6 +713,7 @@ impl EventDispatch {
                                 let dispatch = event_dispatch.read().await;
                                 dispatch_batch.clear();
                                 revalidate_pids.clear();
+                                fork_children.clear();
 
                                 while let Some(item) = ring.next() {
                                     let event = &*item;
@@ -687,6 +739,14 @@ impl EventDispatch {
                                         revalidate_pids.push(header.pid);
                                     }
 
+                                    if is_fork_syscall(header.syscall_nr) {
+                                        if let Some(child) = fork_child_pid(&header, event) {
+                                            if !fork_children.contains(&(header.pid, child)) {
+                                                fork_children.push((header.pid, child));
+                                            }
+                                        }
+                                    }
+
                                     let framed_event = Arc::<[u8]>::from(event);
 
                                     event_stats.framed_event(framed_event.len());
@@ -702,8 +762,14 @@ impl EventDispatch {
                                 guard.clear_ready();
                                 drop(dispatch);
 
-                                if !revalidate_pids.is_empty() {
+                                if !fork_children.is_empty() || !revalidate_pids.is_empty() {
                                     let mut dispatch = event_dispatch.write().await;
+
+                                    for (parent, child) in fork_children.drain(..) {
+                                        if let Err(e) = dispatch.handle_fork(parent, child).await {
+                                            eprintln!("Error following fork of PID {parent}: {e}");
+                                        }
+                                    }
 
                                     for pid in revalidate_pids.drain(..) {
                                         if let Err(e) =
@@ -825,9 +891,11 @@ impl EventDispatch {
         mut syscalls: Vec<i64>,
         pidfd: Option<OwnedFd>, // Pass pidfd from server for monitoring
         uid: u32,
+        follow_forks: bool,
     ) -> anyhow::Result<u64> {
         // Each registration holds a pipe, a writer task and a queue in the
-        // daemon; bound what a single user can pin down.
+        // daemon; bound what a single user can pin down. A client following
+        // forks appears once per traced PID, so count distinct client ids.
         const MAX_CLIENTS_PER_UID: usize = 64;
         if uid != 0 {
             let existing = self
@@ -835,7 +903,9 @@ impl EventDispatch {
                 .values()
                 .flatten()
                 .filter(|client| client.uid == uid)
-                .count();
+                .map(|client| client.client_id)
+                .collect::<HashSet<_>>()
+                .len();
 
             if existing >= MAX_CLIENTS_PER_UID {
                 anyhow::bail!("too many concurrent traces for uid {uid}");
@@ -861,6 +931,7 @@ impl EventDispatch {
             sender: event_tx,
             syscalls: syscalls.into_iter().collect(),
             queue_stats: queue_stats.clone(),
+            follow_forks,
         };
 
         let is_new_pid = !self.clients_map.contains_key(&pid);
@@ -868,18 +939,25 @@ impl EventDispatch {
 
         // Add PID to eBPF filter if this is the first client for this PID
         if is_new_pid {
-            let mut pid_filter: aya::maps::HashMap<_, u32, u8> = self
-                .ebpf
-                .map_mut("PID_FILTER")
-                .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
-                .try_into()
-                .map_err(|e| anyhow::anyhow!("Map conversion failed: {e}"))?;
-            pid_filter
-                .insert(pid, 0, 0)
-                .map_err(|e| anyhow::anyhow!("Failed to insert PID: {e}"))?; // Start monitoring this PID if we got a pidfd
-            if let Some(pidfd) = pidfd {
-                // Set up async monitoring
-                self.start_pidfd_monitoring(pid, pidfd).await?;
+            let setup = async {
+                self.add_pid_to_filter(pid)?;
+
+                // Start monitoring this PID if we got a pidfd
+                if let Some(pidfd) = pidfd {
+                    // Set up async monitoring
+                    self.start_pidfd_monitoring(pid, pidfd).await?;
+                }
+
+                Ok::<(), anyhow::Error>(())
+            };
+
+            if let Err(e) = setup.await {
+                // Roll back the registration so a failed setup does not
+                // leave a clientless entry (or a stray filter PID) behind.
+                self.clients_map.remove(&pid);
+                let _ = self.remove_pid_from_filter(pid).await;
+
+                return Err(e);
             }
         }
 
@@ -901,26 +979,91 @@ impl EventDispatch {
     }
 
     pub async fn remove_client(&mut self, client_id: u64) -> anyhow::Result<()> {
-        let mut removed_pid = None;
+        // A client following forks is registered for several PIDs; collect
+        // every PID left without clients, not just the first.
+        let mut removed_pids = Vec::new();
 
         self.clients_map.retain(|&pid, clients| {
             clients.retain(|client| client.client_id != client_id);
             if clients.is_empty() {
-                removed_pid = Some(pid);
+                removed_pids.push(pid);
                 false
             } else {
                 true
             }
         });
 
-        // Remove PID from eBPF filter if this was the last client for this PID
-        if let Some(pid) = removed_pid {
+        // Remove PIDs from eBPF filter if this was their last client
+        for pid in removed_pids {
             // Clean up any timeout tracking for this PID
             self.pid_timeouts.remove(&pid);
 
             // Remove PID from eBPF filter and resubscribe
             self.remove_pid_from_filter(pid).await?;
         }
+
+        Ok(())
+    }
+
+    // A traced process with a follow-forks client created a new child
+    // process: register the interested clients for the child as well, so its
+    // events flow into the same output stream.
+    pub async fn handle_fork(&mut self, parent: u32, child: u32) -> anyhow::Result<()> {
+        let Some(parent_clients) = self.clients_map.get(&parent) else {
+            return Ok(());
+        };
+
+        let followers: Vec<Client> = parent_clients
+            .iter()
+            .filter(|client| {
+                client.follow_forks
+                    && !self
+                        .clients_map
+                        .get(&child)
+                        .map(|clients| clients.iter().any(|c| c.client_id == client.client_id))
+                        .unwrap_or(false)
+            })
+            .map(|client| Client {
+                client_id: client.client_id,
+                pid: child,
+                uid: client.uid,
+                sender: client.sender.clone(),
+                syscalls: client.syscalls.clone(),
+                queue_stats: client.queue_stats.clone(),
+                follow_forks: true,
+            })
+            .collect();
+
+        if followers.is_empty() {
+            return Ok(());
+        }
+
+        let is_new_pid = !self.clients_map.contains_key(&child);
+
+        if is_new_pid {
+            // The child may already be gone; in that case no events were
+            // captured for it (it was never in the filter), so just skip it.
+            let pidfd = unsafe { libc::syscall(libc::SYS_pidfd_open, child, 0u32) };
+
+            if pidfd < 0 {
+                return Ok(());
+            }
+
+            let pidfd = unsafe { OwnedFd::from_raw_fd(pidfd as std::os::fd::RawFd) };
+
+            self.add_pid_to_filter(child)?;
+
+            if let Err(e) = self.start_pidfd_monitoring(child, pidfd).await {
+                // Without monitoring the child would stay in the filter
+                // forever; roll back instead of tracing it unsupervised.
+                let _ = self.remove_pid_from_filter(child).await;
+
+                return Err(e);
+            }
+        }
+
+        log::debug!("following fork: parent {parent} -> child {child}");
+        self.clients_map.entry(child).or_default().extend(followers);
 
         Ok(())
     }
@@ -1008,12 +1151,49 @@ impl EventDispatch {
             }
         }
 
+        // Likewise capture the fork family while any client follows forks,
+        // so the dispatch loop learns about new children.
+        if self
+            .clients_map
+            .values()
+            .flatten()
+            .any(|client| client.follow_forks)
+        {
+            let fork_syscalls = [
+                syscalls::SYS_clone,
+                syscalls::SYS_clone3,
+                #[cfg(target_arch = "x86_64")]
+                syscalls::SYS_fork,
+                #[cfg(target_arch = "x86_64")]
+                syscalls::SYS_vfork,
+            ];
+
+            for nr in fork_syscalls {
+                bitmap[(nr / 8) as usize] |= 1 << (nr % 8);
+            }
+        }
+
         let mut map: aya::maps::Array<_, u8> =
             Array::try_from(self.ebpf.map_mut("SYSCALL_FILTER").unwrap()).unwrap();
 
         for (i, byte) in bitmap.iter().enumerate() {
             map.set(i as u32, byte, 0).unwrap();
         }
+    }
+
+    fn add_pid_to_filter(&mut self, pid: u32) -> anyhow::Result<()> {
+        let mut pid_filter: aya::maps::HashMap<_, u32, u8> = self
+            .ebpf
+            .map_mut("PID_FILTER")
+            .ok_or_else(|| anyhow::anyhow!("PID_FILTER map not found"))?
+            .try_into()
+            .map_err(|e| anyhow::anyhow!("Map conversion failed: {e}"))?;
+
+        pid_filter
+            .insert(pid, 0, 0)
+            .map_err(|e| anyhow::anyhow!("Failed to insert PID: {e}"))?;
+
+        Ok(())
     }
 
     async fn remove_pid_from_filter(&mut self, pid: u32) -> anyhow::Result<()> {

@@ -2615,7 +2615,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             // The events.rs handler will override this with the extra parameter
             match return_value {
                 0 => std::borrow::Cow::Borrowed("0 (timeout)"),
-                -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+                n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
                 _ => std::borrow::Cow::Owned(format!("{return_value} (ready)")),
             }
         }
@@ -2665,19 +2665,26 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             }
         }
 
-        // Memory address returning syscalls
+        // Memory address returning syscalls; errors are -errno in the
+        // -4095..0 range, anything else is a valid address
         syscalls::SYS_mmap | syscalls::SYS_mremap => {
-            if return_value == -1 {
-                std::borrow::Cow::Borrowed("-1 (error)")
+            if (-4095..0).contains(&return_value) {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
             } else {
                 std::borrow::Cow::Owned(format!("0x{return_value:x} (addr)"))
             }
         }
 
-        // Syscalls that return an address
-        syscalls::SYS_brk | syscalls::SYS_shmat => {
-            std::borrow::Cow::Owned(format!("0x{return_value:x}"))
+        syscalls::SYS_shmat => {
+            if (-4095..0).contains(&return_value) {
+                std::borrow::Cow::Owned(format!("{return_value} (error)"))
+            } else {
+                std::borrow::Cow::Owned(format!("0x{return_value:x}"))
+            }
         }
+
+        // brk returns the new (or unchanged) break, never an error
+        syscalls::SYS_brk => std::borrow::Cow::Owned(format!("0x{return_value:x}")),
 
         // Page migration syscalls return page counts
         syscalls::SYS_migrate_pages => {
@@ -2758,22 +2765,22 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         },
 
         syscalls::SYS_shmget => match return_value {
-            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (shmid)")),
         },
 
         syscalls::SYS_msgget => match return_value {
-            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (msqid)")),
         },
 
         syscalls::SYS_semget => match return_value {
-            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (semid)")),
         },
 
         syscalls::SYS_inotify_add_watch => match return_value {
-            -1 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
+            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (wd)")),
         },
 
@@ -2795,19 +2802,19 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
 
         // Special syscalls with unique return value semantics
         syscalls::SYS_membarrier => match return_value {
-            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             0 => std::borrow::Cow::Borrowed("0 (success)"),
             _ => std::borrow::Cow::Owned(format!("{return_value} (bitmask)")),
         },
 
         syscalls::SYS_pkey_alloc => match return_value {
-            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (pkey)")),
         },
 
         // Signal-related syscalls with special return semantics
         syscalls::SYS_rt_sigtimedwait => match return_value {
-            -1 => std::borrow::Cow::Borrowed("-1 (error)"),
+            n if n < 0 => std::borrow::Cow::Owned(format!("{return_value} (error)")),
             _ => std::borrow::Cow::Owned(format!("{return_value} (signal)")),
         },
 

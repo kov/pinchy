@@ -348,16 +348,18 @@ pub async fn handle_event(
             format_timespec(&mut sf, data.timeout).await?;
             arg!(sf, "sigmask");
 
-            let extra_info = match header.return_value {
-                0 => None,
-                -1 => None,
-                _ => Some(format!(
+            // revents are only meaningful when some fds became ready; a
+            // timeout (0) or an error (raw -errno) has none to report.
+            let extra_info = if header.return_value > 0 {
+                Some(format!(
                     " [{}]",
                     data.fds.iter().zip(data.revents.iter()).join_take_map(
                         data.nfds as usize,
                         |(fd, event)| format!("{fd} = {}", format_poll_events(*event))
                     )
-                )),
+                ))
+            } else {
+                None
             };
 
             match extra_info {

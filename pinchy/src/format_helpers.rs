@@ -2397,6 +2397,10 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_fallocate
         | syscalls::SYS_fchmod
         | syscalls::SYS_fchmodat
+        | syscalls::SYS_fchmodat2
+        | syscalls::SYS_cachestat
+        | syscalls::SYS_statmount
+        | syscalls::SYS_futex_wait
         | syscalls::SYS_fchown
         | syscalls::SYS_fchownat
         | syscalls::SYS_flock
@@ -2504,6 +2508,16 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_kexec_load
         | syscalls::SYS_nfsservctl => match return_value {
             0 => std::borrow::Cow::Borrowed("0 (success)"),
+            _ => format_error_return(return_value),
+        },
+
+        syscalls::SYS_futex_wake | syscalls::SYS_futex_requeue => match return_value {
+            n if n >= 0 => std::borrow::Cow::Owned(format!("{n} (woken)")),
+            _ => format_error_return(return_value),
+        },
+
+        syscalls::SYS_listmount => match return_value {
+            n if n >= 0 => std::borrow::Cow::Owned(format!("{n} (entries)")),
             _ => format_error_return(return_value),
         },
 

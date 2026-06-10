@@ -689,7 +689,7 @@ pub async fn handle_event(
             argf!(sf, "mode: {}", format_mode(data.mode));
             finish!(sf, header.return_value);
         }
-        syscalls::SYS_fchmodat => {
+        syscalls::SYS_fchmodat | syscalls::SYS_fchmodat2 => {
             let data = unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const FchmodatData) };
 
             argf!(sf, "dirfd: {}", format_dirfd(data.dirfd));
@@ -2083,7 +2083,7 @@ pub async fn handle_event(
 
             arg!(sf, "waiters:");
             with_array!(sf, {
-                let count = data.nr_waiters as usize;
+                let count = (data.nr_waiters as usize).min(data.waiters.len());
                 for i in 0..count {
                     let w = data.waiters[i];
                     arg!(sf, "waiter");
@@ -2112,6 +2112,159 @@ pub async fn handle_event(
             } else {
                 finish!(sf, header.return_value);
             }
+        }
+        syscalls::SYS_futex_wake => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FutexWakeData)
+            };
+
+            argf!(sf, "uaddr: 0x{:x}", data.uaddr);
+            argf!(sf, "mask: 0x{:x}", data.mask);
+            argf!(sf, "nr: {}", data.nr);
+            argf!(sf, "flags: {}", format_futex_waitv_flags(data.flags));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_futex_wait => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FutexWaitData)
+            };
+
+            argf!(sf, "uaddr: 0x{:x}", data.uaddr);
+            argf!(sf, "val: {}", data.val);
+            argf!(sf, "mask: 0x{:x}", data.mask);
+            argf!(sf, "flags: {}", format_futex_waitv_flags(data.flags));
+
+            arg!(sf, "timeout:");
+            if data.has_timeout {
+                format_timespec(&mut sf, data.timeout).await?;
+            } else {
+                raw!(sf, " NULL");
+            }
+
+            argf!(sf, "clockid: {}", format_clockid(data.clockid));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_futex_requeue => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FutexRequeueData)
+            };
+
+            if data.has_waiters {
+                arg!(sf, "waiters:");
+                with_array!(sf, {
+                    for w in data.waiters.iter() {
+                        arg!(sf, "waiter");
+                        with_struct!(sf, {
+                            argf!(sf, "uaddr: 0x{:x}", w.uaddr);
+                            argf!(sf, "val: {}", w.val);
+                            argf!(sf, "flags: {}", format_futex_waitv_flags(w.flags));
+                        });
+                    }
+                });
+            } else {
+                arg!(sf, "waiters: NULL");
+            }
+
+            argf!(sf, "flags: {}", format_futex_waitv_flags(data.flags));
+            argf!(sf, "nr_wake: {}", data.nr_wake);
+            argf!(sf, "nr_requeue: {}", data.nr_requeue);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_cachestat => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::CachestatData)
+            };
+
+            argf!(sf, "fd: {}", data.fd);
+
+            if data.has_range {
+                arg!(sf, "range:");
+                with_struct!(sf, {
+                    argf!(sf, "off: {}", data.range.off);
+                    argf!(sf, "len: {}", data.range.len);
+                });
+            } else {
+                arg!(sf, "range: NULL");
+            }
+
+            if data.has_cstat {
+                arg!(sf, "cstat:");
+                with_struct!(sf, {
+                    argf!(sf, "nr_cache: {}", data.cstat.nr_cache);
+                    argf!(sf, "nr_dirty: {}", data.cstat.nr_dirty);
+                    argf!(sf, "nr_writeback: {}", data.cstat.nr_writeback);
+                    argf!(sf, "nr_evicted: {}", data.cstat.nr_evicted);
+                    argf!(
+                        sf,
+                        "nr_recently_evicted: {}",
+                        data.cstat.nr_recently_evicted
+                    );
+                });
+            } else {
+                arg!(sf, "cstat: <unavailable>");
+            }
+
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_statmount => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::StatmountData)
+            };
+
+            if data.has_req {
+                arg!(sf, "req:");
+                with_struct!(sf, {
+                    argf!(sf, "mnt_id: {}", data.req.mnt_id);
+                    argf!(sf, "param: 0x{:x}", data.req.param);
+
+                    if data.req.size as usize >= size_of::<kernel_types::MntIdReq>() {
+                        argf!(sf, "mnt_ns_id: {}", data.req.mnt_ns_id);
+                    }
+                });
+            } else {
+                arg!(sf, "req: NULL");
+            }
+
+            argf!(sf, "buf: 0x{:x}", data.buf);
+            argf!(sf, "bufsize: {}", data.bufsize);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_listmount => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ListmountData)
+            };
+
+            if data.has_req {
+                arg!(sf, "req:");
+                with_struct!(sf, {
+                    argf!(sf, "mnt_id: {}", data.req.mnt_id);
+                    argf!(sf, "param: 0x{:x}", data.req.param);
+
+                    if data.req.size as usize >= size_of::<kernel_types::MntIdReq>() {
+                        argf!(sf, "mnt_ns_id: {}", data.req.mnt_ns_id);
+                    }
+                });
+            } else {
+                arg!(sf, "req: NULL");
+            }
+
+            if header.return_value > 0 {
+                arg!(sf, "mnt_ids:");
+                with_array!(sf, {
+                    let count = (header.return_value as usize).min(data.mnt_ids.len());
+                    for id in &data.mnt_ids[..count] {
+                        argf!(sf, "{}", id);
+                    }
+                });
+            } else {
+                arg!(sf, "mnt_ids: []");
+            }
+
+            argf!(sf, "nr_mnt_ids: {}", data.nr_mnt_ids);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
         }
         syscalls::SYS_ioctl => {
             let data = unsafe {

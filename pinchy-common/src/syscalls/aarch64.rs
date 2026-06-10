@@ -311,6 +311,13 @@ declare_syscalls! {
     SYS_process_mrelease = 448,
     SYS_futex_waitv = 449,
     SYS_set_mempolicy_home_node = 450,
+    SYS_cachestat = 451,
+    SYS_fchmodat2 = 452,
+    SYS_futex_wake = 454,
+    SYS_futex_wait = 455,
+    SYS_futex_requeue = 456,
+    SYS_statmount = 457,
+    SYS_listmount = 458,
     SYS_mseal = 462,
 ;
     aliases:

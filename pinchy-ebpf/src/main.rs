@@ -17,7 +17,7 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::EFF_STAT_COUNT;
 use pinchy_common::{
     syscalls, Fadvise64Data, FchmodData, FchownData, FdatasyncData, FsyncData, FtruncateData,
-    KexecFileLoadData,
+    FutexWakeData, KexecFileLoadData,
 };
 #[cfg(x86_64)]
 use pinchy_common::{
@@ -1236,6 +1236,19 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     return_value,
                     |payload| {
                         payload.level = args[0] as i32;
+                    },
+                )?;
+            }
+            syscalls::SYS_futex_wake => {
+                crate::util::submit_compact_payload::<FutexWakeData, _>(
+                    &ctx,
+                    syscalls::SYS_futex_wake,
+                    return_value,
+                    |payload| {
+                        payload.uaddr = args[0] as u64;
+                        payload.mask = args[1] as u64;
+                        payload.nr = args[2] as i32;
+                        payload.flags = args[3] as u32;
                     },
                 )?;
             }

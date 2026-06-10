@@ -50,8 +50,49 @@ pub async fn trace_child(command: Vec<OsString>, syscalls: Vec<i64>) -> (i32, Ow
         unsafe {
             // Wait for a signal before we exec
             libc::raise(libc::SIGSTOP);
-            let result = libc::execvp(command[0].as_ptr(), argv.as_ptr());
-            std::process::exit(result);
+            libc::execvp(command[0].as_ptr(), argv.as_ptr());
+
+            // Only reached when exec failed. We forked off a multithreaded
+            // process, so only async-signal-safe calls are allowed here:
+            // write(2) straight to stderr and _exit(2), no allocation or
+            // locking. Use the shell convention for the exit code: 126 for
+            // permission problems, 127 for command not found.
+            let errno = *libc::__errno_location();
+
+            let write_all = |bytes: &[u8]| {
+                libc::write(
+                    libc::STDERR_FILENO,
+                    bytes.as_ptr() as *const libc::c_void,
+                    bytes.len(),
+                );
+            };
+
+            write_all(b"pinchy: cannot execute '");
+            write_all(command[0].as_bytes());
+            write_all(b"' (errno ");
+
+            let mut digits = [0u8; 12];
+            let mut i = digits.len();
+            let mut n = errno as u32;
+
+            loop {
+                i -= 1;
+                digits[i] = b'0' + (n % 10) as u8;
+                n /= 10;
+
+                if n == 0 {
+                    break;
+                }
+            }
+
+            write_all(&digits[i..]);
+            write_all(b")\n");
+
+            let code = match errno {
+                libc::EACCES | libc::EPERM => 126,
+                _ => 127,
+            };
+            libc::_exit(code);
         }
     }
 
@@ -129,10 +170,19 @@ fn handle_dbus_error(error: ZBusError) -> ! {
 
         // Service-related errors
         ZBusError::MethodError(error_name, description, _) => match error_name.as_str() {
-            "org.freedesktop.DBus.Error.ServiceUnknown" => {
+            "org.freedesktop.DBus.Error.ServiceUnknown"
+            | "org.freedesktop.DBus.Error.NameHasNoOwner" => {
                 eprintln!("Pinchy service is not running.");
-                eprintln!("Please start the pinchyd daemon first.");
+                eprintln!("Start it with: sudo systemctl start pinchy (or run pinchyd as root).");
                 std::process::exit(3);
+            }
+            "org.freedesktop.DBus.Error.UnknownObject" => {
+                if let Some(desc) = description {
+                    eprintln!("{desc}");
+                } else {
+                    eprintln!("The process does not exist (it may have exited).");
+                }
+                std::process::exit(9);
             }
             "org.freedesktop.DBus.Error.AccessDenied" | "org.freedesktop.DBus.Error.AuthFailed" => {
                 eprintln!("Permission denied: You don't have access to trace this process.");
@@ -172,8 +222,12 @@ fn handle_dbus_error(error: ZBusError) -> ! {
         ZBusError::FDO(fdo_error) => match *fdo_error {
             fdo::Error::ServiceUnknown(_) => {
                 eprintln!("Pinchy service is not running.");
-                eprintln!("Please start the pinchyd daemon first.");
+                eprintln!("Start it with: sudo systemctl start pinchy (or run pinchyd as root).");
                 std::process::exit(3);
+            }
+            fdo::Error::UnknownObject(ref msg) => {
+                eprintln!("{msg}");
+                std::process::exit(9);
             }
             fdo::Error::AccessDenied(_) | fdo::Error::AuthFailed(_) => {
                 eprintln!("Permission denied: You don't have access to trace this process.");

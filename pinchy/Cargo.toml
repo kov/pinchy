@@ -3,6 +3,8 @@ name = "pinchy"
 version = "0.1.0"
 edition = "2021"
 license = "MIT OR Apache-2.0"
+description = "eBPF-based syscall tracer, a low-overhead strace alternative"
+default-run = "pinchy"
 
 [features]
 default = []

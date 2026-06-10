@@ -188,7 +188,7 @@ fn spawn_auto_quit_task(dispatch: SharedEventDispatch, idle_since: Arc<RwLock<In
             }
 
             let pid_count = dispatch.read().await.active_pid_count();
-            println!("Currently serving: {pid_count}");
+            debug!("Currently serving: {pid_count}");
             sleep(idle_timeout).await;
         }
     });
@@ -246,8 +246,16 @@ fn drop_privileges() -> anyhow::Result<()> {
     Ok(())
 }
 
+// pinchyd takes no arguments; this still gives us --help/--version and a
+// proper error for anything else.
+#[derive(clap::Parser, Debug)]
+#[command(author, version, about)]
+struct Args {}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    let _args: Args = clap::Parser::parse();
+
     env_logger::init();
 
     // Bump the memlock rlimit. This is needed for older kernels that don't use the
@@ -273,7 +281,10 @@ async fn main() -> anyhow::Result<()> {
         loader.set_max_entries("EVENTS", size);
     }
 
-    let mut ebpf = loader.load(ebpf_bytes)?;
+    let mut ebpf = loader.load(ebpf_bytes).context(
+        "failed to load eBPF programs; pinchyd must run as root \
+         (or with CAP_BPF, CAP_PERFMON and CAP_SYS_ADMIN)",
+    )?;
     if let Err(e) = aya_log::EbpfLogger::init(&mut ebpf) {
         // This can happen if you remove all log statements from your eBPF program.
         warn!("failed to initialize eBPF logger: {e}");
@@ -312,7 +323,7 @@ async fn main() -> anyhow::Result<()> {
 
     load_tailcalls(&mut ebpf)?;
 
-    println!("Loaded eBPF programs in {:?}", now.elapsed());
+    debug!("Loaded eBPF programs in {:?}", now.elapsed());
 
     // Keeps track of how long since we handled an event; used to decide when to
     // automatically quit.
@@ -334,7 +345,7 @@ async fn main() -> anyhow::Result<()> {
 
     conn.object_server().at("/org/pinchy/Service", dbus).await?;
     conn.request_name("org.pinchy.Service").await?;
-    println!("Pinchy D-Bus service started on {bus_type} bus");
+    debug!("Pinchy D-Bus service started on {bus_type} bus");
 
     // Drop privileges. At this point we have created maps, loaded programs, opened
     // event buffers and obtained our well-known D-Bus name, so we can diminish and
@@ -342,13 +353,18 @@ async fn main() -> anyhow::Result<()> {
     drop_privileges()?;
 
     let ctrl_c = signal::ctrl_c();
+    let mut sigterm = signal::unix::signal(signal::unix::SignalKind::terminate())?;
 
-    println!("Waiting for Ctrl-C...");
+    debug!("Waiting for SIGINT/SIGTERM...");
     tokio::select! {
         result = ctrl_c => {
-            eprintln!("Ctrl-C received...");
+            debug!("SIGINT received...");
             conn.close().await?;
             result?;
+        },
+        _ = sigterm.recv() => {
+            debug!("SIGTERM received...");
+            conn.close().await?;
         },
     };
 

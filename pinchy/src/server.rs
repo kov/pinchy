@@ -462,6 +462,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fchown,
         syscalls::SYS_flock,
         syscalls::SYS_futex_wake,
+        syscalls::SYS_map_shadow_stack,
+        syscalls::SYS_lsm_set_self_attr,
+        syscalls::SYS_rseq_slice_yield,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_create,
         syscalls::SYS_epoll_create1,
@@ -652,6 +655,13 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_cachestat,
         syscalls::SYS_statmount,
         syscalls::SYS_listmount,
+        syscalls::SYS_setxattrat,
+        syscalls::SYS_getxattrat,
+        syscalls::SYS_listxattrat,
+        syscalls::SYS_removexattrat,
+        syscalls::SYS_open_tree_attr,
+        syscalls::SYS_file_getattr,
+        syscalls::SYS_file_setattr,
         syscalls::SYS_fchownat,
         syscalls::SYS_renameat,
         syscalls::SYS_renameat2,
@@ -823,6 +833,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     // System syscalls - all handled by the unified system handler
     const SYSTEM_SYSCALLS: &[i64] = &[
         syscalls::SYS_reboot,
+        syscalls::SYS_listns,
         syscalls::SYS_uname,
         syscalls::SYS_ioctl,
         syscalls::SYS_gettimeofday,
@@ -867,7 +878,12 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     }
 
     // Security syscalls - all handled by the unified security handler
-    const SECURITY_SYSCALLS: &[i64] = &[syscalls::SYS_ptrace, syscalls::SYS_seccomp];
+    const SECURITY_SYSCALLS: &[i64] = &[
+        syscalls::SYS_ptrace,
+        syscalls::SYS_seccomp,
+        syscalls::SYS_lsm_get_self_attr,
+        syscalls::SYS_lsm_list_modules,
+    ];
     let security_prog: &mut aya::programs::TracePoint = ebpf
         .program_mut("syscall_exit_security")
         .context("missing security handler")?

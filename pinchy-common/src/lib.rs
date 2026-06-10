@@ -186,6 +186,21 @@ pub fn compact_payload_size(syscall_nr: i64) -> Option<usize> {
         syscalls::SYS_futex_requeue => Some(core::mem::size_of::<FutexRequeueData>()),
         syscalls::SYS_statmount => Some(core::mem::size_of::<StatmountData>()),
         syscalls::SYS_listmount => Some(core::mem::size_of::<ListmountData>()),
+        syscalls::SYS_setxattrat | syscalls::SYS_getxattrat => {
+            Some(core::mem::size_of::<XattratData>())
+        }
+        syscalls::SYS_listxattrat => Some(core::mem::size_of::<ListxattratData>()),
+        syscalls::SYS_removexattrat => Some(core::mem::size_of::<RemovexattratData>()),
+        syscalls::SYS_map_shadow_stack => Some(core::mem::size_of::<MapShadowStackData>()),
+        syscalls::SYS_lsm_get_self_attr => Some(core::mem::size_of::<LsmGetSelfAttrData>()),
+        syscalls::SYS_lsm_set_self_attr => Some(core::mem::size_of::<LsmSetSelfAttrData>()),
+        syscalls::SYS_lsm_list_modules => Some(core::mem::size_of::<LsmListModulesData>()),
+        syscalls::SYS_open_tree_attr => Some(core::mem::size_of::<MountSetattrData>()),
+        syscalls::SYS_file_getattr | syscalls::SYS_file_setattr => {
+            Some(core::mem::size_of::<FileAttrData>())
+        }
+        syscalls::SYS_listns => Some(core::mem::size_of::<ListnsData>()),
+        syscalls::SYS_rseq_slice_yield => Some(core::mem::size_of::<RseqSliceYieldData>()),
         syscalls::SYS_fchown => Some(core::mem::size_of::<FchownData>()),
         syscalls::SYS_fchownat => Some(core::mem::size_of::<FchownatData>()),
         syscalls::SYS_renameat => Some(core::mem::size_of::<RenameatData>()),
@@ -3846,3 +3861,102 @@ pub struct ListmountData {
     pub nr_mnt_ids: u64,
     pub flags: u64,
 }
+
+// Shared by setxattrat and getxattrat, which have identical signatures.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct XattratData {
+    pub dfd: i32,
+    pub at_flags: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub name: [u8; MEDIUM_READ_SIZE],
+    pub value: [u8; DATA_READ_SIZE],
+    pub args: kernel_types::XattrArgs,
+    pub has_args: bool,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ListxattratData {
+    pub dfd: i32,
+    pub at_flags: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub list: u64,
+    pub size: usize,
+    pub xattr_list: kernel_types::XattrList,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RemovexattratData {
+    pub dfd: i32,
+    pub at_flags: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub name: [u8; MEDIUM_READ_SIZE],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct MapShadowStackData {
+    pub addr: u64,
+    pub size: u64,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct LsmGetSelfAttrData {
+    pub attr: u32,
+    pub ctx: u64,
+    pub size: u32,
+    pub has_size: bool,
+    pub flags: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct LsmSetSelfAttrData {
+    pub attr: u32,
+    pub ctx: u64,
+    pub size: u64,
+    pub flags: u32,
+}
+
+pub const LSM_IDS_COUNT: usize = 8;
+
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct LsmListModulesData {
+    pub ids: [u64; LSM_IDS_COUNT],
+    pub size: u32,
+    pub has_size: bool,
+    pub flags: u32,
+}
+
+// Shared by file_getattr and file_setattr, which have identical signatures.
+// The file_attr struct itself is left as a raw pointer for now.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct FileAttrData {
+    pub dfd: i32,
+    pub at_flags: i32,
+    pub pathname: [u8; DATA_READ_SIZE],
+    pub attr: u64,
+    pub size: u64,
+}
+
+pub const LISTNS_COUNT: usize = 16;
+
+// The ns_id_req struct is too new to rely on; keep it as a raw pointer.
+#[repr(C)]
+#[derive(Clone, Copy, Default)]
+pub struct ListnsData {
+    pub req: u64,
+    pub ns_ids: [u64; LISTNS_COUNT],
+    pub nr_ns_ids: u64,
+    pub flags: u64,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct RseqSliceYieldData;

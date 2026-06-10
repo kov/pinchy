@@ -959,3 +959,12 @@ pub struct MntIdReq {
     pub param: u64,
     pub mnt_ns_id: u64,
 }
+
+/// Matches the kernel's struct xattr_args used by setxattrat/getxattrat.
+#[repr(C)]
+#[derive(Debug, Default, Copy, Clone)]
+pub struct XattrArgs {
+    pub value: u64,
+    pub size: u32,
+    pub flags: u32,
+}

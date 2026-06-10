@@ -10,13 +10,13 @@ use aya_log_ebpf::error;
 #[cfg(x86_64)]
 use pinchy_common::kernel_types::LinuxDirent;
 use pinchy_common::{
-    kernel_types::{Cachestat, CachestatRange, LinuxDirent64, MntIdReq, Stat},
+    kernel_types::{Cachestat, CachestatRange, LinuxDirent64, MntIdReq, Stat, XattrArgs},
     syscalls, CachestatData, ChdirData, FaccessatData, FchmodatData, FchownatData, FgetxattrData,
-    FlistxattrData, FremovexattrData, FsetxattrData, FstatData, FstatfsData, GetcwdData,
-    GetxattrData, LgetxattrData, LinkatData, ListmountData, ListxattrData, LlistxattrData,
-    LremovexattrData, LsetxattrData, MkdiratData, NewfstatatData, ReadlinkatData, RemovexattrData,
-    Renameat2Data, RenameatData, SetxattrData, StatfsData, StatmountData, SymlinkatData,
-    UnlinkatData, DATA_READ_SIZE,
+    FileAttrData, FlistxattrData, FremovexattrData, FsetxattrData, FstatData, FstatfsData,
+    GetcwdData, GetxattrData, LgetxattrData, LinkatData, ListmountData, ListxattrData,
+    ListxattratData, LlistxattrData, LremovexattrData, LsetxattrData, MkdiratData, NewfstatatData,
+    ReadlinkatData, RemovexattrData, RemovexattratData, Renameat2Data, RenameatData, SetxattrData,
+    StatfsData, StatmountData, SymlinkatData, UnlinkatData, XattratData, DATA_READ_SIZE,
 };
 
 use crate::{util, util::submit_compact_payload};
@@ -213,8 +213,13 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
 
                         let list_ptr = args[1] as *const u8;
 
-                        if !list_ptr.is_null() && payload.size > 0 {
-                            let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+                        // The list is an output: only return_value bytes
+                        // are valid, and only on success.
+                        if !list_ptr.is_null() && return_value > 0 {
+                            let read_size = core::cmp::min(
+                                core::cmp::min(payload.size, return_value as usize),
+                                DATA_READ_SIZE,
+                            );
 
                             unsafe {
                                 let _ = bpf_probe_read_user_buf(
@@ -224,6 +229,131 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                             }
 
                             payload.xattr_list.size = read_size;
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_setxattrat | syscalls::SYS_getxattrat => {
+                submit_compact_payload::<XattratData, _>(
+                    &ctx,
+                    syscall_nr,
+                    return_value,
+                    |payload| {
+                        payload.dfd = args[0] as i32;
+                        payload.at_flags = args[2] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+                        let name_ptr = args[3] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+                        }
+
+                        let args_ptr = args[4] as *const XattrArgs;
+                        if !args_ptr.is_null() {
+                            if let Ok(xattr_args) = unsafe { bpf_probe_read_user(args_ptr) } {
+                                payload.args = xattr_args;
+                                payload.has_args = true;
+                            }
+                        }
+
+                        // For setxattrat the value is an input sized by
+                        // args.size; for getxattrat it is an output, present
+                        // only on success and only return_value bytes long.
+                        let read_size = if syscall_nr == syscalls::SYS_setxattrat {
+                            core::cmp::min(payload.args.size as usize, payload.value.len())
+                        } else if return_value > 0 {
+                            core::cmp::min(return_value as usize, payload.value.len())
+                        } else {
+                            0
+                        };
+
+                        let value_ptr = payload.args.value as *const u8;
+                        if payload.has_args && read_size > 0 && !value_ptr.is_null() {
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    value_ptr,
+                                    &mut payload.value[..read_size],
+                                );
+                            }
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_listxattrat => {
+                submit_compact_payload::<ListxattratData, _>(
+                    &ctx,
+                    syscalls::SYS_listxattrat,
+                    return_value,
+                    |payload| {
+                        payload.dfd = args[0] as i32;
+                        payload.at_flags = args[2] as i32;
+                        payload.list = args[3] as u64;
+                        payload.size = args[4];
+                        payload.xattr_list = pinchy_common::kernel_types::XattrList::default();
+
+                        let pathname_ptr = args[1] as *const u8;
+                        let list_ptr = args[3] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                        }
+
+                        // The list is an output: only return_value bytes
+                        // are valid, and only on success.
+                        if !list_ptr.is_null() && return_value > 0 {
+                            let read_size = core::cmp::min(
+                                core::cmp::min(payload.size, return_value as usize),
+                                DATA_READ_SIZE,
+                            );
+
+                            unsafe {
+                                let _ = bpf_probe_read_user_buf(
+                                    list_ptr,
+                                    &mut payload.xattr_list.data[..read_size],
+                                );
+                            }
+
+                            payload.xattr_list.size = read_size;
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_removexattrat => {
+                submit_compact_payload::<RemovexattratData, _>(
+                    &ctx,
+                    syscalls::SYS_removexattrat,
+                    return_value,
+                    |payload| {
+                        payload.dfd = args[0] as i32;
+                        payload.at_flags = args[2] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+                        let name_ptr = args[3] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
+                            let _ = bpf_probe_read_user_buf(name_ptr, &mut payload.name);
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_file_getattr | syscalls::SYS_file_setattr => {
+                submit_compact_payload::<FileAttrData, _>(
+                    &ctx,
+                    syscall_nr,
+                    return_value,
+                    |payload| {
+                        payload.dfd = args[0] as i32;
+                        payload.attr = args[2] as u64;
+                        payload.size = args[3] as u64;
+                        payload.at_flags = args[4] as i32;
+
+                        let pathname_ptr = args[1] as *const u8;
+
+                        unsafe {
+                            let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
                         }
                     },
                 )?;
@@ -245,8 +375,13 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                             let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
                         }
 
-                        if !list_ptr.is_null() && payload.size > 0 {
-                            let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+                        // The list is an output: only return_value bytes
+                        // are valid, and only on success.
+                        if !list_ptr.is_null() && return_value > 0 {
+                            let read_size = core::cmp::min(
+                                core::cmp::min(payload.size, return_value as usize),
+                                DATA_READ_SIZE,
+                            );
 
                             unsafe {
                                 let _ = bpf_probe_read_user_buf(
@@ -277,8 +412,13 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                             let _ = bpf_probe_read_user_buf(pathname_ptr, &mut payload.pathname);
                         }
 
-                        if !list_ptr.is_null() && payload.size > 0 {
-                            let read_size = core::cmp::min(payload.size, DATA_READ_SIZE);
+                        // The list is an output: only return_value bytes
+                        // are valid, and only on success.
+                        if !list_ptr.is_null() && return_value > 0 {
+                            let read_size = core::cmp::min(
+                                core::cmp::min(payload.size, return_value as usize),
+                                DATA_READ_SIZE,
+                            );
 
                             unsafe {
                                 let _ = bpf_probe_read_user_buf(
@@ -1154,10 +1294,10 @@ pub fn syscall_exit_filesystem(ctx: TracePointContext) -> u32 {
                     },
                 )?;
             }
-            syscalls::SYS_mount_setattr => {
+            syscalls::SYS_open_tree_attr | syscalls::SYS_mount_setattr => {
                 crate::util::submit_compact_payload::<pinchy_common::MountSetattrData, _>(
                     &ctx,
-                    syscalls::SYS_mount_setattr,
+                    syscall_nr,
                     return_value,
                     |payload| {
                         payload.dfd = args[0] as i32;

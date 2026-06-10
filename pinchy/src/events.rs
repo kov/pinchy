@@ -776,6 +776,183 @@ pub async fn handle_event(
 
             finish!(sf, header.return_value);
         }
+        syscalls::SYS_setxattrat | syscalls::SYS_getxattrat => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::XattratData)
+            };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "at_flags: {}", format_at_flags(data.at_flags));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+
+            if data.has_args {
+                arg!(sf, "args:");
+                with_struct!(sf, {
+                    if (header.syscall_nr == syscalls::SYS_setxattrat && header.return_value == 0)
+                        || (header.syscall_nr == syscalls::SYS_getxattrat
+                            && header.return_value > 0)
+                    {
+                        let len = if header.syscall_nr == syscalls::SYS_getxattrat {
+                            header.return_value as usize
+                        } else {
+                            data.args.size as usize
+                        };
+
+                        argf!(
+                            sf,
+                            "value: {}",
+                            format_bytes(&data.value[..len.min(data.value.len())])
+                        );
+                    } else {
+                        argf!(sf, "value: 0x{:x}", data.args.value);
+                    }
+
+                    argf!(sf, "size: {}", data.args.size);
+                    argf!(sf, "flags: 0x{:x}", data.args.flags);
+                });
+            } else {
+                arg!(sf, "args: NULL");
+            }
+
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_listxattrat => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ListxattratData)
+            };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "at_flags: {}", format_at_flags(data.at_flags));
+
+            arg!(sf, "list:");
+            format_xattr_list(&mut sf, &data.xattr_list).await?;
+
+            argf!(sf, "size: {}", data.size);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_removexattrat => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::RemovexattratData)
+            };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "at_flags: {}", format_at_flags(data.at_flags));
+            argf!(sf, "name: {}", format_path(&data.name, false));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_file_getattr | syscalls::SYS_file_setattr => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::FileAttrData)
+            };
+
+            argf!(sf, "dfd: {}", format_dirfd(data.dfd));
+            argf!(sf, "pathname: {}", format_path(&data.pathname, false));
+            argf!(sf, "attr: 0x{:x}", data.attr);
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "at_flags: {}", format_at_flags(data.at_flags));
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_map_shadow_stack => {
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::MapShadowStackData
+                )
+            };
+
+            argf!(sf, "addr: 0x{:x}", data.addr);
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_lsm_get_self_attr => {
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::LsmGetSelfAttrData
+                )
+            };
+
+            argf!(sf, "attr: {}", data.attr);
+            argf!(sf, "ctx: 0x{:x}", data.ctx);
+
+            if data.has_size {
+                argf!(sf, "size: {}", data.size);
+            } else {
+                arg!(sf, "size: NULL");
+            }
+
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_lsm_set_self_attr => {
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::LsmSetSelfAttrData
+                )
+            };
+
+            argf!(sf, "attr: {}", data.attr);
+            argf!(sf, "ctx: 0x{:x}", data.ctx);
+            argf!(sf, "size: {}", data.size);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_lsm_list_modules => {
+            let data = unsafe {
+                std::ptr::read_unaligned(
+                    payload.as_ptr() as *const pinchy_common::LsmListModulesData
+                )
+            };
+
+            if header.return_value > 0 {
+                arg!(sf, "ids:");
+                with_array!(sf, {
+                    let count = (header.return_value as usize).min(data.ids.len());
+                    for id in &data.ids[..count] {
+                        argf!(sf, "{}", id);
+                    }
+                });
+            } else {
+                arg!(sf, "ids: []");
+            }
+
+            if data.has_size {
+                argf!(sf, "size: {}", data.size);
+            } else {
+                arg!(sf, "size: NULL");
+            }
+
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_listns => {
+            let data = unsafe {
+                std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::ListnsData)
+            };
+
+            argf!(sf, "req: 0x{:x}", data.req);
+
+            if header.return_value > 0 {
+                arg!(sf, "ns_ids:");
+                with_array!(sf, {
+                    let count = (header.return_value as usize).min(data.ns_ids.len());
+                    for id in &data.ns_ids[..count] {
+                        argf!(sf, "{}", id);
+                    }
+                });
+            } else {
+                arg!(sf, "ns_ids: []");
+            }
+
+            argf!(sf, "nr_ns_ids: {}", data.nr_ns_ids);
+            argf!(sf, "flags: 0x{:x}", data.flags);
+            finish!(sf, header.return_value);
+        }
+        syscalls::SYS_rseq_slice_yield => {
+            finish!(sf, header.return_value);
+        }
         syscalls::SYS_listxattr => {
             let data =
                 unsafe { std::ptr::read_unaligned(payload.as_ptr() as *const ListxattrData) };
@@ -3480,7 +3657,7 @@ pub async fn handle_event(
 
             finish!(sf, header.return_value);
         }
-        syscalls::SYS_mount_setattr => {
+        syscalls::SYS_open_tree_attr | syscalls::SYS_mount_setattr => {
             let data = unsafe {
                 std::ptr::read_unaligned(payload.as_ptr() as *const pinchy_common::MountSetattrData)
             };

@@ -1692,3 +1692,38 @@ syscall_test!(
     },
     "100 kexec_file_load(kernel_fd: 4, initrd_fd: 5, cmdline_len: 12, cmdline: 0x7fff1234, flags: 0x0) = 0 (success)\n"
 );
+
+syscall_test!(
+    parse_listns,
+    {
+        use pinchy_common::{syscalls::SYS_listns, ListnsData};
+
+        let mut data = ListnsData {
+            req: 0x7fff2000,
+            ns_ids: [0u64; pinchy_common::LISTNS_COUNT],
+            nr_ns_ids: 16,
+            flags: 0,
+        };
+
+        data.ns_ids[0] = 4026531840;
+        data.ns_ids[1] = 4026531841;
+
+        crate::tests::make_compact_test_data(SYS_listns, 100, 2, &data)
+    },
+    "100 listns(req: 0x7fff2000, ns_ids: [ 4026531840, 4026531841 ], nr_ns_ids: 16, flags: 0x0) = 2 (entries)\n"
+);
+
+syscall_test!(
+    parse_rseq_slice_yield,
+    {
+        let data = pinchy_common::RseqSliceYieldData;
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_rseq_slice_yield,
+            100,
+            1,
+            &data,
+        )
+    },
+    "100 rseq_slice_yield() = 1\n"
+);

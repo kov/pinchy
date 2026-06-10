@@ -37,16 +37,26 @@ pub fn open_pidfd(pid: libc::pid_t) -> io::Result<OwnedFd> {
     }
 }
 
-pub fn uid_from_pidfd(fd: &OwnedFd) -> io::Result<u32> {
-    let mut stat = std::mem::MaybeUninit::<libc::stat>::uninit();
-    let ret = unsafe { libc::fstat(fd.as_raw_fd(), stat.as_mut_ptr()) };
-    if ret != 0 {
-        return Err(io::Error::last_os_error());
+pub fn pidfd_has_exited(fd: &OwnedFd) -> io::Result<bool> {
+    let mut poll_fd = libc::pollfd {
+        fd: fd.as_raw_fd(),
+        events: libc::POLLIN,
+        revents: 0,
+    };
+
+    loop {
+        let ret = unsafe { libc::poll(&mut poll_fd, 1, 0) };
+
+        if ret >= 0 {
+            return Ok(poll_fd.revents & libc::POLLIN != 0);
+        }
+
+        let err = io::Error::last_os_error();
+
+        if err.kind() != io::ErrorKind::Interrupted {
+            return Err(err);
+        }
     }
-
-    let stat = unsafe { stat.assume_init() };
-
-    Ok(stat.st_uid)
 }
 
 pub fn uid_from_pid(pid: u32) -> io::Result<u32> {
@@ -60,7 +70,7 @@ async fn validate_same_user_or_root(
     header: &Header<'_>,
     conn: &zbus::Connection,
     pid: u32,
-) -> io::Result<Option<OwnedFd>> {
+) -> io::Result<Option<(OwnedFd, u32)>> {
     trace!("validate_same_user_or_root for PID {}", pid as libc::pid_t);
 
     // Use a pidfd to ensure we know what process we are talking about.
@@ -69,19 +79,13 @@ async fn validate_same_user_or_root(
     // User who owns the PID.
     let pid_uid = uid_from_pid(pid)?;
 
-    // Check that the pidfd is still valid after reading the uid from /proc/<pid> to ensure the
-    // PID hasn't been changed from under us between opening the fd and checking the user id.
-    let fd = pidfd.as_raw_fd();
-    let pidfd_still_valid = tokio::task::spawn_blocking(move || {
-        if unsafe { libc::fcntl(fd, libc::F_GETFD) } == -1 {
-            Err(io::Error::last_os_error())
-        } else {
-            Ok(())
-        }
-    })
-    .await
-    .unwrap_or_else(|e| Err(io::Error::other(format!("Join error: {e}"))));
-    pidfd_still_valid?;
+    // A pidfd becomes readable when its process exits. If the process is
+    // still alive at this point, the PID cannot have been recycled between
+    // opening the pidfd and reading the UID from /proc/<pid>, so the UID we
+    // read belongs to the process the pidfd refers to.
+    if pidfd_has_exited(&pidfd)? {
+        return Err(io::Error::from_raw_os_error(libc::ESRCH));
+    }
 
     trace!("pidfd {} has uid {}", pidfd.as_raw_fd(), pid_uid);
 
@@ -97,7 +101,7 @@ async fn validate_same_user_or_root(
     trace!("dbus request came from uid {caller_uid}");
 
     if caller_uid == pid_uid || caller_uid == 0 {
-        Ok(Some(pidfd))
+        Ok(Some((pidfd, caller_uid)))
     } else {
         Ok(None)
     }
@@ -118,9 +122,30 @@ impl PinchyDBus {
         pid: u32,
         syscalls: Vec<i64>,
     ) -> zbus::fdo::Result<Fd<'_>> {
-        let Some(pidfd) = validate_same_user_or_root(&header, conn, pid)
+        // The eBPF SYSCALL_FILTER is a 512-bit bitmap indexed by syscall
+        // number; reject anything outside that range before it reaches the
+        // bitmap arithmetic.
+        const MAX_SYSCALL_NR: i64 = 512;
+        if let Some(&bad) = syscalls
+            .iter()
+            .find(|&&nr| !(0..MAX_SYSCALL_NR).contains(&nr))
+        {
+            return Err(zbus::fdo::Error::InvalidArgs(format!(
+                "invalid syscall number: {bad}"
+            )));
+        }
+
+        let Some((pidfd, caller_uid)) = validate_same_user_or_root(&header, conn, pid)
             .await
-            .map_err(|e| zbus::fdo::Error::AuthFailed(e.to_string()))?
+            .map_err(|e| {
+                if e.raw_os_error() == Some(libc::ESRCH) {
+                    zbus::fdo::Error::UnknownObject(format!(
+                        "no process with PID {pid} (it may have exited)"
+                    ))
+                } else {
+                    zbus::fdo::Error::AuthFailed(e.to_string())
+                }
+            })?
         else {
             return Err(zbus::fdo::Error::AccessDenied("Not authorized".to_string()));
         };
@@ -139,7 +164,7 @@ impl PinchyDBus {
             .dispatch
             .write()
             .await
-            .register_client(pid, writer, syscalls, Some(pidfd))
+            .register_client(pid, writer, syscalls, Some(pidfd), caller_uid)
             .await
             .map_err(|e| zbus::fdo::Error::Failed(e.to_string()))?;
 

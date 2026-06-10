@@ -101,7 +101,7 @@ pub const Q_XQUOTASYNC: i32 = 0x5807;
 pub const Q_XGETQSTATV: i32 = 0x5808;
 pub const Q_XGETNEXTQUOTA: i32 = 0x5809;
 
-pub const WIRE_VERSION: u16 = 4;
+pub const WIRE_VERSION: u16 = 5;
 
 pub const EFF_STAT_EVENTS_SUBMITTED: u32 = 0;
 pub const EFF_STAT_BYTES_SUBMITTED: u32 = 1;
@@ -591,6 +591,8 @@ pub struct WireEventHeader {
     pub pid: u32,
     pub tid: u32,
     pub return_value: i64,
+    // Time spent in the syscall; 0 when no matching enter was seen.
+    pub duration_ns: u64,
 }
 
 #[repr(C)]

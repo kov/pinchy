@@ -66,6 +66,7 @@ pub struct SyscallEnterData {
     pub tgid: u32,
     pub syscall_nr: i64,
     pub args: [usize; SYSCALL_ARGS_COUNT],
+    pub enter_ns: u64,
 }
 
 #[inline(always)]
@@ -130,6 +131,7 @@ pub fn pinchy(ctx: TracePointContext) -> u32 {
             tgid,
             syscall_nr,
             args,
+            enter_ns: unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() },
         };
 
         if let Err(err) = unsafe { ENTER_MAP.insert(&tid, &data, 0) } {

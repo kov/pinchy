@@ -144,11 +144,10 @@ pub fn get_args(ctx: &TracePointContext, expected_syscall_nr: i64) -> Result<[us
         return Err(1);
     }
 
-    // Copy the part of the enter data we care about...
+    // Copy the part of the enter data we care about. The entry stays in the
+    // map so submit_compact_payload() can compute the syscall duration; it
+    // is removed there (or overwritten by the tid's next syscall enter).
     let args = enter_data.args;
-
-    // Then remove the item from the map.
-    let _ = unsafe { ENTER_MAP.remove(&tid) };
 
     Ok(args)
 }
@@ -194,14 +193,27 @@ where
     let event = unsafe { event.assume_init_mut() as *mut WireCompactPayload<T> as *mut u8 };
     let header_ptr = event as *mut WireEventHeader;
 
+    let tid = ctx.pid();
+    let mut duration_ns = 0u64;
+
+    if let Some(enter_data) = unsafe { ENTER_MAP.get(&tid) } {
+        if enter_data.syscall_nr == syscall_nr {
+            duration_ns = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() }
+                .saturating_sub(enter_data.enter_ns);
+
+            let _ = unsafe { ENTER_MAP.remove(&tid) };
+        }
+    }
+
     unsafe {
         header_ptr.write(WireEventHeader {
             version: WIRE_VERSION,
             payload_len: core::mem::size_of::<T>() as u32,
             syscall_nr,
             pid: ctx.tgid(),
-            tid: ctx.pid(),
+            tid,
             return_value,
+            duration_ns,
         });
     }
 

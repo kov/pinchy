@@ -101,6 +101,11 @@ pinchy -f -- sh -c 'ls | wc -l'
 The daemon learns about new children from the parent's fork/clone exit, so a
 child's very first syscalls may be missed.
 
+Show the time spent in each syscall (like `strace -T`):
+```shell
+pinchy -T -p <PID>
+```
+
 Other knobs:
 
 - `--format one-line|multi-line`: trace line formatting (default `one-line`)

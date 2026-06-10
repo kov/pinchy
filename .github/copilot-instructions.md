@@ -52,8 +52,8 @@ Supported architectures are `aarch64` and `x86_64`.
 
 - For eBPF user-memory reads:
   - use `bpf_probe_read_user()` for small structs,
-  - use `bpf_probe_read_buf()` for byte arrays/larger structs to avoid stack
-    pressure by reading directly into compact payload ringbuf memory.
+  - use `bpf_probe_read_user_buf()` for byte arrays/larger structs to avoid
+    stack pressure by reading directly into compact payload ringbuf memory.
 
 - Never use magic values in format helpers or tests. Prefer `libc::` constants;
   declare named constants when `libc` does not provide one.
@@ -73,7 +73,8 @@ Supported architectures are `aarch64` and `x86_64`.
 
 ## Adding a Syscall Checklist
 
-1. Confirm `SYS_<name>` exists in both arch syscall files.
+1. Confirm which arch syscall files define `SYS_<name>`; if only one,
+   cfg-gate all handling for that arch.
 2. Read the man page to understand pointer args and whether dereference is
    required:
    `https://man7.org/linux/man-pages/man2/SYSCALL_NAME.2.html`

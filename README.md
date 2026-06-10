@@ -98,8 +98,8 @@ Follow child processes created by the tracee (like `strace -f`):
 ```shell
 pinchy -f -- sh -c 'ls | wc -l'
 ```
-Trace lines are annotated with the process name (`1234<sh>`) so interleaved
-output stays readable. The daemon learns about new children from the parent's
+Trace lines are annotated with a fixed-width process name field
+(`1234 [sh      ]`) so interleaved output stays readable. The daemon learns about new children from the parent's
 fork/clone exit, so a child's very first syscalls may be missed.
 
 Show the time spent in each syscall (like `strace -T`):

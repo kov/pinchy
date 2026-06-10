@@ -364,7 +364,7 @@ fn follow_forks() {
 
     // Lines are annotated with the process name when following forks.
     let expected_output = escaped_regex(indoc! {r#"
-        @PID@<test-helper> openat(dfd: AT_FDCWD, pathname: "/dev/null", flags: 0x0 (O_RDONLY), mode: 0) = @NUMBER@ (fd)
+        @PID@ [test-hel] openat(dfd: AT_FDCWD, pathname: "/dev/null", flags: 0x0 (O_RDONLY), mode: 0) = @NUMBER@ (fd)
     "#});
 
     let output = handle.join().unwrap();

@@ -109,7 +109,34 @@ async fn syscall_comm_annotation() {
 
     assert_eq!(
         String::from_utf8_lossy(&output),
-        "100<test-helper> close(fd: 3) = 0 (success)\n"
+        "100 [test-hel] close(fd: 3) = 0 (success)\n"
+    );
+}
+
+#[::tokio::test]
+async fn syscall_comm_annotation_multiline() {
+    let data = pinchy_common::CloseData { fd: 3 };
+    let (mut header, payload) =
+        make_compact_test_data(pinchy_common::syscalls::SYS_close, 100, 0, &data);
+
+    let comm = b"test-helper";
+    header.comm[..comm.len()].copy_from_slice(comm);
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter = crate::formatting::Formatter::new(
+        pin_output,
+        crate::formatting::FormattingStyle::MultiLine,
+    )
+    .with_comm(header.comm);
+
+    crate::events::handle_event(&header, &payload, formatter)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "100 test-helper\n\tclose(\n\t    fd: 3\n\t) = 0 (success)\n"
     );
 }
 

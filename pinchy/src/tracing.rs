@@ -468,6 +468,9 @@ struct Client {
     client_id: u64,
     #[allow(unused)]
     pid: u32,
+    // UID the trace was authorized for; 0 means a root caller, which stays
+    // authorized across privilege transitions of the traced process.
+    uid: u32,
     sender: tokio::sync::mpsc::Sender<Arc<[u8]>>,
     syscalls: HashSet<i64>,
     queue_stats: Arc<ClientQueueStats>,
@@ -633,6 +636,7 @@ impl EventDispatch {
         let event_stats = stats.clone();
         tokio::spawn(async move {
             let mut dispatch_batch: Vec<(WireEventHeader, Arc<[u8]>)> = Vec::with_capacity(256);
+            let mut revalidate_pids: Vec<u32> = Vec::new();
 
             loop {
                 tokio::select! {
@@ -647,6 +651,7 @@ impl EventDispatch {
                                 let ring = guard.get_inner_mut();
                                 let dispatch = event_dispatch.read().await;
                                 dispatch_batch.clear();
+                                revalidate_pids.clear();
 
                                 while let Some(item) = ring.next() {
                                     let event = &*item;
@@ -661,6 +666,17 @@ impl EventDispatch {
                                         continue;
                                     };
 
+                                    // A successful exec may be a privilege
+                                    // transition; revalidate authorization
+                                    // once the batch is dispatched.
+                                    if (header.syscall_nr == syscalls::SYS_execve
+                                        || header.syscall_nr == syscalls::SYS_execveat)
+                                        && header.return_value == 0
+                                        && !revalidate_pids.contains(&header.pid)
+                                    {
+                                        revalidate_pids.push(header.pid);
+                                    }
+
                                     let framed_event = Arc::<[u8]>::from(event);
 
                                     event_stats.framed_event(framed_event.len());
@@ -674,6 +690,19 @@ impl EventDispatch {
                                 }
 
                                 guard.clear_ready();
+                                drop(dispatch);
+
+                                if !revalidate_pids.is_empty() {
+                                    let mut dispatch = event_dispatch.write().await;
+
+                                    for pid in revalidate_pids.drain(..) {
+                                        if let Err(e) =
+                                            dispatch.revalidate_pid_authorization(pid).await
+                                        {
+                                            eprintln!("Error revalidating PID {pid}: {e}");
+                                        }
+                                    }
+                                }
                             }
                             Err(e) => {
                                 eprintln!("RingBuf read error: {e}");
@@ -685,7 +714,14 @@ impl EventDispatch {
                         let _ = event_dispatch.write().await.remove_client(client_id).await;
                     },
                     Some(pid) = timeout_rx.recv() => {
-                        let _ = event_dispatch.write().await.start_pid_timeout(pid).await;
+                        let mut dispatch = event_dispatch.write().await;
+
+                        // The process exited: stop capturing the PID right
+                        // away so a recycled PID is not traced; clients stay
+                        // registered through the grace period so buffered
+                        // events still get dispatched.
+                        let _ = dispatch.remove_pid_from_filter(pid).await;
+                        let _ = dispatch.start_pid_timeout(pid).await;
                     },
                 }
             }
@@ -778,7 +814,24 @@ impl EventDispatch {
         writer: tokio::io::BufWriter<tokio::fs::File>,
         mut syscalls: Vec<i64>,
         pidfd: Option<OwnedFd>, // Pass pidfd from server for monitoring
+        uid: u32,
     ) -> anyhow::Result<u64> {
+        // Each registration holds a pipe, a writer task and a queue in the
+        // daemon; bound what a single user can pin down.
+        const MAX_CLIENTS_PER_UID: usize = 64;
+        if uid != 0 {
+            let existing = self
+                .clients_map
+                .values()
+                .flatten()
+                .filter(|client| client.uid == uid)
+                .count();
+
+            if existing >= MAX_CLIENTS_PER_UID {
+                anyhow::bail!("too many concurrent traces for uid {uid}");
+            }
+        }
+
         let client_id = self.next_client_id;
         self.next_client_id += 1;
 
@@ -794,6 +847,7 @@ impl EventDispatch {
         let client_info = Client {
             client_id,
             pid,
+            uid,
             sender: event_tx,
             syscalls: syscalls.into_iter().collect(),
             queue_stats: queue_stats.clone(),
@@ -861,6 +915,41 @@ impl EventDispatch {
         Ok(())
     }
 
+    // After a successful execve the traced process may have gained
+    // privileges (setuid binary). /proc/<pid> ownership follows the
+    // process's effective credentials (and turns to root when it becomes
+    // non-dumpable), so drop any client whose authorizing UID no longer
+    // matches. Root-authorized clients (uid 0) stay.
+    pub async fn revalidate_pid_authorization(&mut self, pid: u32) -> anyhow::Result<()> {
+        let Some(clients) = self.clients_map.get(&pid) else {
+            return Ok(());
+        };
+
+        // If the process is already gone the pidfd monitoring handles
+        // cleanup; nothing to decide here.
+        let Ok(meta) = tokio::fs::metadata(format!("/proc/{pid}")).await else {
+            return Ok(());
+        };
+
+        let current_uid = std::os::unix::fs::MetadataExt::uid(&meta);
+
+        let to_remove: Vec<u64> = clients
+            .iter()
+            .filter(|client| client.uid != 0 && client.uid != current_uid)
+            .map(|client| client.client_id)
+            .collect();
+
+        for client_id in to_remove {
+            log::warn!(
+                "PID {pid} changed ownership to uid {current_uid} after exec; \
+                 detaching client {client_id}"
+            );
+            self.remove_client(client_id).await?;
+        }
+
+        Ok(())
+    }
+
     pub async fn remove_all_clients_for_pid(&mut self, pid: u32) -> anyhow::Result<()> {
         // Remove all clients for this PID
         if self.clients_map.remove(&pid).is_some() {
@@ -898,6 +987,16 @@ impl EventDispatch {
         self.for_each_syscall(|syscall_nr| {
             bitmap[(syscall_nr / 8) as usize] |= 1 << (syscall_nr % 8);
         });
+
+        // Always capture execve/execveat while anything is traced: a
+        // successful exec can be a privilege transition, which the dispatch
+        // loop must observe to revalidate authorization. dispatch_event()
+        // still drops these events for clients that did not subscribe.
+        if !self.clients_map.is_empty() {
+            for nr in [syscalls::SYS_execve, syscalls::SYS_execveat] {
+                bitmap[(nr / 8) as usize] |= 1 << (nr % 8);
+            }
+        }
 
         let mut map: aya::maps::Array<_, u8> =
             Array::try_from(self.ebpf.map_mut("SYSCALL_FILTER").unwrap()).unwrap();

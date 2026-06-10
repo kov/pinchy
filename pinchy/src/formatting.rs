@@ -91,9 +91,9 @@ impl<'f> Formatter<'f> {
         self
     }
 
-    // When set, push_syscall() annotates the PID with the process name:
-    // `1234<test-helper>`. Used when following forks, where lines from
-    // several processes interleave.
+    // When set, push_syscall() annotates the PID with the process name.
+    // Used when following forks, where lines from several processes
+    // interleave.
     pub fn with_comm(mut self, comm: [u8; pinchy_common::COMM_LEN]) -> Self {
         self.comm = Some(comm);
         self
@@ -102,6 +102,15 @@ impl<'f> Formatter<'f> {
     pub async fn push_syscall(mut self, pid: u32, syscall_nr: i64) -> Result<SyscallFormatter<'f>> {
         let syscall_name = syscall_name_from_nr(syscall_nr)
             .ok_or_else(|| anyhow!(format!("Unknown syscall: {syscall_nr}")))?;
+
+        // Width of the one-line `[comm]` field; longer names are truncated
+        // to keep the columns compact.
+        const COMM_DISPLAY_WIDTH: usize = pinchy_common::COMM_LEN / 2;
+
+        // Bound for the process name on multi-line headers; comm is much
+        // shorter today, but richer process information (full command line,
+        // terminal-width awareness) may use the room later.
+        const MULTILINE_COMM_MAX: usize = 65;
 
         let comm = self.comm;
         let output = &mut self.output;
@@ -120,9 +129,23 @@ impl<'f> Formatter<'f> {
                 }
             }
 
-            output.write_all(b"<").await?;
-            output.write_all(&comm[..len]).await?;
-            output.write_all(b">").await?;
+            match self.style {
+                FormattingStyle::OneLine => {
+                    let len = len.min(COMM_DISPLAY_WIDTH);
+                    let mut field = [b' '; COMM_DISPLAY_WIDTH];
+                    field[..len].copy_from_slice(&comm[..len]);
+
+                    output.write_all(b" [").await?;
+                    output.write_all(&field).await?;
+                    output.write_all(b"]").await?;
+                }
+                FormattingStyle::MultiLine => {
+                    output.write_all(b" ").await?;
+                    output
+                        .write_all(&comm[..len.min(MULTILINE_COMM_MAX)])
+                        .await?;
+                }
+            }
         }
 
         match self.style {

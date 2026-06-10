@@ -19,6 +19,61 @@ pub fn syscall_exit_security(ctx: TracePointContext) -> u32 {
         let return_value = util::get_return_value(&ctx)?;
 
         match syscall_nr {
+            syscalls::SYS_lsm_get_self_attr => {
+                crate::util::submit_compact_payload::<pinchy_common::LsmGetSelfAttrData, _>(
+                    &ctx,
+                    syscalls::SYS_lsm_get_self_attr,
+                    return_value,
+                    |payload| {
+                        payload.attr = args[0] as u32;
+                        payload.ctx = args[1] as u64;
+                        payload.flags = args[3] as u32;
+
+                        let size_ptr = args[2] as *const u32;
+                        if !size_ptr.is_null() {
+                            if let Ok(size) =
+                                unsafe { aya_ebpf::helpers::bpf_probe_read_user::<u32>(size_ptr) }
+                            {
+                                payload.size = size;
+                                payload.has_size = true;
+                            }
+                        }
+                    },
+                )?;
+            }
+            syscalls::SYS_lsm_list_modules => {
+                crate::util::submit_compact_payload::<pinchy_common::LsmListModulesData, _>(
+                    &ctx,
+                    syscalls::SYS_lsm_list_modules,
+                    return_value,
+                    |payload| {
+                        payload.flags = args[2] as u32;
+
+                        let size_ptr = args[1] as *const u32;
+                        if !size_ptr.is_null() {
+                            if let Ok(size) =
+                                unsafe { aya_ebpf::helpers::bpf_probe_read_user::<u32>(size_ptr) }
+                            {
+                                payload.size = size;
+                                payload.has_size = true;
+                            }
+                        }
+
+                        let ids_ptr = args[0] as *const u64;
+                        if return_value > 0 && !ids_ptr.is_null() {
+                            let count = core::cmp::min(return_value as usize, payload.ids.len());
+                            for i in 0..count {
+                                let ptr = unsafe { ids_ptr.add(i) };
+                                if let Ok(id) =
+                                    unsafe { aya_ebpf::helpers::bpf_probe_read_user::<u64>(ptr) }
+                                {
+                                    payload.ids[i] = id;
+                                }
+                            }
+                        }
+                    },
+                )?;
+            }
             syscalls::SYS_ptrace => {
                 crate::util::submit_compact_payload::<pinchy_common::PtraceData, _>(
                     &ctx,

@@ -2274,6 +2274,7 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_memfd_secret
         | syscalls::SYS_userfaultfd
         | syscalls::SYS_open_tree
+        | syscalls::SYS_open_tree_attr
         | syscalls::SYS_fsopen
         | syscalls::SYS_fsmount
         | syscalls::SYS_fspick
@@ -2401,6 +2402,11 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
         | syscalls::SYS_cachestat
         | syscalls::SYS_statmount
         | syscalls::SYS_futex_wait
+        | syscalls::SYS_setxattrat
+        | syscalls::SYS_removexattrat
+        | syscalls::SYS_lsm_set_self_attr
+        | syscalls::SYS_file_getattr
+        | syscalls::SYS_file_setattr
         | syscalls::SYS_fchown
         | syscalls::SYS_fchownat
         | syscalls::SYS_flock
@@ -2516,8 +2522,29 @@ pub fn format_return_value(syscall_nr: i64, return_value: i64) -> std::borrow::C
             _ => format_error_return(return_value),
         },
 
-        syscalls::SYS_listmount => match return_value {
+        syscalls::SYS_listmount
+        | syscalls::SYS_lsm_list_modules
+        | syscalls::SYS_lsm_get_self_attr
+        | syscalls::SYS_listns => match return_value {
             n if n >= 0 => std::borrow::Cow::Owned(format!("{n} (entries)")),
+            _ => format_error_return(return_value),
+        },
+
+        syscalls::SYS_getxattrat | syscalls::SYS_listxattrat => match return_value {
+            n if n >= 0 => std::borrow::Cow::Owned(format!("{n} (bytes)")),
+            _ => format_error_return(return_value),
+        },
+
+        syscalls::SYS_map_shadow_stack => {
+            if (-4095..0).contains(&return_value) {
+                format_error_return(return_value)
+            } else {
+                std::borrow::Cow::Owned(format!("0x{return_value:x} (addr)"))
+            }
+        }
+
+        syscalls::SYS_rseq_slice_yield => match return_value {
+            n if n >= 0 => std::borrow::Cow::Owned(n.to_string()),
             _ => format_error_return(return_value),
         },
 

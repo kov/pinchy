@@ -179,3 +179,58 @@ syscall_test!(
     },
     "6006 seccomp(operation: SECCOMP_GET_NOTIF_SIZES, flags: 0, sizes: {notif: 128, resp: 32, data: 64}) = 0 (success)\n"
 );
+
+syscall_test!(
+    parse_lsm_get_self_attr,
+    {
+        use pinchy_common::{syscalls::SYS_lsm_get_self_attr, LsmGetSelfAttrData};
+
+        let data = LsmGetSelfAttrData {
+            attr: 100,
+            ctx: 0x7fff1000,
+            size: 256,
+            has_size: true,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(SYS_lsm_get_self_attr, 100, 1, &data)
+    },
+    "100 lsm_get_self_attr(attr: 100, ctx: 0x7fff1000, size: 256, flags: 0x0) = 1 (entries)\n"
+);
+
+syscall_test!(
+    parse_lsm_set_self_attr,
+    {
+        use pinchy_common::{syscalls::SYS_lsm_set_self_attr, LsmSetSelfAttrData};
+
+        let data = LsmSetSelfAttrData {
+            attr: 100,
+            ctx: 0x7fff1000,
+            size: 64,
+            flags: 0,
+        };
+
+        crate::tests::make_compact_test_data(SYS_lsm_set_self_attr, 100, 0, &data)
+    },
+    "100 lsm_set_self_attr(attr: 100, ctx: 0x7fff1000, size: 64, flags: 0x0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_lsm_list_modules,
+    {
+        use pinchy_common::{syscalls::SYS_lsm_list_modules, LsmListModulesData};
+
+        let mut data = LsmListModulesData {
+            ids: [0u64; pinchy_common::LSM_IDS_COUNT],
+            size: 64,
+            has_size: true,
+            flags: 0,
+        };
+
+        data.ids[0] = 100;
+        data.ids[1] = 104;
+
+        crate::tests::make_compact_test_data(SYS_lsm_list_modules, 100, 2, &data)
+    },
+    "100 lsm_list_modules(ids: [ 100, 104 ], size: 64, flags: 0x0) = 2 (entries)\n"
+);

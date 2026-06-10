@@ -17,7 +17,7 @@ use aya_log_ebpf::{error, trace};
 use pinchy_common::EFF_STAT_COUNT;
 use pinchy_common::{
     syscalls, Fadvise64Data, FchmodData, FchownData, FdatasyncData, FsyncData, FtruncateData,
-    FutexWakeData, KexecFileLoadData,
+    FutexWakeData, KexecFileLoadData, LsmSetSelfAttrData, MapShadowStackData,
 };
 #[cfg(x86_64)]
 use pinchy_common::{
@@ -1237,6 +1237,39 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     |payload| {
                         payload.level = args[0] as i32;
                     },
+                )?;
+            }
+            syscalls::SYS_map_shadow_stack => {
+                crate::util::submit_compact_payload::<MapShadowStackData, _>(
+                    &ctx,
+                    syscalls::SYS_map_shadow_stack,
+                    return_value,
+                    |payload| {
+                        payload.addr = args[0] as u64;
+                        payload.size = args[1] as u64;
+                        payload.flags = args[2] as u32;
+                    },
+                )?;
+            }
+            syscalls::SYS_lsm_set_self_attr => {
+                crate::util::submit_compact_payload::<LsmSetSelfAttrData, _>(
+                    &ctx,
+                    syscalls::SYS_lsm_set_self_attr,
+                    return_value,
+                    |payload| {
+                        payload.attr = args[0] as u32;
+                        payload.ctx = args[1] as u64;
+                        payload.size = args[2] as u64;
+                        payload.flags = args[3] as u32;
+                    },
+                )?;
+            }
+            syscalls::SYS_rseq_slice_yield => {
+                crate::util::submit_compact_payload::<pinchy_common::RseqSliceYieldData, _>(
+                    &ctx,
+                    syscalls::SYS_rseq_slice_yield,
+                    return_value,
+                    |_payload| {},
                 )?;
             }
             syscalls::SYS_futex_wake => {

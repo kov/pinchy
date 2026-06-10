@@ -3193,3 +3193,193 @@ syscall_test!(
     },
     "100 listmount(req: { mnt_id: 4242, param: 0x0, mnt_ns_id: 0 }, mnt_ids: [ 100, 101 ], nr_mnt_ids: 16, flags: 0x0) = 2 (entries)\n"
 );
+
+syscall_test!(
+    parse_setxattrat,
+    {
+        use pinchy_common::{kernel_types::XattrArgs, syscalls::SYS_setxattrat, XattratData};
+
+        let mut data = XattratData {
+            dfd: libc::AT_FDCWD,
+            at_flags: 0,
+            pathname: [0u8; pinchy_common::DATA_READ_SIZE],
+            name: [0u8; pinchy_common::MEDIUM_READ_SIZE],
+            value: [0u8; pinchy_common::DATA_READ_SIZE],
+            args: XattrArgs {
+                value: 0x7fff1000,
+                size: 5,
+                flags: 0,
+            },
+            has_args: true,
+        };
+
+        let path = b"/tmp/test.txt";
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        let name = b"user.comment";
+        data.name[..name.len()].copy_from_slice(name);
+
+        data.value[..5].copy_from_slice(b"hello");
+
+        crate::tests::make_compact_test_data(SYS_setxattrat, 100, 0, &data)
+    },
+    "100 setxattrat(dfd: AT_FDCWD, pathname: \"/tmp/test.txt\", at_flags: 0, name: \"user.comment\", args: { value: \"hello\", size: 5, flags: 0x0 }) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_getxattrat,
+    {
+        use pinchy_common::{kernel_types::XattrArgs, syscalls::SYS_getxattrat, XattratData};
+
+        let mut data = XattratData {
+            dfd: 3,
+            at_flags: libc::AT_SYMLINK_NOFOLLOW,
+            pathname: [0u8; pinchy_common::DATA_READ_SIZE],
+            name: [0u8; pinchy_common::MEDIUM_READ_SIZE],
+            value: [0u8; pinchy_common::DATA_READ_SIZE],
+            args: XattrArgs {
+                value: 0x7fff1000,
+                size: 128,
+                flags: 0,
+            },
+            has_args: true,
+        };
+
+        let path = b"/tmp/test.txt";
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        let name = b"user.comment";
+        data.name[..name.len()].copy_from_slice(name);
+
+        data.value[..5].copy_from_slice(b"hello");
+
+        crate::tests::make_compact_test_data(SYS_getxattrat, 100, 5, &data)
+    },
+    "100 getxattrat(dfd: 3, pathname: \"/tmp/test.txt\", at_flags: AT_SYMLINK_NOFOLLOW (0x100), name: \"user.comment\", args: { value: \"hello\", size: 128, flags: 0x0 }) = 5 (bytes)\n"
+);
+
+syscall_test!(
+    parse_listxattrat,
+    {
+        use pinchy_common::{kernel_types::XattrList, syscalls::SYS_listxattrat, ListxattratData};
+
+        let mut xattr_list = XattrList::default();
+        let names = b"user.attr1\0user.attr2\0";
+        xattr_list.data[..names.len()].copy_from_slice(names);
+        xattr_list.size = names.len();
+
+        let mut pathname = [0u8; pinchy_common::DATA_READ_SIZE];
+        let path = b"/tmp/testfile";
+        pathname[..path.len()].copy_from_slice(path);
+
+        let data = ListxattratData {
+            dfd: libc::AT_FDCWD,
+            at_flags: 0,
+            pathname,
+            list: 0xabadcafe,
+            size: 128,
+            xattr_list,
+        };
+
+        crate::tests::make_compact_test_data(SYS_listxattrat, 43, names.len() as i64, &data)
+    },
+    "43 listxattrat(dfd: AT_FDCWD, pathname: \"/tmp/testfile\", at_flags: 0, list: [ user.attr1, user.attr2 ], size: 128) = 22 (bytes)\n"
+);
+
+syscall_test!(
+    parse_removexattrat,
+    {
+        use pinchy_common::{syscalls::SYS_removexattrat, RemovexattratData};
+
+        let mut data = RemovexattratData {
+            dfd: libc::AT_FDCWD,
+            at_flags: 0,
+            pathname: [0u8; pinchy_common::DATA_READ_SIZE],
+            name: [0u8; pinchy_common::MEDIUM_READ_SIZE],
+        };
+
+        let path = b"/tmp/test.txt";
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        let name = b"user.comment";
+        data.name[..name.len()].copy_from_slice(name);
+
+        crate::tests::make_compact_test_data(SYS_removexattrat, 100, 0, &data)
+    },
+    "100 removexattrat(dfd: AT_FDCWD, pathname: \"/tmp/test.txt\", at_flags: 0, name: \"user.comment\") = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_open_tree_attr,
+    {
+        use pinchy_common::{kernel_types::MountAttr, MountSetattrData};
+
+        let mut path = [0u8; DATA_READ_SIZE];
+        let path_bytes = b"/mnt/test\0";
+        path[..path_bytes.len()].copy_from_slice(path_bytes);
+
+        let data = MountSetattrData {
+            dfd: libc::AT_FDCWD,
+            path,
+            flags: 0x8000,
+            size: std::mem::size_of::<MountAttr>(),
+            has_attr: true,
+            attr: MountAttr {
+                attr_set: 0x1,
+                attr_clr: 0,
+                propagation: 0,
+                userns_fd: 0,
+            },
+        };
+
+        crate::tests::make_compact_test_data(
+            pinchy_common::syscalls::SYS_open_tree_attr,
+            1010,
+            3,
+            &data,
+        )
+    },
+    "1010 open_tree_attr(dfd: AT_FDCWD, path: \"/mnt/test\", flags: 0x8000 (AT_RECURSIVE), mount_attr: { attr_set: 0x1 (RDONLY), attr_clr: 0x0, propagation: UNKNOWN, userns_fd: 0 }, size: 32) = 3 (fd)\n"
+);
+
+syscall_test!(
+    parse_file_getattr,
+    {
+        use pinchy_common::{syscalls::SYS_file_getattr, FileAttrData};
+
+        let mut data = FileAttrData {
+            dfd: libc::AT_FDCWD,
+            at_flags: 0,
+            pathname: [0u8; pinchy_common::DATA_READ_SIZE],
+            attr: 0x7fff2000,
+            size: 96,
+        };
+
+        let path = b"/tmp/test.txt";
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        crate::tests::make_compact_test_data(SYS_file_getattr, 100, 0, &data)
+    },
+    "100 file_getattr(dfd: AT_FDCWD, pathname: \"/tmp/test.txt\", attr: 0x7fff2000, size: 96, at_flags: 0) = 0 (success)\n"
+);
+
+syscall_test!(
+    parse_file_setattr,
+    {
+        use pinchy_common::{syscalls::SYS_file_setattr, FileAttrData};
+
+        let mut data = FileAttrData {
+            dfd: 5,
+            at_flags: libc::AT_EMPTY_PATH,
+            pathname: [0u8; pinchy_common::DATA_READ_SIZE],
+            attr: 0x7fff2000,
+            size: 96,
+        };
+
+        let path = b"";
+        data.pathname[..path.len()].copy_from_slice(path);
+
+        crate::tests::make_compact_test_data(SYS_file_setattr, 100, 0, &data)
+    },
+    "100 file_setattr(dfd: 5, pathname: \"\", attr: 0x7fff2000, size: 96, at_flags: AT_EMPTY_PATH (0x1000)) = 0 (success)\n"
+);

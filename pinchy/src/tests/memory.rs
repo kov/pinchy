@@ -1047,3 +1047,19 @@ syscall_test!(
     },
     "123 remap_file_pages(addr: 0x7f1234567000, size: 4096, prot: 0x1 (PROT_READ), pgoff: 0, flags: 0x1 (MAP_SHARED)) = 0 (success)\n"
 );
+
+syscall_test!(
+    parse_map_shadow_stack,
+    {
+        use pinchy_common::{syscalls::SYS_map_shadow_stack, MapShadowStackData};
+
+        let data = MapShadowStackData {
+            addr: 0,
+            size: 4096,
+            flags: 0x1,
+        };
+
+        crate::tests::make_compact_test_data(SYS_map_shadow_stack, 123, 0x7f1234567000, &data)
+    },
+    "123 map_shadow_stack(addr: 0x0, size: 4096, flags: 0x1) = 0x7f1234567000 (addr)\n"
+);

@@ -24,6 +24,31 @@ pub fn syscall_exit_system(ctx: TracePointContext) -> u32 {
         let return_value = util::get_return_value(&ctx)?;
 
         match syscall_nr {
+            syscalls::SYS_listns => {
+                crate::util::submit_compact_payload::<pinchy_common::ListnsData, _>(
+                    &ctx,
+                    syscalls::SYS_listns,
+                    return_value,
+                    |payload| {
+                        payload.req = args[0] as u64;
+                        payload.nr_ns_ids = args[2] as u64;
+                        payload.flags = args[3] as u64;
+
+                        let ids_ptr = args[1] as *const u64;
+                        if return_value > 0 && !ids_ptr.is_null() {
+                            let count = core::cmp::min(return_value as usize, payload.ns_ids.len());
+                            for i in 0..count {
+                                let ptr = unsafe { ids_ptr.add(i) };
+                                if let Ok(id) =
+                                    unsafe { aya_ebpf::helpers::bpf_probe_read_user::<u64>(ptr) }
+                                {
+                                    payload.ns_ids[i] = id;
+                                }
+                            }
+                        }
+                    },
+                )?;
+            }
             syscalls::SYS_reboot => {
                 crate::util::submit_compact_payload::<pinchy_common::RebootData, _>(
                     &ctx,

@@ -122,7 +122,10 @@ async fn main() -> Result<()> {
 }
 
 async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<()> {
-    let mut reader = tokio::io::BufReader::new(tokio::fs::File::from(std::fs::File::from(fd)));
+    let mut reader = tokio::io::BufReader::with_capacity(
+        64 * 1024,
+        tokio::fs::File::from(std::fs::File::from(fd)),
+    );
     let mut stdout = tokio::io::BufWriter::new(tokio::io::stdout());
     let mut header_buf = [0u8; std::mem::size_of::<WireEventHeader>()];
     let mut payload = Vec::new();
@@ -190,7 +193,11 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
                 stdout.write_all(&output).await?;
                 pending_flush_bytes += output.len();
 
-                if pending_flush_bytes >= flush_bytes {
+                // Flush on threshold, but also whenever we have caught up
+                // with the pipe (empty read buffer means the next read
+                // would block); otherwise output lags behind a slow tracee
+                // by up to the threshold.
+                if pending_flush_bytes >= flush_bytes || reader.buffer().is_empty() {
                     stdout.flush().await?;
                     pending_flush_bytes = 0;
                 }

@@ -1,7 +1,6 @@
 use core::{mem::size_of, ops::DerefMut as _};
 
 use aya_ebpf::{
-    bindings::BPF_RB_FORCE_WAKEUP,
     helpers::{bpf_probe_read_user, bpf_probe_read_user_buf},
     programs::TracePointContext,
     EbpfContext as _,
@@ -12,7 +11,7 @@ use pinchy_common::{
     WireEventHeader, WIRE_VERSION,
 };
 
-use crate::{ENTER_MAP, EVENTS, SYSCALL_RETURN_OFFSET};
+use crate::{ENTER_MAP, EVENTS, SYSCALL_OFFSET, SYSCALL_RETURN_OFFSET};
 
 mod efficiency {
     #[cfg(feature = "efficiency-metrics")]
@@ -112,9 +111,9 @@ pub fn read_epoll_events(events_ptr: *const EpollEvent, nevents: usize, events: 
 
 #[inline(always)]
 pub fn get_syscall_nr(ctx: &TracePointContext) -> Result<i64, u32> {
-    unsafe { ENTER_MAP.get(&ctx.pid()) }
-        .map(|data| data.syscall_nr)
-        .ok_or(1)
+    // The syscall number is right there in the sys_exit tracepoint record;
+    // no need for an ENTER_MAP lookup.
+    unsafe { ctx.read_at::<i64>(SYSCALL_OFFSET).map_err(|_| 1u32) }
 }
 
 #[inline(always)]
@@ -212,7 +211,10 @@ where
 
     record_compact_submit_size(core::mem::size_of::<WireCompactPayload<T>>() as u64);
 
-    entry.submit(BPF_RB_FORCE_WAKEUP.into());
+    // Flag 0 lets the kernel use adaptive notification: the consumer is
+    // only woken when it has caught up, instead of an irq_work + epoll
+    // wakeup for every single event.
+    entry.submit(0);
 
     Ok(())
 }

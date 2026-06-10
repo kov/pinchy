@@ -102,6 +102,7 @@ fn main() -> anyhow::Result<()> {
             "rt_sigaction_realtime" => rt_sigaction_realtime(),
             "rt_sigaction_standard" => rt_sigaction_standard(),
             "fcntl_test" => fcntl_test(),
+            "fork_test" => fork_test(),
             "fchdir_test" => fchdir_test(),
             "network_test" => network_test(),
             "accept_test" => accept_test(),
@@ -1661,6 +1662,37 @@ fn fchdir_test() -> anyhow::Result<()> {
     // Call fchdir on the directory fd
     let ret = unsafe { libc::fchdir(fd) };
     assert_eq!(ret, 0, "fchdir failed");
+
+    Ok(())
+}
+
+fn fork_test() -> anyhow::Result<()> {
+    unsafe {
+        let pid = libc::fork();
+        assert!(pid >= 0, "fork failed");
+
+        if pid == 0 {
+            // Child: do a recognizable syscall so a follow-forks trace can
+            // assert on it, then exit without running any libc cleanup. The
+            // daemon learns about the child from the parent's clone exit, so
+            // retry over a few hundred milliseconds to let it catch up.
+            for _ in 0..5 {
+                libc::usleep(100_000);
+
+                let fd = libc::openat(libc::AT_FDCWD, c"/dev/null".as_ptr(), libc::O_RDONLY);
+
+                if fd >= 0 {
+                    libc::close(fd);
+                }
+            }
+
+            libc::_exit(0);
+        }
+
+        let mut status = 0;
+        let ret = libc::waitpid(pid, &mut status, 0);
+        assert_eq!(ret, pid, "waitpid failed");
+    }
 
     Ok(())
 }

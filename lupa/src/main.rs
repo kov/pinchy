@@ -51,10 +51,10 @@ fn main() -> Result<()> {
     let (pid, fd) = tokio::runtime::Runtime::new()?.block_on(async move {
         let syscalls = vec![SYS_openat, SYS_close, SYS_read, SYS_write];
         let (pid, fd) = if let Some(pid) = args.pid {
-            let fd = pinchy_client::attach(pid, syscalls).await;
+            let fd = pinchy_client::attach(pid, syscalls, false).await;
             (pid, fd)
         } else if let Some(command) = args.command {
-            let (pid, fd) = pinchy_client::trace_child(command, syscalls).await;
+            let (pid, fd) = pinchy_client::trace_child(command, syscalls, false).await;
             (pid as u32, fd)
         } else {
             anyhow::bail!("Need one of -p <pid> or command")

@@ -94,6 +94,13 @@ List the syscall names supported by this build:
 pinchy --list-syscalls
 ```
 
+Follow child processes created by the tracee (like `strace -f`):
+```shell
+pinchy -f -- sh -c 'ls | wc -l'
+```
+The daemon learns about new children from the parent's fork/clone exit, so a
+child's very first syscalls may be missed.
+
 Other knobs:
 
 - `--format one-line|multi-line`: trace line formatting (default `one-line`)

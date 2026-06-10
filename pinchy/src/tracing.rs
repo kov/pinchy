@@ -391,7 +391,7 @@ impl WriterTask {
             revents: 0,
         };
 
-        loop {
+        'run: loop {
             tokio::select! {
                 event_bytes = self.event_rx.recv() => {
                     let Some(event_bytes) = event_bytes else {
@@ -424,7 +424,7 @@ impl WriterTask {
                             self.stats.writer_write_error();
 
                             log::trace!("Writer task ended: write error");
-                            return;
+                            break 'run;
                         }
 
                         self.stats.writer_event_written(event_bytes.len());
@@ -432,6 +432,16 @@ impl WriterTask {
                         log::trace!("Writer task wrote: {} bytes", event_bytes.len());
                     }
 
+                    // Caught up with the queue: flush now. A steady trickle
+                    // of events would otherwise keep resetting the sleep
+                    // below and the output would sit in the buffer until it
+                    // fills.
+                    if self.event_rx.is_empty() && self.writer.flush().await.is_err() {
+                        self.stats.writer_flush_error();
+
+                        log::trace!("Writer task ended: flush error");
+                        break 'run;
+                    }
                 },
                 _ = sleep(Duration::from_millis(WRITER_FLUSH_POLL_MS)) => {
                     if self.event_rx.is_empty() {

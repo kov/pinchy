@@ -197,13 +197,27 @@ async fn main() -> Result<()> {
 
         // Read everything there is to read, the server will close the write end
         // of the pipe
-        relay_to_sink(fd, style, args.output, args.syscall_times).await?;
+        relay_to_sink(
+            fd,
+            style,
+            args.output,
+            args.syscall_times,
+            args.follow_forks,
+        )
+        .await?;
 
         pinchy_client::cleanup_and_quit(pid);
     } else if let Some(pid) = args.pid {
         let fd = pinchy_client::attach(pid, syscalls, args.follow_forks).await;
 
-        relay_to_sink(fd, style, args.output, args.syscall_times).await?;
+        relay_to_sink(
+            fd,
+            style,
+            args.output,
+            args.syscall_times,
+            args.follow_forks,
+        )
+        .await?;
     } else {
         // Print clap's usage message to stderr and exit
         eprintln!("{}", Args::command().render_help());
@@ -220,15 +234,24 @@ async fn relay_to_sink(
     style: FormattingStyle,
     output: Option<std::path::PathBuf>,
     syscall_times: bool,
+    annotate_comm: bool,
 ) -> Result<()> {
     match output {
         Some(path) => {
             let file = tokio::fs::File::create(&path).await?;
-            relay_trace(fd, style, file, false, syscall_times).await
+            relay_trace(fd, style, file, false, syscall_times, annotate_comm).await
         }
         None => {
             let is_terminal = std::io::stderr().is_terminal();
-            relay_trace(fd, style, tokio::io::stderr(), is_terminal, syscall_times).await
+            relay_trace(
+                fd,
+                style,
+                tokio::io::stderr(),
+                is_terminal,
+                syscall_times,
+                annotate_comm,
+            )
+            .await
         }
     }
 }
@@ -239,6 +262,7 @@ async fn relay_trace<W: tokio::io::AsyncWrite + Unpin>(
     sink: W,
     sink_is_terminal: bool,
     syscall_times: bool,
+    annotate_comm: bool,
 ) -> Result<()> {
     let mut reader = tokio::io::BufReader::with_capacity(
         64 * 1024,
@@ -308,6 +332,10 @@ async fn relay_trace<W: tokio::io::AsyncWrite + Unpin>(
 
                 if syscall_times && header.duration_ns > 0 {
                     formatter = formatter.with_duration(header.duration_ns);
+                }
+
+                if annotate_comm {
+                    formatter = formatter.with_comm(header.comm);
                 }
 
                 events::handle_event(&header, &payload, formatter).await?;

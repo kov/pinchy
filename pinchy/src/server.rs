@@ -396,14 +396,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
     const TRIVIAL_SYSCALLS: &[i64] = &[
         syscalls::SYS_dup3,
         syscalls::SYS_fcntl,
-        syscalls::SYS_sched_yield,
-        syscalls::SYS_getpid,
-        syscalls::SYS_gettid,
-        syscalls::SYS_getuid,
-        syscalls::SYS_geteuid,
-        syscalls::SYS_getgid,
-        syscalls::SYS_getegid,
-        syscalls::SYS_getppid,
         syscalls::SYS_brk,
         syscalls::SYS_mprotect,
         syscalls::SYS_getrandom,
@@ -414,12 +406,9 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_rt_tgsigqueueinfo,
         syscalls::SYS_fchdir,
         syscalls::SYS_exit_group,
-        syscalls::SYS_rt_sigreturn,
         syscalls::SYS_dup,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_dup2,
-        syscalls::SYS_sync,
-        syscalls::SYS_setsid,
         syscalls::SYS_setuid,
         syscalls::SYS_setgid,
         syscalls::SYS_close_range,
@@ -427,7 +416,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_getsid,
         syscalls::SYS_setpgid,
         syscalls::SYS_umask,
-        syscalls::SYS_vhangup,
         syscalls::SYS_ioprio_get,
         syscalls::SYS_ioprio_set,
         syscalls::SYS_setregid,
@@ -436,10 +424,6 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_setreuid,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_alarm,
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_pause,
-        #[cfg(target_arch = "x86_64")]
-        syscalls::SYS_getpgrp,
         syscalls::SYS_personality,
         syscalls::SYS_getpriority,
         syscalls::SYS_setpriority,
@@ -462,6 +446,28 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_fchmod,
         syscalls::SYS_fchown,
         syscalls::SYS_flock,
+        syscalls::SYS_pidfd_open,
+        syscalls::SYS_process_mrelease,
+        syscalls::SYS_inotify_init1,
+        syscalls::SYS_inotify_rm_watch,
+    ];
+    const TRIVIAL2_SYSCALLS: &[i64] = &[
+        syscalls::SYS_sched_yield,
+        syscalls::SYS_getpid,
+        syscalls::SYS_gettid,
+        syscalls::SYS_getuid,
+        syscalls::SYS_geteuid,
+        syscalls::SYS_getgid,
+        syscalls::SYS_getegid,
+        syscalls::SYS_getppid,
+        syscalls::SYS_rt_sigreturn,
+        syscalls::SYS_sync,
+        syscalls::SYS_setsid,
+        syscalls::SYS_vhangup,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_pause,
+        #[cfg(target_arch = "x86_64")]
+        syscalls::SYS_getpgrp,
         syscalls::SYS_futex_wake,
         syscalls::SYS_map_shadow_stack,
         syscalls::SYS_lsm_set_self_attr,
@@ -469,9 +475,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_epoll_create,
         syscalls::SYS_epoll_create1,
-        syscalls::SYS_pidfd_open,
         syscalls::SYS_pidfd_getfd,
-        syscalls::SYS_process_mrelease,
         syscalls::SYS_mlock,
         syscalls::SYS_mlock2,
         syscalls::SYS_mlockall,
@@ -492,9 +496,7 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_eventfd2,
         #[cfg(target_arch = "x86_64")]
         syscalls::SYS_inotify_init,
-        syscalls::SYS_inotify_init1,
         syscalls::SYS_set_mempolicy_home_node,
-        syscalls::SYS_inotify_rm_watch,
         syscalls::SYS_timer_delete,
         syscalls::SYS_timer_getoverrun,
         #[cfg(target_arch = "x86_64")]
@@ -549,6 +551,19 @@ fn load_tailcalls(ebpf: &mut Ebpf) -> anyhow::Result<()> {
         syscalls::SYS_vserver,
     ];
     for &syscall_nr in TRIVIAL_SYSCALLS {
+        prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
+        explicitly_supported.insert(syscall_nr);
+    }
+
+    // Second half of the trivial syscalls; see the eBPF side for why the
+    // handler is split in two.
+    let prog: &mut aya::programs::TracePoint = ebpf
+        .program_mut("syscall_exit_trivial2")
+        .context("missing syscall_exit_trivial2 tailcall")?
+        .try_into()?;
+    prog.load()
+        .context("trying to load syscall_exit_trivial2 into eBPF")?;
+    for &syscall_nr in TRIVIAL2_SYSCALLS {
         prog_array.set(syscall_nr as u32, prog.fd()?, 0)?;
         explicitly_supported.insert(syscall_nr);
     }

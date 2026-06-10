@@ -8,7 +8,7 @@
 
 use aya_ebpf::{
     macros::{map, tracepoint},
-    maps::{Array, HashMap, ProgramArray, RingBuf},
+    maps::{Array, HashMap, PerCpuArray, ProgramArray, RingBuf},
     programs::TracePointContext,
     EbpfContext as _,
 };
@@ -57,6 +57,50 @@ static mut EVENTS: RingBuf = RingBuf::with_byte_size(83886080, 0);
 
 #[map]
 static mut ENTER_MAP: HashMap<u32, SyscallEnterData> = HashMap::with_max_entries(10240, 0);
+
+// Per-exit context shared between the dispatching exit program and the
+// tail-called handler that builds the event. Filled once per exit so the
+// many submit_compact_payload() monomorphizations stay small -- inlining
+// the map lookups and helper calls at every submit site pushed the larger
+// programs past the BPF branch offset range. Tracepoint programs are not
+// preempted, so the per-CPU slot is stable across the tail call.
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct ExitContext {
+    pub duration_ns: u64,
+    pub comm: [u8; pinchy_common::COMM_LEN],
+}
+
+#[map]
+static mut EXIT_CONTEXT: PerCpuArray<ExitContext> = PerCpuArray::with_max_entries(1, 0);
+
+// Record the time spent in the syscall (when we saw its enter) and the
+// process name for the handler this exit tail-calls into.
+#[inline(always)]
+pub fn fill_exit_context(ctx: &TracePointContext, syscall_nr: i64) {
+    let tid = ctx.pid();
+
+    let mut duration_ns = 0u64;
+
+    if let Some(enter_data) = unsafe { ENTER_MAP.get(&tid) } {
+        if enter_data.syscall_nr == syscall_nr {
+            duration_ns = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() }
+                .saturating_sub(enter_data.enter_ns);
+        }
+    }
+
+    if let Some(exit_ctx) = unsafe { EXIT_CONTEXT.get_ptr_mut(0) } {
+        unsafe {
+            (*exit_ctx).duration_ns = duration_ns;
+
+            let comm_ptr = core::ptr::addr_of_mut!((*exit_ctx).comm);
+            aya_ebpf::helpers::gen::bpf_get_current_comm(
+                comm_ptr as *mut core::ffi::c_void,
+                pinchy_common::COMM_LEN as u32,
+            );
+        }
+    }
+}
 
 #[map(name = "SYSCALL_TAILCALLS")]
 static mut SYSCALL_TAILCALLS: ProgramArray = ProgramArray::pinned(512, 0);
@@ -183,6 +227,8 @@ pub fn pinchy_exit(ctx: TracePointContext) -> u32 {
         if !is_syscall_enabled(syscall_nr) {
             return Ok(0);
         }
+
+        fill_exit_context(&ctx, syscall_nr);
 
         unsafe {
             let Err(_) = SYSCALL_TAILCALLS.tail_call(&ctx, syscall_nr as u32);
@@ -800,6 +846,32 @@ pub fn syscall_exit_trivial(ctx: TracePointContext) -> u32 {
                     },
                 )?;
             }
+            _ => {
+                trace!(&ctx, "unknown syscall {}", syscall_nr);
+            }
+        }
+
+        Ok(())
+    }
+    match inner(ctx) {
+        Ok(_) => 0,
+        Err(ret) => ret,
+    }
+}
+
+// Split from syscall_exit_trivial: with every submit site inlined, a single
+// program holding all trivial syscalls exceeds the BPF branch offset range
+// on x86_64 ("Branch target out of insn range" at link time). Each syscall
+// is registered against exactly one of the two programs in the tailcall
+// array.
+#[tracepoint]
+pub fn syscall_exit_trivial2(ctx: TracePointContext) -> u32 {
+    fn inner(ctx: TracePointContext) -> Result<(), u32> {
+        let syscall_nr = get_syscall_nr(&ctx)?;
+        let args = get_args(&ctx, syscall_nr)?;
+        let return_value = util::get_return_value(&ctx)?;
+
+        match syscall_nr {
             syscalls::SYS_pidfd_getfd => {
                 crate::util::submit_compact_payload::<pinchy_common::PidfdGetfdData, _>(
                     &ctx,

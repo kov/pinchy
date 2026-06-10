@@ -362,8 +362,9 @@ fn follow_forks() {
     // follow-forks trace sees the child's openat.
     let handle = run_workload_with_args(&pinchy, &["openat"], "fork_test", &["-f"]);
 
+    // Lines are annotated with the process name when following forks.
     let expected_output = escaped_regex(indoc! {r#"
-        @PID@ openat(dfd: AT_FDCWD, pathname: "/dev/null", flags: 0x0 (O_RDONLY), mode: 0) = @NUMBER@ (fd)
+        @PID@<test-helper> openat(dfd: AT_FDCWD, pathname: "/dev/null", flags: 0x0 (O_RDONLY), mode: 0) = @NUMBER@ (fd)
     "#});
 
     let output = handle.join().unwrap();

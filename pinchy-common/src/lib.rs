@@ -582,6 +582,9 @@ pub fn max_compact_payload_size() -> usize {
     max_payload_size
 }
 
+// Same as the kernel's TASK_COMM_LEN.
+pub const COMM_LEN: usize = 16;
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct WireEventHeader {
@@ -593,6 +596,8 @@ pub struct WireEventHeader {
     pub return_value: i64,
     // Time spent in the syscall; 0 when no matching enter was seen.
     pub duration_ns: u64,
+    // NUL-padded name of the process, as the kernel sees it.
+    pub comm: [u8; COMM_LEN],
 }
 
 #[repr(C)]

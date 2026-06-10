@@ -11,7 +11,7 @@ use pinchy_common::{
     WireEventHeader, WIRE_VERSION,
 };
 
-use crate::{ENTER_MAP, EVENTS, SYSCALL_OFFSET, SYSCALL_RETURN_OFFSET};
+use crate::{ENTER_MAP, EVENTS, EXIT_CONTEXT, SYSCALL_OFFSET, SYSCALL_RETURN_OFFSET};
 
 mod efficiency {
     #[cfg(feature = "efficiency-metrics")]
@@ -144,10 +144,12 @@ pub fn get_args(ctx: &TracePointContext, expected_syscall_nr: i64) -> Result<[us
         return Err(1);
     }
 
-    // Copy the part of the enter data we care about. The entry stays in the
-    // map so submit_compact_payload() can compute the syscall duration; it
-    // is removed there (or overwritten by the tid's next syscall enter).
+    // Copy the part of the enter data we care about...
     let args = enter_data.args;
+
+    // Then remove the item from the map. The syscall duration was already
+    // computed from the entry in fill_exit_context() before the tail call.
+    let _ = unsafe { ENTER_MAP.remove(&tid) };
 
     Ok(args)
 }
@@ -193,17 +195,13 @@ where
     let event = unsafe { event.assume_init_mut() as *mut WireCompactPayload<T> as *mut u8 };
     let header_ptr = event as *mut WireEventHeader;
 
-    let tid = ctx.pid();
-    let mut duration_ns = 0u64;
-
-    if let Some(enter_data) = unsafe { ENTER_MAP.get(&tid) } {
-        if enter_data.syscall_nr == syscall_nr {
-            duration_ns = unsafe { aya_ebpf::helpers::bpf_ktime_get_ns() }
-                .saturating_sub(enter_data.enter_ns);
-
-            let _ = unsafe { ENTER_MAP.remove(&tid) };
-        }
-    }
+    // The duration and process name were captured once per exit in
+    // fill_exit_context(); a per-CPU read here keeps this (heavily
+    // monomorphized) function small.
+    let (duration_ns, comm) = match unsafe { EXIT_CONTEXT.get(0) } {
+        Some(exit_ctx) => (exit_ctx.duration_ns, exit_ctx.comm),
+        None => (0, [0u8; pinchy_common::COMM_LEN]),
+    };
 
     unsafe {
         header_ptr.write(WireEventHeader {
@@ -211,9 +209,10 @@ where
             payload_len: core::mem::size_of::<T>() as u32,
             syscall_nr,
             pid: ctx.tgid(),
-            tid,
+            tid: ctx.pid(),
             return_value,
             duration_ns,
+            comm,
         });
     }
 

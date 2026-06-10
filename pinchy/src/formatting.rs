@@ -71,6 +71,7 @@ pub struct Formatter<'f> {
     style: FormattingStyle,
     output: Pin<&'f mut dyn AsyncWrite>,
     duration_ns: Option<u64>,
+    comm: Option<[u8; pinchy_common::COMM_LEN]>,
 }
 
 impl<'f> Formatter<'f> {
@@ -79,6 +80,7 @@ impl<'f> Formatter<'f> {
             style,
             output,
             duration_ns: None,
+            comm: None,
         }
     }
 
@@ -89,13 +91,39 @@ impl<'f> Formatter<'f> {
         self
     }
 
+    // When set, push_syscall() annotates the PID with the process name:
+    // `1234<test-helper>`. Used when following forks, where lines from
+    // several processes interleave.
+    pub fn with_comm(mut self, comm: [u8; pinchy_common::COMM_LEN]) -> Self {
+        self.comm = Some(comm);
+        self
+    }
+
     pub async fn push_syscall(mut self, pid: u32, syscall_nr: i64) -> Result<SyscallFormatter<'f>> {
         let syscall_name = syscall_name_from_nr(syscall_nr)
             .ok_or_else(|| anyhow!(format!("Unknown syscall: {syscall_nr}")))?;
 
+        let comm = self.comm;
         let output = &mut self.output;
 
         output.write_all(pid.to_string().as_bytes()).await?;
+
+        if let Some(mut comm) = comm {
+            let len = comm.iter().position(|&b| b == 0).unwrap_or(comm.len());
+
+            // comm is set by the traced process (prctl PR_SET_NAME) and can
+            // hold arbitrary bytes; neutralize anything that could carry a
+            // terminal escape sequence.
+            for byte in comm[..len].iter_mut() {
+                if !byte.is_ascii_graphic() && *byte != b' ' {
+                    *byte = b'?';
+                }
+            }
+
+            output.write_all(b"<").await?;
+            output.write_all(&comm[..len]).await?;
+            output.write_all(b">").await?;
+        }
 
         match self.style {
             FormattingStyle::OneLine => output.write_all(b" ").await?,

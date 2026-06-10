@@ -30,6 +30,7 @@ pub(crate) fn make_compact_test_data<T: Copy>(
         tid: pid,
         return_value,
         duration_ns: 0,
+        comm: [0u8; pinchy_common::COMM_LEN],
     };
 
     let payload = unsafe {
@@ -84,6 +85,31 @@ async fn syscall_duration_suffix() {
     assert_eq!(
         String::from_utf8_lossy(&output),
         "100 close(fd: 3) = 0 (success) <0.000123>\n"
+    );
+}
+
+#[::tokio::test]
+async fn syscall_comm_annotation() {
+    let data = pinchy_common::CloseData { fd: 3 };
+    let (mut header, payload) =
+        make_compact_test_data(pinchy_common::syscalls::SYS_close, 100, 0, &data);
+
+    let comm = b"test-helper";
+    header.comm[..comm.len()].copy_from_slice(comm);
+
+    let mut output: Vec<u8> = vec![];
+    let pin_output = unsafe { std::pin::Pin::new_unchecked(&mut output) };
+    let formatter =
+        crate::formatting::Formatter::new(pin_output, crate::formatting::FormattingStyle::OneLine)
+            .with_comm(header.comm);
+
+    crate::events::handle_event(&header, &payload, formatter)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        String::from_utf8_lossy(&output),
+        "100<test-helper> close(fd: 3) = 0 (success)\n"
     );
 }
 

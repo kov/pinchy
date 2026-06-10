@@ -170,12 +170,18 @@ PINCHYD_OUT="$OUTDIR/pinchyd.out"
 
 wait_for_pinchyd() {
     for i in $(seq 1 60); do
-        if grep -q "Waiting for Ctrl-C..." "$PINCHYD_OUT" 2>/dev/null; then
+        if grep -q "Pinchy daemon ready" "$PINCHYD_OUT" 2>/dev/null; then
             return 0
         fi
 
         if ! kill -0 $PINCHYD_PID 2>/dev/null; then
-            echo "pinchyd exited prematurely" >"$OUTDIR/pinchy.stderr"
+            # Include the daemon's output so startup failures are diagnosable
+            # from the test report.
+            {
+                echo "pinchyd exited prematurely"
+                echo "--- pinchyd output ---"
+                cat "$PINCHYD_OUT" 2>/dev/null
+            } >"$OUTDIR/pinchy.stderr"
             echo "1" >"$OUTDIR/pinchyd.exit"
             echo "1" >"$OUTDIR/pinchy.exit"
             touch "$OUTDIR/done"
@@ -456,8 +462,8 @@ run_latency_probe() {
     first_print_seen=0
 
     while kill -0 "$WORKLOAD_PID" 2>/dev/null; do
-        if [ "$first_print_seen" -eq 0 ] && [ -f "$OUTDIR/pinchy.stdout" ]; then
-            if grep -q 'pathname: "/etc/passwd"' "$OUTDIR/pinchy.stdout"; then
+        if [ "$first_print_seen" -eq 0 ] && [ -f "$OUTDIR/pinchy.stderr" ]; then
+            if grep -q 'pathname: "/etc/passwd"' "$OUTDIR/pinchy.stderr"; then
                 date +%s%N >"$OUTDIR/latency_first_print_ns"
                 first_print_seen=1
             fi
@@ -470,8 +476,8 @@ run_latency_probe() {
 
     date +%s%N >"$OUTDIR/latency_workload_exit_ns"
 
-    if [ "$first_print_seen" -eq 0 ] && [ -f "$OUTDIR/pinchy.stdout" ]; then
-        if grep -q 'pathname: "/etc/passwd"' "$OUTDIR/pinchy.stdout"; then
+    if [ "$first_print_seen" -eq 0 ] && [ -f "$OUTDIR/pinchy.stderr" ]; then
+        if grep -q 'pathname: "/etc/passwd"' "$OUTDIR/pinchy.stderr"; then
             date +%s%N >"$OUTDIR/latency_first_print_ns"
             first_print_seen=1
         fi

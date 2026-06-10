@@ -118,12 +118,12 @@ fn parse_stdout_flush_bytes() -> usize {
         .unwrap_or(DEFAULT_STDOUT_FLUSH_BYTES)
 }
 
-fn low_latency_flush_enabled() -> bool {
+fn low_latency_flush_enabled(sink_is_terminal: bool) -> bool {
     if let Ok(value) = std::env::var("PINCHY_LOW_LATENCY_FLUSH") {
         return value == "1" || value.eq_ignore_ascii_case("true");
     }
 
-    std::io::stdout().is_terminal()
+    sink_is_terminal
 }
 
 #[derive(Parser, Debug)]
@@ -140,6 +140,10 @@ struct Args {
     /// List the syscall names supported by this build and exit
     #[arg(long = "list-syscalls")]
     list_syscalls: bool,
+
+    /// Write trace output to FILE instead of stderr
+    #[arg(short = 'o', long = "output")]
+    output: Option<std::path::PathBuf>,
 
     /// PID to trace
     #[arg(short = 'p', long = "pid", action = clap::ArgAction::Set, conflicts_with = "command")]
@@ -180,33 +184,56 @@ async fn main() -> Result<()> {
 
         // Read everything there is to read, the server will close the write end
         // of the pipe
-        relay_trace(fd, style).await?;
+        relay_to_sink(fd, style, args.output).await?;
 
         pinchy_client::cleanup_and_quit(pid);
     } else if let Some(pid) = args.pid {
         let fd = pinchy_client::attach(pid, syscalls).await;
 
-        relay_trace(fd, style).await?;
+        relay_to_sink(fd, style, args.output).await?;
     } else {
-        // Print clap's usage message and exit
-        Args::command().print_help().expect("Failed to print usage");
-        println!();
+        // Print clap's usage message to stderr and exit
+        eprintln!("{}", Args::command().render_help());
         std::process::exit(2);
     };
 
     Ok(())
 }
 
-async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<()> {
+// Trace output goes to stderr by default (like strace), keeping the traced
+// program's stdout clean, or to a file with -o.
+async fn relay_to_sink(
+    fd: OwnedFd,
+    style: FormattingStyle,
+    output: Option<std::path::PathBuf>,
+) -> Result<()> {
+    match output {
+        Some(path) => {
+            let file = tokio::fs::File::create(&path).await?;
+            relay_trace(fd, style, file, false).await
+        }
+        None => {
+            let is_terminal = std::io::stderr().is_terminal();
+            relay_trace(fd, style, tokio::io::stderr(), is_terminal).await
+        }
+    }
+}
+
+async fn relay_trace<W: tokio::io::AsyncWrite + Unpin>(
+    fd: OwnedFd,
+    formatting_style: FormattingStyle,
+    sink: W,
+    sink_is_terminal: bool,
+) -> Result<()> {
     let mut reader = tokio::io::BufReader::with_capacity(
         64 * 1024,
         tokio::fs::File::from(std::fs::File::from(fd)),
     );
-    let mut stdout = tokio::io::BufWriter::new(tokio::io::stdout());
+    let mut sink = tokio::io::BufWriter::new(sink);
     let mut header_buf = [0u8; std::mem::size_of::<WireEventHeader>()];
     let mut payload = Vec::new();
     let max_payload_size = max_compact_payload_size();
-    let low_latency_flush = low_latency_flush_enabled();
+    let low_latency_flush = low_latency_flush_enabled(sink_is_terminal);
     let flush_bytes = if low_latency_flush {
         parse_stdout_flush_bytes()
     } else {
@@ -266,7 +293,7 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
 
                 events::handle_event(&header, &payload, formatter).await?;
 
-                stdout.write_all(&output).await?;
+                sink.write_all(&output).await?;
                 pending_flush_bytes += output.len();
 
                 // Flush on threshold, but also whenever we have caught up
@@ -274,7 +301,7 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
                 // would block); otherwise output lags behind a slow tracee
                 // by up to the threshold.
                 if pending_flush_bytes >= flush_bytes || reader.buffer().is_empty() {
-                    stdout.flush().await?;
+                    sink.flush().await?;
                     pending_flush_bytes = 0;
                 }
             }
@@ -282,7 +309,7 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
             Err(e) => break Err(e.into()),
         }
     };
-    stdout.flush().await?;
+    sink.flush().await?;
 
     read_result
 }

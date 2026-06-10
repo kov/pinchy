@@ -1413,7 +1413,7 @@ fn sysv_ipc_syscalls() {
         @PID@ msgrcv(msqid: @NUMBER@, msgp: @ADDR@, msgsz: 32, msgtyp: 0, msgflg: 0x0) = 30
         @PID@ msgctl(msqid: @NUMBER@, cmd: IPC_RMID, buf: NULL) = 0 (success)
         @PID@ semget(key: 0x11223344, nsems: 2, semflg: IPC_CREAT) = @NUMBER@ (semid)
-        @PID@ semctl(semid: @NUMBER@, semnum: 0, op: SETVAL, val: 0) = 0 (success)
+        @PID@ semctl(semid: @NUMBER@, semnum: 0, op: SETVAL, val: 5) = 0 (success)
         @PID@ semctl(semid: @NUMBER@, semnum: 0, op: GETVAL) = 5
         @PID@ semctl(semid: @NUMBER@, semnum: 0, op: IPC_RMID, arg: 0x0 (unknown)) = 0 (success)
     "#});

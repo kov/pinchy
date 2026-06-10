@@ -450,7 +450,6 @@ syscall_test!(
 syscall_test!(
     parse_signalfd,
     {
-
         let mut mask = Sigset::default();
         let mut libc_mask: libc::sigset_t = unsafe { std::mem::zeroed() };
 
@@ -466,15 +465,14 @@ syscall_test!(
         });
 
         let data = pinchy_common::SignalfdData {
-                    fd: 5,
-                    flags: libc::SFD_CLOEXEC | libc::SFD_NONBLOCK,
-                    has_mask: true,
-                    mask,
-                };
+            fd: 5,
+            has_mask: true,
+            mask,
+        };
 
         crate::tests::make_compact_test_data(syscalls::SYS_signalfd, 102, 5, &data)
     },
-    "102 signalfd(fd: 5, mask: [SIGUSR1|SIGTERM], flags: 0x80800 (SFD_CLOEXEC|SFD_NONBLOCK)) = 5 (fd)\n"
+    "102 signalfd(fd: 5, mask: [SIGUSR1|SIGTERM]) = 5 (fd)\n"
 );
 
 syscall_test!(

@@ -2557,7 +2557,6 @@ pub struct SigaltstackData {
 #[derive(Clone, Copy, Default)]
 pub struct SignalfdData {
     pub fd: i32,
-    pub flags: i32,
     pub mask: crate::kernel_types::Sigset,
     pub has_mask: bool,
 }

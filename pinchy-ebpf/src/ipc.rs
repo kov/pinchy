@@ -219,14 +219,14 @@ pub fn syscall_exit_ipc(ctx: TracePointContext) -> u32 {
 
                         let arg_ptr = args[3] as *const kernel_types::Semun;
                         payload.has_arg = !arg_ptr.is_null();
-                        if payload.has_arg {
-                            match payload.op {
-                                SETVAL => {
-                                    let val_ptr = arg_ptr as *const i32;
 
-                                    payload.arg.val =
-                                        unsafe { bpf_probe_read_user::<i32>(val_ptr).unwrap_or(0) };
-                                }
+                        if payload.op == SETVAL {
+                            // For SETVAL the union is passed by value: the
+                            // argument is the value itself, not a pointer.
+                            payload.arg.val = args[3] as i32;
+                            payload.has_arg = true;
+                        } else if payload.has_arg {
+                            match payload.op {
                                 SETALL | GETALL => {
                                     let array_ptr = arg_ptr as *const u16;
 

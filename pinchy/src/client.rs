@@ -7,7 +7,7 @@ use std::{ffi::OsString, io::IsTerminal, os::fd::OwnedFd, pin::Pin};
 use anyhow::Result;
 use clap::{CommandFactory as _, Parser};
 use pinchy_common::{
-    max_compact_payload_size,
+    compact_payload_size, max_compact_payload_size,
     syscalls::{syscall_nr_from_name, ALL_SYSCALLS},
     WireEventHeader, WIRE_VERSION,
 };
@@ -163,6 +163,21 @@ async fn relay_trace(fd: OwnedFd, formatting_style: FormattingStyle) -> Result<(
 
                 payload.resize(payload_len, 0);
                 reader.read_exact(&mut payload).await?;
+
+                // handle_event() reads the payload as a fixed-size struct;
+                // a short payload would be an out-of-bounds read.
+                if let Some(expected) = compact_payload_size(header.syscall_nr) {
+                    if payload_len != expected {
+                        return Err(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!(
+                                "payload_len {} does not match expected {} for syscall {}",
+                                payload_len, expected, header.syscall_nr
+                            ),
+                        )
+                        .into());
+                    }
+                }
 
                 output.clear();
 

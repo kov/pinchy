@@ -5,7 +5,7 @@
 # for use in rootless, parallel integration testing.
 #
 # The kernel source is from the ARM64 UML port at:
-#   https://github.com/kov/linux/tree/arm64-uml
+#   https://github.com/kov/linux/tree/arm64-uml-7.0
 #
 # Usage: ./build-kernel.sh [arch]
 #   arch: x86_64 or aarch64 (default: auto-detect from uname -m)
@@ -14,8 +14,8 @@ set -euo pipefail
 
 # Configuration
 KERNEL_GIT_URL="https://github.com/kov/linux.git"
-KERNEL_GIT_BRANCH="arm64-uml"
-KERNEL_GIT_COMMIT="f391975cd33f19c3da5cc58c217818af41ee3ec9"
+KERNEL_GIT_BRANCH="arm64-uml-7.0"
+KERNEL_GIT_COMMIT="383d0856e77baa21d8c814dd39319ca42b401fb4"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CACHE_DIR="${SCRIPT_DIR}/cache"
